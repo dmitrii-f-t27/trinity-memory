@@ -49,9 +49,19 @@ packed, validated and unpacked the 13-trit example and exported three dense RTL
 words. Its TMEM file is 24 header bytes + 3 payload bytes = 27 bytes, illustrating
 why small-file overhead must be counted separately.
 
+## Remote validation after publication
+
+The [first GitHub Actions run](https://github.com/dmitrii-f-t27/trinity-memory/actions/runs/34197035797)
+completed successfully on 2026-09-08 for implementation commit
+`496f5425759d2632a69987b1530e8546bfef9531`. All four jobs passed: Python 3.10,
+3.12, 3.14, and RTL simulation. Python jobs also generated and uploaded their
+synthetic benchmark/report artifacts. This extends the local evidence above.
+
+The [workflow page](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml)
+shows the status of subsequent commits.
+
 ## Evidence not yet available
 
-GitHub Actions have been prepared but have not run remotely. The Vivado Tcl
-script has not been executed. No physical board, post-route timing, physical
+The Vivado Tcl script has not been executed. No physical board, post-route timing, physical
 BRAM/LUT utilization, power, DDR throughput, model quality, or tokens/s result
 was measured in this iteration.

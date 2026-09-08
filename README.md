@@ -1,5 +1,7 @@
 # Trinity Memory
 
+[![Reference codecs and RTL](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml)
+
 **Ternary storage formats, memory RTL, and experimental memory interfaces.**
 
 [Russian overview](README.ru.md) · [Direction and roadmap](docs/DIRECTION.md) ·
