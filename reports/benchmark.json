@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-08T03:38:14.896590+00:00",
+  "environment": {
+    "python": "3.14.3",
+    "platform": "Darwin 25.6.0 arm64"
+  },
+  "seed": 27,
+  "repeats": 3,
+  "weights_per_dataset": 65536,
+  "measurement_scope": "Synthetic integer trits. Exact bytes and verified round trips. Median Python payload encode/decode wall time after one warm-up; container creation/CRC/file I/O excluded from timing. No FPGA, DDR, model quality, power, or tokens/s measurements.",
+  "datasets": [
+    {
+      "name": "uniform",
+      "count": 65536,
+      "zero_fraction": 0.3358001708984375,
+      "entropy_bpw": 1.5849422131431798,
+      "results": [
+        {
+          "codec": "baseline2",
+          "group_size": 4,
+          "group_bits": 8,
+          "payload_bytes": 16384,
+          "container_bytes": 16408,
+          "payload_bpw": 2.0,
+          "container_bpw": 2.0029296875,
+          "encode_ms": 13.35575,
+          "decode_ms": 6.461041,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.0
+        },
+        {
+          "codec": "dense5",
+          "group_size": 5,
+          "group_bits": 8,
+          "payload_bytes": 13108,
+          "container_bytes": 13132,
+          "payload_bpw": 1.60009765625,
+          "container_bpw": 1.60302734375,
+          "encode_ms": 7.307875,
+          "decode_ms": 5.933666,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2499237107110162
+        },
+        {
+          "codec": "dense17",
+          "group_size": 17,
+          "group_bits": 27,
+          "payload_bytes": 13014,
+          "container_bytes": 13038,
+          "payload_bpw": 1.588623046875,
+          "container_bpw": 1.591552734375,
+          "encode_ms": 5.572541,
+          "decode_ms": 4.807333,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2589518979560472
+        },
+        {
+          "codec": "dense22",
+          "group_size": 22,
+          "group_bits": 35,
+          "payload_bytes": 13034,
+          "container_bytes": 13058,
+          "payload_bpw": 1.591064453125,
+          "container_bpw": 1.593994140625,
+          "encode_ms": 5.666167,
+          "decode_ms": 4.662708,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2570201012735922
+        }
+      ]
+    },
+    {
+      "name": "sparse_4_1",
+      "count": 65536,
+      "zero_fraction": 0.75,
+      "entropy_bpw": 1.061275372729721,
+      "results": [
+        {
+          "codec": "baseline2",
+          "group_size": 4,
+          "group_bits": 8,
+          "payload_bytes": 16384,
+          "container_bytes": 16408,
+          "payload_bpw": 2.0,
+          "container_bpw": 2.0029296875,
+          "encode_ms": 11.40825,
+          "decode_ms": 6.756833,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.0
+        },
+        {
+          "codec": "dense5",
+          "group_size": 5,
+          "group_bits": 8,
+          "payload_bytes": 13108,
+          "container_bytes": 13132,
+          "payload_bpw": 1.60009765625,
+          "container_bpw": 1.60302734375,
+          "encode_ms": 6.975792,
+          "decode_ms": 6.053959,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2499237107110162
+        },
+        {
+          "codec": "dense17",
+          "group_size": 17,
+          "group_bits": 27,
+          "payload_bytes": 13014,
+          "container_bytes": 13038,
+          "payload_bpw": 1.588623046875,
+          "container_bpw": 1.591552734375,
+          "encode_ms": 5.250167,
+          "decode_ms": 4.715083,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2589518979560472
+        },
+        {
+          "codec": "dense22",
+          "group_size": 22,
+          "group_bits": 35,
+          "payload_bytes": 13034,
+          "container_bytes": 13058,
+          "payload_bpw": 1.591064453125,
+          "container_bpw": 1.593994140625,
+          "encode_ms": 5.493917,
+          "decode_ms": 4.71475,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2570201012735922
+        },
+        {
+          "codec": "sparse41",
+          "group_size": 4,
+          "group_bits": 4,
+          "payload_bytes": 8192,
+          "container_bytes": 8216,
+          "payload_bpw": 1.0,
+          "container_bpw": 1.0029296875,
+          "encode_ms": 5.717208,
+          "decode_ms": 3.736833,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 2.0
+        },
+        {
+          "codec": "sparse82",
+          "group_size": 8,
+          "group_bits": 8,
+          "payload_bytes": 8192,
+          "container_bytes": 8216,
+          "payload_bpw": 1.0,
+          "container_bpw": 1.0029296875,
+          "encode_ms": 4.100417,
+          "decode_ms": 2.165333,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 2.0
+        }
+      ]
+    },
+    {
+      "name": "sparse_8_2",
+      "count": 65536,
+      "zero_fraction": 0.75,
+      "entropy_bpw": 1.061254882116945,
+      "results": [
+        {
+          "codec": "baseline2",
+          "group_size": 4,
+          "group_bits": 8,
+          "payload_bytes": 16384,
+          "container_bytes": 16408,
+          "payload_bpw": 2.0,
+          "container_bpw": 2.0029296875,
+          "encode_ms": 10.972541,
+          "decode_ms": 6.5865,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.0
+        },
+        {
+          "codec": "dense5",
+          "group_size": 5,
+          "group_bits": 8,
+          "payload_bytes": 13108,
+          "container_bytes": 13132,
+          "payload_bpw": 1.60009765625,
+          "container_bpw": 1.60302734375,
+          "encode_ms": 7.270667,
+          "decode_ms": 5.962458,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2499237107110162
+        },
+        {
+          "codec": "dense17",
+          "group_size": 17,
+          "group_bits": 27,
+          "payload_bytes": 13014,
+          "container_bytes": 13038,
+          "payload_bpw": 1.588623046875,
+          "container_bpw": 1.591552734375,
+          "encode_ms": 5.4645,
+          "decode_ms": 4.566917,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2589518979560472
+        },
+        {
+          "codec": "dense22",
+          "group_size": 22,
+          "group_bits": 35,
+          "payload_bytes": 13034,
+          "container_bytes": 13058,
+          "payload_bpw": 1.591064453125,
+          "container_bpw": 1.593994140625,
+          "encode_ms": 5.688,
+          "decode_ms": 5.056041,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 1.2570201012735922
+        },
+        {
+          "codec": "sparse82",
+          "group_size": 8,
+          "group_bits": 8,
+          "payload_bytes": 8192,
+          "container_bytes": 8216,
+          "payload_bpw": 1.0,
+          "container_bpw": 1.0029296875,
+          "encode_ms": 4.084875,
+          "decode_ms": 2.101375,
+          "roundtrip": true,
+          "ideal_payload_ratio_vs_baseline": 2.0
+        }
+      ]
+    }
+  ]
+}
