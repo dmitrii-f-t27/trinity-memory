@@ -1,16 +1,37 @@
-# Trinity · Ternary Memory Lab
+# Trinity Memory
 
-Воспроизводимый прототип хранения троичных весов: **6 программных кодеков,
-бинарный формат с проверкой целостности, RTL-декодеры и синтетический бенчмарк**.
+**Ternary storage formats, memory RTL, and experimental memory interfaces.**
 
-Реализован первый этап исследования памяти Trinity. Код сохраняет уже полученные
-веса `−1 / 0 / +1` без потерь. Это исследовательский стенд; обучение модели,
-полноценный inference engine и измерения на физической FPGA остаются следующими этапами.
+[Russian overview](README.ru.md) · [Direction and roadmap](docs/DIRECTION.md) ·
+[Format specification](docs/format.md) · [Hardware protocol](docs/hardware.md) ·
+[Research audit](docs/research.md)
 
-## Запуск
+Trinity Memory is a dedicated experimental memory direction for the Trinity
+ecosystem. This repository contains the reference implementation and evidence
+for storing and retrieving balanced ternary values (`-1`, `0`, `+1`) using
+binary memory. It has its own code, tests, reports, and hardware roadmap.
 
-Python 3.10+; у программного ядра нет сторонних зависимостей.
-Из корня репозитория:
+The current deliverable is a **software and RTL prototype**. Physical FPGA
+measurements and a complete memory-device interface remain next steps.
+
+## Current implementation
+
+- Six lossless reference codecs: `baseline2`, `dense5`, `dense17`, `dense22`,
+  `sparse41`, and `sparse82`.
+- TMEM v1 files with explicit lengths, canonical padding, and CRC32 integrity.
+- A CLI for packing, unpacking, inspection, benchmarking, and RTL memory export.
+- Matching Verilog dense5 and sparse41 decoders, plus synchronous packed/baseline
+  memory streams with five decoded lanes per active cycle.
+- Exhaustive small-codebook tests, stream-protocol simulation, synthetic
+  measurements, and a self-contained interactive benchmark report.
+
+The sparse codecs require a per-block constraint and reject incompatible data.
+They do not silently prune weights. This repository does not contain a trained
+model, a DDR controller, or a physical multi-level memory-cell implementation.
+
+## Reproduce
+
+Python 3.10+; the reference package has no third-party runtime dependencies.
 
 ```sh
 python3 -m unittest discover -s tests -v
@@ -18,12 +39,12 @@ python3 -m trinity_memory benchmark --count 65536 --repeats 3
 python3 scripts/render_report.py
 ```
 
-Откройте [`reports/index.html`](reports/index.html): автономный отчёт с реальными
-результатами запуска, переключением наборов данных и интерактивным кодированием
-пяти тритов. [`reports/benchmark.json`](reports/benchmark.json) содержит исходные
-числа, параметры, дату и среду. HTML не требует сервера или внешних библиотек.
+Open [`reports/index.html`](reports/index.html) locally to use the report and
+five-trit encoder. It has no server or CDN dependency. The checked-in report
+has Russian labels; the raw results are in [`benchmark.json`](reports/benchmark.json).
+GitHub displays HTML source, so download/open the file to use its controls.
 
-Для RTL нужен [Icarus Verilog](https://github.com/steveicarus/iverilog):
+RTL tests require [Icarus Verilog](https://github.com/steveicarus/iverilog):
 
 ```sh
 # macOS
@@ -32,47 +53,8 @@ brew install icarus-verilog
 python3 scripts/test_rtl.py
 ```
 
-Полный локальный цикл: `make check` и `make report`.
-Опциональная установка CLI: `python3 -m pip install -e .`.
-Проверенный локальный результат: [22 Python-теста и 1 296 входов RTL-декодеров](reports/validation.md),
-плюс тесты потокового протокола и неизвестных сигналов.
-
-## Результат первого запуска
-
-Из [`reports/benchmark.json`](reports/benchmark.json), 65 536 весов в каждом
-синтетическом наборе, seed=27. Размер включает хвостовое выравнивание; контейнер
-добавляет ровно 24 байта. Скейлы и метаданные модели в формат не входят.
-
-| Формат | Байты payload | Бит/вес payload | Условие |
-|---|---:|---:|---|
-| baseline2 | 16 384 | 2,000000 | любые триты |
-| dense5 · 5/8 | 13 108 | 1,600098 | любые триты |
-| dense17 · 17/27 | 13 014 | 1,588623 | любые триты |
-| dense22 · 22/35 | 13 034 | 1,591064 | любые триты |
-| sparse41 · (4,≤1) | 8 192 | 1,000000 | ≤1 ненулевого в каждой четвёрке |
-| sparse82 · (8,≤2) | 8 192 | 1,000000 | ≤2 ненулевых в каждой восьмёрке |
-
-Все 15 сочетаний набора/кодека в отчёте прошли точное восстановление весов и
-контейнера. Время encode/decode — медиана трёх запусков Python после прогрева;
-оно не характеризует оптимизированный CPU kernel или FPGA.
-
-`dense5` в пределе уменьшает payload на `1 − 1,6/2 = 20%`. При ограничении
-**только** полосой чтения идеальное отношение скоростей равно `2/1,6 = 1,25`.
-В отчёте конечный расчёт использует фактические байты с учётом padding.
-Измеренных tokens/s, частоты FPGA, DDR throughput, LUT/BRAM utilization,
-энергопотребления или качества обученной модели здесь пока нет.
-
-## Что реализовано
-
-- Кодеки dense5, dense17, dense22 и 2-битный baseline; проверка зарезервированных
-  кодов, хвостов, пустых и некорректных входов.
-- Структурные sparse41/sparse82. Несовместимые веса отклоняются; кодек сам их не обнуляет.
-- TMEM v1: версия, число весов, длина payload и CRC32 метаданных/данных.
-- CLI `pack`, `unpack`, `inspect`, `benchmark`, `export-rtl`.
-- Синтезируемые Verilog-декодеры dense5 и sparse41; потоковое синхронное хранилище
-  dense5 и 2-битный baseline с одинаковыми пятью выходными lanes.
-- Исчерпывающая проверка маленьких кодовых пространств и симуляция протокола памяти.
-- GitHub Actions для Python и RTL. Удалённый запуск CI подтверждается только после публикации.
+`make check` runs Python and RTL checks. `make report` regenerates measurements
+and the HTML report. Optional CLI installation: `python3 -m pip install -e .`.
 
 ```sh
 mkdir -p build
@@ -82,23 +64,49 @@ python3 -m trinity_memory unpack build/example.tmem build/restored.json
 python3 -m trinity_memory export-rtl examples/trits.json build/dense.mem --codec dense5
 ```
 
-## Исследование и дальнейшая работа
+## Measured storage
 
-В исходной записке потребовались поправки: Sparse-BitNet 6:8 сохраняет шесть
-весов, LUT-декодирование расходует ресурсы, а широкое утверждение об отсутствии
-работ по тернарному KV-cache не подтверждается. Проверка первоисточников,
-ссылки и границы выводов — в [`docs/research.md`](docs/research.md).
+Each synthetic dataset has **65,536 weights**, seed 27. These are actual payload
+bytes, including final padding. TMEM adds **24 header bytes**; tensor scales,
+shape, and other model metadata are outside this prototype's format.
 
-1. **AX7203:** выбрать подтверждённый part/clock, выполнить Vivado synthesis и
-   implementation для обеих схем, измерить физическую FPGA по
-   [`docs/hardware.md`](docs/hardware.md). Битовая ширина массива в RTL не равна
-   числу выделенных физических блоков BRAM.
-2. **QAT:** подключить настоящий checkpoint и обучающий pipeline; сравнить качество,
-   фактическую разреженность по блокам и стоимость скейлов. Текущие наборы синтетические.
-3. **Weights-as-logic и KV:** отдельные эксперименты с заранее заданными baselines
-   и метриками. В этом прототипе они не реализованы.
+| Codec | Payload bytes | Payload bits/weight | Required structure |
+|---|---:|---:|---|
+| baseline2 | 16,384 | 2.000000 | Any trits |
+| dense5 (5/8) | 13,108 | 1.600098 | Any trits |
+| dense17 (17/27) | 13,014 | 1.588623 | Any trits |
+| dense22 (22/35) | 13,034 | 1.591064 | Any trits |
+| sparse41 (4, <=1) | 8,192 | 1.000000 | At most one nonzero in each block of four |
+| sparse82 (8, <=2) | 8,192 | 1.000000 | At most two nonzeros in each block of eight |
 
-Спецификация: [`docs/format.md`](docs/format.md).
-Материал для будущей публикации: [`docs/showcase.md`](docs/showcase.md).
-Этот кодек не совместим побайтово с GGUF/TQ1_0 и не заявляется новым изобретением
-base-3 упаковки; ценность текущей работы — воспроизводимая связка формата, кода и RTL.
+All **15 dataset/codec combinations** recover their input exactly. The recorded
+local validation also passed **22 Python tests** and **1,296 binary decoder
+patterns**, plus unknown-input and stream tests. Sources:
+[`benchmark.json`](reports/benchmark.json), [`validation.md`](reports/validation.md).
+
+Asymptotically, `1 - 1.6/2 = 20%` less payload implies at most `2/1.6 = 1.25x`
+transfer throughput if bandwidth alone limits performance. This is a model,
+not measured FPGA or inference speed. Python timings are median wall times
+from three repetitions after warm-up, not optimized CPU-kernel performance.
+
+Physical BRAM allocation, LUT use, routed timing, DDR throughput, power, and
+model quality are **not yet measured**. Continuous 27/35-bit software packing
+does not establish the physical cost of a memory device.
+
+## Place in Trinity
+
+- [`gHashTag/t27`](https://github.com/gHashTag/t27): compiler and specification stack.
+- [`gHashTag/trinity-fpga`](https://github.com/gHashTag/trinity-fpga): FPGA infrastructure.
+- [`gHashTag/trinity`](https://github.com/gHashTag/trinity): broader compute/runtime stack.
+- **This repository:** memory representation, decoding, storage interfaces,
+  and reproducible memory experiments.
+
+This is a standalone implementation, not a fork of those repositories or an
+already-merged subsystem. Shared tensor formats, scales, buses, and controller
+interfaces require explicit integration work. Base-3 packing and structured
+ternary coding have prior art; the [research audit](docs/research.md) identifies
+the sources and corrects unsupported claims from the initial research note.
+
+Trinity is the shared project of Dmitrii Fedorov and Dmitrii Vasilev. Hosting
+this memory implementation under `dmitrii-f-t27` gives it a direct development
+home without representing the wider Trinity stack as a solo project.
