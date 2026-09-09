@@ -22,10 +22,15 @@ host / workload
     -> ternary output lanes / consumer
 ```
 
-Today the repository implements the format/reference layer, small RTL decoders,
-and a synchronous streaming-memory prototype. The RTL loader is a clocked
-write port, not a host bus or a DDR controller. No end-to-end memory device is
-claimed yet.
+Version 0.2 adds five connected software/RTL directions: Bridge, TensorPack,
+Stream Compute, Conformance Lab and Edge Demo. The real loopback HTTP service
+stores containers in emulated memory and computes exact integer dots. The
+downloaded weights can be replayed in an Icarus ready/valid dot pipeline.
+See [the complete walkthrough](STACK.md) and [release evidence](../reports/stack-validation.md).
+
+The original RTL storage loader remains a clocked write port. The new dot
+pipeline has backpressure; the old storage sequencer does not. No physical
+host bus, DDR controller or end-to-end memory device is claimed yet.
 
 Weight tensors are the first test workload. QAT and model inference remain
 consumers of the memory system, not the full product scope. Other ternary
@@ -74,8 +79,9 @@ after the demonstrator identifies its host and board constraints.
 **Acceptance evidence:** reproducible host-to-device round trips, randomized
 transfer lengths, backpressure, reset during transfer, and invalid/corrupt-data
 tests. Report sustained payload and bus throughput plus latency distributions
-under the stated workload. The current stream has no downstream backpressure;
-this milestone requires additional implementation.
+under the stated workload. The new compute stream implements downstream
+backpressure in simulation; connecting it to a physical storage controller
+and transport remains work.
 
 ## Milestone 3: portability and workload integration
 

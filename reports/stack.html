@@ -1,0 +1,1294 @@
+<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Trinity Memory · five directions</title>
+<style>body{margin:0;background:#0d1424;color:#e6edf7;font:16px/1.6 system-ui}main{max-width:1100px;margin:auto;padding:48px 24px}h1{font-size:42px;line-height:1.15}h2{margin-top:36px}.eyebrow{color:#72dcc0;letter-spacing:.12em}.chain{padding:24px;background:#172338;border:1px solid #32455f;border-radius:12px;font-size:19px}.badge{display:inline-block;background:#184b40;border:1px solid #458b75;padding:4px 12px;border-radius:20px}.muted{color:#afc0d6}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;border-bottom:1px solid #32455f;padding:12px}.scroll{overflow:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}a{color:#72dcc0}details{margin-top:32px}code{color:#9ee0ef}</style>
+<main><div class="eyebrow">TRINITY MEMORY · V0.2</div><h1>From a tensor file<br>to a checked computation.</h1>
+<p><span class="badge">Software + RTL simulation</span></p>
+<p class="chain">TensorPack → Bridge / HTTP → emulated memory → Stream Compute → Edge Demo<br><small>Conformance Lab checks each boundary.</small></p>
+<p class="muted">A hand-authored ternary signal classifier. Every result below is compared against an independent integer reference. Physical hardware has not been tested.</p>
+<h2>Storage and transfer</h2><p>Raw payload counts the 36 trits only. TensorPack includes names, dimensions, scales, headers and checksums. The tiny fixture illustrates metadata overhead.</p>
+<div class="scroll"><table><thead><tr><th>Codec</th><th>Payload bytes</th><th>Container bytes</th><th>HTTP upload + read (ms)</th></tr></thead><tbody><tr><td>dense5</td><td>8</td><td>231</td><td>1.566</td></tr><tr><td>baseline2</td><td>9</td><td>235</td><td>1.407</td></tr></tbody></table></div>
+<h2>End-to-end checks</h2><p>RTL cycles are per output row and include the configured testbench stalls.</p><div class="scroll"><table><thead><tr><th>Codec</th><th>Signal</th><th>Expected</th><th>Predicted</th><th>Integer scores</th><th>RTL cycles</th><th>Check</th></tr></thead><tbody><tr><td>dense5</td><td>step_up</td><td>rising</td><td>rising</td><td>[480, -480, 0]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>dense5</td><td>step_down</td><td>falling</td><td>falling</td><td>[-480, 480, 0]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>dense5</td><td>alternating</td><td>alternating</td><td>alternating</td><td>[0, 0, 360]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>dense5</td><td>offset_step_up</td><td>rising</td><td>rising</td><td>[249, -249, 3]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>dense5</td><td>offset_step_down</td><td>falling</td><td>falling</td><td>[-255, 255, 3]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>dense5</td><td>noisy_alternating</td><td>alternating</td><td>alternating</td><td>[1, -1, 341]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>baseline2</td><td>step_up</td><td>rising</td><td>rising</td><td>[480, -480, 0]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>baseline2</td><td>step_down</td><td>falling</td><td>falling</td><td>[-480, 480, 0]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>baseline2</td><td>alternating</td><td>alternating</td><td>alternating</td><td>[0, 0, 360]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>baseline2</td><td>offset_step_up</td><td>rising</td><td>rising</td><td>[249, -249, 3]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>baseline2</td><td>offset_step_down</td><td>falling</td><td>falling</td><td>[-255, 255, 3]</td><td>12, 11, 11</td><td>PASS</td></tr><tr><td>baseline2</td><td>noisy_alternating</td><td>alternating</td><td>alternating</td><td>[1, -1, 341]</td><td>12, 11, 11</td><td>PASS</td></tr></tbody></table></div><h2>Evidence boundaries</h2><ul><li>Illustrative synthetic fixtures; no measured generalization accuracy.</li><li>HTTP wall times include Python, JSON and scheduling overhead.</li><li>RTL cycles are simulation evidence, not FPGA throughput or power.</li><li>No physical board, DDR controller, trained checkpoint or ZK proof.</li></ul>
+<p><a href="https://github.com/dmitrii-f-t27/trinity-memory">Source and reproduction instructions</a></p><details><summary>Inspect the complete report JSON</summary><pre>{
+  &quot;schema&quot;: &quot;trinity.edge-report.v1&quot;,
+  &quot;passed&quot;: true,
+  &quot;evidence&quot;: [
+    &quot;software-loopback-http&quot;,
+    &quot;rtl-simulation&quot;
+  ],
+  &quot;physical_device_tested&quot;: false,
+  &quot;python&quot;: &quot;3.14.3&quot;,
+  &quot;seed&quot;: 27,
+  &quot;model&quot;: &quot;hand-authored ternary template classifier, shape [3,12]&quot;,
+  &quot;labels&quot;: [
+    &quot;rising&quot;,
+    &quot;falling&quot;,
+    &quot;alternating&quot;
+  ],
+  &quot;fixture_count&quot;: 6,
+  &quot;modes&quot;: [
+    {
+      &quot;codec&quot;: &quot;dense5&quot;,
+      &quot;container_bytes&quot;: 231,
+      &quot;raw_weight_payload_bytes&quot;: 8,
+      &quot;container_sha256&quot;: &quot;42c1cc78a0d9053082e8c72ad3136fab976c6205bb069e20cebb33412f154660&quot;,
+      &quot;roundtrip_exact&quot;: true,
+      &quot;upload_read_wall_ns&quot;: 1565834,
+      &quot;capabilities&quot;: {
+        &quot;protocol&quot;: &quot;trinity-memory-bridge&quot;,
+        &quot;version&quot;: 1,
+        &quot;backend&quot;: &quot;emulator&quot;,
+        &quot;hardware&quot;: false,
+        &quot;persistence&quot;: &quot;process-memory&quot;,
+        &quot;authentication&quot;: &quot;none-loopback-only&quot;,
+        &quot;formats&quot;: [
+          &quot;TMEM/1&quot;,
+          &quot;TensorPack/1&quot;
+        ],
+        &quot;codecs&quot;: [
+          &quot;baseline2&quot;,
+          &quot;dense5&quot;,
+          &quot;dense17&quot;,
+          &quot;dense22&quot;,
+          &quot;sparse41&quot;,
+          &quot;sparse82&quot;
+        ],
+        &quot;methods&quot;: [
+          &quot;trinity.capabilities&quot;,
+          &quot;memory.upload&quot;,
+          &quot;memory.read&quot;,
+          &quot;memory.info&quot;,
+          &quot;memory.delete&quot;,
+          &quot;compute.dot&quot;,
+          &quot;chip_info&quot;,
+          &quot;trinity_chipInfo&quot;
+        ],
+        &quot;limits&quot;: {
+          &quot;max_request_bytes&quot;: 2097152,
+          &quot;max_object_bytes&quot;: 524288,
+          &quot;max_storage_bytes&quot;: 8388608,
+          &quot;max_objects&quot;: 16,
+          &quot;max_trits&quot;: 1000000
+        }
+      },
+      &quot;cases&quot;: [
+        {
+          &quot;name&quot;: &quot;step_up&quot;,
+          &quot;samples&quot;: [
+            -40,
+            -40,
+            -40,
+            -40,
+            -40,
+            -40,
+            40,
+            40,
+            40,
+            40,
+            40,
+            40
+          ],
+          &quot;expected&quot;: &quot;rising&quot;,
+          &quot;label&quot;: &quot;rising&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            480,
+            -480,
+            0
+          ],
+          &quot;scores&quot;: [
+            480.0,
+            -480.0,
+            0.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            480,
+            -480,
+            0
+          ],
+          &quot;rpc_wall_ns&quot;: 626834,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: -480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;step_down&quot;,
+          &quot;samples&quot;: [
+            40,
+            40,
+            40,
+            40,
+            40,
+            40,
+            -40,
+            -40,
+            -40,
+            -40,
+            -40,
+            -40
+          ],
+          &quot;expected&quot;: &quot;falling&quot;,
+          &quot;label&quot;: &quot;falling&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            -480,
+            480,
+            0
+          ],
+          &quot;scores&quot;: [
+            -480.0,
+            480.0,
+            0.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            -480,
+            480,
+            0
+          ],
+          &quot;rpc_wall_ns&quot;: 1141542,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: -480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;alternating&quot;,
+          &quot;samples&quot;: [
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30
+          ],
+          &quot;expected&quot;: &quot;alternating&quot;,
+          &quot;label&quot;: &quot;alternating&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            0,
+            0,
+            360
+          ],
+          &quot;scores&quot;: [
+            0.0,
+            0.0,
+            360.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            0,
+            0,
+            360
+          ],
+          &quot;rpc_wall_ns&quot;: 1018666,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 360,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;offset_step_up&quot;,
+          &quot;samples&quot;: [
+            -8,
+            -7,
+            -9,
+            -8,
+            -6,
+            -8,
+            33,
+            34,
+            35,
+            34,
+            32,
+            35
+          ],
+          &quot;expected&quot;: &quot;rising&quot;,
+          &quot;label&quot;: &quot;rising&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            249,
+            -249,
+            3
+          ],
+          &quot;scores&quot;: [
+            249.0,
+            -249.0,
+            3.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            249,
+            -249,
+            3
+          ],
+          &quot;rpc_wall_ns&quot;: 888375,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 249,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: -249,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 3,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;offset_step_down&quot;,
+          &quot;samples&quot;: [
+            36,
+            35,
+            33,
+            35,
+            34,
+            36,
+            -8,
+            -9,
+            -7,
+            -8,
+            -8,
+            -6
+          ],
+          &quot;expected&quot;: &quot;falling&quot;,
+          &quot;label&quot;: &quot;falling&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            -255,
+            255,
+            3
+          ],
+          &quot;scores&quot;: [
+            -255.0,
+            255.0,
+            3.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            -255,
+            255,
+            3
+          ],
+          &quot;rpc_wall_ns&quot;: 1220291,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: -255,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 255,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 3,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;noisy_alternating&quot;,
+          &quot;samples&quot;: [
+            -25,
+            29,
+            -27,
+            31,
+            -28,
+            30,
+            -26,
+            28,
+            -29,
+            32,
+            -25,
+            31
+          ],
+          &quot;expected&quot;: &quot;alternating&quot;,
+          &quot;label&quot;: &quot;alternating&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            1,
+            -1,
+            341
+          ],
+          &quot;scores&quot;: [
+            1.0,
+            -1.0,
+            341.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            1,
+            -1,
+            341
+          ],
+          &quot;rpc_wall_ns&quot;: 1124709,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 1,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: -1,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;dense5&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 341,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 24
+            }
+          ],
+          &quot;passed&quot;: true
+        }
+      ]
+    },
+    {
+      &quot;codec&quot;: &quot;baseline2&quot;,
+      &quot;container_bytes&quot;: 235,
+      &quot;raw_weight_payload_bytes&quot;: 9,
+      &quot;container_sha256&quot;: &quot;97eac7f9e8ff1e887afabf68e603f15f6ff940fb2941f78a3de4332028ec817a&quot;,
+      &quot;roundtrip_exact&quot;: true,
+      &quot;upload_read_wall_ns&quot;: 1407000,
+      &quot;capabilities&quot;: {
+        &quot;protocol&quot;: &quot;trinity-memory-bridge&quot;,
+        &quot;version&quot;: 1,
+        &quot;backend&quot;: &quot;emulator&quot;,
+        &quot;hardware&quot;: false,
+        &quot;persistence&quot;: &quot;process-memory&quot;,
+        &quot;authentication&quot;: &quot;none-loopback-only&quot;,
+        &quot;formats&quot;: [
+          &quot;TMEM/1&quot;,
+          &quot;TensorPack/1&quot;
+        ],
+        &quot;codecs&quot;: [
+          &quot;baseline2&quot;,
+          &quot;dense5&quot;,
+          &quot;dense17&quot;,
+          &quot;dense22&quot;,
+          &quot;sparse41&quot;,
+          &quot;sparse82&quot;
+        ],
+        &quot;methods&quot;: [
+          &quot;trinity.capabilities&quot;,
+          &quot;memory.upload&quot;,
+          &quot;memory.read&quot;,
+          &quot;memory.info&quot;,
+          &quot;memory.delete&quot;,
+          &quot;compute.dot&quot;,
+          &quot;chip_info&quot;,
+          &quot;trinity_chipInfo&quot;
+        ],
+        &quot;limits&quot;: {
+          &quot;max_request_bytes&quot;: 2097152,
+          &quot;max_object_bytes&quot;: 524288,
+          &quot;max_storage_bytes&quot;: 8388608,
+          &quot;max_objects&quot;: 16,
+          &quot;max_trits&quot;: 1000000
+        }
+      },
+      &quot;cases&quot;: [
+        {
+          &quot;name&quot;: &quot;step_up&quot;,
+          &quot;samples&quot;: [
+            -40,
+            -40,
+            -40,
+            -40,
+            -40,
+            -40,
+            40,
+            40,
+            40,
+            40,
+            40,
+            40
+          ],
+          &quot;expected&quot;: &quot;rising&quot;,
+          &quot;label&quot;: &quot;rising&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            480,
+            -480,
+            0
+          ],
+          &quot;scores&quot;: [
+            480.0,
+            -480.0,
+            0.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            480,
+            -480,
+            0
+          ],
+          &quot;rpc_wall_ns&quot;: 791208,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: -480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;step_down&quot;,
+          &quot;samples&quot;: [
+            40,
+            40,
+            40,
+            40,
+            40,
+            40,
+            -40,
+            -40,
+            -40,
+            -40,
+            -40,
+            -40
+          ],
+          &quot;expected&quot;: &quot;falling&quot;,
+          &quot;label&quot;: &quot;falling&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            -480,
+            480,
+            0
+          ],
+          &quot;scores&quot;: [
+            -480.0,
+            480.0,
+            0.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            -480,
+            480,
+            0
+          ],
+          &quot;rpc_wall_ns&quot;: 992541,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: -480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 480,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;alternating&quot;,
+          &quot;samples&quot;: [
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30,
+            -30,
+            30
+          ],
+          &quot;expected&quot;: &quot;alternating&quot;,
+          &quot;label&quot;: &quot;alternating&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            0,
+            0,
+            360
+          ],
+          &quot;scores&quot;: [
+            0.0,
+            0.0,
+            360.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            0,
+            0,
+            360
+          ],
+          &quot;rpc_wall_ns&quot;: 1009250,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 0,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 360,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;offset_step_up&quot;,
+          &quot;samples&quot;: [
+            -8,
+            -7,
+            -9,
+            -8,
+            -6,
+            -8,
+            33,
+            34,
+            35,
+            34,
+            32,
+            35
+          ],
+          &quot;expected&quot;: &quot;rising&quot;,
+          &quot;label&quot;: &quot;rising&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            249,
+            -249,
+            3
+          ],
+          &quot;scores&quot;: [
+            249.0,
+            -249.0,
+            3.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            249,
+            -249,
+            3
+          ],
+          &quot;rpc_wall_ns&quot;: 986375,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 249,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: -249,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 3,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;offset_step_down&quot;,
+          &quot;samples&quot;: [
+            36,
+            35,
+            33,
+            35,
+            34,
+            36,
+            -8,
+            -9,
+            -7,
+            -8,
+            -8,
+            -6
+          ],
+          &quot;expected&quot;: &quot;falling&quot;,
+          &quot;label&quot;: &quot;falling&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            -255,
+            255,
+            3
+          ],
+          &quot;scores&quot;: [
+            -255.0,
+            255.0,
+            3.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            -255,
+            255,
+            3
+          ],
+          &quot;rpc_wall_ns&quot;: 860458,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: -255,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 255,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 3,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            }
+          ],
+          &quot;passed&quot;: true
+        },
+        {
+          &quot;name&quot;: &quot;noisy_alternating&quot;,
+          &quot;samples&quot;: [
+            -25,
+            29,
+            -27,
+            31,
+            -28,
+            30,
+            -26,
+            28,
+            -29,
+            32,
+            -25,
+            31
+          ],
+          &quot;expected&quot;: &quot;alternating&quot;,
+          &quot;label&quot;: &quot;alternating&quot;,
+          &quot;ambiguous&quot;: false,
+          &quot;accumulators&quot;: [
+            1,
+            -1,
+            341
+          ],
+          &quot;scores&quot;: [
+            1.0,
+            -1.0,
+            341.0
+          ],
+          &quot;backend&quot;: &quot;emulator&quot;,
+          &quot;reference&quot;: [
+            1,
+            -1,
+            341
+          ],
+          &quot;rpc_wall_ns&quot;: 1098292,
+          &quot;rtl&quot;: [
+            {
+              &quot;cycles&quot;: 12,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 4,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 27,
+              &quot;stalls&quot;: 4,
+              &quot;result&quot;: 1,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 9,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 28,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: -1,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            },
+            {
+              &quot;cycles&quot;: 11,
+              &quot;groups&quot;: 3,
+              &quot;input_stalls&quot;: 0,
+              &quot;output_stalls&quot;: 3,
+              &quot;source_bubbles&quot;: 0,
+              &quot;resets&quot;: 0,
+              &quot;codec&quot;: &quot;baseline2&quot;,
+              &quot;evidence&quot;: &quot;rtl-simulation&quot;,
+              &quot;simulator&quot;: &quot;Icarus Verilog&quot;,
+              &quot;accumulator_bits&quot;: 32,
+              &quot;seed&quot;: 29,
+              &quot;stalls&quot;: 3,
+              &quot;result&quot;: 341,
+              &quot;error&quot;: false,
+              &quot;weight_count&quot;: 12,
+              &quot;result_cycle&quot;: 8,
+              &quot;encoded_weight_bits&quot;: 30
+            }
+          ],
+          &quot;passed&quot;: true
+        }
+      ]
+    }
+  ],
+  &quot;limitations&quot;: [
+    &quot;Illustrative synthetic fixtures; no measured generalization accuracy.&quot;,
+    &quot;HTTP wall times include Python, JSON and scheduling overhead.&quot;,
+    &quot;RTL cycles are simulation evidence, not FPGA throughput or power.&quot;,
+    &quot;No physical board, DDR controller, trained checkpoint or ZK proof.&quot;
+  ]
+}</pre></details></main></html>
