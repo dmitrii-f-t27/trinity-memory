@@ -1,9 +1,10 @@
 # Framed ternary/int8 stream compute
 
-`rtl/trinity_dot_stream.v` implements a dot product with five ternary weights
-and five signed int8 activations per input beat. `DENSE5=1` reuses the existing
-base-3 decoder; `DENSE5=0` reuses the five-lane 2-bit decoder. Both feed the same
-checked addition/subtraction pipeline. This is a synthesizable RTL design
+[The native `.t27` pipeline](../t27/rtl/dot_stream.t27) implements a dot product
+with five ternary weights and five signed int8 activations per input beat.
+[Its wiring adapter](../rtl/t27/dot_stream.v) exposes
+`trinity_dot_stream_t27`. `DENSE5=1` selects base-3 decoding; `DENSE5=0` selects
+five-lane 2-bit decoding. Both feed the same checked addition/subtraction pipeline. This is a synthesizable RTL design
 verified by Icarus simulation; synthesis, routed timing, physical device
 measurements, DDR integration, and model-quality measurements are not provided.
 
@@ -43,13 +44,14 @@ Unknown `in_last`/handshake control signals are outside the digital protocol.
 
 The first register stage captures a decoded five-term group sum, validity,
 and frame flags. Each activation is sign-extended before conditional negation;
-in particular `(-1) * (-128) = 128`. A signed 12-bit group sum covers all five
+in particular `(-1) * (-128) = 128`. The native signed 16-bit group sum holds all five
 products, whose exact range is -640..640. The second stage adds the group to
 the frame accumulator and creates a result on the final group.
 
-`ACC_WIDTH` must be at least 12; the Python runner supports widths 12..32 and
-uses 32 for its public API. The accumulator checks overflow after each group
-using a one-bit-wider addition. Overflow poisons the whole frame; it never
+The hardware adapter supports `ACC_WIDTH=2..32`; the native runner accepts
+12..32 for frame simulations and uses 32 for `run_rtl_dot`. Unsupported widths
+fail explicitly. The native `i32` accumulator checks overflow after each group
+using an `i64` temporary and configured signed bounds. Overflow poisons the whole frame; it never
 wraps or saturates. A later cancellation does not repair an earlier overflow.
 Terms inside one five-lane group are summed exactly before this check.
 
@@ -82,22 +84,29 @@ assert dense["result"] == baseline["result"] == 7
 assert dense["evidence"] == "rtl-simulation"
 ```
 
-The function validates exact ternary weights and signed int8 activations,
-writes temporary `.mem` fixtures, compiles the RTL with `iverilog`, executes
-`vvp`, and parses the hardware-language result. A Python integer dot product
-is an independent scoreboard oracle, not the returned execution path. Missing
-tools or RTL files, compilation failures, simulation assertions, and timeouts
-raise `RTLSimulationError`; there is no Python fallback for this explicit API.
+The Python function validates Python argument types and calls
+[the native `.t27` runner](../t27/rtl_driver.t27). That runner validates values,
+prepares an independent integer scoreboard and `.mem` fixtures, invokes
+`iverilog` and `vvp` through the generic OS process adapter, and verifies the
+observed results and counters. The frozen Python implementation is used only
+in [differential tests](../tests/native/test_rtl_parity.py). Missing tools or RTL
+files, compilation failures, simulation assertions, and timeouts raise
+`RTLSimulationError`; there is no legacy execution fallback.
 Input values outside the contract raise `ValueError`. A signed32 prefix-group
-overflow raises `OverflowError` before allocating simulator fixtures.
+overflow raises `OverflowError` before starting the simulator.
 
-RTL resources are resolved from `TRINITY_MEMORY_RTL_ROOT` when set (a repository
-root or `rtl` directory); otherwise from a packaged `trinity_memory/rtl`
-directory or the source checkout. An explicit missing resource location fails
-rather than silently using a different checkout. The four needed resources are
-`trinity_dot_stream.v`, `tb_dot_stream.v`, `generated/ternary_dense5_decoder.v`,
-and `ternary_baseline5_decoder.v`. An installed distribution must include these
-files, or its caller must set the explicit resource location.
+Native resources default to `rtl/resources` alongside the loaded native library
+or executable; the source build places them in `build/t27/rtl/resources`.
+`TRINITY_T27_RTL_ROOT` selects another explicit resource directory;
+`TRINITY_MEMORY_RTL_ROOT` remains a compatibility alias. A missing explicit
+location fails. Point either variable only to generated native resources.
+There is no automatic lookup of `tests/reference/rtl`.
+
+The resource names remain `trinity_dot_stream.v`, `tb_dot_stream.v`,
+`generated/ternary_dense5_decoder.v`, and `ternary_baseline5_decoder.v` for
+interface compatibility. The production build fills them with generated native
+RTL and wiring; the old algorithms live only under
+[tests/reference/rtl](../tests/reference/rtl/).
 
 Returned counters describe the simulator's seeded testbench:
 
@@ -124,13 +133,15 @@ an acceleration ratio between them.
 ## Verification
 
 ```sh
-python3 scripts/test_dot_rtl.py
+python3 -m unittest discover -s tests/native -p 'test_rtl_parity.py' -v
 python3 -m unittest discover -s tests -p 'test_rtl_compute.py' -v
 ```
 
-The explicit RTL script fails clearly if Icarus is missing. Unit tests skip
-simulation-only cases when it is absent and still check input validation and
-the explicit failure behavior. CI must install Icarus and run the RTL script.
+The native differential suite requires actual Icarus execution and compares the
+new runner with frozen v0.2 oracle fixtures. It also checks that missing tools
+and resources fail. CI installs Icarus; generation or parser success alone is
+not simulation evidence. `scripts/test_dot_rtl.py` remains an explicit legacy
+oracle test, not the production implementation.
 
 For each codec, the protocol suite scores 57 outputs: random ternary/int8
 vectors, empty and partial groups, -128/+127 boundaries, seven malformed frames,

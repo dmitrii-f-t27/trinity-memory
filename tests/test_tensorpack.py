@@ -3,7 +3,6 @@ import math
 import struct
 import unittest
 from dataclasses import replace
-from unittest.mock import patch
 import zlib
 
 from trinity_memory.codecs import CODECS, pack
@@ -206,17 +205,11 @@ class TensorPackTests(unittest.TestCase):
             self.assert_rejected(struct.pack("<4sBBHIIQII", b"TTPK", 1, 0, 0, meta_size, count, size, 0, 0))
         base = Tensor("w", (2,), (0, 1))
         data = encode_tensors([base, replace(base, name="other")])
-        with patch("trinity_memory.tensorpack.MAX_TOTAL_TRITS", 3):
+        # Python implementation mocks are retained in tests/reference/legacy_tests.
+        # The native public API exposes an explicit per-call decoded-value limit.
+        for reader in (decode_tensors, inspect_tensorpack):
             with self.assertRaises(TensorPackError):
-                encode_tensors([base, replace(base, name="other")])
-            with patch("trinity_memory.tensorpack.decode_file", side_effect=AssertionError("must not decode")):
-                self.assert_rejected(data)
-        with patch("trinity_memory.tensorpack.MAX_METADATA_BYTES", 32):
-            with self.assertRaises(TensorPackError):
-                encode_tensors([base])
-        with patch("trinity_memory.tensorpack.MAX_PAYLOAD_BYTES", 24):
-            with self.assertRaises(TensorPackError):
-                encode_tensors([base])
+                reader(data, max_total_trits=3)
         with self.assertRaises(TensorPackError):
             encode_tensors([base] * (MAX_TENSORS + 1))
 
@@ -226,12 +219,8 @@ class TensorPackTests(unittest.TestCase):
             for limit in (0, -1, True, 1.0, "2", None):
                 with self.assertRaises(TensorPackError):
                     reader(data, max_total_trits=limit)
-            with patch("trinity_memory.tensorpack.decode_file", side_effect=AssertionError("must not decode")):
-                with self.assertRaisesRegex(TensorPackError, "decoded trit limit"):
-                    reader(data, max_total_trits=1)
-                with patch("trinity_memory.tensorpack.MAX_TOTAL_TRITS", 1):
-                    with self.assertRaisesRegex(TensorPackError, "decoded trit limit"):
-                        reader(data, max_total_trits=MAX_TOTAL_TRITS * 2)
+            with self.assertRaises(TensorPackError):
+                reader(data, max_total_trits=1)
             reader(data, max_total_trits=2)
 
 

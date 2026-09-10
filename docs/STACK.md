@@ -1,20 +1,22 @@
 # Five directions: reproducible software and RTL demonstrator
 
-Version 0.2 connects the five directions in one repository and one Python package.
+Version 0.3 connects all five directions through executable t27 and a native library.
+Python exposes compatibility adapters; v0.2 remains an independent test oracle.
+Build the native artifacts first using [the migration guide](T27-MIGRATION.md).
 No physical FPGA, DDR, power, production driver or model-quality result is implied.
 
 | Direction | Implementation | Acceptance path |
 |---|---|---|
-| Bridge | `trinity_memory/bridge.py`, real loopback HTTP JSON-RPC memory service/client | upload/read exact bytes, limits/errors, SDK adapter |
-| TensorPack | `trinity_memory/tensorpack.py`, TTPK v1 around TMEM v1 | named tensors, shape/axes/scales, strict bounds/CRC/schema |
-| Stream Compute | `rtl/trinity_dot_stream.v`, Python Icarus runner | dense5/baseline5 dot, int8 activations, ready/valid, invalid frames/reset |
-| Conformance Lab | `examples/conformance.json`, `trinity_memory/conformance.py`, tests | fixed independent bytes/sums and randomized network/RTL checks |
-| Edge Demo | `trinity_memory/edge.py` | fixed signal classifier, two encodings, exact reference and optional RTL comparisons |
+| Bridge | `t27/bridge.t27`, `t27/http.t27`, real loopback HTTP JSON-RPC memory service/client | upload/read exact bytes, limits/errors, SDK adapter |
+| TensorPack | `t27/tensorpack*.t27`, TTPK v1 around TMEM v1 | named tensors, shape/axes/scales, strict bounds/CRC/schema |
+| Stream Compute | `t27/rtl/dot_stream.t27`, native Icarus runner | dense5/baseline5 dot, int8 activations, ready/valid, invalid frames/reset |
+| Conformance Lab | `examples/conformance.json`, `t27/experiments.t27`, tests | fixed independent bytes/sums and randomized network/RTL checks |
+| Edge Demo | `t27/experiments.t27` | fixed signal classifier, two encodings, exact reference and optional RTL comparisons |
 
 ## Reproduce the complete path
 
 Requirements: Python 3.10+, Icarus Verilog (`iverilog` and `vvp`) on PATH for RTL.
-Python runtime dependencies: standard library only. Run from a source checkout:
+Python adapter dependencies: standard library plus the built native library. Run from a source checkout:
 
 ```sh
 make check
@@ -23,7 +25,7 @@ make demo
 ```
 
 `make demo` writes `build/edge-report.json` and `build/edge-report.html`. Open the
-HTML locally; it contains its data and needs no external scripts. Checked-in
+HTML locally; it contains its data and needs no external scripts. Historical v0.2 checked-in
 release snapshots are `reports/stack.json`, `reports/stack.html` and
 `reports/conformance.json`; see `reports/stack-validation.md` for provenance.
 
@@ -43,7 +45,7 @@ hand-authored template matrix + metadata
   -> independent arithmetic comparison and HTML/JSON report
 ```
 
-The HTTP backend computes in Python. The RTL replay runs separately from that
+The HTTP backend executes the compiled t27 kernels. The RTL replay runs separately from that
 backend, with retrieved weights and the same activations. This is not an HTTP
 driver for a board or a hardware-executed RPC call.
 

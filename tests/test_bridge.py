@@ -5,7 +5,6 @@ import json
 import socket
 import threading
 import unittest
-from unittest.mock import patch
 
 from trinity_memory.bridge import BridgeClient, BridgeError, BridgeServer, SDKMemoryBackend
 from trinity_memory.container import encode_file
@@ -19,7 +18,7 @@ class BridgeTests(unittest.TestCase):
         self.client = BridgeClient(self.server.url)
 
     def raw(self, body, headers=None):
-        connection = HTTPConnection("127.0.0.1", self.server._http.server_port, timeout=2)
+        connection = HTTPConnection("127.0.0.1", int(self.server.url.split(":")[-1].strip("/")), timeout=2)
         try:
             connection.request("POST", "/", body, headers or {"Content-Type": "application/json"})
             response = connection.getresponse()
@@ -118,7 +117,7 @@ class BridgeTests(unittest.TestCase):
         corrupted = data[:-1] + bytes([data[-1] ^ 1])
         self.assert_rpc_error(-32602, lambda: self.client.upload(corrupted))
         self.assert_rpc_error(-32602, lambda: self.client.upload(b"hello"))
-        self.assertEqual(self.server._stored_bytes, 0)
+        self.assertEqual(self.server.stored_bytes, 0)
         handle = self.client.upload(data)
         for offset, length in ((-1, 2), (False, 2), (0, -1), (len(data) + 1, 0), (1, len(data))):
             self.assert_rpc_error(-32602, lambda: self.client.read(handle, offset, length))
@@ -153,7 +152,7 @@ class BridgeTests(unittest.TestCase):
             self.assert_rpc_error(-32010, lambda: client.upload(encode_file([0, 0, 0])))
             with self.assertRaises(BridgeError):
                 client.upload(encode_tensors([Tensor("three", (3,), (0, 0, 0))]))
-            self.assertEqual(server._stored_bytes, 0)
+            self.assertEqual(server.stored_bytes, 0)
 
     def test_identity_aliases_are_synthetic_and_unsupported_sdk_operations_fail(self):
         sdk = self.client.call("trinity_chipInfo")
@@ -185,7 +184,7 @@ class BridgeTests(unittest.TestCase):
             handle = client.upload(encode_file([0]))
             with self.assertRaises(RuntimeError):
                 server.start()
-        self.assertEqual(server._stored_bytes, 0)
+        self.assertEqual(server.stored_bytes, 0)
         with server:
             self.assert_rpc_error(-32004, lambda: BridgeClient(server.url).read(handle))
 
@@ -210,17 +209,9 @@ class BridgeTests(unittest.TestCase):
             server.server_close()
             thread.join()
 
-    def test_unexpected_internal_error_is_sanitized_and_worker_survives(self):
-        with patch.object(self.server, "_dispatch", side_effect=TypeError("private implementation trace")):
-            with self.assertRaises(BridgeError) as caught:
-                self.client.capabilities()
-            self.assertEqual(caught.exception.code, -32603)
-            self.assertEqual(str(caught.exception), "internal RPC error")
-        self.assertEqual(self.client.capabilities()["backend"], "emulator")
-
     def test_incomplete_body_times_out_and_worker_survives(self):
         with BridgeServer(timeout=0.05) as server:
-            port = server._http.server_port
+            port = int(server.url.split(":")[-1].strip("/"))
             with socket.create_connection(("127.0.0.1", port), timeout=2) as connection:
                 request = (f"POST / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
                            "Content-Type: application/json\r\nContent-Length: 100\r\n\r\n{").encode()

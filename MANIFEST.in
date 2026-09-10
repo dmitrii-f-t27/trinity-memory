@@ -1,7 +1,13 @@
 include README.ru.md
-recursive-include rtl *.v
+recursive-include rtl *.v *.sv *.tcl
 recursive-include docs *.md
 recursive-include examples *.json
 recursive-include scripts *.py
 recursive-include tests *.py
 include Makefile
+
+include setup.py
+recursive-include t27 *.t27 *.md
+recursive-include native *.c *.cpp *.h *.lock
+recursive-include tools *.sh *.py
+recursive-include tests *.c *.sv *.v *.tcl *.json *.md *.mjs

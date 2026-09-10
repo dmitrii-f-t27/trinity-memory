@@ -1,11 +1,53 @@
-name: Memory stack conformance
+name: Executable t27 stack
 on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CC: clang
+      CXX: clang++
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fetch pinned compiler and install build tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y iverilog clang lld libssl-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Generate and execute native C, RTL and WASM with differential tests
+        run: |
+          sh tools/test-t27.sh
+          python -m unittest discover -s tests/reference/legacy_tests -v
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-t27-evidence
+          path: build/t27/
   python:
+    needs: native
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python: ['3.10', '3.12', '3.14']
     steps:
@@ -13,59 +55,50 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m unittest discover -s tests -v
-      - run: python scripts/generate_rtl.py --check
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-t27-evidence
+          path: build/t27
+      - name: Restore executable mode and install simulator
+        run: |
+          chmod +x build/t27/trinity-memory-t27
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+      - name: Exercise public native Python adapters
+        run: python -m unittest discover -s tests -v
       - run: python -m trinity_memory benchmark --count 4096 --repeats 1 --output build/benchmark.json
       - run: python scripts/render_report.py build/benchmark.json --output build/report.html
-      - run: python -m trinity_memory conformance --output build/conformance-report.json
-      - run: python -m trinity_memory edge-demo
-      - run: python -m pip install --no-deps . --target build/installed
-      - name: Check installed package outside the source tree
-        run: |
-          cd /tmp
-          PYTHONPATH="$GITHUB_WORKSPACE/build/installed" python -m trinity_memory edge-demo --output "$GITHUB_WORKSPACE/build/installed-edge.json" --html "$GITHUB_WORKSPACE/build/installed-edge.html"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: experiment-python-${{ matrix.python }}
-          path: |
-            build/benchmark.json
-            build/report.html
-            build/conformance-report.json
-            build/edge-report.json
-            build/edge-report.html
-            build/installed-edge.json
-  rtl:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: sudo apt-get update && sudo apt-get install -y iverilog
-      - run: python scripts/test_rtl.py
-      - run: python scripts/test_dot_rtl.py
-      - run: python -m trinity_memory conformance --rtl
+      - run: python -m trinity_memory conformance --rtl --output build/conformance-report.json
       - run: python -m trinity_memory edge-demo --rtl
-      - run: python -m pip install --no-deps . --target build/installed-rtl
-      - name: Check wheel RTL resources outside the source tree
+      - name: Build and install platform wheel
+        run: |
+          python -m pip wheel --no-deps . --wheel-dir build/wheels
+          python -m pip install --no-deps build/wheels/*.whl --target build/installed
+          python tests/native/test_installed_wheel.py --wheel build/wheels/*.whl --rtl --output build/installed-wheel.json
+      - name: Exercise installed package outside the checkout
         run: |
           cd /tmp
-          PYTHONPATH="$GITHUB_WORKSPACE/build/installed-rtl" python -m trinity_memory edge-demo --rtl --output "$GITHUB_WORKSPACE/build/installed-rtl.json" --html "$GITHUB_WORKSPACE/build/installed-rtl.html"
+          PYTHONPATH="$GITHUB_WORKSPACE/build/installed" python -m trinity_memory edge-demo --rtl --output "$GITHUB_WORKSPACE/build/installed-edge.json" --html "$GITHUB_WORKSPACE/build/installed-edge.html"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: stream-compute-evidence
+          name: native-python-${{ matrix.python }}
           path: |
-            build/conformance-report.json
-            build/edge-report.json
-            build/edge-report.html
-            build/installed-rtl.json
+            build/*.json
+            build/*.html
+            build/wheels/
   sdk:
+    needs: native
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-t27-evidence
+          path: build/t27
       - name: Fetch the explicitly pinned upstream SDK
         run: |
           git clone https://github.com/gHashTag/trinity-sdk.git build/upstream-sdk
