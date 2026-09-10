@@ -28,8 +28,15 @@ stores containers in emulated memory and computes exact integer dots. The
 downloaded weights can be replayed in an Icarus ready/valid dot pipeline.
 See [the complete walkthrough](STACK.md) and [release evidence](../reports/stack-validation.md).
 
-The original RTL storage loader remains a clocked write port. The new dot
-pipeline has backpressure; the old storage sequencer does not. No physical
+The current implementation uses executable [.t27 host modules](../t27/) and
+[.t27 RTL sources](../t27/rtl/), with generated C/Verilog and small OS/wiring
+adapters. The original v0.2 Python and RTL are frozen under
+[tests/reference](../tests/reference/) for differential verification; they are
+not runtime fallbacks. [Migration scope](T27-MIGRATION.md) records the current
+interfaces and limits.
+
+The native storage loader remains a clocked write port. The dot
+pipeline has backpressure; the storage sequencer does not. No physical
 host bus, DDR controller or end-to-end memory device is claimed yet.
 
 Weight tensors are the first test workload. QAT and model inference remain
@@ -42,7 +49,12 @@ workloads may be added after their representation and access needs are specified
 - Structured sparse codecs with at most one nonzero per four values or two per
   eight. They reject incompatible blocks rather than silently changing data.
 - TMEM v1 lengths, canonical padding, and CRC32; CLI and raw RTL word export.
-- Dense5 and sparse41 decoders, and dense5/baseline5 synchronous streams.
+- Native dense5, baseline5 and sparse41 decoders, and dense5/baseline5 streams.
+- Default storage checks every logical count 1..320. Explicit native capacity
+  specializations were simulated at **1, 65, 820, and 4096 groups**, with selected
+  logical counts up to 20480; this does not cover every intervening capacity.
+  The [capacity generator](../tools/generate-t27-storage.py) changes a source
+  bound and regenerates the same `.t27` algorithm.
 - Software tests, Icarus Verilog simulations, and synthetic byte/timing reports.
 
 Evidence is in [validation](../reports/validation.md) and

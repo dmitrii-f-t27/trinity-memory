@@ -19,3 +19,10 @@ demo:
 report:
 	$(PYTHON) -m trinity_memory benchmark --count 65536 --repeats 3
 	$(PYTHON) scripts/render_report.py
+
+.PHONY: t27 t27-test
+t27:
+	sh tools/build-t27.sh
+
+t27-test:
+	PYTHON=$(PYTHON) sh tools/test-t27.sh

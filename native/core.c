@@ -1,0 +1,27 @@
+/* Foreign ABI glue only. All codec and numeric algorithms are generated. */
+#include <math.h>
+#include "ffi.h"
+#include "runtime.h"
+#include "process.h"
+#include "assets.h"
+#if defined(__clang__)
+/* Upstream emits extra parentheses around equality tests. */
+#pragma clang diagnostic ignored "-Wparentheses-equality"
+#endif
+#include "codecs.h"
+#include "container.h"
+#include "compute.h"
+#include "sparsity.h"
+#include "json.h"
+#include "json_writer.h"
+#include "tensorpack.h"
+#include "tensorpack_json.h"
+#include "tensorpack_cli.h"
+#include "http.h"
+#include "bridge.h"
+#include "client.h"
+#include "random.h"
+#include "rtl_driver.h"
+#include "experiments.h"
+#include "reports.h"
+#include "python_api.h"

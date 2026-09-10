@@ -1,19 +1,28 @@
 # Trinity Memory
 
-[![Reference codecs and RTL](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml)
+[![Executable t27 stack](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml)
 
 **Ternary memory stack: Bridge, TensorPack, Stream Compute, Conformance Lab and Edge Demo.**
+
+**Version 0.3 implements the stack in executable t27:** codecs, containers,
+JSON/HTTP Bridge, compute, experiments, reports and CLI live in [`t27/`](t27/).
+The compiler generates native C, Verilog and the browser's WebAssembly codec.
+Python is a compatibility adapter; the v0.2 implementation is a frozen test oracle.
+See [build instructions and compatibility limits](docs/T27-MIGRATION.md) and
+[issue #1](https://github.com/dmitrii-f-t27/trinity-memory/issues/1).
+
+[Native Edge report](reports/t27/edge.html) · [Native benchmark](reports/t27/index.html) · [Migration validation](reports/t27/validation.md)
 
 [Russian overview](README.ru.md) · [Direction and roadmap](docs/DIRECTION.md) ·
 [Format specification](docs/format.md) · [Hardware protocol](docs/hardware.md) ·
 [Research audit](docs/research.md) · [Five-direction walkthrough](docs/STACK.md)
 
 Trinity Memory is a dedicated experimental memory direction for the Trinity
-ecosystem. This repository contains the reference implementation and evidence
+ecosystem. This repository contains the native implementation and evidence
 for storing and retrieving balanced ternary values (`-1`, `0`, `+1`) using
 binary memory. It has its own code, tests, reports, and hardware roadmap.
 
-Version 0.2 is a **working software and RTL-simulation demonstrator**. A real
+Version 0.3 is a **working software and RTL-simulation demonstrator**. A real
 loopback HTTP client/server connects tensor files to emulated memory and exact
 integer computations; an optional Icarus replay verifies the retrieved weights
 in RTL. Physical board transport and FPGA measurements remain next steps.
@@ -31,19 +40,24 @@ in RTL. Physical board transport and FPGA measurements remain next steps.
 ```sh
 git clone https://github.com/dmitrii-f-t27/trinity-memory.git
 cd trinity-memory
-make check     # Python tests + original and new RTL tests; Icarus required
+git clone https://github.com/gHashTag/t27.git build/compiler
+git -C build/compiler checkout "$(cat native/compiler.lock)"
+export T27_ROOT="$PWD/build/compiler"
+make t27       # see prerequisite toolchains in docs/T27-MIGRATION.md
+make t27-test  # native sanitizers, frozen-oracle parity, HTTP, RTL, WASM
+make check     # public adapters + hardware regression checks
 make stack     # network and RTL conformance
 make demo      # build/edge-report.html and JSON
 ```
 
-Open [the release report](reports/stack.html) locally after downloading it;
+Open [the historical v0.2 release report](reports/stack.html) locally after downloading it;
 GitHub shows HTML source. For software only, run
 `python3 -m trinity_memory edge-demo` without `--rtl`.
 See [validation](reports/stack-validation.md) for evidence and limitations.
 
 ## Current implementation
 
-- Six lossless reference codecs: `baseline2`, `dense5`, `dense17`, `dense22`,
+- Six lossless native codecs: `baseline2`, `dense5`, `dense17`, `dense22`,
   `sparse41`, and `sparse82`.
 - TMEM v1 files with explicit lengths, canonical padding, and CRC32 integrity.
 - A CLI for memory/tensor packing, inspection, transfer, computation and reports.
@@ -58,7 +72,9 @@ model, a DDR controller, or a physical multi-level memory-cell implementation.
 
 ## Reproduce
 
-Python 3.10+; the reference package has no third-party runtime dependencies.
+Build the native library first (instructions above). Python 3.10+ adapters have
+no third-party Python runtime dependencies. Platform libraries are described in
+[the migration guide](docs/T27-MIGRATION.md).
 
 ```sh
 python3 -m unittest discover -s tests -v
@@ -66,7 +82,7 @@ python3 -m trinity_memory benchmark --count 65536 --repeats 3
 python3 scripts/render_report.py
 ```
 
-Open [`reports/index.html`](reports/index.html) locally to use the report and
+Open the historical [`reports/index.html`](reports/index.html) locally to use the report and
 five-trit encoder. It has no server or CDN dependency. The checked-in report
 has Russian labels; the raw results are in [`benchmark.json`](reports/benchmark.json).
 GitHub displays HTML source, so download/open the file to use its controls.
@@ -80,8 +96,8 @@ brew install icarus-verilog
 python3 scripts/test_rtl.py
 ```
 
-`make check` runs Python and RTL checks. `make report` regenerates the original
-codec measurements and HTML report. Optional CLI installation:
+`make check` runs Python and RTL checks. `make report` records new native
+codec measurements and renders the HTML report. Optional CLI installation:
 `python3 -m pip install .`. Built wheels include the RTL resources; Icarus must
 still be installed separately to use `--rtl`.
 

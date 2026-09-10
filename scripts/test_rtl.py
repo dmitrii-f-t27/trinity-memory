@@ -14,11 +14,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
+import os
 
 
 def expected_tables() -> dict[str, list[int]]:
     """Enumerate logical states independently of the RTL generator's division loop."""
-    from trinity_memory.codecs import pack, unpack
+    from trinity_memory_reference.codecs import pack, unpack
 
     tables = {
         "dense5": [0] * 256,
@@ -52,9 +54,14 @@ def main() -> int:
         if shutil.which(tool) is None:
             print(f"Required simulator tool not found: {tool}. Install Icarus Verilog.", file=sys.stderr)
             return 2
-    subprocess.run([sys.executable, str(ROOT / "scripts/generate_rtl.py"), "--check"], check=True)
+    # Frozen generator is an independent test oracle; production compiles .t27.
+    import generate_rtl_reference as reference_generator
+    reference_generator.ROOT = ROOT / "tests/reference"
+    for path, contents in reference_generator.generated_files().items():
+        if path.read_text() != contents:
+            raise AssertionError(f"Frozen legacy RTL fixture changed: {path}")
     tables = expected_tables()
-    sources = sorted((ROOT / "rtl").glob("*.v")) + sorted((ROOT / "rtl/generated").glob("*.v"))
+    sources = sorted((ROOT / "tests/reference/rtl").glob("*.v")) + sorted((ROOT / "tests/reference/rtl/generated").glob("*.v"))
     with tempfile.TemporaryDirectory(prefix="trinity-rtl-") as temporary:
         directory = Path(temporary)
         for name, values in tables.items():

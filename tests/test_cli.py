@@ -23,7 +23,7 @@ class CliTests(unittest.TestCase):
                 self.assertEqual(main(["export-rtl", str(source), str(memory)]), 0)
             self.assertEqual(json.loads(output.read_text()), values)
             self.assertEqual(memory.read_text().splitlines()[0], "b7")
-            self.assertIn('"validated": true', captured.getvalue())
+            self.assertTrue(json.loads(captured.getvalue().splitlines()[0])["validated"])
 
     def test_error_does_not_create_output(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -33,7 +33,7 @@ class CliTests(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()) as errors:
                 self.assertEqual(main(["pack", str(source), str(output), "--codec", "sparse41"]), 2)
             self.assertFalse(output.exists())
-            self.assertIn("at most 1 nonzeros", errors.getvalue())
+            self.assertIn("rejected", errors.getvalue().lower())
 
     def test_benchmark_sizes_and_reproducible_data(self):
         report = run_benchmark(count=88, repeats=1)

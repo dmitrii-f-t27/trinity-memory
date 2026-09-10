@@ -10,8 +10,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests/reference"))
+import os
 
-from trinity_memory.rtl_compute import (  # noqa: E402
+from trinity_memory_reference.rtl_compute import (  # noqa: E402
     RTLSimulationError, _packet, _packets, _require_tools, _run_packets,
 )
 
