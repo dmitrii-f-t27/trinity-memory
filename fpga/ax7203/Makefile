@@ -28,7 +28,7 @@ SOURCES   := $(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v \
              $(CURDIR)/tms_dut_wrappers.v $(CURDIR)/tms_uart_tx.v $(BUILD)/tms_trace_bank.v $(CURDIR)/tms_trace_player.v
 REL       = $(patsubst $(ROOT)/%,%,$(1))
 
-.PHONY: gen sim synth pnr bit flash capture detect clean
+.PHONY: gen sim synth chipdb pnr bit flash capture detect clean
 
 gen: $(BUILD)/tms_trace_bank.v $(RTL)/dot_stream.v
 
@@ -51,6 +51,7 @@ synth: $(BUILD)/$(TOP).json
 $(BUILD)/$(TOP).json: $(SOURCES)
 	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) $(TOP); synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7 -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
 
+chipdb: $(CHIPDB)
 $(CHIPDB):
 	mkdir -p $(dir $@)
 	$(DOCKER) bash -c "cd /nextpnr-xilinx && python3 xilinx/python/bbaexport.py --device $(PART) --bba /work/$(call REL,$(BUILD))/chipdb/$(PART).bba && bbasm -l /work/$(call REL,$(BUILD))/chipdb/$(PART).bba /work/$(call REL,$@) && rm -f /work/$(call REL,$(BUILD))/chipdb/$(PART).bba"
