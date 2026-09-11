@@ -1,0 +1,97 @@
+name: fpga-ax7203
+
+# Bitstream for the AX7203 (XC7A200T-FBG484-2) trace player on the open flow:
+# pinned t27c -> generated cores -> Icarus pre-silicon run -> yosys ->
+# nextpnr-xilinx -> prjxray -> .bit, all inside regymm/openxc7 (the image
+# gHashTag/trinity-fpga builds this board with). The chip database is cached
+# between runs; generating it is the long step (about an hour on ubuntu-latest).
+# Flashing and the UART capture happen on the host that owns the board.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - 'fpga/**'
+      - 'tools/generate-fpga-trace-player.py'
+      - 'tools/fpga-capture.py'
+      - 'tests/tb_fpga_trace_player.v'
+      - 't27/rtl/**'
+      - 'conformance/memory_stream_compute.json'
+      - '.github/workflows/fpga-ax7203.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bitstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+      PART: xc7a200tfbg484-2
+      TOP: tms_trace_player_ax7203
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned compiler and install tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build the pinned compiler
+        run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
+      - name: Generate cores, ROM bank and manifest
+        run: make -C fpga/ax7203 gen
+      - name: Pre-silicon run in Icarus with the host comparison
+        run: make -C fpga/ax7203 sim
+      - name: Pull the open toolchain image
+        run: |
+          for i in 1 2 3 4 5 6; do docker pull regymm/openxc7:latest && break; sleep $((i*20)); done
+          docker image inspect regymm/openxc7:latest > /dev/null
+      - name: Synthesize (yosys)
+        run: make -C fpga/ax7203 synth && grep -E "Number of cells|LUT|FDRE|FDCE|RAMB|MUXF" build/fpga/yosys_stat.txt | head -30
+      - name: Restore or generate the chip database
+        id: chipdb
+        uses: actions/cache@v4
+        with:
+          path: build/fpga/chipdb/xc7a200tfbg484-2.bin
+          key: chipdb-xc7a200tfbg484-2-regymm-openxc7-v1
+      - name: Generate the chip database
+        if: steps.chipdb.outputs.cache-hit != 'true'
+        run: make -C fpga/ax7203 build/fpga/chipdb/xc7a200tfbg484-2.bin CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
+      - name: Place and route (nextpnr-xilinx, seed search)
+        run: make -C fpga/ax7203 pnr CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
+      - name: Pack the bitstream
+        run: make -C fpga/ax7203 bit
+      - name: Timing and utilization summary
+        run: |
+          grep -E "Max frequency|Info: Device utilisation|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/nextpnr.log | head -40 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ax7203-trace-player
+          path: |
+            build/fpga/tms_trace_player_ax7203.bit
+            build/fpga/tms_trace_player_ax7203.fasm
+            build/fpga/tms_trace_bank.v
+            build/fpga/tms_trace_manifest.json
+            build/fpga/yosys.log
+            build/fpga/yosys_stat.txt
+            build/fpga/nextpnr.log
+            build/fpga/sim_capture.txt
+            build/fpga/sim_capture.json
+          retention-days: 90
+          if-no-files-found: error

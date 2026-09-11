@@ -1,0 +1,85 @@
+# AX7203 (XC7A200T-FBG484-2) trace player: generate, simulate, synthesize, place
+# and route, pack, flash, capture. The open flow (yosys, nextpnr-xilinx, prjxray)
+# runs inside the regymm/openxc7 image, the same recipe gHashTag/trinity-fpga uses
+# for this board; flashing and capture run on the host with openFPGALoader and
+# pyserial. Every target is reproducible from a clean checkout.
+#
+#   make -C fpga/ax7203 gen        generated cores (pinned t27c) + ROM bank + manifest
+#   make -C fpga/ax7203 sim        Icarus run of the whole player, host comparison
+#   make -C fpga/ax7203 bit        yosys -> nextpnr-xilinx -> fasm2frames -> xc7frames2bit
+#   make -C fpga/ax7203 flash      openFPGALoader over the board's FT232H (SRAM only)
+#   make -C fpga/ax7203 capture    UART capture compared with the reference
+ROOT      := $(abspath $(CURDIR)/../..)
+BUILD     := $(ROOT)/build/fpga
+RTL       := $(ROOT)/build/t27/specs/rtl
+T27C      ?= $(T27_ROOT)/target/release/t27c
+PART      ?= xc7a200tfbg484-2
+DBPART    := xc7a200t
+TOP       := tms_trace_player_ax7203
+IMAGE     ?= regymm/openxc7:latest
+DOCKER    ?= docker run --rm -v "$(ROOT):/work" -w /work $(IMAGE)
+CHIPDB    ?= $(BUILD)/chipdb/$(PART).bin
+SEEDS     ?= 1 2 3 4 5 6 7 8
+FREQ_MHZ  ?= 50.0
+PORT      ?= /dev/cu.usbserial-10
+CABLE     ?= digilent_hs2
+BUILD_ID  ?= $(shell git -C $(ROOT) rev-parse --short=8 HEAD)
+SOURCES   := $(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v \
+             $(CURDIR)/tms_dut_wrappers.v $(CURDIR)/tms_uart_tx.v $(BUILD)/tms_trace_bank.v $(CURDIR)/tms_trace_player.v
+REL       = $(patsubst $(ROOT)/%,%,$(1))
+
+.PHONY: gen sim synth pnr bit flash capture detect clean
+
+gen: $(BUILD)/tms_trace_bank.v $(RTL)/dot_stream.v
+
+$(BUILD)/tms_trace_bank.v $(BUILD)/tms_trace_manifest.json: $(ROOT)/conformance/memory_stream_compute.json $(ROOT)/tools/generate-fpga-trace-player.py
+	python3 $(ROOT)/tools/generate-fpga-trace-player.py
+
+$(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v:
+	@test -x "$(T27C)" || { echo "T27_ROOT must point at the pinned compiler checkout (native/compiler.lock)"; exit 1; }
+	mkdir -p $(RTL)
+	cd $(ROOT) && for s in dot_stream stream_storage stream_view; do \
+	    "$(T27C)" gen-verilog t27/rtl/$$s.t27 > $(RTL)/$$s.v || exit 1; done
+
+sim: gen
+	mkdir -p $(BUILD)/sim
+	iverilog -g2012 -o $(BUILD)/sim/player.vvp -s tb_fpga_trace_player $(CURDIR)/sim/xilinx_stubs.v $(SOURCES) $(ROOT)/tests/tb_fpga_trace_player.v
+	cd $(BUILD)/sim && vvp player.vvp +capture=$(BUILD)/sim_capture.txt | tail -3
+	python3 $(ROOT)/tools/fpga-capture.py --from-file $(BUILD)/sim_capture.txt --manifest $(BUILD)/tms_trace_manifest.json --output $(BUILD)/sim_capture.json
+
+synth: $(BUILD)/$(TOP).json
+$(BUILD)/$(TOP).json: $(SOURCES)
+	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) $(TOP); synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7 -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
+
+$(CHIPDB):
+	mkdir -p $(dir $@)
+	$(DOCKER) bash -c "cd /nextpnr-xilinx && python3 xilinx/python/bbaexport.py --device $(PART) --bba /work/$(call REL,$(BUILD))/chipdb/$(PART).bba && bbasm -l /work/$(call REL,$(BUILD))/chipdb/$(PART).bba /work/$(call REL,$@) && rm -f /work/$(call REL,$(BUILD))/chipdb/$(PART).bba"
+
+pnr: $(BUILD)/$(TOP).fasm
+$(BUILD)/$(TOP).fasm: $(BUILD)/$(TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc
+	@rm -f $@; ok=0; for s in $(SEEDS); do \
+	  echo "nextpnr seed $$s"; \
+	  $(DOCKER) nextpnr-xilinx --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
+	    --json $(call REL,$(BUILD))/$(TOP).json --write $(call REL,$(BUILD))/$(TOP)_routed.json \
+	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer sa --router router1 --timing-allow-fail \
+	    > $(BUILD)/nextpnr_seed$$s.log 2>&1 || true; \
+	  if [ -s $@ ] && ! grep -q "Failed to find a route" $(BUILD)/nextpnr_seed$$s.log; then ok=$$s; cp $(BUILD)/nextpnr_seed$$s.log $(BUILD)/nextpnr.log; break; fi; \
+	  rm -f $@; done; \
+	  [ "$$ok" != 0 ] || { echo "no seed routed"; exit 1; }; echo "routed with seed $$ok"
+
+bit: $(BUILD)/$(TOP).bit
+$(BUILD)/$(TOP).bit: $(BUILD)/$(TOP).fasm
+	$(DOCKER) bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $(PART) $(call REL,$<) $(call REL,$(BUILD))/$(TOP).frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$(PART)/part.yaml --part_name $(PART) --frm_file $(call REL,$(BUILD))/$(TOP).frames --output_file $(call REL,$@)"
+	@echo "frames: $$(wc -l < $(BUILD)/$(TOP).frames) lines; bit: $$(wc -c < $@) bytes"
+
+detect:
+	openFPGALoader -c $(CABLE) --detect
+
+flash: $(BUILD)/$(TOP).bit
+	openFPGALoader -c $(CABLE) $<
+
+capture:
+	python3 $(ROOT)/tools/fpga-capture.py --port $(PORT) --manifest $(BUILD)/tms_trace_manifest.json --output $(BUILD)/capture.json --raw $(BUILD)/capture.txt --label "$(LABEL)"
+
+clean:
+	rm -rf $(BUILD)/sim $(BUILD)/$(TOP).* $(BUILD)/nextpnr*.log $(BUILD)/yosys*.log $(BUILD)/yosys_stat.txt
