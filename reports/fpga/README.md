@@ -21,6 +21,14 @@ Decision record and captured device output for issue #10. Protocol and flow:
   replayed by `fpga/ax7203/tms_trace_player.v`; counters as listed in
   `build/fpga/tms_trace_manifest.json`.
 - **Rented hardware:** none.
+- **Player:** every state machine is executable t27 (`t27/rtl/fpga_*.t27`, tables
+  generated as `build/fpga/fpga_trace_rom.t27`); the Verilog under `fpga/ax7203/`
+  only wires the generated cores. Phases of one run: stepped and free-run replay
+  of all 34 trace vectors (dot, storage, join), the throughput workload (64
+  words, 16 frames x 64 beats, results recomputed by the host) and the Edge Demo
+  (three template rows in lockstep, t27 argmax, six fixtures).
+- **Not measurable on this bench:** DDR (no trusted DDR3 PHY in the open flow)
+  and power (no instrument); see `docs/hardware.md`.
 
 ## Files
 

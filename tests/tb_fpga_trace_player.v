@@ -1,5 +1,5 @@
 // Pre-silicon check of the AX7203 trace player: runs the whole design with a
-// simulated 200 MHz differential clock, decodes the UART byte stream and writes
+// simulated 200 MHz differential clock, decodes the 20-byte UART report lines and writes
 // it to the file named by +capture=, so tools/fpga-capture.py --from-file can
 // apply the same comparison it applies to the real board. The second run
 // (triggered by a start bit on uart_rx) is stopped at its header line.

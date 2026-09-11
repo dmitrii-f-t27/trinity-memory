@@ -27,17 +27,24 @@ PORT      ?= /dev/cu.usbserial-10
 CABLE     ?= digilent_hs2
 BUILD_ID  ?= $(shell git -C $(ROOT) rev-parse --short=8 HEAD)
 CLOCK_MODE ?= 1
-SOURCES   := $(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v \
-             $(CURDIR)/tms_dut_wrappers.v $(CURDIR)/tms_uart_tx.v $(BUILD)/tms_trace_bank.v $(CURDIR)/tms_trace_player.v
+CORES     := dot_stream stream_storage stream_view stream_join \
+             fpga_tick fpga_reset fpga_uart_tx fpga_line_emitter fpga_edge_argmax fpga_trace_player
+SOURCES   := $(foreach c,$(CORES),$(RTL)/$(c).v) $(BUILD)/fpga_trace_rom.v \
+             $(CURDIR)/tms_dut_wrappers.v $(BUILD)/tms_trace_bank.v $(CURDIR)/tms_trace_player.v
 REL       = $(patsubst $(ROOT)/%,%,$(1))
 
 .PHONY: gen sim synth chipdb pnr bit flash capture detect clean
 
-gen: $(BUILD)/tms_trace_bank.v $(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v
+gen: $(BUILD)/tms_trace_bank.v $(BUILD)/fpga_trace_rom.v $(foreach c,$(CORES),$(RTL)/$(c).v)
 
-$(BUILD)/tms_trace_bank.v $(BUILD)/tms_trace_manifest.json: $(ROOT)/conformance/memory_stream_compute.json $(ROOT)/tools/generate-fpga-trace-player.py
+$(BUILD)/tms_trace_bank.v $(BUILD)/tms_trace_manifest.json $(BUILD)/fpga_trace_rom.t27: $(ROOT)/conformance/memory_stream_compute.json $(ROOT)/conformance/memory_edge_demo.json $(ROOT)/tools/generate-fpga-trace-player.py
 	mkdir -p $(BUILD)
 	python3 $(ROOT)/tools/generate-fpga-trace-player.py --output-dir $(BUILD)
+
+# The generated ROM core is executable t27 as well; the pinned compiler lowers it.
+$(BUILD)/fpga_trace_rom.v: $(BUILD)/fpga_trace_rom.t27
+	@test -x "$(T27C)" || { echo "T27_ROOT must point at the pinned compiler checkout (native/compiler.lock)"; exit 1; }
+	"$(T27C)" gen-verilog $< > $@
 
 # One generated core per executable source; regenerated whenever the source changes.
 $(RTL)/%.v: $(ROOT)/t27/rtl/%.t27

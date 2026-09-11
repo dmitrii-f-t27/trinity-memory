@@ -1,46 +1,30 @@
-// On-device trace player for the AX7203 measurement track (issue #10).
+// Wiring adapter of the AX7203 trace player. Every state machine and every rule
+// is executable t27 in t27/rtl/fpga_*.t27 (tick generator, reset generator,
+// UART transmitter, line emitter, sequencer, Edge argmax) and in the generated
+// ROM core build/fpga/fpga_trace_rom.t27; the cores under test are the
+// generated stream modules. This file only instantiates and connects them and
+// the two Xilinx clock primitives.
 //
-// Replays every dot_trace and storage_trace vector of
-// conformance/memory_stream_compute.json on the generated cores, cycle by
-// cycle, and reports what the device observed over the UART so the host
-// (tools/fpga-capture.py) can compare it with the reference independently.
-//
-// Two passes per run:
-//   stepped   each trace cycle is applied with `en` high for exactly one tick,
-//             the outputs are captured with the same stimulus still applied
-//             (the sampling rule of tests/tb_spec_*_trace.v), compared with the
-//             expected ROM word and written as a `C` line;
-//   free-run  the same vectors are replayed without the UART pauses, two
-//             ticks per trace cycle (one with `en` high, one holding the
-//             stimulus while the outputs are sampled, because in_ready and
-//             load_ready are combinational in the inputs); only the on-device
-//             mismatch count per vector is reported (`F` lines).
-//
-// Clocking, two variants selected by CLOCK_MODE (both from the board's 200 MHz
-// LVDS oscillator through IBUFDS and BUFG, no PLL):
-//   1  the harness and the cores run on a BUFG-driven clock divided by TICK_DIV
-//      (25 MHz) and every register is enabled every clock (single-cycle timing);
-//   0  everything runs on the 200 MHz clock and every register is enabled by
-//      `tick`, one clock in TICK_DIV, so a path between enabled registers has
-//      TICK_DIV periods to settle (the tick net itself is a single-cycle path).
-// In both variants the enabled rate is 200/TICK_DIV M ticks/s; baud and
-// heartbeat counters count ticks.
-//
-// Line format (19 bytes): tag, 8 hex digits (a), 9 hex digits (b), LF.
-//   H a=BUILD_ID          b={4'h1, total cycles[15:0], vector count[15:0]}
-//   V a=vector index      b=cycles in the vector
-//   C a=cycle index       b=observed word (packing of the expected word)
-//   E a=vector index      b=device mismatches in the stepped pass
-//   K a=counter index     b=counter value (six per vector, see the manifest)
-//   F a=vector index      b=device mismatches in the free-run pass
+// Report line format (20 bytes): tag, 8 hex digits (a), 10 hex digits (b), LF.
+//   H a=0                 b={format 2, total cycles[15:0], vector count[15:0]}
+//   V a=vector index      b=cycles      C a=cycle index  b=observed word
+//   E a=vector index      b=device mismatches (stepped)   K a=counter index b=value
+//   F a=vector index      b=device mismatches (free-run)
+//   W a=0 b=frames        R a=frame b=result (two's complement)   T a=index b=total
+//   X a=fixture           b={latency ticks[..3], label[2:0] (7 = ambiguous)}
+//   A a=fixture*4+row     b=accumulator (two's complement)
 //   D a=total stepped mismatches b=total free-run mismatches
-// A run starts after configuration and again whenever a byte arrives on uart_rx.
+// Clocking, two variants of one design selected by CLOCK_MODE (both from the
+// 200 MHz LVDS oscillator through IBUFDS and BUFG, no PLL): 1 runs everything
+// on a second BUFG fed by the t27 tick generator's divide-by-eight bit (25 MHz,
+// every register enabled every clock); 0 runs everything on the 200 MHz clock
+// with every register enabled by the generator's tick, one clock in eight.
 // LEDs: [0] heartbeat, [1] run active, [2] run complete, [3] any mismatch.
 `timescale 1ns/1ps
 `default_nettype none
 module tms_trace_player_ax7203 #(
-    parameter integer CLOCK_MODE = 1,       // 1: divided clock on a BUFG; 0: 200 MHz clock with a tick enable
-    parameter integer TICK_DIV = 8,         // clocks per tick: 200 MHz / 8 = 25 M ticks/s (power of two)
+    parameter integer CLOCK_MODE = 1,
+    parameter integer TICK_DIV = 8,         // fixed by the tick generator (three-bit counter)
     parameter integer BAUD_DIV = 217,       // ticks per UART bit (25 M / 115200 = 217.01)
     parameter [31:0] BUILD_ID = 32'h0
 ) (
@@ -51,344 +35,110 @@ module tms_trace_player_ax7203 #(
     output wire       uart_tx,
     input  wire       uart_rx
 );
-    // ---- clocking: IBUFDS -> BUFG (200 MHz), then either a divided clock on a
-    // second BUFG (CLOCK_MODE=1) or a registered tick enable (CLOCK_MODE=0) ----
-    localparam integer TICK_BITS = (TICK_DIV >= 2) ? $clog2(TICK_DIV) : 1;
-    wire clk200_raw, clk200, clk, tick;
+    // ---- clocks ----
+    wire clk200_raw, clk200, clk, tick, tick_raw, div_bit;
     IBUFDS clk_ibufds (.I(clk200_p), .IB(clk200_n), .O(clk200_raw));
     BUFG clk200_bufg (.I(clk200_raw), .O(clk200));
-    reg [TICK_BITS-1:0] tick_cnt = {TICK_BITS{1'b0}};
-    always @(posedge clk200) tick_cnt <= tick_cnt + 1'b1;
+    TrinityFpgaTickT27 tickgen (
+        .clk(clk200), .rst_n(1'b1), .en(1'b1), .ready(), .hold(1'b0),
+        .count(), .tick(tick_raw), .div_bit(div_bit)
+    );
     generate if (CLOCK_MODE != 0) begin : divided_clock
-        BUFG clk_bufg (.I(tick_cnt[TICK_BITS-1]), .O(clk));
+        BUFG clk_bufg (.I(div_bit), .O(clk));
         assign tick = 1'b1;
     end else begin : tick_enable
-        reg tick_q = 1'b0;
-        always @(posedge clk200) tick_q <= (tick_cnt == {TICK_BITS{1'b1}});
         assign clk = clk200;
-        assign tick = tick_q;
+        assign tick = tick_raw;
     end endgenerate
 
-    // ---- reset: power-on counter plus the synchronized active-low button ----
-    reg [1:0] rst_sync = 2'b00;
-    reg [7:0] por = 8'd0;
-    always @(posedge clk) begin
-        rst_sync <= {rst_sync[0], rst_n};
-        if (tick && !por[7]) por <= por + 1'b1;
-    end
-    wire rst = !por[7] || !rst_sync[1];
-
-    // ---- UART receive trigger: any start bit restarts the run ----
-    reg [2:0] rx_sync = 3'b111;
-    always @(posedge clk) rx_sync <= {rx_sync[1:0], uart_rx};
-    wire rx_falling = rx_sync[2] && !rx_sync[1];
-
-    // ---- UART transmit and the 19-byte line emitter ----
-    reg        tx_start = 1'b0;
-    reg [7:0]  tx_byte = 8'd0;
-    wire       tx_busy;
-    tms_uart_tx #(.BAUD_DIV(BAUD_DIV)) uart (
-        .clk(clk), .tick(tick), .rst(rst), .data(tx_byte), .start(tx_start), .busy(tx_busy), .tx(uart_tx)
+    // ---- reset and heartbeat ----
+    wire rst, heartbeat;
+    TrinityFpgaResetT27 resetgen (
+        .clk(clk), .rst_n(1'b1), .en(tick), .ready(), .button_n(rst_n),
+        .stage1(), .stage2(), .hold(), .blink(), .reset(rst), .heartbeat(heartbeat)
     );
-    reg        line_go = 1'b0;
-    reg [7:0]  line_tag = 8'd0;
-    reg [31:0] line_a = 32'd0;
-    reg [35:0] line_b = 36'd0;
-    reg        line_busy = 1'b0;
-    reg [4:0]  line_pos = 5'd0;
-    function [7:0] hex;
-        input [3:0] nibble;
-        hex = (nibble < 4'd10) ? (8'h30 + {4'd0, nibble}) : (8'h57 + {4'd0, nibble});
-    endfunction
-    function [7:0] line_char;
-        input [4:0]  pos;
-        input [7:0]  tag;
-        input [31:0] a;
-        input [35:0] b;
-        begin
-            if (pos == 5'd0)
-                line_char = tag;
-            else if (pos <= 5'd8)
-                line_char = hex(a[(5'd8 - pos) * 4 +: 4]);
-            else if (pos <= 5'd17)
-                line_char = hex(b[(5'd17 - pos) * 4 +: 4]);
-            else
-                line_char = 8'h0a;
-        end
-    endfunction
-    wire [7:0] line_byte = line_char(line_pos, line_tag, line_a, line_b);
-    always @(posedge clk) if (tick) begin
-        tx_start <= 1'b0;
-        if (rst) begin
-            line_busy <= 1'b0;
-            line_pos <= 5'd0;
-        end else if (!line_busy) begin
-            if (line_go) begin
-                line_busy <= 1'b1;
-                line_pos <= 5'd0;
-            end
-        end else if (!tx_busy && !tx_start) begin
-            tx_byte <= line_byte;
-            tx_start <= 1'b1;
-            if (line_pos == 5'd18)
-                line_busy <= 1'b0;
-            else
-                line_pos <= line_pos + 1'b1;
-        end
-    end
-    wire line_idle = !line_busy && !tx_busy && !tx_start;
 
-    // ---- trace bank: ROMs, vector table and the cores ----
-    reg  [9:0]  vector = 10'd0;
-    reg  [9:0]  addr = 10'd0;
-    reg  [63:0] stim_q = 64'd0;
-    reg         dut_en = 1'b0;
-    reg         dut_rst_n = 1'b0;
-    wire [63:0] rom_stim;
-    wire [35:0] rom_exp;
-    wire [9:0]  vbase, vcycles, vector_count, cycle_count;
-    wire        vkind;
-    wire [3:0]  vdut;
-    wire [35:0] observed;
-    tms_trace_bank bank (
-        .clk(clk), .dut_rst_n(dut_rst_n), .step(dut_en && tick), .vector(vector), .addr(addr),
-        .stim_q(stim_q), .stimulus(rom_stim), .expected(rom_exp), .vector_base(vbase),
-        .vector_cycles(vcycles), .vector_kind(vkind), .vector_dut(vdut),
-        .vector_count(vector_count), .cycle_count(cycle_count), .observed(observed)
+    // ---- UART transmitter and line emitter ----
+    wire        tx_start, tx_busy, line_idle, line_go;
+    wire [31:0] tx_byte, line_tag, line_a;
+    wire [63:0] line_b;
+    TrinityFpgaUartTxT27 uart (
+        .clk(clk), .rst_n(!rst), .en(tick), .ready(),
+        .start(tx_start), .data(tx_byte), .baud_div(BAUD_DIV),
+        .busy(tx_busy), .shift(), .count(), .bits(), .tx(uart_tx)
+    );
+    TrinityFpgaLineEmitterT27 emitter (
+        .clk(clk), .rst_n(!rst), .en(tick), .ready(),
+        .go(line_go), .tag(line_tag), .a(line_a), .b(line_b), .tx_busy(tx_busy),
+        .line_busy(), .pos(), .tag_q(), .a_q(), .b_q(), .tx_start(tx_start), .tx_byte(tx_byte), .idle(line_idle)
     );
 
     // ---- sequencer ----
-    localparam [4:0] S_IDLE = 5'd0, S_LINE_START = 5'd1, S_LINE_WAIT = 5'd2,
-                     S_VEC_BEGIN = 5'd3, S_VEC_RESET = 5'd4,
-                     S_STEP_APPLY = 5'd5, S_STEP_ENABLE = 5'd6, S_STEP_WAIT = 5'd7,
-                     S_STEP_CAPTURE = 5'd8, S_STEP_COMPARE = 5'd9, S_STEP_NEXT = 5'd10,
-                     S_VEC_END = 5'd11, S_VEC_K = 5'd12, S_VEC_K_NEXT = 5'd13,
-                     S_FREE_BEGIN = 5'd14, S_FREE_VEC = 5'd15, S_FREE_RESET = 5'd16,
-                     S_FREE_LOAD = 5'd17, S_FREE_CONSUME = 5'd18, S_FREE_DRAIN = 5'd19,
-                     S_FREE_REPORT = 5'd20, S_FREE_NEXT = 5'd21, S_DONE = 5'd22;
-    reg [4:0]  state = S_IDLE;
-    reg [4:0]  after_line = S_IDLE;
-    reg [9:0]  cyc = 10'd0;
-    reg [35:0] obs_q = 36'd0;
-    reg [35:0] exp_q = 36'd0;
-    reg [31:0] mism = 32'd0;
-    reg [31:0] mism_total = 32'd0;
-    reg [31:0] free_total = 32'd0;
-    reg [31:0] counter [0:5];
-    reg [2:0]  kidx = 3'd0;
-    reg [2:0]  wait_cnt = 3'd0;
-    reg        auto_started = 1'b0;
-    reg        run_done = 1'b0;
-    reg        mism_seen = 1'b0;
-    reg [23:0] heartbeat = 24'd0;
-    // outputs as the core sees them at the consuming edge (stimulus applied,
-    // state not yet advanced): the handshake values the counters are defined on
-    reg [35:0] pre_q = 36'd0;
-    reg        free_first = 1'b0;
-    reg        trigger_pending = 1'b0;
-    integer k;
-    function [3:0] popcount5;
-        input [4:0] bits;
-        popcount5 = {3'd0, bits[0]} + {3'd0, bits[1]} + {3'd0, bits[2]} + {3'd0, bits[3]} + {3'd0, bits[4]};
-    endfunction
+    wire [31:0] vector, addr, wl_load_addr, edge_load_row, edge_load_addr, edge_ra, edge_fb;
+    wire [63:0] stim_q, wl_act_data;
+    wire        dut_en, dut_reset, run_active, run_done, mism_seen;
+    wire        wl_reset, wl_start, wl_load_en, wl_act_valid;
+    wire        edge_reset, edge_load_en, edge_start, edge_act_valid, edge_out_ready;
+    wire [63:0] stimulus;
+    wire [39:0] expected, observed, edge_beat_data;
+    wire [31:0] entry;
+    wire [9:0]  vector_count, cycle_count;
+    wire [7:0]  wl_code, edge_code, workload_frames;
+    wire [2:0]  edge_fixtures;
+    wire        wl_busy, wl_act_ready, wl_beat, wl_out_valid;
+    wire signed [31:0] wl_result, edge_acc0, edge_acc1, edge_acc2;
+    wire        edge_act_ready, edge_beat, edge_done, edge_ambiguous;
+    wire [1:0]  edge_label;
+    TrinityFpgaTracePlayerT27 player (
+        .clk(clk), .rst_n(!rst), .en(tick), .ready(),
+        .uart_rx(uart_rx), .line_idle(line_idle),
+        .stimulus(stimulus), .expected({24'd0, expected}), .entry(entry),
+        .vector_count({22'd0, vector_count}), .cycle_count({22'd0, cycle_count}),
+        .observed({24'd0, observed}), .workload_frames({24'd0, workload_frames}),
+        .wl_busy(wl_busy), .wl_act_ready(wl_act_ready), .wl_beat(wl_beat), .wl_out_valid(wl_out_valid), .wl_result(wl_result),
+        .edge_fixtures({29'd0, edge_fixtures}), .edge_act_ready(edge_act_ready), .edge_beat(edge_beat), .edge_done(edge_done),
+        .edge_acc0(edge_acc0), .edge_acc1(edge_acc1), .edge_acc2(edge_acc2),
+        .edge_label(edge_ambiguous ? 32'd7 : {30'd0, edge_label}),
+        .state(), .after_line(), .vector(vector), .addr(addr), .cyc(), .stim_q(stim_q), .exp_q(), .obs_q(), .pre_q(),
+        .dut_en(dut_en), .dut_reset(dut_reset), .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
+        .mism(), .mism_total(), .free_total(), .kidx(), .wait_cnt(), .auto_started(), .trigger_pending(),
+        .run_done(run_done), .mism_seen(mism_seen), .free_first(), .rx1(), .rx2(), .rx3(),
+        .wl_reset(wl_reset), .wl_start(wl_start), .wl_load_en(wl_load_en), .wl_load_addr(wl_load_addr),
+        .wl_act_valid(wl_act_valid), .wl_beat_index(), .wl_frame(), .wl_ticks(), .wl_beats(), .wl_stalls(), .wl_done(), .wl_load_ticks(),
+        .edge_reset(edge_reset), .edge_load_en(edge_load_en), .edge_load_row(edge_load_row), .edge_load_addr(edge_load_addr),
+        .edge_start(edge_start), .edge_act_valid(edge_act_valid), .edge_beat_index(), .edge_fixture(), .edge_out_ready(edge_out_ready),
+        .edge_ticks(), .edge_acc0_q(), .edge_acc1_q(), .edge_acc2_q(), .edge_label_q(),
+        .run_active(run_active), .wl_act_data(wl_act_data), .wl_out_ready(), .edge_ra(edge_ra), .edge_fb(edge_fb),
+        .vbase(), .vcycles(), .vkind()
+    );
 
-    always @(posedge clk) begin
-        if (rx_falling)
-            trigger_pending <= 1'b1;   // outranks the clear below only when both happen on one clock
-        if (tick) begin
-        heartbeat <= heartbeat + 1'b1;
-        line_go <= 1'b0;
-        if (rst) begin
-            state <= S_IDLE;
-            dut_en <= 1'b0;
-            dut_rst_n <= 1'b0;
-            auto_started <= 1'b0;
-            trigger_pending <= 1'b0;
-            run_done <= 1'b0;
-            mism_seen <= 1'b0;
-        end else begin
-            case (state)
-                S_IDLE: begin
-                    dut_en <= 1'b0;
-                    if (trigger_pending || !auto_started) begin
-                        auto_started <= 1'b1;
-                        trigger_pending <= 1'b0;
-                        run_done <= 1'b0;
-                        mism_seen <= 1'b0;
-                        vector <= 10'd0;
-                        mism_total <= 32'd0;
-                        free_total <= 32'd0;
-                        line_tag <= "H"; line_a <= BUILD_ID;
-                        line_b <= {4'h1, 6'd0, cycle_count, 6'd0, vector_count};
-                        line_go <= 1'b1; after_line <= S_VEC_BEGIN; state <= S_LINE_START;
-                    end
-                end
-                S_LINE_START: state <= S_LINE_WAIT;
-                S_LINE_WAIT: if (line_idle) state <= after_line;
-                S_VEC_BEGIN: begin
-                    if (vector == vector_count) begin
-                        state <= S_FREE_BEGIN;
-                    end else begin
-                        dut_rst_n <= 1'b0;
-                        dut_en <= 1'b0;
-                        wait_cnt <= 3'd0;
-                        cyc <= 10'd0;
-                        addr <= vbase;
-                        mism <= 32'd0;
-                        for (k = 0; k < 6; k = k + 1) counter[k] <= 32'd0;
-                        state <= S_VEC_RESET;
-                    end
-                end
-                S_VEC_RESET: begin
-                    wait_cnt <= wait_cnt + 1'b1;
-                    if (wait_cnt == 3'd3) begin
-                        dut_rst_n <= 1'b1;
-                        line_tag <= "V"; line_a <= {22'd0, vector}; line_b <= {26'd0, vcycles};
-                        line_go <= 1'b1; after_line <= S_STEP_APPLY; state <= S_LINE_START;
-                    end
-                end
-                S_STEP_APPLY: begin
-                    stim_q <= rom_stim;
-                    exp_q <= rom_exp;
-                    state <= S_STEP_ENABLE;
-                end
-                S_STEP_ENABLE: begin
-                    dut_en <= 1'b1;
-                    state <= S_STEP_WAIT;
-                end
-                S_STEP_WAIT: begin
-                    // this edge is the consuming edge: `observed` still holds the
-                    // outputs the core evaluates its handshakes on
-                    pre_q <= observed;
-                    dut_en <= 1'b0;
-                    state <= S_STEP_CAPTURE;
-                end
-                S_STEP_CAPTURE: begin
-                    obs_q <= observed;
-                    state <= S_STEP_COMPARE;
-                end
-                S_STEP_COMPARE: begin
-                    if (obs_q != exp_q) begin
-                        mism <= mism + 1'b1;
-                        mism_seen <= 1'b1;
-                    end
-                    if (!vkind) begin
-                        counter[0] <= counter[0] + {31'd0, stim_q[57] && pre_q[34]};
-                        counter[1] <= counter[1] + {31'd0, stim_q[58] && pre_q[33]};
-                        counter[2] <= counter[2] + {31'd0, stim_q[57] && !pre_q[34]};
-                        counter[3] <= counter[3] + {31'd0, pre_q[33] && !stim_q[58]};
-                        counter[4] <= counter[4] + {31'd0, stim_q[58] && pre_q[33] && pre_q[32]};
-                        counter[5] <= counter[5] + {31'd0, stim_q[56]};
-                    end else begin
-                        counter[0] <= counter[0] + {31'd0, stim_q[2] && pre_q[19]};
-                        counter[1] <= counter[1] + {31'd0, obs_q[17]};
-                        counter[2] <= counter[2] + (obs_q[17] ? {28'd0, popcount5(obs_q[14:10])} : 32'd0);
-                        counter[3] <= counter[3] + {31'd0, obs_q[17] && !obs_q[15]};
-                        counter[4] <= counter[4] + {31'd0, stim_q[1] && !pre_q[18] && !stim_q[0]};
-                        counter[5] <= counter[5] + {31'd0, stim_q[0]};
-                    end
-                    line_tag <= "C"; line_a <= {22'd0, cyc}; line_b <= obs_q;
-                    line_go <= 1'b1; after_line <= S_STEP_NEXT; state <= S_LINE_START;
-                end
-                S_STEP_NEXT: begin
-                    cyc <= cyc + 1'b1;
-                    addr <= addr + 1'b1;
-                    if (cyc + 10'd1 == vcycles)
-                        state <= S_VEC_END;
-                    else
-                        state <= S_STEP_APPLY;
-                end
-                S_VEC_END: begin
-                    mism_total <= mism_total + mism;
-                    kidx <= 3'd0;
-                    line_tag <= "E"; line_a <= {22'd0, vector}; line_b <= {4'd0, mism};
-                    line_go <= 1'b1; after_line <= S_VEC_K; state <= S_LINE_START;
-                end
-                S_VEC_K: begin
-                    line_tag <= "K"; line_a <= {29'd0, kidx}; line_b <= {4'd0, counter[kidx]};
-                    line_go <= 1'b1; after_line <= S_VEC_K_NEXT; state <= S_LINE_START;
-                end
-                S_VEC_K_NEXT: begin
-                    if (kidx == 3'd5) begin
-                        vector <= vector + 1'b1;
-                        state <= S_VEC_BEGIN;
-                    end else begin
-                        kidx <= kidx + 1'b1;
-                        state <= S_VEC_K;
-                    end
-                end
-                S_FREE_BEGIN: begin
-                    vector <= 10'd0;
-                    state <= S_FREE_VEC;
-                end
-                S_FREE_VEC: begin
-                    if (vector == vector_count) begin
-                        line_tag <= "D"; line_a <= mism_total; line_b <= {4'd0, free_total};
-                        line_go <= 1'b1; after_line <= S_DONE; state <= S_LINE_START;
-                    end else begin
-                        dut_rst_n <= 1'b0;
-                        dut_en <= 1'b0;
-                        wait_cnt <= 3'd0;
-                        cyc <= 10'd0;
-                        addr <= vbase;
-                        mism <= 32'd0;
-                        free_first <= 1'b1;
-                        state <= S_FREE_RESET;
-                    end
-                end
-                S_FREE_RESET: begin
-                    wait_cnt <= wait_cnt + 1'b1;
-                    if (wait_cnt == 3'd3) begin
-                        dut_rst_n <= 1'b1;
-                        state <= S_FREE_LOAD;
-                    end
-                end
-                S_FREE_LOAD: begin
-                    // `observed` still shows the previous trace cycle with its stimulus applied
-                    if (!free_first && observed != exp_q) begin
-                        mism <= mism + 1'b1;
-                        mism_seen <= 1'b1;
-                    end
-                    free_first <= 1'b0;
-                    stim_q <= rom_stim;
-                    exp_q <= rom_exp;
-                    dut_en <= 1'b1;
-                    addr <= addr + 1'b1;
-                    state <= S_FREE_CONSUME;
-                end
-                S_FREE_CONSUME: begin
-                    dut_en <= 1'b0;
-                    cyc <= cyc + 1'b1;
-                    if (cyc + 10'd1 == vcycles)
-                        state <= S_FREE_DRAIN;
-                    else
-                        state <= S_FREE_LOAD;
-                end
-                S_FREE_DRAIN: begin
-                    if (observed != exp_q) begin
-                        mism <= mism + 1'b1;
-                        mism_seen <= 1'b1;
-                    end
-                    state <= S_FREE_REPORT;
-                end
-                S_FREE_REPORT: begin
-                    free_total <= free_total + mism;
-                    line_tag <= "F"; line_a <= {22'd0, vector}; line_b <= {4'd0, mism};
-                    line_go <= 1'b1; after_line <= S_FREE_NEXT; state <= S_LINE_START;
-                end
-                S_FREE_NEXT: begin
-                    vector <= vector + 1'b1;
-                    state <= S_FREE_VEC;
-                end
-                S_DONE: begin
-                    run_done <= 1'b1;
-                    state <= S_IDLE;
-                end
-                default: state <= S_IDLE;
-            endcase
-        end
-        end
-    end
-    assign led = {mism_seen, run_done, state != S_IDLE, heartbeat[23]};
+    // ---- tables and cores under test ----
+    tms_trace_bank bank (
+        .clk(clk), .dut_rst_n(!dut_reset), .step(dut_en && tick), .vector(vector[9:0]), .addr(addr[9:0]),
+        .stim_q(stim_q), .stimulus(stimulus), .expected(expected), .entry(entry),
+        .vector_count(vector_count), .cycle_count(cycle_count), .observed(observed),
+        .wl_addr(wl_load_addr[5:0]), .wl_code(wl_code), .edge_ra(edge_ra[3:0]), .edge_code(edge_code),
+        .edge_fb(edge_fb[4:0]), .edge_beat(edge_beat_data), .workload_frames(workload_frames), .edge_fixtures(edge_fixtures)
+    );
+
+    // ---- throughput workload: the joined path with 64 stored words ----
+    tms_join_path #(.DENSE5(1), .TRIT_COUNT(320), .ACC_WIDTH(32)) workload (
+        .clk(clk), .rst_n(!wl_reset), .en(tick), .rst(1'b0), .start(wl_start),
+        .load_en(wl_load_en), .load_addr(wl_load_addr[5:0]), .load_code({2'd0, wl_code}),
+        .act_valid(wl_act_valid), .act_data(wl_act_data[39:0]), .out_ready(1'b1),
+        .busy(wl_busy), .load_ready(), .act_ready(wl_act_ready), .beat(wl_beat),
+        .out_valid(wl_out_valid), .out_error(), .out_result(wl_result)
+    );
+
+    // ---- Edge Demo: three template rows in lockstep, t27 argmax ----
+    tms_edge_datapath edge_demo (
+        .clk(clk), .rst_n(!edge_reset), .en(tick), .rst(1'b0),
+        .load_en(edge_load_en), .load_row(edge_load_row[1:0]), .load_addr(edge_load_addr[1:0]), .load_code(edge_code),
+        .start(edge_start), .act_valid(edge_act_valid), .act_data(edge_beat_data), .out_ready(edge_out_ready),
+        .busy(), .act_ready(edge_act_ready), .beat(edge_beat), .done(edge_done),
+        .acc0(edge_acc0), .acc1(edge_acc1), .acc2(edge_acc2), .label(edge_label), .ambiguous(edge_ambiguous)
+    );
+
+    assign led = {mism_seen, run_done, run_active, heartbeat};
 endmodule
 `default_nettype wire
