@@ -126,6 +126,18 @@ def run(binary: Path, root: Path) -> dict:
         for url in ("https://127.0.0.1:8787", "http://example.com:8787", "http://127.0.0.1", "http://user@127.0.0.1:8787", "http://127.0.0.1:8787/?x=1"):
             cli("upload", packed, "--url", url, success=False)
         cli("serve", "--port", "65536", success=False)
+        # --seed is accepted by edge-demo and conformance and lands in the report (issue #18);
+        # RTL seeds are bounded by the specs (edge 0..4294967293, conformance 0..4294967295);
+        # --count and --repeats stay benchmark-only.
+        seeded = work / "seeded.json"
+        cli("edge-demo", "--seed", "5", "--output", seeded, "--html", work / "seeded.html")
+        assert json.loads(seeded.read_text())["seed"] == 5
+        cli("conformance", "--seed", "9", "--output", seeded)
+        assert json.loads(seeded.read_text())["seed"] == 9
+        assert "0..4294967293" in cli("edge-demo", "--rtl", "--seed", "4294967294", "--output", seeded, success=False).stderr
+        assert "0..4294967295" in cli("conformance", "--rtl", "--seed", "-1", "--output", seeded, success=False).stderr
+        cli("edge-demo", "--count", "3", success=False)
+        cli("conformance", "--repeats", "2", success=False)
     return {"evidence": "native-t27-cli-and-real-loopback-http", "executable_checks": checks,
             "native_server_tested": True, "python_server_tested": True,
             "file_bytes_and_metadata_parity": True, "all_codecs": list(CODECS)}
