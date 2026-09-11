@@ -12,6 +12,7 @@ module ternary_stream_storage_t27 #(
     input wire load_en,
     input wire [ADDR_WIDTH-1:0] load_addr,
     input wire [CODE_WIDTH-1:0] load_code,
+    input wire out_ready,
     output wire load_ready, out_valid, out_last,
     output wire [CODE_WIDTH-1:0] out_code
 );
@@ -24,6 +25,7 @@ module ternary_stream_storage_t27 #(
             .clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .reset(rst),
             .start(start), .load_en(load_en), .load_addr({{(32-ADDR_WIDTH){1'b0}}, load_addr}),
             .load_code({{(16-CODE_WIDTH){1'b0}}, load_code}), .word_count(WORDS),
+            .out_ready(out_ready),
             .busy(busy), .load_ready(load_ready), .out_valid(out_valid),
             .out_last(out_last), .out_code(native_code)
         );
@@ -43,6 +45,7 @@ module ternary_stream_adapter_t27 #(
     input wire load_en,
     input wire [ADDR_WIDTH-1:0] load_addr,
     input wire [CODE_WIDTH-1:0] load_code,
+    input wire out_ready,
     output wire load_ready, out_valid, out_last, out_code_valid,
     output wire [4:0] out_lane_mask,
     output wire [9:0] out_trits
@@ -56,7 +59,7 @@ module ternary_stream_adapter_t27 #(
         wire [15:0] visible;
         ternary_stream_storage_t27 #(.CODE_WIDTH(CODE_WIDTH), .WORDS(WORDS), .ADDR_WIDTH(ADDR_WIDTH)) storage (
             .clk(clk), .rst(rst), .start(start), .busy(busy),
-            .load_en(load_en), .load_addr(load_addr), .load_code(load_code),
+            .load_en(load_en), .load_addr(load_addr), .load_code(load_code), .out_ready(out_ready),
             .load_ready(load_ready), .out_valid(out_valid), .out_last(out_last), .out_code(code)
         );
         TrinityStreamViewT27 view (
@@ -87,7 +90,7 @@ module ternary_dense5_stream_t27 #(
     ternary_stream_adapter_t27 #(.DENSE5(1), .CODE_WIDTH(8), .TRIT_COUNT(TRIT_COUNT),
         .WORDS(WORDS), .ADDR_WIDTH(ADDR_WIDTH)) adapter (
         .clk(clk), .rst(rst), .start(start), .busy(busy), .load_en(load_en),
-        .load_addr(load_addr), .load_code(load_code), .load_ready(load_ready),
+        .load_addr(load_addr), .load_code(load_code), .out_ready(1'b1), .load_ready(load_ready),
         .out_valid(out_valid), .out_last(out_last), .out_code_valid(out_code_valid),
         .out_lane_mask(out_lane_mask), .out_trits(out_trits)
     );
@@ -110,7 +113,7 @@ module ternary_baseline5_stream_t27 #(
     ternary_stream_adapter_t27 #(.DENSE5(0), .CODE_WIDTH(10), .TRIT_COUNT(TRIT_COUNT),
         .WORDS(WORDS), .ADDR_WIDTH(ADDR_WIDTH)) adapter (
         .clk(clk), .rst(rst), .start(start), .busy(busy), .load_en(load_en),
-        .load_addr(load_addr), .load_code(load_code), .load_ready(load_ready),
+        .load_addr(load_addr), .load_code(load_code), .out_ready(1'b1), .load_ready(load_ready),
         .out_valid(out_valid), .out_last(out_last), .out_code_valid(out_code_valid),
         .out_lane_mask(out_lane_mask), .out_trits(out_trits)
     );

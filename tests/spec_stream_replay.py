@@ -72,6 +72,35 @@ def storage_stimulus_word(step):
     word |= (1 if stimulus["load_en"] else 0) << 2
     word |= (stimulus["load_addr"] & 63) << 3
     word |= (stimulus["load_code"] & 0x3ff) << 9
+    word |= (1 if stimulus.get("out_stall") else 0) << 19
+    return word
+
+
+def join_stimulus_word(step):
+    """Joined path (issue #15): [0] rst, [1] start, [2] load_en, [8:3] load_addr, [18:9] load_code,
+    [19] act_valid, [59:20] act_data (five int8 lanes), [60] out_ready."""
+    stimulus = step["stimulus"]
+    word = 1 if stimulus["rst"] else 0
+    word |= (1 if stimulus["start"] else 0) << 1
+    word |= (1 if stimulus["load_en"] else 0) << 2
+    word |= (stimulus["load_addr"] & 63) << 3
+    word |= (stimulus["load_code"] & 0x3ff) << 9
+    word |= (1 if stimulus["act_valid"] else 0) << 19
+    word |= pack_activations(stimulus["act_data"]) << 20
+    word |= (1 if stimulus["out_ready"] else 0) << 60
+    return word
+
+
+def join_expected_word(step):
+    """[31:0] result, [32] out_error, [33] out_valid, [34] act_ready, [35] load_ready, [36] busy, [37] beat."""
+    expect = step["expect"]
+    word = expect["out_result"] & 0xffffffff
+    word |= (1 if expect["out_error"] else 0) << 32
+    word |= (1 if expect["out_valid"] else 0) << 33
+    word |= (1 if expect["act_ready"] else 0) << 34
+    word |= (1 if expect["load_ready"] else 0) << 35
+    word |= (1 if expect["busy"] else 0) << 36
+    word |= (1 if expect["beat"] else 0) << 37
     return word
 
 
@@ -109,16 +138,19 @@ def simulate(work, name, sources, top, parameters, stimulus, expected):
 
 
 def replay(document, rtl_dir, work=None, only=None):
-    """Return (dot traces run, storage traces run, total cycles)."""
+    """Return (dot traces run, storage traces run, join traces run, total cycles)."""
     require_tools()
     rtl_dir = Path(rtl_dir).resolve()
-    for name in ("dot_stream.v", "stream_storage.v", "stream_view.v"):
+    for name in ("dot_stream.v", "stream_storage.v", "stream_view.v", "stream_join.v"):
         if not (rtl_dir / name).is_file():
             raise TraceFailure(f"generated RTL missing: {rtl_dir / name}")
     dot_sources = [rtl_dir / "dot_stream.v", ROOT / "rtl/t27/dot_stream.v", ROOT / "tests/tb_spec_dot_trace.v"]
     storage_sources = [rtl_dir / "stream_storage.v", rtl_dir / "stream_view.v", ROOT / "rtl/t27/streams.v",
                        ROOT / "tests/tb_spec_storage_trace.v"]
-    dots, storages, cycles = 0, 0, 0
+    join_sources = [rtl_dir / "stream_storage.v", rtl_dir / "stream_view.v", rtl_dir / "stream_join.v",
+                    rtl_dir / "dot_stream.v", ROOT / "rtl/t27/streams.v", ROOT / "rtl/t27/dot_stream.v",
+                    ROOT / "rtl/t27/stream_dot.v", ROOT / "tests/tb_spec_join_trace.v"]
+    dots, storages, joins, cycles = 0, 0, 0, 0
     with tempfile.TemporaryDirectory(prefix="trinity-spec-traces-") as temporary:
         directory = (Path(work) if work else Path(temporary)).resolve()
         directory.mkdir(parents=True, exist_ok=True)
@@ -147,7 +179,19 @@ def replay(document, rtl_dir, work=None, only=None):
                          stimulus, expected)
                 storages += 1
                 cycles += len(steps)
-    return dots, storages, cycles
+            elif vector["kind"] == "join_trace":
+                steps = vector["cycles"]
+                stimulus = directory / f"{vector['id']}.stim.mem"
+                expected = directory / f"{vector['id']}.exp.mem"
+                write_mem(stimulus, [join_stimulus_word(step) for step in steps])
+                write_mem(expected, [join_expected_word(step) for step in steps])
+                simulate(directory, vector["id"], join_sources, "tb_spec_join_trace",
+                         {"DENSE5": 1 if vector["dense"] else 0, "TRIT_COUNT": vector["trit_count"],
+                          "ACC_WIDTH": vector["acc_width"], "CYCLES": len(steps)},
+                         stimulus, expected)
+                joins += 1
+                cycles += len(steps)
+    return dots, storages, joins, cycles
 
 
 def main():
@@ -157,16 +201,19 @@ def main():
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     document = load_document()
-    dots, storages, cycles = replay(document, args.rtl_dir, args.work)
+    dots, storages, joins, cycles = replay(document, args.rtl_dir, args.work)
     expected_dots = sum(1 for vector in document["vectors"] if vector["kind"] == "dot_trace")
     expected_storages = sum(1 for vector in document["vectors"] if vector["kind"] == "storage_trace")
-    if (dots, storages) != (expected_dots, expected_storages):
-        raise SystemExit(f"replayed {dots}/{expected_dots} dot and {storages}/{expected_storages} storage traces")
-    summary = {"rtl_dir": str(args.rtl_dir), "dot_traces": dots, "storage_traces": storages, "cycles": cycles,
-               "evidence": "rtl-simulation", "simulator": "Icarus Verilog"}
+    expected_joins = sum(1 for vector in document["vectors"] if vector["kind"] == "join_trace")
+    if (dots, storages, joins) != (expected_dots, expected_storages, expected_joins):
+        raise SystemExit(f"replayed {dots}/{expected_dots} dot, {storages}/{expected_storages} storage and "
+                         f"{joins}/{expected_joins} join traces")
+    summary = {"rtl_dir": str(args.rtl_dir), "dot_traces": dots, "storage_traces": storages, "join_traces": joins,
+               "cycles": cycles, "evidence": "rtl-simulation", "simulator": "Icarus Verilog"}
     if args.output:
         args.output.write_text(json.dumps(summary, indent=1) + "\n")
-    print(f"PASS spec stream traces in Icarus: {dots} dot traces, {storages} storage traces, {cycles} compared cycles")
+    print(f"PASS spec stream traces in Icarus: {dots} dot traces, {storages} storage traces, {joins} join traces, "
+          f"{cycles} compared cycles")
 
 
 if __name__ == "__main__":

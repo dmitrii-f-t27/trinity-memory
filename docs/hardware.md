@@ -13,6 +13,8 @@ cells, a DDR controller, an inference engine, or a board-specific design.
 | `ternary_baseline5_decoder_t27` | Five 2-bit lanes | Five 2-bit trit lanes | Any lane equal to `11` |
 | `ternary_dense5_stream_t27` | Clocked loading/start interface | Stream of five decoded lanes | Per-word `out_code_valid` |
 | `ternary_baseline5_stream_t27` | Same interface, wider load data | Same decoded stream | Per-word `out_code_valid` |
+| `ternary_stream_adapter_t27` | The stream interface with `out_ready` exposed | Same decoded stream, held while `out_ready` is low | Per-word `out_code_valid` |
+| `ternary_stream_dot_t27` | Loading/start interface plus an activation stream | Framed dot results (`out_valid`/`out_ready`) | `out_error` per frame |
 
 Balanced values are `−1, 0, +1`. On all decoder outputs, `00 = 0`, `01 = +1`,
 `10 = −1`; the first trit occupies bits `[1:0]`. Invalid codes produce all-zero
@@ -78,7 +80,8 @@ widths explicitly.
 | `load_ready` | High when reset is inactive, `busy = 0`, and `start = 0`. |
 | `load_en`, `load_addr`, `load_code` | A write occurs on the rising edge only when `load_en && load_ready` and `load_addr < WORDS`. Dense data is 8 bits; baseline data is 10 bits. |
 | `start` | Accepted on a rising edge only when idle and reset is inactive. Takes priority over loading. Starts a complete fixed-length read from word 0. |
-| `busy` | High from an accepted start through the cycle carrying the last output word. Busy starts and writes are ignored. |
+| `busy` | High from an accepted start through the cycle carrying the last output word, including cycles in which the word is held. Busy starts and writes are ignored. |
+| `out_ready` | Downstream ready (`ternary_stream_adapter_t27`; tied high inside the dense5/baseline5 wrappers). While `out_valid` is high and `out_ready` is low, the word, `out_last`, the mask and the sequencer's address are held; the timing table below resumes where it stopped. Ignored while no word is presented. |
 | `out_valid` | Marks a response from memory, including a response with an invalid encoded word. |
 | `out_code_valid` | High only when `out_valid` is high and the encoded word is valid. |
 | `out_last` | High with the last response, including an invalid last word. |
@@ -234,7 +237,7 @@ The wrappers in [`fpga/ax7203/tms_dut_wrappers.v`](../fpga/ax7203/tms_dut_wrappe
 repeat the wiring of `rtl/t27/dot_stream.v` and `rtl/t27/streams.v` with the cores'
 `en` and `rst_n` exposed; arithmetic and state stay in `.t27`.
 
-Each run makes two passes over the 24 vectors (243 cycles):
+Each run makes two passes over every `dot_trace` and `storage_trace` vector (27 vectors, 288 cycles at the time of writing):
 
 - *stepped*: a trace cycle is applied with `en` high for exactly one clock; the
   outputs are captured with the same stimulus still applied, which is the sampling

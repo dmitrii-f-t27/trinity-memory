@@ -49,7 +49,7 @@ module tms_storage_dut #(
     input  wire        clk,
     input  wire        rst_n,
     input  wire        en,
-    input  wire [63:0] stim,      // [0] rst, [1] start, [2] load_en, [8:3] load_addr, [18:9] load_code
+    input  wire [63:0] stim,      // [0] rst, [1] start, [2] load_en, [8:3] load_addr, [18:9] load_code, [19] out_stall
     output wire [35:0] observed   // [9:0] trits, [14:10] lane mask, [15] code_valid, [16] last, [17] valid, [18] busy, [19] load_ready
 );
     localparam integer CODE_WIDTH = (DENSE5 != 0) ? 8 : 10;
@@ -66,6 +66,7 @@ module tms_storage_dut #(
         .clk(clk), .rst_n(rst_n), .en(en), .ready(), .reset(stim[0]),
         .start(stim[1]), .load_en(stim[2]), .load_addr({{(32-ADDR_WIDTH){1'b0}}, load_addr}),
         .load_code({{(16-CODE_WIDTH){1'b0}}, load_code}), .word_count(WORDS),
+        .out_ready(!stim[19]),
         .busy(busy), .load_ready(load_ready), .out_valid(out_valid),
         .out_last(out_last), .out_code(native_code)
     );

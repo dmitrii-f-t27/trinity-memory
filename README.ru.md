@@ -74,7 +74,9 @@ HTTP-статусы, лимиты, handle, правила чтения и dot, �
 контейнер TTPK v1: заголовок, лимиты, схема метаданных, правила дескрипторов и цепочки,
 представление float (см. [docs/tensorpack.md](docs/tensorpack.md));
 [`stream_compute.t27`](specs/memory/stream_compute.t27) — конвейер dot, sequencer хранилища
-и view с потактовыми трассами, воспроизводимыми в Icarus (см. [docs/stream-compute.md](docs/stream-compute.md));
+с обратным давлением (`out_ready`), view и объединённый путь read -> decode -> dot
+(`rtl/t27/stream_dot.v`) с потактовыми трассами, воспроизводимыми в Icarus
+(см. [docs/stream-compute.md](docs/stream-compute.md));
 [`conformance.t27`](specs/memory/conformance.t27) — схема conformance-фикстуры, план нативного
 эксперимента и лабораторный отчёт, который [`tools/conformance-lab.py`](tools/conformance-lab.py)
 воспроизводит по всем потребителям (см. [docs/STACK.md](docs/STACK.md)); [`edge_demo.t27`](specs/memory/edge_demo.t27) —

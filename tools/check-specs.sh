@@ -114,6 +114,7 @@ done
 # The dot pipeline source is generated to C as well, so the harness compares the
 # spec against the same functions that produce the RTL.
 "$compiler" gen-c t27/rtl/dot_stream.t27 > "$impl/rtl_dot_stream.h"
+"$compiler" gen-c t27/rtl/stream_join.t27 > "$impl/rtl_stream_join.h"
 for spec in $specs; do
     cp "$out/$(basename "$spec" .t27).h" "$impl/specs/"
 done
@@ -132,7 +133,7 @@ done
 # Cycle traces: generate the RTL modules from their executable sources and
 # replay every trace of the stream compute spec in Icarus Verilog.
 mkdir -p "$out/rtl"
-for module in dot_stream stream_storage stream_view; do
+for module in dot_stream stream_storage stream_view stream_join; do
     "$compiler" gen-verilog "t27/rtl/$module.t27" > "$out/rtl/$module.v"
     if grep -E 'ENTRY POINT REFUSED|NO DATA PORTS|TODO' "$out/rtl/$module.v"; then
         echo "Incomplete generated RTL: t27/rtl/$module.t27" >&2
