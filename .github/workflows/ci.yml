@@ -22,7 +22,7 @@ jobs:
           git -C "$T27_ROOT" checkout --detach FETCH_HEAD
           rustup toolchain install 1.94.0 --profile minimal
           sudo apt-get update
-          sudo apt-get install -y iverilog clang
+          sudo apt-get install -y iverilog clang libssl-dev
       - uses: actions/cache@v4
         with:
           path: |
