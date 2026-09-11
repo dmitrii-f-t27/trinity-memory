@@ -8,7 +8,7 @@ Decision record and captured device output for issue #10. Protocol and flow:
 - **Board / part:** ALINX AX7203, `xc7a200tfbg484-2`. Owned hardware, on the
   bench of the build machine; the same board `gHashTag/trinity-fpga` builds with
   (its verified pin map is reused in `fpga/ax7203/tms_trace_player.xdc`).
-- **Clock:** 200 MHz LVDS oscillator divided to 50 MHz in fabric; no PLL.
+- **Clock:** 200 MHz LVDS oscillator through IBUFDS/BUFG, one domain; registers enabled one clock in eight (25 M ticks/s); no divided clock, no PLL.
 - **Configuration:** on-board FT232H JTAG (`openFPGALoader -c digilent_hs2`),
   SRAM only. **Host link:** on-board CP2102N UART at 115200 8N1.
 - **Toolchain:** open flow (yosys, nextpnr-xilinx, prjxray) from the

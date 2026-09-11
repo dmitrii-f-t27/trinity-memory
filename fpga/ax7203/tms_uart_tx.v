@@ -2,9 +2,10 @@
 `timescale 1ns/1ps
 `default_nettype none
 module tms_uart_tx #(
-    parameter integer BAUD_DIV = 434   // clock cycles per bit (50 MHz / 115200 = 434.03)
+    parameter integer BAUD_DIV = 217   // ticks per bit (25 M ticks/s / 115200 = 217.01)
 ) (
     input  wire       clk,
+    input  wire       tick,            // clock enable; the bit timer counts ticks
     input  wire       rst,
     input  wire [7:0] data,
     input  wire       start,
@@ -15,7 +16,7 @@ module tms_uart_tx #(
     reg [15:0] count = 16'd0;
     reg [3:0]  bits = 4'd0;
     assign tx = busy ? shift[0] : 1'b1;
-    always @(posedge clk) begin
+    always @(posedge clk) if (tick) begin
         if (rst) begin
             busy <= 1'b0;
             shift <= 10'h3ff;

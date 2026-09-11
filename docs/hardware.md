@@ -217,7 +217,7 @@ captured output matches the reference.
 | Decision | Value |
 | --- | --- |
 | Board / part | ALINX AX7203, `xc7a200tfbg484-2` (owned hardware; the board `gHashTag/trinity-fpga` builds with) |
-| Clock | On-board 200 MHz LVDS oscillator (`R4`/`T4`) through `IBUFDS`, divided by four to the 50 MHz harness clock; no PLL or MMCM |
+| Clock | On-board 200 MHz LVDS oscillator (`R4`/`T4`) through `IBUFDS` and `BUFG`, one clock domain; every register is enabled by a tick, one clock in eight (25 M ticks/s), so paths between enabled registers have 40 ns to settle; no divided clock, no PLL or MMCM |
 | Configuration | On-board FT232H JTAG, `openFPGALoader -c digilent_hs2`, SRAM only (a power cycle removes the design) |
 | Host link | On-board CP2102N UART, 115200 8N1; the design reports, the host only triggers |
 | Toolchain | yosys `synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7`, nextpnr-xilinx (`--placer sa --router router1 --timing-allow-fail`, seed search), prjxray `fasm2frames` and `xc7frames2bit`, all from the `regymm/openxc7` image; Vivado is not used |
@@ -239,14 +239,14 @@ repeat the wiring of `rtl/t27/dot_stream.v` and `rtl/t27/streams.v` with the cor
 
 Each run makes two passes over every `dot_trace` and `storage_trace` vector (27 vectors, 288 cycles at the time of writing):
 
-- *stepped*: a trace cycle is applied with `en` high for exactly one clock; the
+- *stepped*: a trace cycle is applied with `en` high for exactly one tick; the
   outputs are captured with the same stimulus still applied, which is the sampling
   rule of the Icarus testbenches (`in_ready` and `load_ready` are combinational in
   the inputs), compared with the expected ROM word on the device, and written to
   the UART as a `C` line;
-- *free-run*: the same vectors without the UART pauses, two harness clocks per
-  trace cycle (one enabled, one holding the stimulus while the outputs are
-  sampled); only the on-device mismatch count per vector is reported.
+- *free-run*: the same vectors without the UART pauses, two ticks per trace
+  cycle (one enabled, one holding the stimulus while the outputs are sampled);
+  only the on-device mismatch count per vector is reported.
 
 The report is a stream of fixed 19-byte lines (`tag`, 8 hex digits, 9 hex digits,
 LF): `H` build id and totals, `V` vector start, `C` observed word per cycle, `E`
@@ -279,7 +279,6 @@ The bitstream is also built by the `fpga-ax7203` workflow (chip database cached,
 
 **What this track does not measure.** DDR, power, the Edge Demo classifier (a
 software demo; its device numbers are outside this harness), and any frequency
-beyond what nextpnr reports for the harness clock. A trace cycle in the free-run
-pass takes two harness clocks by construction, so the pass demonstrates
-cycle-exact behaviour at 25 M trace cycles per second, not the cores' maximum
-clock.
+beyond what nextpnr reports. A trace cycle in the free-run pass takes two ticks
+(sixteen clocks) by construction, so the pass demonstrates cycle-exact behaviour
+at 12.5 M trace cycles per second, not the cores' maximum clock.

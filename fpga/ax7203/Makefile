@@ -30,16 +30,16 @@ REL       = $(patsubst $(ROOT)/%,%,$(1))
 
 .PHONY: gen sim synth chipdb pnr bit flash capture detect clean
 
-gen: $(BUILD)/tms_trace_bank.v $(RTL)/dot_stream.v
+gen: $(BUILD)/tms_trace_bank.v $(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v
 
 $(BUILD)/tms_trace_bank.v $(BUILD)/tms_trace_manifest.json: $(ROOT)/conformance/memory_stream_compute.json $(ROOT)/tools/generate-fpga-trace-player.py
 	python3 $(ROOT)/tools/generate-fpga-trace-player.py
 
-$(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v:
+# One generated core per executable source; regenerated whenever the source changes.
+$(RTL)/%.v: $(ROOT)/t27/rtl/%.t27
 	@test -x "$(T27C)" || { echo "T27_ROOT must point at the pinned compiler checkout (native/compiler.lock)"; exit 1; }
 	mkdir -p $(RTL)
-	cd $(ROOT) && for s in dot_stream stream_storage stream_view; do \
-	    "$(T27C)" gen-verilog t27/rtl/$$s.t27 > $(RTL)/$$s.v || exit 1; done
+	cd $(ROOT) && "$(T27C)" gen-verilog t27/rtl/$*.t27 > $@
 
 sim: gen
 	mkdir -p $(BUILD)/sim
