@@ -93,23 +93,6 @@ jobs:
         run: make -C fpga/ax7203 pnr CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
       - name: Pack the bitstream
         run: make -C fpga/ax7203 bit
-      - name: Build the tick-enable variant as well (CLOCK_MODE=0, fallback)
-        run: |
-          make -C fpga/ax7203 bit BUILD=${{ github.workspace }}/build/fpga-tick CLOCK_MODE=0 CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
-          grep -E "Max frequency" build/fpga-tick/nextpnr.log | head -2 || true
-      - name: Upload the tick-enable variant
-        uses: actions/upload-artifact@v4
-        with:
-          name: ax7203-trace-player-tick
-          path: |
-            build/fpga-tick/tms_trace_player_ax7203.bit
-            build/fpga-tick/nextpnr.log
-            build/fpga-tick/yosys_stat.txt
-          retention-days: 90
-          if-no-files-found: error
-      - name: Timing and utilization summary
-        run: |
-          grep -E "Max frequency|Info: Device utilisation|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/nextpnr.log | head -40 || true
       - name: Keep every tool log even when a step failed
         if: always()
         uses: actions/upload-artifact@v4
@@ -138,3 +121,22 @@ jobs:
             build/fpga/sim_capture.json
           retention-days: 90
           if-no-files-found: error
+      - name: Build the tick-enable variant as well (CLOCK_MODE=0, fallback)
+        continue-on-error: true
+        run: |
+          make -C fpga/ax7203 bit BUILD=${{ github.workspace }}/build/fpga-tick CLOCK_MODE=0 CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
+          grep -E "Max frequency" build/fpga-tick/nextpnr.log | head -2 || true
+      - name: Upload the tick-enable variant
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax7203-trace-player-tick
+          path: |
+            build/fpga-tick/tms_trace_player_ax7203.bit
+            build/fpga-tick/nextpnr.log
+            build/fpga-tick/yosys_stat.txt
+          retention-days: 90
+          if-no-files-found: warn
+      - name: Timing and utilization summary
+        run: |
+          grep -E "Max frequency|Info: Device utilisation|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/nextpnr.log | head -40 || true

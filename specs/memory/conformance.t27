@@ -76,6 +76,17 @@ module TrinityMemoryConformanceLabSpec {
         software_loopback_http = 2,
         rtl_simulation = 3,
         wasm = 4,
+        fpga = 5,
+    }
+    // A device capture (tools/fpga-capture.py, reports/fpga/capture-*.json) carries
+    // the fpga label only while it replayed exactly the committed vector set: its
+    // manifest source hash must equal the hash of the stream compute vectors, and
+    // its result must be PASS. Sections that do not run on the device keep their
+    // own labels.
+    pub const TMS_LAB_DEVICE_CAPTURE_SCHEMA_VERSION: u32 = 1;
+    pub const TMS_LAB_DEVICE_CAPTURE_MUST_MATCH_SOURCE_HASH: u32 = 1;
+    pub fn tms_lab_device_capture_current(source_hash_matches: bool, passed: bool) -> bool {
+        return source_hash_matches && passed;
     }
 
     // 4. Catalogues. Each case names the sibling vector kind that exercises it.
@@ -270,5 +281,10 @@ module TrinityMemoryConformanceLabSpec {
         assert !tms_lab_seed_valid(-1, true) && !tms_lab_seed_valid(4294967296, true);
         assert tms_lab_seed_valid(-1, false);
         assert tms_lab_field_is_timing(1) && !tms_lab_field_is_timing(0);
+    }
+    test "device captures carry fpga only when current and passed" {
+        assert tms_lab_device_capture_current(true, true);
+        assert !tms_lab_device_capture_current(false, true) && !tms_lab_device_capture_current(true, false);
+        assert TMS_LAB_DEVICE_CAPTURE_SCHEMA_VERSION == 1 && TMS_LAB_DEVICE_CAPTURE_MUST_MATCH_SOURCE_HASH == 1;
     }
 }

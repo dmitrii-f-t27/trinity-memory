@@ -36,7 +36,8 @@ REL       = $(patsubst $(ROOT)/%,%,$(1))
 gen: $(BUILD)/tms_trace_bank.v $(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v
 
 $(BUILD)/tms_trace_bank.v $(BUILD)/tms_trace_manifest.json: $(ROOT)/conformance/memory_stream_compute.json $(ROOT)/tools/generate-fpga-trace-player.py
-	python3 $(ROOT)/tools/generate-fpga-trace-player.py
+	mkdir -p $(BUILD)
+	python3 $(ROOT)/tools/generate-fpga-trace-player.py --output-dir $(BUILD)
 
 # One generated core per executable source; regenerated whenever the source changes.
 $(RTL)/%.v: $(ROOT)/t27/rtl/%.t27
@@ -55,6 +56,7 @@ sim: gen
 
 synth: $(BUILD)/$(TOP).json
 $(BUILD)/$(TOP).json: $(SOURCES)
+	mkdir -p $(BUILD)
 	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(TOP); $(YOSYS_SYNTH) -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
 
 chipdb: $(CHIPDB)
