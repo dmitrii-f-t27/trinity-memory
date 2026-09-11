@@ -25,10 +25,12 @@ binary memory. It has its own code, tests, reports, and hardware roadmap.
 Version 0.3 is a **working software and RTL-simulation demonstrator**. A real
 loopback HTTP client/server connects tensor files to emulated memory and exact
 integer computations; an optional Icarus replay verifies the retrieved weights
-in RTL. On 2026-09-11 the stream-compute trace suites (27 vectors, 288 cycles) were
-replayed on an ALINX AX7203 (XC7A200T) in two clock variants and the captured device
-output matched the reference in every run ([reports/fpga](reports/fpga/README.md)); DDR,
-power and throughput beyond those workloads remain unmeasured.
+in RTL. On 2026-09-11 an ALINX AX7203 (XC7A200T) ran the player written in t27: all 34
+stream-compute trace vectors including the joined read -> decode -> dot path matched
+the reference, a streaming workload delivered 0.94 beats per tick (23.5 M beats/s at
+25 M ticks/s) with every result recomputed by the host, and the Edge Demo classifier
+labelled all six fixtures on the device in 7 ticks each
+([reports/fpga](reports/fpga/README.md)). DDR and power remain unmeasured.
 
 ## Five directions, one reproducible chain
 
