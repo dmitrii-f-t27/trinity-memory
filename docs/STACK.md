@@ -113,7 +113,20 @@ specifications under [`specs/memory/`](../specs/memory/), starting with
 framing, CRC32, status codes, evidence labels). Vectors in
 [`conformance/`](../conformance/) are generated from the spec and replayed by the
 native harness and the Python adapters; `tools/check-specs.sh` is the gate. The
-Bridge, TensorPack, Stream Compute, Conformance Lab and Edge Demo specs are
+Conformance Lab is specified in [`conformance.t27`](../specs/memory/conformance.t27):
+the fixture schema, the experiment plan the native runtime executes (codec
+order, seeded random cases, sparse transfers, six single-bit corruptions), the
+native report, and the lab report that `tools/conformance-lab.py` assembles
+from every consumer under evidence labels. Run it from a clean clone after
+`make t27`:
+
+```sh
+python3 tools/conformance-lab.py --repeat 2 --output build/conformance-lab.json
+```
+
+Two runs must be identical except the `timing` key; the report lists the
+corruption, interruption and reset cases it covers and where each is replayed.
+The Bridge, TensorPack, Stream Compute, Conformance Lab and Edge Demo specs are
 tracked in [epic #3](https://github.com/dmitrii-f-t27/trinity-memory/issues/3).
 
 ## Hardware continuation

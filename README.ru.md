@@ -74,7 +74,10 @@ HTTP-статусы, лимиты, handle, правила чтения и dot, �
 контейнер TTPK v1: заголовок, лимиты, схема метаданных, правила дескрипторов и цепочки,
 представление float (см. [docs/tensorpack.md](docs/tensorpack.md));
 [`stream_compute.t27`](specs/memory/stream_compute.t27) — конвейер dot, sequencer хранилища
-и view с потактовыми трассами, воспроизводимыми в Icarus (см. [docs/stream-compute.md](docs/stream-compute.md)). Инварианты —
+и view с потактовыми трассами, воспроизводимыми в Icarus (см. [docs/stream-compute.md](docs/stream-compute.md));
+[`conformance.t27`](specs/memory/conformance.t27) — схема conformance-фикстуры, план нативного
+эксперимента и лабораторный отчёт, который [`tools/conformance-lab.py`](tools/conformance-lab.py)
+воспроизводит по всем потребителям (см. [docs/STACK.md](docs/STACK.md)). Инварианты —
 константные выражения, они компилируются в `_Static_assert`; блоки `test`
 исполняются сгенерированным C-раннером. У каждой спецификации есть печать в
 [`.trinity/seals/`](.trinity/seals/) и независимые от языка векторы в

@@ -24,6 +24,14 @@ python3 -m pip wheel --no-deps . --wheel-dir dist
 python3 tests/native/test_installed_wheel.py --wheel dist/<platform-wheel>.whl --rtl
 ```
 
+## Specification
+
+The conformance experiment above (fixture schema, codec order, random cases,
+sparse transfers, six corruptions, report fields) is stated in
+[`specs/memory/conformance.t27`](../../specs/memory/conformance.t27); the lab
+report produced by `tools/conformance-lab.py` aggregates this experiment with
+the codec, container, bridge and stream vectors under evidence labels.
+
 ## Observed local evidence
 
 | Check | Result |

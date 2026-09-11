@@ -105,6 +105,11 @@ jobs:
       - run: python -m trinity_memory benchmark --count 4096 --repeats 1 --output build/benchmark.json
       - run: python scripts/render_report.py build/benchmark.json --output build/report.html
       - run: python -m trinity_memory conformance --rtl --output build/conformance-report.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Conformance lab, two identical runs
+        run: python tools/conformance-lab.py --repeat 2 --output build/conformance-lab.json
       - run: python -m trinity_memory edge-demo --rtl
       - name: Build and install platform wheel
         run: |
