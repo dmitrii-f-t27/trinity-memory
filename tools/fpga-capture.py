@@ -24,10 +24,13 @@ ROOT = Path(__file__).resolve().parent.parent
 LINE = re.compile(r"^([HVCEKFWRTXAD])([0-9a-f]{8})([0-9a-f]{10})$")
 
 
-def read_port(port, baud, timeout, trigger):
+def read_port(port, baud, timeout, trigger, settle=0.5):
     import serial  # pyserial
 
     with serial.Serial(port, baud, timeout=0.2) as link:
+        # Opening the port can glitch the device's RX line, which the player takes as a start
+        # bit; let any run that started that way finish before discarding it and triggering ours.
+        time.sleep(settle)
         link.reset_input_buffer()
         if trigger:
             link.write(b"r")
@@ -65,6 +68,8 @@ def parse(text):
             continue
         if tag == "V":
             current["vectors"].append({"index": a, "cycles": int(b, 16), "observed": [], "device_mismatches": None, "counters": []})
+        elif tag in ("C", "E", "K") and not current["vectors"]:
+            bad.append(raw)   # a per-vector line before any vector: a damaged stream
         elif tag == "C":
             current["vectors"][-1]["observed"].append((a, b))
         elif tag == "E":
@@ -176,6 +181,7 @@ def main():
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--no-trigger", action="store_true", help="do not send a byte to restart the run")
+    parser.add_argument("--settle", type=float, default=0.5, help="seconds to wait after opening the port before triggering")
     parser.add_argument("--from-file", help="parse a previously captured byte stream instead of a port")
     parser.add_argument("--manifest", default=str(ROOT / "build" / "fpga" / "tms_trace_manifest.json"))
     parser.add_argument("--output", help="write the JSON report here")
@@ -187,7 +193,7 @@ def main():
         data = Path(args.from_file).read_bytes()
         source = {"file": args.from_file}
     elif args.port:
-        data = read_port(args.port, args.baud, args.timeout, not args.no_trigger)
+        data = read_port(args.port, args.baud, args.timeout, not args.no_trigger, args.settle)
         source = {"port": args.port, "baud": args.baud}
     else:
         parser.error("give --port or --from-file")
