@@ -9,6 +9,24 @@ Implementation: [`trinity_memory/bridge.py`](../trinity_memory/bridge.py).
 The protocol and the server are implemented here; they have not been merged
 into the upstream Rust `trinity-node`.
 
+## Specification
+
+The contract on this page is restated as the sealed specification
+[`specs/memory/bridge.t27`](../specs/memory/bridge.t27): envelope and field
+masks, id bounds, error codes with their HTTP statuses, default limits, handle
+layout, read-range and dot rules, base64 sizes, storage accounting, runtime
+buffer capacities and the synthetic identity derivation. Its constant
+invariants compile as `_Static_assert` and its test blocks execute in the
+generated C runner. [`conformance/memory_bridge.json`](../conformance/memory_bridge.json)
+holds request/response vectors for every method, every error code, raw HTTP
+framing failures, an interrupted body, out-of-range reads and per-row-scale
+dots; `tests/test_spec_bridge.py` replays them over real TCP against the native
+server, `tests/native/test_spec_bridge_vectors.py` replays them in process
+through the generated bridge module, and `tests/native_spec_bridge.c` ties the
+spec constants and rules to `t27/bridge.t27` and `t27/client.t27`.
+The transport remains loopback-only and unauthenticated; the spec labels the
+backend `emulator` and `hardware: false` until a device backend exists.
+
 ## Python client and server
 
 ```python

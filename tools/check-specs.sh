@@ -93,10 +93,27 @@ if grep -q 'WARN' "$out/conformance.log"; then
     exit 1
 fi
 "${PYTHON:-python3}" tools/generate-spec-vectors.py --check
-# Differential harness: spec constants against the executable implementation.
-"$compiler" gen-c t27/codecs.t27 > "$out/codecs.h"
-"$compiler" gen-c t27/container.t27 > "$out/container.h"
+# Differential harnesses: spec constants and rules against the executable
+# implementation. Implementation headers are generated next to the spec headers
+# (build/t27/specs/impl) so both can be included from one translation unit.
+impl="$out/impl"
+mkdir -p "$impl/specs"
+for module in codecs container tensorpack json json_writer tensorpack_json bridge client; do
+    "$compiler" gen-c "t27/$module.t27" > "$impl/$module.h"
+done
+for spec in $specs; do
+    cp "$out/$(basename "$spec" .t27).h" "$impl/specs/"
+done
+cxx=${CXX:-c++}
+case $(uname -s) in Darwin) crypto_flags= ;; *) crypto_flags="-lcrypto -ldl" ;; esac
+"$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/float.cpp -o "$out/float-spec.o"
+"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/platform.c -o "$out/platform-spec.o"
 # shellcheck disable=SC2086
-"$cc" $cflags -I "$out" tests/native_spec_types.c -o "$out/test-spec-types"
+"$cc" $cflags -I "$impl" tests/native_spec_types.c -o "$out/test-spec-types"
 "$out/test-spec-types"
-echo "PASS spec gate: $count spec(s) lexed, parsed, typechecked, generated (C, Verilog), tested, sealed; conformance validated"
+# shellcheck disable=SC2086
+"$cc" $cflags -I "$impl" -c tests/native_spec_bridge.c -o "$out/test-spec-bridge.o"
+# shellcheck disable=SC2086
+"$cxx" -fsanitize=address,undefined "$out/test-spec-bridge.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/test-spec-bridge"
+"$out/test-spec-bridge"
+echo "PASS spec gate: $count spec(s) lexed, parsed, typechecked, generated (C, Verilog), tested, sealed; conformance validated; differential harnesses passed"
