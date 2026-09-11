@@ -82,6 +82,13 @@ jobs:
       - name: Generate the chip database
         if: steps.chipdb.outputs.cache-hit != 'true'
         run: make -C fpga/ax7203 chipdb CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
+      - name: Save the chip database as an artifact (local iteration)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax7203-chipdb-xc7a200tfbg484-2
+          path: build/fpga/chipdb/xc7a200tfbg484-2.bin
+          retention-days: 14
+          compression-level: 6
       - name: Place and route (nextpnr-xilinx, seed search)
         run: make -C fpga/ax7203 pnr CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
       - name: Pack the bitstream
@@ -89,6 +96,19 @@ jobs:
       - name: Timing and utilization summary
         run: |
           grep -E "Max frequency|Info: Device utilisation|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/nextpnr.log | head -40 || true
+      - name: Keep every tool log even when a step failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax7203-tool-logs
+          path: |
+            build/fpga/yosys.log
+            build/fpga/yosys_stat.txt
+            build/fpga/nextpnr*.log
+            build/fpga/sim_capture.txt
+            build/fpga/sim_capture.json
+          retention-days: 30
+          if-no-files-found: warn
       - uses: actions/upload-artifact@v4
         with:
           name: ax7203-trace-player

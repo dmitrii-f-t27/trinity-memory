@@ -6,15 +6,21 @@
 // (tools/fpga-capture.py) can compare it with the reference independently.
 //
 // Two passes per run:
-//   stepped   each trace cycle is applied with `en` high for exactly one clock,
+//   stepped   each trace cycle is applied with `en` high for exactly one tick,
 //             the outputs are captured with the same stimulus still applied
 //             (the sampling rule of tests/tb_spec_*_trace.v), compared with the
 //             expected ROM word and written as a `C` line;
 //   free-run  the same vectors are replayed without the UART pauses, two
-//             harness clocks per trace cycle (one with `en` high, one holding
-//             the stimulus while the outputs are sampled, because in_ready and
+//             ticks per trace cycle (one with `en` high, one holding the
+//             stimulus while the outputs are sampled, because in_ready and
 //             load_ready are combinational in the inputs); only the on-device
 //             mismatch count per vector is reported (`F` lines).
+//
+// Clocking: one clock domain, the board's 200 MHz LVDS oscillator through
+// IBUFDS and BUFG; no divided clock, no PLL. Every register of the harness and
+// every core is enabled by `tick`, one clock in TICK_DIV (25 M ticks/s), so a
+// path between enabled registers has TICK_DIV clock periods to settle. Baud and
+// heartbeat counters count ticks.
 //
 // Line format (19 bytes): tag, 8 hex digits (a), 9 hex digits (b), LF.
 //   H a=BUILD_ID          b={4'h1, total cycles[15:0], vector count[15:0]}
@@ -29,8 +35,8 @@
 `timescale 1ns/1ps
 `default_nettype none
 module tms_trace_player_ax7203 #(
-    parameter integer CLK_DIV = 4,          // 200 MHz LVDS input divided to the harness clock (power of two)
-    parameter integer BAUD_DIV = 434,       // harness clocks per UART bit (50 MHz / 115200)
+    parameter integer TICK_DIV = 8,         // clocks per tick: 200 MHz / 8 = 25 M ticks/s (power of two)
+    parameter integer BAUD_DIV = 217,       // ticks per UART bit (25 M / 115200 = 217.01)
     parameter [31:0] BUILD_ID = 32'h0
 ) (
     input  wire       clk200_p,
@@ -40,21 +46,24 @@ module tms_trace_player_ax7203 #(
     output wire       uart_tx,
     input  wire       uart_rx
 );
-    // ---- clocking: IBUFDS -> BUFG -> divider register -> BUFG ----
-    localparam integer DIV_BITS = (CLK_DIV >= 2) ? $clog2(CLK_DIV) : 1;
-    wire clk200_raw, clk200, clk;
+    // ---- clocking: IBUFDS -> BUFG, then a registered tick enable ----
+    localparam integer TICK_BITS = (TICK_DIV >= 2) ? $clog2(TICK_DIV) : 1;
+    wire clk200_raw, clk;
     IBUFDS clk_ibufds (.I(clk200_p), .IB(clk200_n), .O(clk200_raw));
-    BUFG clk200_bufg (.I(clk200_raw), .O(clk200));
-    reg [DIV_BITS-1:0] div = {DIV_BITS{1'b0}};
-    always @(posedge clk200) div <= div + 1'b1;
-    BUFG clk_bufg (.I(div[DIV_BITS-1]), .O(clk));
+    BUFG clk_bufg (.I(clk200_raw), .O(clk));
+    reg [TICK_BITS-1:0] tick_cnt = {TICK_BITS{1'b0}};
+    reg tick = 1'b0;
+    always @(posedge clk) begin
+        tick_cnt <= tick_cnt + 1'b1;
+        tick <= (tick_cnt == {TICK_BITS{1'b1}});
+    end
 
     // ---- reset: power-on counter plus the synchronized active-low button ----
     reg [1:0] rst_sync = 2'b00;
     reg [7:0] por = 8'd0;
     always @(posedge clk) begin
         rst_sync <= {rst_sync[0], rst_n};
-        if (!por[7]) por <= por + 1'b1;
+        if (tick && !por[7]) por <= por + 1'b1;
     end
     wire rst = !por[7] || !rst_sync[1];
 
@@ -68,7 +77,7 @@ module tms_trace_player_ax7203 #(
     reg [7:0]  tx_byte = 8'd0;
     wire       tx_busy;
     tms_uart_tx #(.BAUD_DIV(BAUD_DIV)) uart (
-        .clk(clk), .rst(rst), .data(tx_byte), .start(tx_start), .busy(tx_busy), .tx(uart_tx)
+        .clk(clk), .tick(tick), .rst(rst), .data(tx_byte), .start(tx_start), .busy(tx_busy), .tx(uart_tx)
     );
     reg        line_go = 1'b0;
     reg [7:0]  line_tag = 8'd0;
@@ -97,7 +106,7 @@ module tms_trace_player_ax7203 #(
         end
     endfunction
     wire [7:0] line_byte = line_char(line_pos, line_tag, line_a, line_b);
-    always @(posedge clk) begin
+    always @(posedge clk) if (tick) begin
         tx_start <= 1'b0;
         if (rst) begin
             line_busy <= 1'b0;
@@ -131,7 +140,7 @@ module tms_trace_player_ax7203 #(
     wire [3:0]  vdut;
     wire [35:0] observed;
     tms_trace_bank bank (
-        .clk(clk), .dut_rst_n(dut_rst_n), .step(dut_en), .vector(vector), .addr(addr),
+        .clk(clk), .dut_rst_n(dut_rst_n), .step(dut_en && tick), .vector(vector), .addr(addr),
         .stim_q(stim_q), .stimulus(rom_stim), .expected(rom_exp), .vector_base(vbase),
         .vector_cycles(vcycles), .vector_kind(vkind), .vector_dut(vdut),
         .vector_count(vector_count), .cycle_count(cycle_count), .observed(observed)
@@ -173,10 +182,11 @@ module tms_trace_player_ax7203 #(
     endfunction
 
     always @(posedge clk) begin
+        if (rx_falling)
+            trigger_pending <= 1'b1;   // outranks the clear below only when both happen on one clock
+        if (tick) begin
         heartbeat <= heartbeat + 1'b1;
         line_go <= 1'b0;
-        if (rx_falling)
-            trigger_pending <= 1'b1;
         if (rst) begin
             state <= S_IDLE;
             dut_en <= 1'b0;
@@ -365,6 +375,7 @@ module tms_trace_player_ax7203 #(
                 end
                 default: state <= S_IDLE;
             endcase
+        end
         end
     end
     assign led = {mism_seen, run_done, state != S_IDLE, heartbeat[23]};
