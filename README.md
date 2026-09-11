@@ -64,7 +64,9 @@ TMEM v1 framing, CRC32 parameters, native status codes and evidence labels
 (`emulator`, `software`, `rtl-simulation`, `fpga`);
 [`bridge.t27`](specs/memory/bridge.t27) states the Bridge protocol: envelope,
 error codes and HTTP statuses, limits, handles, read and dot rules, identity
-(see [docs/bridge.md](docs/bridge.md)). Invariants are constant
+(see [docs/bridge.md](docs/bridge.md)); [`tensorpack.t27`](specs/memory/tensorpack.t27)
+states the TTPK v1 container: header, limits, metadata schema, descriptor and
+chain rules, float presentation (see [docs/tensorpack.md](docs/tensorpack.md)). Invariants are constant
 expressions compiled as `_Static_assert`; `test` blocks execute in the generated C
 test runner. Each spec has a seal in [`.trinity/seals/`](.trinity/seals/) and
 language-independent vectors in [`conformance/`](conformance/), generated from
