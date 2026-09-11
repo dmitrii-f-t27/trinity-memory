@@ -1,13 +1,13 @@
 /* Differential harness: the constants and reference functions declared in
  * specs/memory/types.t27 must agree with the executable implementation in
- * t27/codecs.t27 and t27/container.t27. Generate types.h, codecs.h and
- * container.h with the pinned compiler and compile this file with -I paths to
- * both directories. No production algorithm is maintained here. */
+ * t27/codecs.t27 and t27/container.t27. Generate specs/types.h, codecs.h and
+ * container.h with the pinned compiler into one include directory and compile
+ * this file with -I pointing at it. No production algorithm is maintained here. */
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
-#include "types.h"
+#include "specs/types.h"
 #include "codecs.h"
 #include "container.h"
 
