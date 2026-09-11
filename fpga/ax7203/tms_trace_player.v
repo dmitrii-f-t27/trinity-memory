@@ -16,10 +16,14 @@
 //             load_ready are combinational in the inputs); only the on-device
 //             mismatch count per vector is reported (`F` lines).
 //
-// Clocking: one clock domain, the board's 200 MHz LVDS oscillator through
-// IBUFDS and BUFG; no divided clock, no PLL. Every register of the harness and
-// every core is enabled by `tick`, one clock in TICK_DIV (25 M ticks/s), so a
-// path between enabled registers has TICK_DIV clock periods to settle. Baud and
+// Clocking, two variants selected by CLOCK_MODE (both from the board's 200 MHz
+// LVDS oscillator through IBUFDS and BUFG, no PLL):
+//   1  the harness and the cores run on a BUFG-driven clock divided by TICK_DIV
+//      (25 MHz) and every register is enabled every clock (single-cycle timing);
+//   0  everything runs on the 200 MHz clock and every register is enabled by
+//      `tick`, one clock in TICK_DIV, so a path between enabled registers has
+//      TICK_DIV periods to settle (the tick net itself is a single-cycle path).
+// In both variants the enabled rate is 200/TICK_DIV M ticks/s; baud and
 // heartbeat counters count ticks.
 //
 // Line format (19 bytes): tag, 8 hex digits (a), 9 hex digits (b), LF.
@@ -35,6 +39,7 @@
 `timescale 1ns/1ps
 `default_nettype none
 module tms_trace_player_ax7203 #(
+    parameter integer CLOCK_MODE = 1,       // 1: divided clock on a BUFG; 0: 200 MHz clock with a tick enable
     parameter integer TICK_DIV = 8,         // clocks per tick: 200 MHz / 8 = 25 M ticks/s (power of two)
     parameter integer BAUD_DIV = 217,       // ticks per UART bit (25 M / 115200 = 217.01)
     parameter [31:0] BUILD_ID = 32'h0
@@ -46,17 +51,23 @@ module tms_trace_player_ax7203 #(
     output wire       uart_tx,
     input  wire       uart_rx
 );
-    // ---- clocking: IBUFDS -> BUFG, then a registered tick enable ----
+    // ---- clocking: IBUFDS -> BUFG (200 MHz), then either a divided clock on a
+    // second BUFG (CLOCK_MODE=1) or a registered tick enable (CLOCK_MODE=0) ----
     localparam integer TICK_BITS = (TICK_DIV >= 2) ? $clog2(TICK_DIV) : 1;
-    wire clk200_raw, clk;
+    wire clk200_raw, clk200, clk, tick;
     IBUFDS clk_ibufds (.I(clk200_p), .IB(clk200_n), .O(clk200_raw));
-    BUFG clk_bufg (.I(clk200_raw), .O(clk));
+    BUFG clk200_bufg (.I(clk200_raw), .O(clk200));
     reg [TICK_BITS-1:0] tick_cnt = {TICK_BITS{1'b0}};
-    reg tick = 1'b0;
-    always @(posedge clk) begin
-        tick_cnt <= tick_cnt + 1'b1;
-        tick <= (tick_cnt == {TICK_BITS{1'b1}});
-    end
+    always @(posedge clk200) tick_cnt <= tick_cnt + 1'b1;
+    generate if (CLOCK_MODE != 0) begin : divided_clock
+        BUFG clk_bufg (.I(tick_cnt[TICK_BITS-1]), .O(clk));
+        assign tick = 1'b1;
+    end else begin : tick_enable
+        reg tick_q = 1'b0;
+        always @(posedge clk200) tick_q <= (tick_cnt == {TICK_BITS{1'b1}});
+        assign clk = clk200;
+        assign tick = tick_q;
+    end endgenerate
 
     // ---- reset: power-on counter plus the synchronized active-low button ----
     reg [1:0] rst_sync = 2'b00;
