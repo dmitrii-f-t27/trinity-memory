@@ -19,8 +19,10 @@ TOP       := tms_trace_player_ax7203
 IMAGE     ?= regymm/openxc7:latest
 DOCKER    ?= docker run --rm -v "$(ROOT):/work" -w /work $(IMAGE)
 CHIPDB    ?= $(BUILD)/chipdb/$(PART).bin
-SEEDS     ?= 1 2 3 4 5 6 7 8
-FREQ_MHZ  ?= 50.0
+SEEDS     ?= 1 2 3 4 5 6
+PLACERS   ?= sa heap
+YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -family xc7
+FREQ_MHZ  ?= 200.0
 PORT      ?= /dev/cu.usbserial-10
 CABLE     ?= digilent_hs2
 BUILD_ID  ?= $(shell git -C $(ROOT) rev-parse --short=8 HEAD)
@@ -49,7 +51,7 @@ sim: gen
 
 synth: $(BUILD)/$(TOP).json
 $(BUILD)/$(TOP).json: $(SOURCES)
-	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) $(TOP); synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7 -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
+	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) $(TOP); $(YOSYS_SYNTH) -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
 
 chipdb: $(CHIPDB)
 $(CHIPDB):
@@ -58,15 +60,15 @@ $(CHIPDB):
 
 pnr: $(BUILD)/$(TOP).fasm
 $(BUILD)/$(TOP).fasm: $(BUILD)/$(TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc
-	@rm -f $@; ok=0; for s in $(SEEDS); do \
-	  echo "nextpnr seed $$s"; \
+	@rm -f $@; ok=0; for p in $(PLACERS); do for s in $(SEEDS); do \
+	  echo "nextpnr placer $$p seed $$s"; \
 	  $(DOCKER) nextpnr-xilinx --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
 	    --json $(call REL,$(BUILD))/$(TOP).json --write $(call REL,$(BUILD))/$(TOP)_routed.json \
-	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer sa --router router1 --timing-allow-fail \
-	    > $(BUILD)/nextpnr_seed$$s.log 2>&1 || true; \
-	  if [ -s $@ ] && ! grep -q "Failed to find a route" $(BUILD)/nextpnr_seed$$s.log; then ok=$$s; cp $(BUILD)/nextpnr_seed$$s.log $(BUILD)/nextpnr.log; break; fi; \
-	  rm -f $@; done; \
-	  [ "$$ok" != 0 ] || { echo "no seed routed"; exit 1; }; echo "routed with seed $$ok"
+	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer $$p --router router1 --timing-allow-fail \
+	    > $(BUILD)/nextpnr_$${p}_seed$$s.log 2>&1 || true; \
+	  if [ -s $@ ] && ! grep -q "Failed to find a route" $(BUILD)/nextpnr_$${p}_seed$$s.log; then ok=$$p/$$s; cp $(BUILD)/nextpnr_$${p}_seed$$s.log $(BUILD)/nextpnr.log; break 2; fi; \
+	  rm -f $@; done; done; \
+	  [ "$$ok" != 0 ] || { echo "no placer/seed routed"; exit 1; }; echo "routed with placer/seed $$ok"
 
 bit: $(BUILD)/$(TOP).bit
 $(BUILD)/$(TOP).bit: $(BUILD)/$(TOP).fasm
