@@ -68,6 +68,8 @@ def parse(text):
             continue
         if tag == "V":
             current["vectors"].append({"index": a, "cycles": int(b, 16), "observed": [], "device_mismatches": None, "counters": []})
+        elif tag in ("C", "E", "K") and not current["vectors"]:
+            bad.append(raw)   # a per-vector line before any vector: a damaged stream
         elif tag == "C":
             current["vectors"][-1]["observed"].append((a, b))
         elif tag == "E":
