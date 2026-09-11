@@ -265,11 +265,52 @@ def section_bridge(manifest):
             "vectors": run, "sequence_steps": steps, "lab_checks": lab}
 
 
+def device_captures():
+    """Device captures under reports/fpga (tools/fpga-capture.py, schema trinity.fpga-capture.v1).
+    A capture is `current` only if it replayed exactly the committed vector set (same source
+    sha256 as conformance/memory_stream_compute.json) and passed; otherwise it is `stale`."""
+    current = hashlib.sha256((ROOT / "conformance" / "memory_stream_compute.json").read_bytes()).hexdigest()
+    captures = []
+    for path in sorted((ROOT / "reports" / "fpga").glob("capture-*.json")):
+        capture = json.loads(path.read_text(encoding="utf-8"))
+        if capture.get("schema") != "trinity.fpga-capture.v1":
+            continue
+        matches = capture.get("manifest_source", {}).get("sha256") == current
+        captures.append({"file": str(path.relative_to(ROOT)), "result": capture.get("result"),
+                         "captured_at": capture.get("captured_at"), "label": capture.get("label", ""),
+                         "vectors": len(capture.get("vectors", [])), "device_totals": capture.get("device_totals"),
+                         "status": "current" if matches and capture.get("result") == "PASS" else "stale"})
+    return captures
+
+
+def section_stream(work):
+    document = load("memory_stream_compute.json")
+def device_captures():
+    """Device captures under reports/fpga (tools/fpga-capture.py, schema trinity.fpga-capture.v1).
+    A capture is `current` only if it replayed exactly the committed vector set (same source
+    sha256 as conformance/memory_stream_compute.json) and passed; otherwise it is `stale`."""
+    current = hashlib.sha256((ROOT / "conformance" / "memory_stream_compute.json").read_bytes()).hexdigest()
+    captures = []
+    for path in sorted((ROOT / "reports" / "fpga").glob("capture-*.json")):
+        capture = json.loads(path.read_text(encoding="utf-8"))
+        if capture.get("schema") != "trinity.fpga-capture.v1":
+            continue
+        matches = capture.get("manifest_source", {}).get("sha256") == current
+        captures.append({"file": str(path.relative_to(ROOT)), "result": capture.get("result"),
+                         "captured_at": capture.get("captured_at"), "label": capture.get("label", ""),
+                         "vectors": len(capture.get("vectors", [])), "device_totals": capture.get("device_totals"),
+                         "status": "current" if matches and capture.get("result") == "PASS" else "stale"})
+    return captures
+
+
 def section_stream(work):
     document = load("memory_stream_compute.json")
     dots, storages, joins, cycles = spec_stream_replay.replay(document, RTL_DIR, work / "traces")
+    captures = device_captures()
+    device = {"evidence": "fpga" if any(c["status"] == "current" for c in captures) else None,
+              "captures": captures}
     return {"evidence": ["rtl-simulation"], "passed": True, "checks": cycles, "dot_traces": dots, "storage_traces": storages,
-            "join_traces": joins, "compared_cycles": cycles, "simulator": "Icarus Verilog"}
+            "join_traces": joins, "compared_cycles": cycles, "simulator": "Icarus Verilog", "device": device}
 
 
 def section_frames(seed):
@@ -344,7 +385,8 @@ def run_lab(rtl, seed):
     report = {"schema": "trinity.conformance-lab.v1", "passed": all(section.get("passed") for section in sections.values()),
               "seed": seed, "rtl": rtl, "sections": sections, "catalogue": catalogue_coverage(manifest),
               "sources": sources, "tools": tools, "timing": timing, "physical_device_tested": False,
-              "evidence": sorted({label for section in sections.values() for label in section.get("evidence", [])})}
+              "evidence": sorted({label for section in sections.values() for label in section.get("evidence", [])}),
+              "device_evidence": (sections.get("stream") or {}).get("device")}
     return report
 
 

@@ -25,7 +25,10 @@ binary memory. It has its own code, tests, reports, and hardware roadmap.
 Version 0.3 is a **working software and RTL-simulation demonstrator**. A real
 loopback HTTP client/server connects tensor files to emulated memory and exact
 integer computations; an optional Icarus replay verifies the retrieved weights
-in RTL. Physical board transport and FPGA measurements remain next steps.
+in RTL. On 2026-09-11 the stream-compute trace suites (24 vectors, 243 cycles) were
+replayed on an ALINX AX7203 (XC7A200T) and the captured device output matched the
+reference in three identical runs ([reports/fpga](reports/fpga/README.md)); DDR,
+power and throughput beyond those workloads remain unmeasured.
 
 ## Five directions, one reproducible chain
 
