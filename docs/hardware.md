@@ -223,8 +223,16 @@ captured output matches the reference.
 | Toolchain | yosys `synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -family xc7` (LUTs only: with MUXF7/MUXF8 cells every nextpnr seed failed its post-placement validity check on an `A5FF` bel), nextpnr-xilinx (`--router router1 --timing-allow-fail`, placers `sa` then `heap` over seeds 1..6; the first routed build came from `heap` seed 1), prjxray `fasm2frames` and `xc7frames2bit`, all from the `regymm/openxc7` image; Vivado is not used |
 | Reset | `rst_n` push button (`T6`) synchronized, plus a power-on counter |
 
-**What runs on the device.** [`fpga/ax7203/tms_trace_player.v`](../fpga/ax7203/tms_trace_player.v)
-replays every `dot_trace` and `storage_trace` vector of
+**What runs on the device.** Every state machine and rule of the player is
+executable t27 in [`t27/rtl/fpga_*.t27`](../t27/rtl/): the tick generator
+(`fpga_tick.t27`), the reset generator with the heartbeat (`fpga_reset.t27`), the
+UART transmitter (`fpga_uart_tx.t27`), the report line serializer
+(`fpga_line_emitter.t27`), the sequencer (`fpga_trace_player.t27`) and the Edge
+argmax (`fpga_edge_argmax.t27`); the tables are a generated t27 module
+(`build/fpga/fpga_trace_rom.t27`, from the conformance vectors). The Verilog under
+[`fpga/ax7203/`](../fpga/ax7203/) only wires them, the generated cores and the two
+Xilinx clock primitives. The sequencer replays every `dot_trace`, `storage_trace`
+and `join_trace` vector of
 [`conformance/memory_stream_compute.json`](../conformance/memory_stream_compute.json)
 on the generated cores (`build/t27/specs/rtl/{dot_stream,stream_storage,stream_view}.v`,
 pinned compiler). [`tools/generate-fpga-trace-player.py`](../tools/generate-fpga-trace-player.py)
@@ -237,7 +245,7 @@ The wrappers in [`fpga/ax7203/tms_dut_wrappers.v`](../fpga/ax7203/tms_dut_wrappe
 repeat the wiring of `rtl/t27/dot_stream.v` and `rtl/t27/streams.v` with the cores'
 `en` and `rst_n` exposed; arithmetic and state stay in `.t27`.
 
-Each run makes two passes over every `dot_trace` and `storage_trace` vector (27 vectors, 288 cycles at the time of writing):
+Each run makes two passes over every trace vector (34 vectors: 18 dot, 9 storage, 7 join; 406 cycles), then two measurements:
 
 - *stepped*: a trace cycle is applied with `en` high for exactly one tick; the
   outputs are captured with the same stimulus still applied, which is the sampling
@@ -248,20 +256,36 @@ Each run makes two passes over every `dot_trace` and `storage_trace` vector (27 
   cycle (one enabled, one holding the stimulus while the outputs are sampled);
   only the on-device mismatch count per vector is reported.
 
-The report is a stream of fixed 19-byte lines (`tag`, 8 hex digits, 9 hex digits,
-LF): `H` build id and totals, `V` vector start, `C` observed word per cycle, `E`
-device mismatches, six `K` counters (dot: beats accepted, results delivered, input
-stalls, output holds, error results delivered, reset cycles; storage: loads
-accepted, words delivered, lanes delivered, invalid words delivered, starts
-accepted, reset cycles; all evaluated on the handshake values at the consuming
-edge), `F` free-run mismatches, `D` totals. A run starts after configuration and
-again whenever a byte arrives on the UART. LEDs: heartbeat, run active, run
+- *throughput workload*: the joined path with 64 stored words (320 trits, dense5
+  codes from a closed rule) runs 16 frames of 64 beats back to back with
+  activations from a closed rule (`int8((beat*13 + lane*29 + frame*5 + 7) & 255)`),
+  the host recomputes every frame result; the device reports the results and the
+  ticks from the first start to the last result, beats fired, results delivered,
+  activation stalls and the load ticks;
+- *Edge Demo*: the three template rows of `specs/memory/edge_demo.t27` in three
+  joined paths in lockstep, one fixture at a time (three beats), the t27 argmax
+  labels the fixture; the device reports label, accumulators and the latency in
+  ticks from the start to the result for each of the six fixtures.
+
+The report is a stream of fixed 20-byte lines (`tag`, 8 hex digits, 10 hex
+digits, LF): `H` format and totals, `V` vector start, `C` observed word per
+cycle, `E` device mismatches, six `K` counters (dot: beats accepted, results
+delivered, input stalls, output holds, error results delivered, reset cycles;
+storage: loads accepted, words delivered, lanes delivered, invalid words
+delivered, starts accepted, reset cycles; join: beats fired, results delivered,
+activation stalls, output holds, loads accepted, reset cycles; all evaluated on
+the handshake values at the consuming edge), `F` free-run mismatches, `W`/`R`/`T`
+workload frames, results and totals, `X`/`A` Edge label with latency and the
+three accumulators, `D` totals. A run starts after configuration and again
+whenever a start bit arrives on the UART. LEDs: heartbeat, run active, run
 complete, any mismatch.
 
 **Host side.** [`tools/fpga-capture.py`](../tools/fpga-capture.py) triggers a run,
 reads the stream, compares every `C` line with the manifest independently of the
 device's own comparison, cross-checks the device mismatch counts and the free-run
-counts, and writes a `trinity.fpga-capture.v1` report. The same tool checks the
+counts, checks every workload result against its own recomputation and every
+Edge label and accumulator against the fixtures, and writes a
+`trinity.fpga-capture.v1` report with the throughput and latency figures. The same tool checks the
 pre-silicon run: [`tests/tb_fpga_trace_player.v`](../tests/tb_fpga_trace_player.v)
 simulates the whole design in Icarus, decodes the UART bytes and hands them to the
 tool (`make -C fpga/ax7203 sim`).
@@ -311,8 +335,15 @@ passes ([`reports/fpga/capture-2026-09-11-fb0533e-div.json`](../reports/fpga/cap
 `-tick.json`, raw streams alongside). The conformance lab marks these captures
 current and carries `device_evidence: fpga`.
 
-**What this track does not measure.** DDR, power, the Edge Demo classifier (a
-software demo; its device numbers are outside this harness), and any frequency
-beyond what nextpnr reports. A trace cycle in the free-run pass takes two ticks
-(sixteen clocks) by construction, so the pass demonstrates cycle-exact behaviour
-at 12.5 M trace cycles per second, not the cores' maximum clock.
+**What this track does not measure, and why.** DDR and power. DDR3 on the
+AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open
+flow's support for those primitives is partial (gHashTag/trinity-fpga records an
+IDDR path that never fires, openXC7 issue 114) and no DDR3 controller has been
+brought up on this board with it, so any DDR figure would rest on unverified
+primitives; the protocol above ("If testing DDR bandwidth …") stays the plan for
+a Vivado-built controller or a repaired open PHY. Power needs an instrument on
+the 12 V input or the board's rails; none is attached to the bench, and the USB
+ports power only the bridges. Both are therefore separate experiments with their
+own protocol, not claims. The player's clock is the board's crystal, so every
+tick figure is exact by construction but no instrument measured it; nextpnr's
+Fmax is an estimate, not a measurement.
