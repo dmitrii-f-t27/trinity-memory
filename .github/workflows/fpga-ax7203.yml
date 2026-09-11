@@ -9,6 +9,15 @@ name: fpga-ax7203
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'fpga/**'
+      - 'tools/generate-fpga-trace-player.py'
+      - 'tools/fpga-capture.py'
+      - 'tests/tb_fpga_trace_player.v'
+      - 't27/rtl/**'
+      - 'conformance/memory_stream_compute.json'
+      - '.github/workflows/fpga-ax7203.yml'
   push:
     branches: [master]
     paths:
