@@ -281,6 +281,27 @@ variants are built, the tick-enable one as `ax7203-trace-player-tick`).
 [`reports/fpga/`](../reports/fpga/README.md) (cell counts, nextpnr utilisation
 and Fmax, frames, bitstream hash).
 
+**Device results (2026-09-11).** Bitstream of commit e3e8cfb (tick variant,
+`reports/fpga/build-2026-09-11-e3e8cfb/`, sha256 `198df230…`) configured over
+the on-board JTAG in 13 s (`openFPGALoader -c digilent_hs2`, `done 1`, idcode
+`0x3636093`). Three consecutive captures over the CP2102N UART are byte-identical
+(17518 bytes, 922 lines): all 24 vectors, 243 cycles, 0 mismatches on the host,
+0 device-side mismatches in the stepped pass and 0 in the free-run pass
+([`reports/fpga/capture-2026-09-11-e3e8cfb.json`](../reports/fpga/capture-2026-09-11-e3e8cfb.json),
+raw stream alongside). The counters the device reported are the ones the traces
+define, for example `two_beat_frame_dense`: 2 beats accepted, 1 result delivered,
+0 input stalls, 0 output holds, 0 error results, 2 reset cycles;
+`load_three_words_and_read`: 3 loads, 3 words, 12 lanes, 0 invalid words,
+1 start, 2 reset cycles; `backpressure_holds_result_and_stalls_input`: 3 beats,
+2 results, 3 input stalls, 4 output holds. The free-run pass replays the 243
+cycles in 486 ticks, 19.4 µs at 25 M ticks/s from the board's 200 MHz
+oscillator (a value that follows from the clock and the design, not from an
+instrument). The evidence label `fpga` is attached to these captures by the
+conformance lab (`tools/conformance-lab.py`, section `stream`, field `device`)
+only while a capture replayed exactly the committed vector set; the Bridge
+capabilities and the Edge report keep their `emulator`/`software` labels, since
+neither runs on the device.
+
 **What this track does not measure.** DDR, power, the Edge Demo classifier (a
 software demo; its device numbers are outside this harness), and any frequency
 beyond what nextpnr reports. A trace cycle in the free-run pass takes two ticks
