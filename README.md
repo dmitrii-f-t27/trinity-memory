@@ -55,6 +55,35 @@ GitHub shows HTML source. For software only, run
 `python3 -m trinity_memory edge-demo` without `--rtl`.
 See [validation](reports/stack-validation.md) for evidence and limitations.
 
+## Specifications (contract layer)
+
+[`specs/memory/`](specs/memory/) holds sealed `.t27` specifications that state the
+contracts the executable modules implement. [`types.t27`](specs/memory/types.t27)
+defines trit lane codes, codec identifiers and group geometry, valid-code limits,
+TMEM v1 framing, CRC32 parameters, native status codes and evidence labels
+(`emulator`, `software`, `rtl-simulation`, `fpga`). Invariants are constant
+expressions compiled as `_Static_assert`; `test` blocks execute in the generated C
+test runner. Each spec has a seal in [`.trinity/seals/`](.trinity/seals/) and
+language-independent vectors in [`conformance/`](conformance/), generated from
+the spec by [`tools/generate-spec-vectors.py`](tools/generate-spec-vectors.py)
+without calling the native code.
+
+[`tools/check-specs.sh`](tools/check-specs.sh) is the gate (also run by
+`make t27-test` and the `spec` CI job): lexer and parser completeness,
+typecheck, C and Verilog generation, executed tests, seal verification,
+conformance validation, and the differential harness
+[`tests/native_spec_types.c`](tests/native_spec_types.c) that ties the spec
+constants to `t27/codecs.t27` and `t27/container.t27`.
+[`tests/test_spec_types.py`](tests/test_spec_types.py) replays the vectors through
+the Python adapters. Conventions and the pinned-compiler pitfalls are recorded in
+[`specs/memory/OWNERS.md`](specs/memory/OWNERS.md); the roadmap for the remaining
+directions is [epic #3](https://github.com/dmitrii-f-t27/trinity-memory/issues/3).
+
+```sh
+export T27_ROOT="$PWD/build/compiler"   # pinned checkout, built by make t27
+make check-specs
+```
+
 ## Current implementation
 
 - Six lossless native codecs: `baseline2`, `dense5`, `dense17`, `dense22`,

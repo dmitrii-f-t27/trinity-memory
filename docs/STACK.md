@@ -105,6 +105,17 @@ small tensors can be dominated by metadata. Loopback wall times include JSON,
 HTTP and scheduling. RTL cycles include testbench stalls; neither metric proves
 FPGA throughput or acceleration over another inference implementation.
 
+## Specifications
+
+The contracts behind these directions are being restated as sealed `.t27`
+specifications under [`specs/memory/`](../specs/memory/), starting with
+[`types.t27`](../specs/memory/types.t27) (lane codes, codec geometry, TMEM v1
+framing, CRC32, status codes, evidence labels). Vectors in
+[`conformance/`](../conformance/) are generated from the spec and replayed by the
+native harness and the Python adapters; `tools/check-specs.sh` is the gate. The
+Bridge, TensorPack, Stream Compute, Conformance Lab and Edge Demo specs are
+tracked in [epic #3](https://github.com/dmitrii-f-t27/trinity-memory/issues/3).
+
 ## Hardware continuation
 
 The next physical milestone still requires a named board/part, clock constraints,
