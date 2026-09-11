@@ -73,7 +73,9 @@ Icarus (see [docs/stream-compute.md](docs/stream-compute.md));
 [`conformance.t27`](specs/memory/conformance.t27) states the conformance fixture
 schema, the native experiment plan and the lab report that
 [`tools/conformance-lab.py`](tools/conformance-lab.py) reproduces over every
-consumer (see [docs/STACK.md](docs/STACK.md)). Invariants are constant
+consumer (see [docs/STACK.md](docs/STACK.md)); [`edge_demo.t27`](specs/memory/edge_demo.t27)
+states the template classifier, its fixtures, scoring rules and report fields.
+Invariants are constant
 expressions compiled as `_Static_assert`; `test` blocks execute in the generated C
 test runner. Each spec has a seal in [`.trinity/seals/`](.trinity/seals/) and
 language-independent vectors in [`conformance/`](conformance/), generated from
