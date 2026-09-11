@@ -69,7 +69,11 @@ states the TTPK v1 container: header, limits, metadata schema, descriptor and
 chain rules, float presentation (see [docs/tensorpack.md](docs/tensorpack.md));
 [`stream_compute.t27`](specs/memory/stream_compute.t27) states the framed dot
 pipeline, the storage sequencer and the view with cycle-exact traces replayed in
-Icarus (see [docs/stream-compute.md](docs/stream-compute.md)). Invariants are constant
+Icarus (see [docs/stream-compute.md](docs/stream-compute.md));
+[`conformance.t27`](specs/memory/conformance.t27) states the conformance fixture
+schema, the native experiment plan and the lab report that
+[`tools/conformance-lab.py`](tools/conformance-lab.py) reproduces over every
+consumer (see [docs/STACK.md](docs/STACK.md)). Invariants are constant
 expressions compiled as `_Static_assert`; `test` blocks execute in the generated C
 test runner. Each spec has a seal in [`.trinity/seals/`](.trinity/seals/) and
 language-independent vectors in [`conformance/`](conformance/), generated from

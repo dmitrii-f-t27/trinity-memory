@@ -20,6 +20,7 @@ OUTPUT = ROOT / "conformance" / "memory_types.json"
 BRIDGE_OUTPUT = ROOT / "conformance" / "memory_bridge.json"
 TENSORPACK_OUTPUT = ROOT / "conformance" / "memory_tensorpack.json"
 STREAM_OUTPUT = ROOT / "conformance" / "memory_stream_compute.json"
+LAB_OUTPUT = ROOT / "conformance" / "memory_conformance.json"
 
 CODECS = {
     "baseline2": {"id": 0, "group_trits": 4, "group_bits": 8, "max_nonzero": None},
@@ -1286,6 +1287,151 @@ def build_stream_compute():
     }
 
 
+# ---------------------------------------------------------------------------
+# specs/memory/conformance.t27 -- the lab manifest
+
+
+def fixture_vector(name, weights, activations):
+    return {"name": name, "weights": list(weights), "activations": list(activations),
+            "dot": sum(w * a for w, a in zip(weights, activations)),
+            "dense5_hex": encode("dense5", weights).hex(), "baseline2_hex": encode("baseline2", weights).hex(),
+            "dense17_hex": encode("dense17", weights).hex(), "dense22_hex": encode("dense22", weights).hex()}
+
+
+def build_conformance():
+    base = json.loads((ROOT / "examples" / "conformance.json").read_text(encoding="utf-8"))
+    fixture = [fixture_vector(item["name"], item["weights"], item["activations"]) for item in base["vectors"]]
+    for original, extended in zip(base["vectors"], fixture):
+        for key in ("dot", "dense5_hex", "baseline2_hex"):
+            if original[key] != extended[key]:
+                raise RuntimeError(f"examples/conformance.json disagrees with the pure encoders on {original['name']}.{key}")
+    document = {"schema": "trinity.conformance.v1", "vectors": fixture}
+    fixture_text = json.dumps(document, indent=2) + "\n"
+    containers = []
+    for item in fixture:
+        for codec in ("dense5", "baseline2"):
+            containers.append({"vector": item["name"], "codec": codec,
+                               "ttpk_hex": ttpk([tensor("weights", [len(item["weights"])], item["weights"], codec)]).hex()})
+    corruption_blob = ttpk([tensor("w", [5], [1, 0, -1, 0, 1], "dense5")])
+    size = len(corruption_blob)
+    positions = [0, 4, 12, 31, size // 2, size - 1]
+    corruption = [{"index": index, "position": position, "ttpk_hex": (corruption_blob[:position] + bytes([corruption_blob[position] ^ 1]) + corruption_blob[position + 1:]).hex()}
+                  for index, position in enumerate(positions)]
+    good = fixture[0]
+    invalid = [
+        {"id": "missing_schema", "rejected_at": "validation", "document": {"vectors": fixture}},
+        {"id": "wrong_schema", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v2", "vectors": fixture}},
+        {"id": "extra_root_member", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": fixture, "extra": 1}},
+        {"id": "zero_vectors", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": []}},
+        {"id": "too_many_vectors", "rejected_at": "validation",
+         "recipe": {"vectors": 257, "vector": {"weights": [1], "activations": [1], "dot": 1}}},
+        {"id": "vector_missing_dot", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [{k: v for k, v in good.items() if k != "dot"}]}},
+        {"id": "vector_extra_field", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, note="x")]}},
+        {"id": "dot_mismatch", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, dot=good["dot"] + 1)]}},
+        {"id": "duplicate_names", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [good, dict(good)]}},
+        {"id": "weight_out_of_range", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, weights=[2] + good["weights"][1:], dot=good["dot"] + good["activations"][0])]}},
+        {"id": "activation_out_of_range", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, activations=[128] + good["activations"][1:], dot=good["dot"] + 1)]}},
+        {"id": "count_mismatch", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, activations=good["activations"] + [1])]}},
+        {"id": "empty_weights", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, weights=[], activations=[], dot=0)]}},
+        {"id": "empty_name", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, name="")]}},
+        {"id": "golden_not_a_string", "rejected_at": "validation", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, dense5_hex=1)]}},
+        {"id": "golden_hex_mismatch", "rejected_at": "checks", "document": {"schema": "trinity.conformance.v1", "vectors": [dict(good, dense5_hex="00")]}},
+        {"id": "too_many_weights", "rejected_at": "validation",
+         "recipe": {"weights": 4097, "weight": 1, "activation": 1}},
+    ]
+    sections = {
+        "fixture": {"consumer": "native runtime (t27/experiments.t27) through trinity_memory.conformance", "input": "fixture_document",
+                    "evidence": ["software-loopback-http", "rtl-simulation"],
+                    "expected": {"positive_checks": 4 * (len(fixture) + 7) + 2, "corrupt_rejections": 6, "rtl_checks": 2 * (len(fixture) + 7),
+                                 "checks_without_rtl": 4 * (len(fixture) + 7) + 2 + 6, "physical_device_tested": False}},
+        "codecs": {"file": "memory_types.json", "kinds": ["group", "container", "invalid_word", "invalid_sparsity"],
+                   "consumers": ["python adapter", "wasm (five-trit groups)"], "evidence": ["software", "wasm"]},
+        "containers": {"file": "memory_tensorpack.json", "kinds": ["pack", "invalid_pack"],
+                       "consumers": ["python adapter", "native CLI when built"], "evidence": ["software"]},
+        "bridge": {"file": "memory_bridge.json", "kinds": ["rpc", "transport", "sequence"], "consumers": ["native loopback server over TCP"],
+                   "evidence": ["emulator", "software-loopback-http"],
+                   "lab_checks": ["client_disconnect_after_upload", "server_restart_clears_objects"]},
+        "stream": {"file": "memory_stream_compute.json", "kinds": ["dot_trace", "storage_trace"], "consumers": ["Icarus Verilog trace replay"],
+                   "evidence": ["rtl-simulation"]},
+        "frames": {"file": "memory_stream_compute.json", "kinds": ["frame"], "consumers": ["native RTL runner"], "evidence": ["rtl-simulation"]},
+    }
+    catalogue = {
+        "corruption": {
+            "header_bit_flip": ["memory_tensorpack.json#wrong_magic", "memory_tensorpack.json#version_2", "memory_tensorpack.json#flags_set", "fixture_corruption#0", "fixture_corruption#1"],
+            "metadata_bit_flip": ["fixture_corruption#2", "memory_tensorpack.json#metadata_crc_mismatch"],
+            "payload_bit_flip": ["fixture_corruption#3", "fixture_corruption#4", "fixture_corruption#5", "memory_tensorpack.json#payload_crc_mismatch", "memory_bridge.json#upload_corrupted_crc"],
+            "resealed_crc": ["memory_tensorpack.json#nested_nonzero_padding", "memory_tensorpack.json#nested_reserved_code", "memory_tensorpack.json#nested_count_mismatch", "memory_types.json#dense5_nonzero_padding"],
+            "truncated_body": ["memory_bridge.json#truncated_body_times_out", "memory_tensorpack.json#truncated_payload", "memory_tensorpack.json#truncated_header"],
+            "wrong_content_type": ["memory_bridge.json#text_plain_unsupported"],
+            "oversized_request": ["memory_bridge.json#oversized_request", "memory_bridge.json#content_length_over_limit"],
+            "reserved_code": ["memory_types.json#dense5_reserved_code_243", "memory_types.json#sparse41_reserved_code_9", "memory_tensorpack.json#nested_reserved_code"],
+            "nonzero_padding": ["memory_types.json#dense5_nonzero_padding", "memory_tensorpack.json#nested_nonzero_padding", "memory_tensorpack.json#nested_unused_high_bits"],
+        },
+        "interruption": {
+            "truncated_body_timeout": ["memory_bridge.json#truncated_body_times_out"],
+            "client_disconnect_after_upload": ["memory_bridge.json#tmem_lifecycle", "lab#client_disconnect_after_upload"],
+            "server_restart_clears_objects": ["lab#server_restart_clears_objects"],
+        },
+        "reset": {
+            "rtl_reset_mid_frame": ["memory_stream_compute.json#reset_mid_frame"],
+            "rtl_reset_with_pending_output": ["memory_stream_compute.json#reset_with_pending_output"],
+            "storage_reset_mid_stream": ["memory_stream_compute.json#reset_mid_stream_preserves_contents"],
+        },
+    }
+    report = {
+        "schema": "trinity.conformance-lab.v1",
+        "native_report_schema": "trinity.conformance-report.v1",
+        "sections": list(sections),
+        "timing_keys": ["timing"],
+        "determinism": "two runs from one clone are equal after removing the timing keys",
+        "tool": "tools/conformance-lab.py",
+        "fields": ["schema", "passed", "seed", "sections", "catalogue", "sources", "tools", "timing", "physical_device_tested"],
+    }
+    return {
+        "module": "TrinityMemoryConformanceLabSpec",
+        "spec_path": "specs/memory/conformance.t27",
+        "schema_version": 2,
+        "format_family": "Conformance",
+        "vector_name": "Trinity Conformance Lab manifest",
+        "description": "The fixture the native conformance experiment consumes (with golden bytes for all four dense codecs), the "
+                       "containers it uploads, its six corruption blobs, the fixtures it must reject, the map from lab sections to "
+                       "the sibling conformance files and their consumers, and the catalogue of corruption, interruption and reset cases.",
+        "created_at": "2026-09-11T00:00:00Z",
+        "generator": "tools/generate-spec-vectors.py",
+        "constants": {
+            "fixture_schema": {"name": "trinity.conformance.v1", "root": ["schema", "vectors"], "vectors": [1, 256], "weights": [1, 4096],
+                               "required": ["name", "weights", "activations", "dot"], "optional": ["dense5_hex", "baseline2_hex", "dense17_hex", "dense22_hex"],
+                               "rules": ["unique nonempty names", "weights in {-1,0,1}", "int8 activations", "dot == sum(weights*activations)", "fixture <= 16 MiB"]},
+            "plan": {"codec_order": ["dense5", "baseline2", "dense17", "dense22"], "rtl_codecs": ["dense5", "baseline2"],
+                     "random_case_counts": [1, 4, 5, 6, 12, 31, 65], "sparse_transfer_codecs": ["sparse41", "sparse82"],
+                     "sparse_pattern": [1, 0, 0, 0, 0, -1, 0, 0], "corruption_positions": "0, 4, 12, 31, size/2, size-1",
+                     "corruption_rpc_error": -32602, "seed_default": 27, "rtl_seed_range": [0, 4294967295],
+                     "server": {"max_request_bytes": 131072, "max_object_bytes": 32768, "max_storage_bytes": 131072, "max_objects": 4, "max_trits": 16384, "timeout_seconds": 10.0},
+                     "positive_checks": "4 * (vectors + 7) + 2", "rtl_checks": "2 * (vectors + 7) when rtl", "corrupt_rejections": 6},
+            "status": {"check": -90, "resource": -91, "rtl": -82},
+            "report": report,
+        },
+        "invariants": [
+            {"id": "required_fields_are_the_first_four_bits", "condition": "name|weights|activations|dot == 15; allowed == 255"},
+            {"id": "fixture_bounds_are_the_documented_limits", "condition": "256 vectors, 4096 weights, 16 MiB"},
+            {"id": "the_plan_counts_add_up", "condition": "4 codecs, 2 RTL codecs, 7 random cases, 2 sparse transfers, 6 flips"},
+            {"id": "corruption_is_rejected_as_invalid_params", "condition": "-32602"},
+            {"id": "the_experiment_server_fits_its_vectors", "condition": "4 * 32768 == 131072; 16384 >= 4096"},
+            {"id": "the_report_has_six_sections_and_no_device", "condition": "6 sections; physical_device_tested == false"},
+        ],
+        "fixture_document": document,
+        "fixture_text": fixture_text,
+        "fixture_containers": containers,
+        "fixture_corruption": {"blob_ttpk_hex": corruption_blob.hex(), "size": size, "flips": corruption},
+        "invalid_fixtures": invalid,
+        "sections": sections,
+        "catalogue": catalogue,
+        "vectors": [{"id": f"fixture_{item['name']}", "kind": "fixture_vector", **item} for item in fixture]
+                   + [{"id": f"corruption_{flip['index']}", "kind": "fixture_corruption", **flip} for flip in corruption]
+                   + [{"id": item["id"], "kind": "invalid_fixture", "rejected_at": item["rejected_at"]} for item in invalid],
+    }
+
+
 def render(document):
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -1295,7 +1441,8 @@ def main():
     parser.add_argument("--check", action="store_true", help="fail if a committed file differs")
     args = parser.parse_args()
     documents = ((OUTPUT, render(build())), (BRIDGE_OUTPUT, render(build_bridge())),
-                 (TENSORPACK_OUTPUT, render(build_tensorpack())), (STREAM_OUTPUT, render(build_stream_compute())))
+                 (TENSORPACK_OUTPUT, render(build_tensorpack())), (STREAM_OUTPUT, render(build_stream_compute())),
+                 (LAB_OUTPUT, render(build_conformance())))
     stale = 0
     for output, text in documents:
         if args.check:
