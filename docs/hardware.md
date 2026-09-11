@@ -217,7 +217,7 @@ captured output matches the reference.
 | Decision | Value |
 | --- | --- |
 | Board / part | ALINX AX7203, `xc7a200tfbg484-2` (owned hardware; the board `gHashTag/trinity-fpga` builds with) |
-| Clock | On-board 200 MHz LVDS oscillator (`R4`/`T4`) through `IBUFDS` and `BUFG`; no PLL or MMCM. Two variants of one design (`CLOCK_MODE`): the harness and the cores on a second `BUFG` fed by a divide-by-eight register (25 MHz, single-cycle timing), or everything on the 200 MHz clock with every register enabled one clock in eight (the tick net is then the only single-cycle path). The enabled rate is 25 M ticks/s either way |
+| Clock | On-board 200 MHz LVDS oscillator (`R4`/`T4`) through `IBUFDS` and `BUFG`; no PLL or MMCM. Two variants of one design (`CLOCK_MODE`): the harness and the cores on a second `BUFG` fed by the tick generator's divide-by-eight bit (25 MHz, single-cycle timing; the device variant), or everything on the 200 MHz clock with every register enabled one clock in eight (the tick net is then a single-cycle path; works for the small e3e8cfb design, not for the full t27 player). The enabled rate is 25 M ticks/s either way |
 | Configuration | On-board FT232H JTAG, `openFPGALoader -c digilent_hs2`, SRAM only (a power cycle removes the design) |
 | Host link | On-board CP2102N UART, 115200 8N1; the design reports, the host only triggers |
 | Toolchain | yosys `synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -family xc7` (LUTs only: with MUXF7/MUXF8 cells every nextpnr seed failed its post-placement validity check on an `A5FF` bel), nextpnr-xilinx (`--router router1 --timing-allow-fail`, placers `sa` then `heap` over seeds 1..6; the first routed build came from `heap` seed 1), prjxray `fasm2frames` and `xc7frames2bit`, all from the `regymm/openxc7` image; Vivado is not used |
@@ -357,6 +357,16 @@ captures are byte-identical (23040 bytes, 1152 lines)
   ticks (280 ns) from the start of a fixture to its label, three template rows
   resident in three storage cores (nine 16-bit elements, 72 code bits, for 36
   trits) with the whole classifier datapath inside the player's 7870 LUTs.
+
+**Negative result, tick-enable variant of the t27 player.** The same commit's
+`CLOCK_MODE=0` bitstream (everything on the 200 MHz clock, registers enabled one
+clock in eight; nextpnr Fmax 60 MHz on that domain) configures (`done 1`) but
+emits only fragments of a report (six lines in two captures,
+[`reports/fpga/capture-2026-09-11-6d0cfa6-tick-FAIL.txt`](../reports/fpga/capture-2026-09-11-6d0cfa6-tick-FAIL.txt)):
+the tick enable now fans out to about 3600 registers and its single-cycle path
+does not hold at 200 MHz. The earlier, ten-times smaller tick design (1019
+flip-flops, e3e8cfb) did run; the variant stays a fallback for small designs
+only, and the divided-clock variant is the device variant of the player.
 
 **What this track does not measure, and why.** DDR and power. DDR3 on the
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open

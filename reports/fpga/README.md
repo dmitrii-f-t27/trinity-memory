@@ -42,7 +42,7 @@ Decision record and captured device output for issue #10. Protocol and flow:
 
 | Directory | Commit | Variant | Result |
 | --- | --- | --- | --- |
-| `build-2026-09-11-6d0cfa6/` | 6d0cfa6 (PR #25 head; the t27 player with join traces, workload and Edge) | `CLOCK_MODE=1` divided 25 MHz clock | nextpnr: 7870 LUTs, 3612 FFs, Fmax 52.1 MHz for the 25 MHz clock (PASS); `heap` placer; bitstream sha256 in `build.json` |
+| `build-2026-09-11-6d0cfa6/` (+ `-tick/`) | 6d0cfa6 (PR #25 head; the t27 player with join traces, workload and Edge) | `CLOCK_MODE=1` divided 25 MHz clock (device variant); `-tick/` the 200 MHz tick-enable variant, Fmax 60 MHz, not functional on the device | nextpnr: 7870 LUTs, 3612 FFs, Fmax 52.1 MHz for the 25 MHz clock (PASS); `heap` placer; bitstream sha256 in `build.json` |
 | `build-2026-09-11-fb0533e/` (+ `-tick/`) | fb0533e (PR #21 head; the merged 27-vector set) | both variants: `CLOCK_MODE=1` divided 25 MHz clock and `CLOCK_MODE=0` tick enable | divided: nextpnr Fmax 71.9 MHz for the 25 MHz clock (PASS), 1024.6 MHz for the 200 MHz input clock; tick: Fmax 67.4 MHz on the 200 MHz domain (eight periods between enabled registers); bitstream sha256 in `build.json` / `bitstream.sha256` |
 | `build-2026-09-11-e3e8cfb/` | e3e8cfb | tick enable on the 200 MHz clock (the only variant at that commit) | routed by `heap` seed 1 after six `sa` seeds failed; 2352 LUTs, 1019 FFs, 1 RAMB18; nextpnr Fmax 67.5 MHz for the 200 MHz clock (paths between tick-enabled registers have eight periods); 20230 frames, bitstream 9 730 785 bytes, sha256 in `build.json`; pre-silicon capture PASS |
 
@@ -51,6 +51,7 @@ Decision record and captured device output for issue #10. Protocol and flow:
 | File | Board / bitstream | Result |
 | --- | --- | --- |
 | `capture-2026-09-11-6d0cfa6-div.json` (+ `.txt`, `-run2.json`, `-run3.json`) | ALINX AX7203, bitstream of `build-2026-09-11-6d0cfa6` (t27 player, divided clock) | PASS: 34 vectors incl. the 7 join traces, 406 cycles, 0 mismatches in both passes; workload 1024 beats in 1089 ticks (0.940 beats/tick), all 16 results match; Edge six fixtures correct, 7 ticks each; two runs byte-identical |
+| `capture-2026-09-11-6d0cfa6-tick-FAIL.txt` / `.json` | bitstream of `build-2026-09-11-6d0cfa6-tick` (tick-enable variant, nextpnr Fmax 60 MHz on the 200 MHz domain) | FAIL (negative result kept on purpose): the device configures but emits six fragment lines in two captures; the tick enable fans out to ~3600 registers and does not hold at 200 MHz for this design size |
 | `capture-2026-09-11-fb0533e-div.json` / `-tick.json` (+ `.txt` raw streams) | ALINX AX7203, idcode `0x3636093`, bitstreams of `build-2026-09-11-fb0533e` (divided clock) and `-tick` | PASS in both variants: 27 vectors, 288 cycles, 0 host mismatches, 0 device mismatches (stepped), 0 (free-run); the merged vector set, so the conformance lab marks these captures current |
 | `capture-2026-09-11-e3e8cfb.json` (+ `.txt` raw stream, `-run2.json`, `-run3.json`) | ALINX AX7203, idcode `0x3636093`, bitstream `build-2026-09-11-e3e8cfb` (sha256 `198df230…`, header build id `0e6a6ed5` = the PR merge commit the CI built), UART `/dev/cu.usbserial-10` 115200 | PASS: 24 vectors, 243 cycles, 0 host mismatches, 0 device mismatches (stepped), 0 (free-run); three runs byte-identical (17518 bytes) |
 
