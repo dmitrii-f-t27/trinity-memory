@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "conformance" / "memory_types.json"
 BRIDGE_OUTPUT = ROOT / "conformance" / "memory_bridge.json"
+TENSORPACK_OUTPUT = ROOT / "conformance" / "memory_tensorpack.json"
 
 CODECS = {
     "baseline2": {"id": 0, "group_trits": 4, "group_bits": 8, "max_nonzero": None},
@@ -595,6 +596,226 @@ def build_bridge():
     }
 
 
+# ---------------------------------------------------------------------------
+# specs/memory/tensorpack.t27
+
+
+def frame(metadata, payload=b"", tensor_count=None):
+    """Independent TTPK framing from arbitrary metadata bytes (for rejection cases)."""
+    if isinstance(metadata, dict):
+        if tensor_count is None:
+            tensor_count = len(metadata["tensors"])
+        metadata = json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    prefix = struct.pack("<4sBBHIIQ", b"TTPK", 1, 0, 0, len(metadata), tensor_count or 0, len(payload))
+    return prefix + struct.pack("<II", zlib.crc32(prefix + metadata), zlib.crc32(payload)) + metadata + payload
+
+
+def reseal_inner(blob):
+    """Recompute the nested TMEM checksum over deliberately malformed content."""
+    return blob[:20] + struct.pack("<I", zlib.crc32(blob[:20] + blob[24:])) + blob[24:]
+
+
+def tensor(name, shape, values, codec="dense5", scales=(1.0,), scale_axis=None, axes=()):
+    return {"name": name, "shape": list(shape), "values": list(values), "codec": codec,
+            "scales": [float(x) for x in scales], "scale_axis": scale_axis, "axes": list(axes)}
+
+
+def descriptor_entry(name, values, codec="dense5", **fields):
+    blob = tmem(codec, values)
+    entry = {"name": name, "shape": [len(values)], "codec": codec, "scales": [1.0],
+             "scale_axis": None, "axes": [], "offset": 0, "length": len(blob)}
+    entry.update(fields)
+    return entry, blob
+
+
+def tensorpack_inspect(tensors, container):
+    document = ttpk_info(tensors, container)
+    return {key: document[key] for key in ("format", "version", "order", "tensor_count", "total_count",
+                                           "header_bytes", "metadata_bytes", "payload_bytes", "container_bytes",
+                                           "validated", "tensors")}
+
+
+def build_tensorpack():
+    import math
+    pattern = [-1 if i % 8 == 0 else 0 for i in range(23)]
+    packs = [("empty_pack", [], "An empty pack: 32-byte header and 26 bytes of metadata, no payload")]
+    for name in CODECS:
+        packs.append((f"{name}_23_trits", [tensor(name, [23], pattern, name)],
+                      f"One {name} tensor with a partial final group; nested TMEM keeps its canonical padding"))
+    packs += [
+        ("scalar_baseline2_quarter_scale", [tensor("scalar", [], [-1], "baseline2", [0.25])],
+         "A scalar has shape [] and exactly one trit"),
+        ("matrix_row_scales_dense22_with_axes",
+         [tensor("matrix.α", [2, 3], [-1, 0, 1, 1, 0, -1], "dense22", [0.1, 0.75], 0, ["output", "input"])],
+         "Per-row scales on axis 0, labelled axes, a non-ASCII name written as raw UTF-8"),
+        ("cube_sparse41_next_after_one",
+         [tensor("cube", [1, 2, 2], [0, 0, 0, -1], "sparse41", [math.nextafter(1.0, 2.0)], None, ["batch", "row", "column"])],
+         "Rank 3, sparse41 block across the flattened values, a scale printed with 17 significant digits"),
+        ("three_tensors_in_one_pack",
+         [tensor("matrix.α", [2, 3], [-1, 0, 1, 1, 0, -1], "dense22", [0.1, 0.75], 0, ["output", "input"]),
+          tensor("cube", [1, 2, 2], [0, 0, 0, -1], "sparse41", [math.nextafter(1.0, 2.0)], None, ["batch", "row", "column"]),
+          tensor("scalar", [], [1])],
+         "Descriptors and payload stay in input order; offsets chain without gaps"),
+        ("float_presentation_of_scales",
+         [tensor("scaled", [4], [1, 0, -1, 0], "dense5", [0.0001, 0.00001, 1e16, 123456789.0], 0)],
+         "Fixed notation for exponents -4..15, scientific with a two-digit exponent otherwise"),
+        ("example_tensorpack_json", [tensor("weights", [7], [1, -1, 0, 1, 0, -1, 1], "dense5", [1.0], None, ["sample"])],
+         "The repository example input examples/tensorpack.json"),
+    ]
+    vectors = []
+    for identifier, tensors, description in packs:
+        container = ttpk(tensors)
+        metadata = container[32:32 + int.from_bytes(container[8:12], "little")].decode("utf-8")
+        vectors.append({"id": identifier, "kind": "pack", "tensors": tensors, "ttpk_hex": container.hex(),
+                        "metadata_json": metadata, "inspect": tensorpack_inspect(tensors, container),
+                        "description": description})
+    # Rejections: every container below must be refused by decode and inspect.
+    entry, blob = descriptor_entry("weights", [1, 0, -1])
+    valid = {"order": "C", "tensors": [entry]}
+    good = frame(valid, blob)
+    second, blob2 = descriptor_entry("other", [0, 1, 1])
+    second["offset"] = len(blob)
+    invalid = []
+
+    def reject(identifier, data, reason, error_class=None):
+        item = {"id": identifier, "kind": "invalid_pack", "ttpk_hex": data.hex(), "reason": reason}
+        if error_class:
+            item["error_class"] = error_class
+        invalid.append(item)
+
+    reject("wrong_magic", b"TTPX" + good[4:], "magic must be TTPK", "header")
+    reject("version_2", good[:4] + b"\x02" + good[5:], "only version 1 exists", "header")
+    reject("flags_set", good[:5] + b"\x01" + good[6:], "flags must be zero", "header")
+    reject("reserved_set", good[:6] + b"\x01\x00" + good[8:], "reserved bytes must be zero", "header")
+    reject("trailing_byte", good + b"\x00", "size must equal 32 + metadata + payload", "length")
+    reject("truncated_payload", good[:-1], "size must equal 32 + metadata + payload", "length")
+    reject("truncated_header", good[:31], "a container is at least 32 bytes", "length")
+    reject("metadata_crc_mismatch", good[:24] + bytes([good[24] ^ 1]) + good[25:], "CRC32 over header[0:24] + metadata", "checksum")
+    reject("payload_crc_mismatch", good[:28] + bytes([good[28] ^ 1]) + good[29:], "CRC32 over the payload", "checksum")
+    reject("metadata_limit_in_header", struct.pack("<4sBBHIIQII", b"TTPK", 1, 0, 0, 1048577, 0, 0, 0, 0), "metadata length above 1 MiB", "limit")
+    reject("tensor_count_limit_in_header", struct.pack("<4sBBHIIQII", b"TTPK", 1, 0, 0, 0, 1025, 0, 0, 0), "more than 1024 tensors", "limit")
+    reject("payload_limit_in_header", struct.pack("<4sBBHIIQII", b"TTPK", 1, 0, 0, 0, 0, 67108865, 0, 0), "payload above 64 MiB", "limit")
+    reject("utf8_bom", frame(b"\xef\xbb\xbf" + json.dumps(valid, separators=(",", ":")).encode(), blob, 1), "no byte order mark", "text")
+    reject("invalid_utf8_metadata", frame(b"\xff", blob, 1), "metadata must be UTF-8", "text")
+    reject("json_null", frame(b"null", blob, 1), "root must be an object", "schema")
+    reject("json_array_root", frame(b"[]", blob, 1), "root must be an object", "schema")
+    reject("json_empty_object", frame(b"{}", blob, 1), "root needs order and tensors", "schema")
+    reject("json_trailing_comma", frame(b'{"order":"C","tensors":[],}', blob, 1), "strict JSON grammar", "json")
+    reject("json_duplicate_root_key", frame(b'{"order":"C","order":"C","tensors":[]}', blob, 1), "duplicate keys are rejected", "json")
+    canonical = json.dumps(valid, separators=(",", ":")).encode()
+    reject("json_duplicate_descriptor_key", frame(canonical.replace(b'"name":"weights"', b'"name":"weights","name":"other"'), blob, 1), "duplicate keys are rejected", "json")
+    reject("json_nan_scale", frame(canonical.replace(b"[1.0]", b"[NaN]"), blob, 1), "nonfinite numbers are invalid JSON", "json")
+    reject("json_overflowing_real", frame(canonical.replace(b"[1.0]", b"[1e999]"), blob, 1), "nonfinite numbers are invalid JSON", "json")
+    reject("json_integer_token_too_long", frame(canonical.replace(b'"offset":0', b'"offset":' + b"1" * 21), blob, 1), "integer tokens have at most 20 characters", "json")
+    reject("json_nesting_too_deep", frame(b'{"order":"C","tensors":[' + b"[" * 8 + b"]" * 8 + b"]}", blob, 1), "nesting deeper than 8 levels", "json")
+    reject("json_trailing_garbage", frame(canonical + b" extra", blob, 1), "one JSON document only", "json")
+    reject("order_f", frame({"order": "F", "tensors": [entry]}, blob), "only C order", "schema")
+    reject("root_extra_member", frame({"order": "C", "tensors": [entry], "future": 1}, blob), "exactly two root members", "schema")
+    reject("tensors_not_an_array", frame({"order": "C", "tensors": {}}, blob, 1), "tensors must be an array", "schema")
+    reject("descriptor_null", frame({"order": "C", "tensors": [None]}, blob), "descriptors are objects", "schema")
+    reject("descriptor_missing_name", frame({"order": "C", "tensors": [{k: v for k, v in entry.items() if k != "name"}]}, blob), "exactly eight descriptor members", "schema")
+    reject("descriptor_missing_length", frame({"order": "C", "tensors": [{k: v for k, v in entry.items() if k != "length"}]}, blob), "exactly eight descriptor members", "schema")
+    reject("descriptor_extra_member", frame({"order": "C", "tensors": [{**entry, "future": 1}]}, blob), "exactly eight descriptor members", "schema")
+    reject("tensor_count_header_mismatch", frame(valid, blob, 2), "header count must equal the array length", "schema")
+    reject("shape_zero_dimension", frame({"order": "C", "tensors": [{**entry, "shape": [0]}]}, blob), "dimensions are at least 1", "shape")
+    reject("shape_negative_dimension", frame({"order": "C", "tensors": [{**entry, "shape": [-3]}]}, blob), "dimensions are unsigned integers", "shape")
+    reject("shape_real_dimension", frame({"order": "C", "tensors": [{**entry, "shape": [3.0]}]}, blob), "dimensions are integers", "shape")
+    reject("shape_count_mismatch", frame({"order": "C", "tensors": [{**entry, "shape": [4]}]}, blob), "product of the shape must equal the nested count", "descriptor")
+    reject("shape_rank_17", frame({"order": "C", "tensors": [{**entry, "shape": [1] * 16 + [3]}]}, blob), "rank at most 16", "shape")
+    reject("shape_dimension_over_limit", frame({"order": "C", "tensors": [{**entry, "shape": [2147483648]}]}, blob), "dimension at most 2^31 - 1", "shape")
+    reject("shape_product_over_limit", frame({"order": "C", "tensors": [{**entry, "shape": [2048, 2049]}]}, blob), "at most 4194304 trits", "shape")
+    reject("axes_count_mismatch", frame({"order": "C", "tensors": [{**entry, "axes": ["x", "y"]}]}, blob), "axes are empty or one label per dimension", "axes")
+    reject("axes_duplicate_labels", frame({"order": "C", "tensors": [{**entry, "shape": [3, 1], "axes": ["x", "x"]}]}, blob), "axis labels are unique", "axes")
+    reject("axes_empty_label", frame({"order": "C", "tensors": [{**entry, "axes": [""]}]}, blob), "labels are nonempty", "axes")
+    reject("axes_label_65_bytes", frame({"order": "C", "tensors": [{**entry, "axes": ["x" * 65]}]}, blob), "labels are at most 64 bytes", "axes")
+    reject("name_empty", frame({"order": "C", "tensors": [{**entry, "name": ""}]}, blob), "names are nonempty", "text")
+    reject("name_257_bytes", frame({"order": "C", "tensors": [{**entry, "name": "n" * 257}]}, blob), "names are at most 256 bytes", "text")
+    reject("name_control_character", frame({"order": "C", "tensors": [{**entry, "name": "a\nb"}]}, blob), "no ASCII control characters", "text")
+    reject("scales_integer_token", frame(canonical.replace(b"[1.0]", b"[1]"), blob, 1), "scales are JSON reals", "scale")
+    reject("scales_empty", frame({"order": "C", "tensors": [{**entry, "scales": []}]}, blob), "exactly one scale without an axis", "scale")
+    reject("scales_zero", frame({"order": "C", "tensors": [{**entry, "scales": [0.0]}]}, blob), "scales are positive", "scale")
+    reject("scales_negative", frame({"order": "C", "tensors": [{**entry, "scales": [-1.0]}]}, blob), "scales are positive", "scale")
+    reject("scales_two_without_axis", frame({"order": "C", "tensors": [{**entry, "scales": [1.0, 2.0]}]}, blob), "exactly one scale without an axis", "scale")
+    reject("scale_axis_out_of_rank", frame({"order": "C", "tensors": [{**entry, "scale_axis": 1}]}, blob), "scale_axis is below the rank", "scale")
+    reject("scale_axis_negative", frame({"order": "C", "tensors": [{**entry, "scale_axis": -1}]}, blob), "scale_axis is null or unsigned", "scale")
+    reject("scale_axis_16", frame({"order": "C", "tensors": [{**entry, "scale_axis": 16}]}, blob), "scale_axis is at most 15", "scale")
+    reject("scale_axis_real", frame({"order": "C", "tensors": [{**entry, "scale_axis": 0.0}]}, blob), "scale_axis is an integer", "scale")
+    reject("codec_unknown", frame({"order": "C", "tensors": [{**entry, "codec": "unknown"}]}, blob), "codec is one of the six names", "codec")
+    reject("codec_mismatch_with_nested", frame({"order": "C", "tensors": [{**entry, "codec": "baseline2"}]}, blob), "nested codec byte must match", "descriptor")
+    reject("offset_not_zero", frame({"order": "C", "tensors": [{**entry, "offset": 1}]}, blob), "first offset is zero", "offset")
+    reject("offset_negative", frame({"order": "C", "tensors": [{**entry, "offset": -1}]}, blob), "offsets are unsigned", "schema")
+    reject("length_short", frame({"order": "C", "tensors": [{**entry, "length": len(blob) - 1}]}, blob), "length is the whole nested file", "offset")
+    reject("length_long", frame({"order": "C", "tensors": [{**entry, "length": len(blob) + 1}]}, blob), "length is the whole nested file", "offset")
+    reject("duplicate_names", frame({"order": "C", "tensors": [entry, {**second, "name": "weights"}]}, blob + blob2), "names are unique", "descriptor")
+    reject("gap_between_tensors", frame({"order": "C", "tensors": [entry, {**second, "offset": len(blob) + 1}]}, blob + blob2), "no gaps", "offset")
+    reject("overlapping_tensors", frame({"order": "C", "tensors": [entry, {**second, "offset": 0}]}, blob + blob2), "no overlaps", "offset")
+    reject("reordered_descriptors", frame({"order": "C", "tensors": [second, entry]}, blob + blob2), "descriptors follow payload order", "offset")
+    reject("payload_tail", frame(valid, blob + b"\x00"), "no unused payload bytes", "offset")
+    reject("payload_without_descriptors", frame({"order": "C", "tensors": []}, blob), "payload must be covered", "offset")
+    reject("nested_crc_mismatch", frame(valid, blob[:20] + b"\x00\x00\x00\x00" + blob[24:]), "nested TMEM checksum", "checksum")
+    reject("nested_count_mismatch", frame(valid, reseal_inner(blob[:8] + struct.pack("<Q", 1) + blob[16:])), "nested count must match the shape", "descriptor")
+    reject("nested_flags_set", frame(valid, reseal_inner(blob[:6] + b"\x01" + blob[7:])), "nested reserved bytes must be zero", "header")
+    reject("nested_version_2", frame(valid, reseal_inner(blob[:4] + b"\x02" + blob[5:])), "nested version must be 1", "header")
+    padded_entry, padded_blob = descriptor_entry("weights", [0])
+    bad_padding = reseal_inner(padded_blob[:24] + encode("dense5", [0, 0, 0, 0, 1]))
+    reject("nested_nonzero_padding", frame({"order": "C", "tensors": [padded_entry]}, bad_padding), "padding trits must be zero", "padding")
+    reserved = reseal_inner(padded_blob[:24] + bytes([243]))
+    reject("nested_reserved_code", frame({"order": "C", "tensors": [padded_entry]}, reserved), "reserved dense5 code 243", "code")
+    entry17, blob17 = descriptor_entry("seventeen", [0], "dense17")
+    high_bits = reseal_inner(blob17[:-1] + bytes([blob17[-1] | 0x80]))
+    reject("nested_unused_high_bits", frame({"order": "C", "tensors": [entry17]}, high_bits), "unused high bits must be zero", "padding")
+    sparse_entry, sparse_blob = descriptor_entry("sparse", [0, 0, 0, 0], "sparse41")
+    bad_sparse = reseal_inner(sparse_blob[:24] + bytes([9]))
+    reject("nested_sparse41_reserved_code", frame({"order": "C", "tensors": [sparse_entry]}, bad_sparse), "reserved sparse41 code 9", "code")
+    constants = {
+        "header": {"magic": "TTPK", "version": 1, "flags": 0, "reserved": 0, "header_bytes": 32,
+                   "metadata_length_offset": 8, "tensor_count_offset": 12, "payload_length_offset": 16,
+                   "metadata_crc_offset": 24, "payload_crc_offset": 28, "metadata_crc_covers": "header[0:24] + metadata",
+                   "payload_crc_covers": "payload", "crc32": "IEEE, as zlib.crc32", "endianness": "little"},
+        "limits": {"tensors": 1024, "metadata_bytes": 1048576, "payload_bytes": 67108864, "total_trits": 4194304,
+                   "rank": 16, "dimension": 2147483647, "name_bytes": 256, "axis_bytes": 64, "json_depth": 8,
+                   "json_integer_chars": 20, "scale_axis": 15},
+        "schema": {"root": ["order", "tensors"], "order": "C",
+                   "descriptor": ["axes", "codec", "length", "name", "offset", "scale_axis", "scales", "shape"],
+                   "writer": "sorted keys, no insignificant whitespace, raw UTF-8, only quote and backslash escaped",
+                   "codecs": list(CODECS), "scales": "JSON reals only; integer tokens are rejected",
+                   "scale_axis": "null or an unsigned index below the rank"},
+        "nested": {"format": "TMEM v1", "header_bytes": HEADER_BYTES, "length": "24 + payload bytes of the codec",
+                   "checks": ["magic", "version", "flags", "codec byte equals descriptor codec", "count equals shape product",
+                              "payload length", "CRC32", "valid codes", "zero padding", "zero unused high bits"]},
+        "float_presentation": {"fixed_exponent_range": [-4, 15], "scientific_exponent_min_digits": 2,
+                               "examples": {"0.0001": "0.0001", "0.00001": "1e-05", "1e16": "1e+16", "123456789.0": "123456789.0"}},
+        "errors": {"descriptor": -20, "text": -21, "shape": -22, "scale": -23, "axes": -24, "offset": -25, "schema": -26, "json": -27},
+        "empty_pack": {"bytes": 58, "metadata": '{"order":"C","tensors":[]}'},
+    }
+    invariants = [
+        {"id": "header_layout_is_contiguous", "condition": "4+1+1+2+4+4+8+4+4 == 32"},
+        {"id": "metadata_crc_covers_the_header_prefix", "condition": "covered bytes == 24 == metadata_crc_offset"},
+        {"id": "empty_pack_is_header_plus_empty_metadata", "condition": "58 == 32 + 26"},
+        {"id": "limits_are_the_documented_powers_of_two", "condition": "1 MiB metadata, 64 MiB payload, 4 Mi trits, 2^31-1 dimension"},
+        {"id": "scale_axis_indexes_a_dimension", "condition": "max scale_axis + 1 == max rank"},
+        {"id": "a_maximal_pack_of_any_codec_fits_the_payload_limit", "condition": "4194304 trits at 2 bits or 8/5 bits + 24 <= 64 MiB"},
+        {"id": "schema_member_counts_are_fixed", "condition": "2 root members, 8 descriptor members, 6 codec names"},
+        {"id": "float_notation_thresholds_match_python", "condition": "fixed for -4 <= exponent <= 15"},
+        {"id": "tensorpack_status_codes_are_distinct_and_below_the_shared_codes", "condition": "-27 < ... < -20 < -10"},
+    ]
+    return {
+        "module": "TrinityMemoryTensorPackSpec",
+        "spec_path": "specs/memory/tensorpack.t27",
+        "schema_version": 2,
+        "format_family": "Conformance",
+        "vector_name": "TensorPack v1 containers",
+        "description": "Golden TTPK containers per codec, scalar, per-axis scales, axis labels, float presentation and an "
+                       "empty pack, plus rejected containers for framing, JSON, schema, descriptor, chain and nested-TMEM rules. "
+                       "Bytes come from the pure-Python encoders in tools/generate-spec-vectors.py.",
+        "created_at": "2026-09-11T00:00:00Z",
+        "generator": "tools/generate-spec-vectors.py",
+        "constants": constants,
+        "invariants": invariants,
+        "vectors": vectors + invalid,
+    }
+
+
 def render(document):
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -603,7 +824,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if a committed file differs")
     args = parser.parse_args()
-    documents = ((OUTPUT, render(build())), (BRIDGE_OUTPUT, render(build_bridge())))
+    documents = ((OUTPUT, render(build())), (BRIDGE_OUTPUT, render(build_bridge())),
+                 (TENSORPACK_OUTPUT, render(build_tensorpack())))
     stale = 0
     for output, text in documents:
         if args.check:

@@ -22,12 +22,19 @@ constants a consumer may rely on, and a `vectors` array. Vector kinds:
 `expect` carries `http_status` (default 200), `error_code` or a `result` subset,
 optional `id`, `result_keys` and `result_format` (`uuid4-hex32`).
 
+`memory_tensorpack.json` (from `specs/memory/tensorpack.t27`) uses container kinds:
+
+| kind | fields | meaning |
+|---|---|---|
+| `pack` | `tensors` (input records), `ttpk_hex`, `metadata_json`, `inspect` | the native encoder must produce exactly these bytes; both readers restore the tensors and report the inspect subset |
+| `invalid_pack` | `ttpk_hex`, `reason`, `error_class` | both readers must refuse the container |
+
 `memory_types.json` is generated from `specs/memory/types.t27` by
 `tools/generate-spec-vectors.py` using plain arithmetic and `zlib.crc32`; it does
 not call the native implementation. Consumers that must reproduce every vector:
 
-- native C harnesses `tests/native_spec_types.c` and `tests/native_spec_bridge.c` (run by `tools/check-specs.sh`);
-- Python adapters, `tests/test_spec_types.py`; TCP replay `tests/test_spec_bridge.py`; in-process replay `tests/native/test_spec_bridge_vectors.py`;
+- native C harnesses `tests/native_spec_*.c` (run by `tools/check-specs.sh`);
+- Python adapters, `tests/test_spec_types.py`, `tests/test_spec_tensorpack.py` (also through the native CLI when built); TCP replay `tests/test_spec_bridge.py`; in-process replay `tests/native/test_spec_bridge_vectors.py`;
 - the same test also fails when the committed file is stale (`--check`).
 
 Validate the files and refresh them:
