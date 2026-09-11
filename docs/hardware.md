@@ -302,6 +302,15 @@ only while a capture replayed exactly the committed vector set; the Bridge
 capabilities and the Edge report keep their `emulator`/`software` labels, since
 neither runs on the device.
 
+**Device results, merged vector set (2026-09-11, later the same day).** After
+the storage join (#15) the player covers 27 vectors (288 cycles). Both clock
+variants of commit fb0533e ran on the board: the divided-clock variant (nextpnr
+Fmax 71.9 MHz for the 25 MHz clock, PASS) and the tick-enable variant; each
+capture reports 27 vectors, 0 host mismatches, 0 device mismatches in both
+passes ([`reports/fpga/capture-2026-09-11-fb0533e-div.json`](../reports/fpga/capture-2026-09-11-fb0533e-div.json),
+`-tick.json`, raw streams alongside). The conformance lab marks these captures
+current and carries `device_evidence: fpga`.
+
 **What this track does not measure.** DDR, power, the Edge Demo classifier (a
 software demo; its device numbers are outside this harness), and any frequency
 beyond what nextpnr reports. A trace cycle in the free-run pass takes two ticks
