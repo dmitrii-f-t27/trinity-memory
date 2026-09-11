@@ -70,7 +70,9 @@ RTL памяти и будущих интерфейсов устройств. Р
 кодов, формат контейнера TMEM v1, параметры CRC32, коды статусов и метки источника
 измерений (`emulator`, `software`, `rtl-simulation`, `fpga`);
 [`bridge.t27`](specs/memory/bridge.t27) — протокол Bridge: envelope, коды ошибок и
-HTTP-статусы, лимиты, handle, правила чтения и dot, идентичность (см. [docs/bridge.md](docs/bridge.md)). Инварианты —
+HTTP-статусы, лимиты, handle, правила чтения и dot, идентичность (см. [docs/bridge.md](docs/bridge.md)); [`tensorpack.t27`](specs/memory/tensorpack.t27) —
+контейнер TTPK v1: заголовок, лимиты, схема метаданных, правила дескрипторов и цепочки,
+представление float (см. [docs/tensorpack.md](docs/tensorpack.md)). Инварианты —
 константные выражения, они компилируются в `_Static_assert`; блоки `test`
 исполняются сгенерированным C-раннером. У каждой спецификации есть печать в
 [`.trinity/seals/`](.trinity/seals/) и независимые от языка векторы в

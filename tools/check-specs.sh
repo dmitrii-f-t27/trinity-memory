@@ -41,6 +41,8 @@ if [ -z "$specs" ]; then
     exit 1
 fi
 count=0
+# Pass 1: every spec must lex, parse, typecheck and generate C before any runner
+# is built, because a spec's test runner includes the foundation header first.
 for spec in $specs; do
     module=$(basename "$spec" .t27)
     "$compiler" parse-complete --show "$spec" > "$out/$module.parse.log" 2>&1
@@ -60,9 +62,17 @@ for spec in $specs; do
         exit 1
     fi
     mv "$out/$module.h.tmp" "$out/$module.h"
-    printf '#include "%s.h"\n' "$module" > "$out/$module.main.c"
+done
+# Pass 2: execute the tests, generate Verilog and verify the seal of each spec.
+for spec in $specs; do
+    module=$(basename "$spec" .t27)
+    {
+        if [ "$module" != types ]; then echo '#include "types.h"'; fi
+        echo '#define T27_TEST_MAIN'
+        printf '#include "%s.h"\n' "$module"
+    } > "$out/$module.main.c"
     # shellcheck disable=SC2086
-    "$cc" $cflags -DT27_TEST_MAIN -I "$out" "$out/$module.main.c" -o "$out/$module-tests"
+    "$cc" $cflags -I "$out" "$out/$module.main.c" -o "$out/$module-tests"
     if ! "$out/$module-tests" > "$out/$module.tests.log" 2>&1; then
         cat "$out/$module.tests.log" >&2
         exit 1
@@ -108,12 +118,12 @@ cxx=${CXX:-c++}
 case $(uname -s) in Darwin) crypto_flags= ;; *) crypto_flags="-lcrypto -ldl" ;; esac
 "$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/float.cpp -o "$out/float-spec.o"
 "$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/platform.c -o "$out/platform-spec.o"
-# shellcheck disable=SC2086
-"$cc" $cflags -I "$impl" tests/native_spec_types.c -o "$out/test-spec-types"
-"$out/test-spec-types"
-# shellcheck disable=SC2086
-"$cc" $cflags -I "$impl" -c tests/native_spec_bridge.c -o "$out/test-spec-bridge.o"
-# shellcheck disable=SC2086
-"$cxx" -fsanitize=address,undefined "$out/test-spec-bridge.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/test-spec-bridge"
-"$out/test-spec-bridge"
+for harness in tests/native_spec_*.c; do
+    name=$(basename "$harness" .c)
+    # shellcheck disable=SC2086
+    "$cc" $cflags -I "$impl" -c "$harness" -o "$out/$name.o"
+    # shellcheck disable=SC2086
+    "$cxx" -fsanitize=address,undefined "$out/$name.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/$name"
+    "$out/$name"
+done
 echo "PASS spec gate: $count spec(s) lexed, parsed, typechecked, generated (C, Verilog), tested, sealed; conformance validated; differential harnesses passed"

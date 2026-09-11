@@ -11,6 +11,23 @@ This format preserves integer trits and supplied metadata. It does not quantize,
 train, prune, or infer tensor scales. A stored tensor is not evidence of model
 quality, compatibility with a model runtime, or physical memory performance.
 
+## Specification
+
+The layout and rules on this page are restated as the sealed specification
+[`specs/memory/tensorpack.t27`](../specs/memory/tensorpack.t27): header offsets
+and CRC coverage, the v1 limits, the exact root and descriptor member sets and
+their sorted writer order, dimension, name, label, axis and scale rules, the
+contiguous offset chain, nested TMEM lengths, the float presentation thresholds
+and the TensorPack status codes. Its constant invariants compile as
+`_Static_assert` and its test blocks execute in the generated C runner.
+[`conformance/memory_tensorpack.json`](../conformance/memory_tensorpack.json)
+carries golden containers (one per codec, a scalar, per-axis scales, axis
+labels, float presentation, an empty pack) that the native encoder must
+reproduce byte for byte, and rejected containers that both readers must refuse;
+`tests/test_spec_tensorpack.py` replays them through the Python adapters and the
+native CLI, and `tests/native_spec_tensorpack.c` ties the spec constants and
+rules to `t27/tensorpack.t27` and `t27/tensorpack_json.t27`.
+
 ## Python API
 
 ```python
