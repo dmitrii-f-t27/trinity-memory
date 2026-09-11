@@ -217,10 +217,10 @@ captured output matches the reference.
 | Decision | Value |
 | --- | --- |
 | Board / part | ALINX AX7203, `xc7a200tfbg484-2` (owned hardware; the board `gHashTag/trinity-fpga` builds with) |
-| Clock | On-board 200 MHz LVDS oscillator (`R4`/`T4`) through `IBUFDS` and `BUFG`, one clock domain; every register is enabled by a tick, one clock in eight (25 M ticks/s), so paths between enabled registers have 40 ns to settle; no divided clock, no PLL or MMCM |
+| Clock | On-board 200 MHz LVDS oscillator (`R4`/`T4`) through `IBUFDS` and `BUFG`; no PLL or MMCM. Two variants of one design (`CLOCK_MODE`): the harness and the cores on a second `BUFG` fed by a divide-by-eight register (25 MHz, single-cycle timing), or everything on the 200 MHz clock with every register enabled one clock in eight (the tick net is then the only single-cycle path). The enabled rate is 25 M ticks/s either way |
 | Configuration | On-board FT232H JTAG, `openFPGALoader -c digilent_hs2`, SRAM only (a power cycle removes the design) |
 | Host link | On-board CP2102N UART, 115200 8N1; the design reports, the host only triggers |
-| Toolchain | yosys `synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7`, nextpnr-xilinx (`--placer sa --router router1 --timing-allow-fail`, seed search), prjxray `fasm2frames` and `xc7frames2bit`, all from the `regymm/openxc7` image; Vivado is not used |
+| Toolchain | yosys `synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -family xc7` (LUTs only: with MUXF7/MUXF8 cells every nextpnr seed failed its post-placement validity check on an `A5FF` bel), nextpnr-xilinx (`--router router1 --timing-allow-fail`, placers `sa` then `heap` over seeds 1..6; the first routed build came from `heap` seed 1), prjxray `fasm2frames` and `xc7frames2bit`, all from the `regymm/openxc7` image; Vivado is not used |
 | Reset | `rst_n` push button (`T6`) synchronized, plus a power-on counter |
 
 **What runs on the device.** [`fpga/ax7203/tms_trace_player.v`](../fpga/ax7203/tms_trace_player.v)
@@ -275,7 +275,11 @@ make -C fpga/ax7203 capture  # UART capture compared with the reference
 ```
 
 The bitstream is also built by the `fpga-ax7203` workflow (chip database cached,
-`.bit`, logs and the pre-silicon capture uploaded as artifacts).
+`.bit`, logs and the pre-silicon capture uploaded as artifacts; both clock
+variants are built, the tick-enable one as `ax7203-trace-player-tick`).
+`tools/fpga-build-report.py` turns a build into a provenance record under
+[`reports/fpga/`](../reports/fpga/README.md) (cell counts, nextpnr utilisation
+and Fmax, frames, bitstream hash).
 
 **What this track does not measure.** DDR, power, the Edge Demo classifier (a
 software demo; its device numbers are outside this harness), and any frequency

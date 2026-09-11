@@ -26,6 +26,7 @@ FREQ_MHZ  ?= 200.0
 PORT      ?= /dev/cu.usbserial-10
 CABLE     ?= digilent_hs2
 BUILD_ID  ?= $(shell git -C $(ROOT) rev-parse --short=8 HEAD)
+CLOCK_MODE ?= 1
 SOURCES   := $(RTL)/dot_stream.v $(RTL)/stream_storage.v $(RTL)/stream_view.v \
              $(CURDIR)/tms_dut_wrappers.v $(CURDIR)/tms_uart_tx.v $(BUILD)/tms_trace_bank.v $(CURDIR)/tms_trace_player.v
 REL       = $(patsubst $(ROOT)/%,%,$(1))
@@ -45,13 +46,16 @@ $(RTL)/%.v: $(ROOT)/t27/rtl/%.t27
 
 sim: gen
 	mkdir -p $(BUILD)/sim
-	iverilog -g2012 -o $(BUILD)/sim/player.vvp -s tb_fpga_trace_player $(CURDIR)/sim/xilinx_stubs.v $(SOURCES) $(ROOT)/tests/tb_fpga_trace_player.v
-	cd $(BUILD)/sim && vvp player.vvp +capture=$(BUILD)/sim_capture.txt | tail -3
-	python3 $(ROOT)/tools/fpga-capture.py --from-file $(BUILD)/sim_capture.txt --manifest $(BUILD)/tms_trace_manifest.json --output $(BUILD)/sim_capture.json
+	@for mode in 1 0; do \
+	  iverilog -g2012 -Ptb_fpga_trace_player.CLOCK_MODE=$$mode -o $(BUILD)/sim/player_$$mode.vvp -s tb_fpga_trace_player $(CURDIR)/sim/xilinx_stubs.v $(SOURCES) $(ROOT)/tests/tb_fpga_trace_player.v || exit 1; \
+	  (cd $(BUILD)/sim && vvp player_$$mode.vvp +capture=$(BUILD)/sim_capture_$$mode.txt | tail -2) || exit 1; \
+	  python3 $(ROOT)/tools/fpga-capture.py --from-file $(BUILD)/sim_capture_$$mode.txt --manifest $(BUILD)/tms_trace_manifest.json --output $(BUILD)/sim_capture_$$mode.json | tail -1 || exit 1; \
+	done
+	cp $(BUILD)/sim_capture_$(CLOCK_MODE).txt $(BUILD)/sim_capture.txt; cp $(BUILD)/sim_capture_$(CLOCK_MODE).json $(BUILD)/sim_capture.json
 
 synth: $(BUILD)/$(TOP).json
 $(BUILD)/$(TOP).json: $(SOURCES)
-	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) $(TOP); $(YOSYS_SYNTH) -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
+	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(TOP); $(YOSYS_SYNTH) -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
 
 chipdb: $(CHIPDB)
 $(CHIPDB):
