@@ -62,6 +62,29 @@ RTL памяти и будущих интерфейсов устройств. Р
 веса `−1 / 0 / +1` без потерь. Это исследовательский стенд; обучение модели,
 полноценный inference engine и измерения на физической FPGA остаются следующими этапами.
 
+## Спецификации (слой контрактов)
+
+В [`specs/memory/`](specs/memory/) лежат запечатанные спецификации `.t27`, которые
+фиксируют контракты исполняемых модулей. [`types.t27`](specs/memory/types.t27)
+задаёт коды трит-линий, идентификаторы кодеков и геометрию групп, границы допустимых
+кодов, формат контейнера TMEM v1, параметры CRC32, коды статусов и метки источника
+измерений (`emulator`, `software`, `rtl-simulation`, `fpga`). Инварианты —
+константные выражения, они компилируются в `_Static_assert`; блоки `test`
+исполняются сгенерированным C-раннером. У каждой спецификации есть печать в
+[`.trinity/seals/`](.trinity/seals/) и независимые от языка векторы в
+[`conformance/`](conformance/), которые [`tools/generate-spec-vectors.py`](tools/generate-spec-vectors.py)
+вычисляет из спецификации без вызова нативного кода.
+
+Гейт [`tools/check-specs.sh`](tools/check-specs.sh) (его же запускают `make t27-test`
+и job `spec` в CI): полнота лексера и парсера, typecheck, генерация C и Verilog,
+исполнение тестов, проверка печати, валидация conformance и дифференциальный
+harness [`tests/native_spec_types.c`](tests/native_spec_types.c), связывающий
+константы спецификации с `t27/codecs.t27` и `t27/container.t27`.
+[`tests/test_spec_types.py`](tests/test_spec_types.py) прогоняет векторы через
+Python-адаптеры. Соглашения и ловушки пина компилятора — в
+[`specs/memory/OWNERS.md`](specs/memory/OWNERS.md); план остальных направлений —
+[эпик #3](https://github.com/dmitrii-f-t27/trinity-memory/issues/3).
+
 ## Запуск
 
 После сборки нативного ядра доступен Python API (Python 3.10+).
