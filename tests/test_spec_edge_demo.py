@@ -132,8 +132,7 @@ class SpecEdgeDemoConformance(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="trinity-spec-edge-") as directory:
             output = Path(directory) / "edge.json"
             html = Path(directory) / "edge.html"
-            # The CLI parser accepts --seed only for benchmark (its usage text says otherwise); the default seed is 27.
-            result = subprocess.run([str(CLI), "edge-demo", "--rtl", "--output", str(output), "--html", str(html)],
+            result = subprocess.run([str(CLI), "edge-demo", "--rtl", "--seed", "27", "--output", str(output), "--html", str(html)],
                                     capture_output=True, text=True, timeout=600)
             self.assertEqual(result.returncode, 0, result.stderr)
             cli_report = json.loads(output.read_text(encoding="utf-8"))
