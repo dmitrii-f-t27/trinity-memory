@@ -41,6 +41,7 @@ done
 "$cc" -std=c11 -O2 -fPIC $warning_flags -I build/t27 -c tests/native_bridge.c -o build/t27/bridge-harness.o
 "$cxx" $shared_flags build/t27/bridge-harness.o build/t27/float.o build/t27/platform.o $crypto_flags -lm -o "build/t27/bridge-harness.$extension"
 "${PYTHON:-python3}" tests/native/test_bridge_parity.py --library "build/t27/bridge-harness.$extension" --output build/t27/bridge-parity.json
+"${PYTHON:-python3}" tests/native/test_spec_bridge_vectors.py --library "build/t27/bridge-harness.$extension" --output build/t27/spec-bridge-vectors.json
 "${PYTHON:-python3}" tests/native/test_cli_complete.py --binary build/t27/trinity-memory-t27 --output build/t27/cli-parity.json
 node tests/native/test_wasm.mjs
 "${PYTHON:-python3}" -m unittest discover -s tests/native -v

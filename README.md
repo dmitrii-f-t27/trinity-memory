@@ -61,7 +61,10 @@ See [validation](reports/stack-validation.md) for evidence and limitations.
 contracts the executable modules implement. [`types.t27`](specs/memory/types.t27)
 defines trit lane codes, codec identifiers and group geometry, valid-code limits,
 TMEM v1 framing, CRC32 parameters, native status codes and evidence labels
-(`emulator`, `software`, `rtl-simulation`, `fpga`). Invariants are constant
+(`emulator`, `software`, `rtl-simulation`, `fpga`);
+[`bridge.t27`](specs/memory/bridge.t27) states the Bridge protocol: envelope,
+error codes and HTTP statuses, limits, handles, read and dot rules, identity
+(see [docs/bridge.md](docs/bridge.md)). Invariants are constant
 expressions compiled as `_Static_assert`; `test` blocks execute in the generated C
 test runner. Each spec has a seal in [`.trinity/seals/`](.trinity/seals/) and
 language-independent vectors in [`conformance/`](conformance/), generated from

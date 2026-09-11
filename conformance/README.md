@@ -11,12 +11,23 @@ constants a consumer may rely on, and a `vectors` array. Vector kinds:
 | `invalid_word` | `codec`, `count`, `payload_hex` | a decoder must reject this payload (reserved code, invalid lane or nonzero padding) |
 | `invalid_sparsity` | `codec`, `trits` | an encoder must reject the block instead of pruning weights |
 
+`memory_bridge.json` (from `specs/memory/bridge.t27`) uses request/response kinds:
+
+| kind | fields | meaning |
+|---|---|---|
+| `rpc` | `request` or `request_text`, optional `limits`, `expect` | one JSON-RPC body against a server configured with the given limits |
+| `transport` | `headers` + `body`, or `raw` with `{port}`, optional `limits`, `expect` | HTTP framing rules; replayed over TCP only |
+| `sequence` | `steps[]` with `request`, `expect`, optional `capture`; `$name` substitutes a captured result field | ordered calls on one server (upload, read, info, dot, delete) |
+
+`expect` carries `http_status` (default 200), `error_code` or a `result` subset,
+optional `id`, `result_keys` and `result_format` (`uuid4-hex32`).
+
 `memory_types.json` is generated from `specs/memory/types.t27` by
 `tools/generate-spec-vectors.py` using plain arithmetic and `zlib.crc32`; it does
 not call the native implementation. Consumers that must reproduce every vector:
 
-- native C harness `tests/native_spec_types.c` (run by `tools/check-specs.sh`);
-- Python adapters, `tests/test_spec_types.py`;
+- native C harnesses `tests/native_spec_types.c` and `tests/native_spec_bridge.c` (run by `tools/check-specs.sh`);
+- Python adapters, `tests/test_spec_types.py`; TCP replay `tests/test_spec_bridge.py`; in-process replay `tests/native/test_spec_bridge_vectors.py`;
 - the same test also fails when the committed file is stale (`--check`).
 
 Validate the files and refresh them:
