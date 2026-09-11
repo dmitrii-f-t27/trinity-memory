@@ -77,7 +77,8 @@ HTTP-статусы, лимиты, handle, правила чтения и dot, �
 и view с потактовыми трассами, воспроизводимыми в Icarus (см. [docs/stream-compute.md](docs/stream-compute.md));
 [`conformance.t27`](specs/memory/conformance.t27) — схема conformance-фикстуры, план нативного
 эксперимента и лабораторный отчёт, который [`tools/conformance-lab.py`](tools/conformance-lab.py)
-воспроизводит по всем потребителям (см. [docs/STACK.md](docs/STACK.md)). Инварианты —
+воспроизводит по всем потребителям (см. [docs/STACK.md](docs/STACK.md)); [`edge_demo.t27`](specs/memory/edge_demo.t27) —
+классификатор-шаблон, его фикстуры, правила скоринга и поля отчёта. Инварианты —
 константные выражения, они компилируются в `_Static_assert`; блоки `test`
 исполняются сгенерированным C-раннером. У каждой спецификации есть печать в
 [`.trinity/seals/`](.trinity/seals/) и независимые от языка векторы в
