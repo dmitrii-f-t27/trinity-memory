@@ -73,10 +73,12 @@ def main():
                 "--timing-allow-fail; prjxray fasm2frames + xc7frames2bit (regymm/openxc7 image)",
         "files": {},
     }
-    for name in ("yosys_stat.txt", "nextpnr.log", "yosys.log"):
+    for name in ("yosys_stat.txt", "nextpnr.log"):  # yosys.log is megabytes; its hash is enough
         if (src / name).is_file():
             shutil.copy(src / name, out / name)
             record["files"][name] = sha256(out / name)
+    if (src / "yosys.log").is_file():
+        record["files"]["yosys.log"] = sha256(src / "yosys.log")
     if (src / "yosys_stat.txt").is_file():
         record["yosys"] = yosys_cells((src / "yosys_stat.txt").read_text(errors="replace"))
     if (src / "nextpnr.log").is_file():
