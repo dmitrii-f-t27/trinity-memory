@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Capture the AX7203 trace player's UART report and compare it with the reference.
+
+Reads the 19-byte lines emitted by fpga/ax7203/tms_trace_player.v (from a serial
+port, or from a file written by tests/tb_fpga_trace_player.v), checks every `C`
+line against the expected word of build/fpga/tms_trace_manifest.json, and writes
+a JSON report (`trinity.fpga-capture.v1`). Exit status 1 on any mismatch, any
+missing vector, or a device-side mismatch count that disagrees with the host.
+
+  python3 tools/fpga-capture.py --port /dev/cu.usbserial-10 --output reports/fpga/capture.json
+  python3 tools/fpga-capture.py --from-file build/fpga/sim_capture.txt
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+LINE = re.compile(r"^([HVCEKFD])([0-9a-f]{8})([0-9a-f]{9})$")
+
+
+def read_port(port, baud, timeout, trigger):
+    import serial  # pyserial
+
+    with serial.Serial(port, baud, timeout=0.2) as link:
+        link.reset_input_buffer()
+        if trigger:
+            link.write(b"r")
+        deadline = time.monotonic() + timeout
+        data = bytearray()
+        while time.monotonic() < deadline:
+            chunk = link.read(4096)
+            if chunk:
+                data += chunk
+                if b"\nD" in data and data.endswith(b"\n") and data[data.rfind(b"\nD"):].count(b"\n") >= 2:
+                    break
+        return bytes(data)
+
+
+def parse(text):
+    """Return (runs, bad_lines). A run starts at an H line."""
+    runs, bad = [], []
+    current = None
+    for raw in text.decode("ascii", "replace").split("\n"):
+        if not raw:
+            continue
+        match = LINE.match(raw)
+        if not match:
+            bad.append(raw)
+            continue
+        tag, a, b = match.group(1), int(match.group(2), 16), match.group(3)
+        if tag == "H":
+            current = {"build_id": f"{a:08x}", "format": int(b[0], 16), "cycles": int(b[1:5], 16),
+                       "vectors_announced": int(b[5:9], 16), "vectors": [], "free": {}, "done": None}
+            runs.append(current)
+            continue
+        if current is None:
+            bad.append(raw)
+            continue
+        if tag == "V":
+            current["vectors"].append({"index": a, "cycles": int(b, 16), "observed": [], "device_mismatches": None, "counters": []})
+        elif tag == "C":
+            current["vectors"][-1]["observed"].append((a, b))
+        elif tag == "E":
+            current["vectors"][-1]["device_mismatches"] = int(b, 16)
+        elif tag == "K":
+            current["vectors"][-1]["counters"].append((a, int(b, 16)))
+        elif tag == "F":
+            current["free"][a] = int(b, 16)
+        elif tag == "D":
+            current["done"] = {"stepped_mismatches": a, "free_mismatches": int(b, 16)}
+    return runs, bad
+
+
+def compare(run, manifest):
+    report, ok = [], True
+    expected_vectors = manifest["vectors"]
+    if run["vectors_announced"] != len(expected_vectors) or run["cycles"] != manifest["total_cycles"]:
+        ok = False
+    for entry in expected_vectors:
+        got = next((v for v in run["vectors"] if v["index"] == entry["index"]), None)
+        item = {"index": entry["index"], "id": entry["id"], "kind": entry["kind"], "cycles": entry["cycles"],
+                "captured": got is not None, "host_mismatches": None, "device_mismatches": None,
+                "free_mismatches": run["free"].get(entry["index"]), "counters": None, "first_mismatch": None}
+        if got is None:
+            ok = False
+            report.append(item)
+            continue
+        observed = {c: w for c, w in got["observed"]}
+        mismatches = 0
+        for cycle, expected in enumerate(entry["expected"]):
+            word = observed.get(cycle)
+            if word != expected:
+                mismatches += 1
+                if item["first_mismatch"] is None:
+                    item["first_mismatch"] = {"cycle": cycle, "expected": expected, "observed": word}
+        item["host_mismatches"] = mismatches
+        item["device_mismatches"] = got["device_mismatches"]
+        names = manifest["counters"][entry["kind"]]
+        item["counters"] = {names[i].split(":")[0]: value for i, value in got["counters"] if i < len(names)}
+        if (mismatches or got["cycles"] != entry["cycles"] or len(observed) != entry["cycles"]
+                or got["device_mismatches"] != mismatches or item["free_mismatches"] != 0):
+            ok = False
+        report.append(item)
+    if run["done"] is None:
+        ok = False
+    return ok, report
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--port")
+    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--timeout", type=float, default=30.0)
+    parser.add_argument("--no-trigger", action="store_true", help="do not send a byte to restart the run")
+    parser.add_argument("--from-file", help="parse a previously captured byte stream instead of a port")
+    parser.add_argument("--manifest", default=str(ROOT / "build" / "fpga" / "tms_trace_manifest.json"))
+    parser.add_argument("--output", help="write the JSON report here")
+    parser.add_argument("--raw", help="also save the raw byte stream here")
+    parser.add_argument("--label", default="", help="free-text provenance (board, bitstream, commit)")
+    args = parser.parse_args()
+    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    if args.from_file:
+        data = Path(args.from_file).read_bytes()
+        source = {"file": args.from_file}
+    elif args.port:
+        data = read_port(args.port, args.baud, args.timeout, not args.no_trigger)
+        source = {"port": args.port, "baud": args.baud}
+    else:
+        parser.error("give --port or --from-file")
+    if args.raw:
+        Path(args.raw).write_bytes(data)
+    runs, bad = parse(data)
+    if not runs:
+        print("no run header in the capture", file=sys.stderr)
+        sys.exit(1)
+    run = runs[-1] if runs[-1]["done"] else runs[0]
+    ok, report = compare(run, manifest)
+    summary = {
+        "schema": "trinity.fpga-capture.v1",
+        "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "source": source, "label": args.label, "build_id": run["build_id"],
+        "manifest_source": manifest["source"], "runs_in_capture": len(runs), "unparsed_lines": len(bad),
+        "device_totals": run["done"], "vectors": report,
+        "result": "PASS" if ok else "FAIL",
+        "evidence": "fpga" if ok and args.port else "capture-file",
+    }
+    if args.output:
+        Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.output).write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    width = max(len(v["id"]) for v in report)
+    print(f"{'vector':{width}}  kind     cycles  host  dev  free  counters")
+    for v in report:
+        counters = " ".join(f"{val}" for val in (v["counters"] or {}).values())
+        print(f"{v['id']:{width}}  {v['kind']:8} {v['cycles']:6}  {v['host_mismatches']!s:>4}  {v['device_mismatches']!s:>3}  "
+              f"{v['free_mismatches']!s:>4}  {counters}")
+    print(f"result {summary['result']}: {len(report)} vectors, device totals {run['done']}, unparsed {len(bad)}")
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()
