@@ -68,8 +68,9 @@ error codes and HTTP statuses, limits, handles, read and dot rules, identity
 states the TTPK v1 container: header, limits, metadata schema, descriptor and
 chain rules, float presentation (see [docs/tensorpack.md](docs/tensorpack.md));
 [`stream_compute.t27`](specs/memory/stream_compute.t27) states the framed dot
-pipeline, the storage sequencer and the view with cycle-exact traces replayed in
-Icarus (see [docs/stream-compute.md](docs/stream-compute.md));
+pipeline, the ready-capable storage sequencer and the view, and the joined
+read -> decode -> dot path (`rtl/t27/stream_dot.v`), with cycle-exact traces
+replayed in Icarus (see [docs/stream-compute.md](docs/stream-compute.md));
 [`conformance.t27`](specs/memory/conformance.t27) states the conformance fixture
 schema, the native experiment plan and the lab report that
 [`tools/conformance-lab.py`](tools/conformance-lab.py) reproduces over every

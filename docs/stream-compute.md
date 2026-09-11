@@ -31,10 +31,19 @@ frames through the native runner; `tests/native_spec_stream_compute.c`
 compares the spec with the C generated from `t27/rtl/dot_stream.t27`, the
 same source the RTL comes from. Every result is `rtl-simulation` evidence.
 
-**Recorded gap.** The storage sequencer has no downstream ready port and is
-not connected to this pipeline; joining them needs a FIFO of `WORDS` beats or a
-ready-capable sequencer. The spec states this as `TMS_STORAGE_HAS_BACKPRESSURE = 0`
-and `TMS_STORAGE_JOIN_NEEDS_BUFFER = 1`; the join is tracked separately.
+**Joined path.** The storage sequencer is ready-capable: a low `out_ready`
+holds the presented word, its flags and the address
+(`TMS_STORAGE_HAS_BACKPRESSURE = 1`), so the read -> decode -> dot path needs no
+buffer (`TMS_STORAGE_JOIN_NEEDS_BUFFER = 0`). [`rtl/t27/stream_dot.v`](../rtl/t27/stream_dot.v)
+(`ternary_stream_dot_t27`) wires the sequencer, the combinational join
+[`t27/rtl/stream_join.t27`](../t27/rtl/stream_join.t27) and this pipeline: a beat
+fires when a stored word, an activation beat (`act_valid`, `act_data[39:0]`,
+int8 lanes; lanes outside the mask must be zero) and `in_ready` are all present,
+the sequencer sees ready only when the activations and the pipeline are ready,
+the activation source sees ready only when a word and the pipeline are ready,
+and the mask is `11111` except the tail mask on the last word. Nothing is
+dropped; see [`join_trace` vectors](../conformance/memory_stream_compute.json)
+and the joined-path section below.
 
 ## Input and output contract
 
@@ -157,6 +166,26 @@ clocks and adds seeded source bubbles and longer output stalls. Different
 seeds may change cycles without changing arithmetic. Both codec modes use
 identical logical lanes and schedules, so this simulation does not establish
 an acceleration ratio between them.
+
+## Joined path: read -> decode -> dot in one circuit
+
+`ternary_stream_dot_t27 #(DENSE5, TRIT_COUNT, ACC_WIDTH)` exposes the storage
+side (`rst`, `start`, `busy`, `load_en`, `load_addr`, `load_code`, `load_ready`),
+an activation stream (`act_valid`, `act_ready`, `act_data[39:0]`) and the result
+side (`out_valid`, `out_ready`, `out_result`, `out_error`) plus `beat`, high in
+the cycle a joined beat is accepted. Load the words, assert `start`, then present
+one activation beat per stored word; the k-th activation beat multiplies the
+k-th word. The join is stated by `tms_join_word` in the spec and by the packed
+join word of `TrinityStreamJoinT27` (`[0]` fire, `[1]` word ready, `[2]`
+activation ready, `[3]` pipeline valid, `[4]` last, `[12:5]` mask), checked
+against each other exhaustively by `tests/native_spec_stream_compute.c`. The
+`join_trace` vectors replay the joined circuit cycle by cycle in Icarus
+(`tests/tb_spec_join_trace.v`): back-to-back beats, activation bubbles, output
+backpressure holding the second frame's word in the sequencer, reset mid-stream,
+a twelve-bit overflow and ignored starts and writes, each frame's result equal to
+the frame reference. The storage traces `hold_word_under_backpressure`,
+`stall_without_a_word_changes_nothing` and `reset_during_hold` state the hold
+rule on the sequencer alone.
 
 ## Verification
 

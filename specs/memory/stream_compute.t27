@@ -63,9 +63,9 @@ module TrinityMemoryStreamComputeSpec {
     pub const TMS_RTL_ERR_PROCESS: i32 = -85;
     pub const TMS_RTL_ERR_RESOURCE: i32 = -86;
 
-    // 5. Storage sequencer and view. Words are read in order after start; the
-    //    sequencer has no downstream ready port, so joining it to the dot
-    //    pipeline needs a buffer or a ready-capable sequencer (recorded gap).
+    // 5. Storage sequencer and view. Words are read in order after start; a
+    //    low downstream ready (out_ready) holds the presented word, its flags
+    //    and the address, so the read -> decode -> dot join needs no buffer.
     pub const TMS_STORAGE_CAPACITY_GROUPS: u32 = 64;
     pub const TMS_STORAGE_TRITS_PER_WORD: u32 = 5;
     pub const TMS_STORAGE_MAX_TRITS: u32 = 320;
@@ -73,11 +73,26 @@ module TrinityMemoryStreamComputeSpec {
     pub const TMS_STORAGE_BASELINE_CODE_WIDTH: u32 = 10;
     pub const TMS_STORAGE_ELEMENT_BITS: u32 = 16;
     pub const TMS_STORAGE_START_TO_WORD0_EDGES: u32 = 1;
-    pub const TMS_STORAGE_HAS_BACKPRESSURE: u32 = 0;
-    pub const TMS_STORAGE_JOIN_NEEDS_BUFFER: u32 = 1;
+    pub const TMS_STORAGE_HAS_BACKPRESSURE: u32 = 1;
+    pub const TMS_STORAGE_JOIN_NEEDS_BUFFER: u32 = 0;
     pub const TMS_VIEW_VALID_BIT: u32 = 32768;
     pub const TMS_VIEW_MASK_SHIFT: u32 = 10;
     pub const TMS_VIEW_LANE_FIELD_MASK: u32 = 1023;
+
+    // 6. The joined path (rtl/t27/stream_dot.v): the sequencer's word and one
+    //    activation beat become one beat of the dot pipeline. The join is
+    //    combinational (t27/rtl/stream_join.t27): a beat fires only when the
+    //    word, the activations and the pipeline are all present, each source
+    //    sees ready only when the other two are, nothing is dropped. Packed
+    //    join word bits and the activation beat width:
+    pub const TMS_JOIN_FIRE_BIT: u32 = 1;
+    pub const TMS_JOIN_WORD_READY_BIT: u32 = 2;
+    pub const TMS_JOIN_ACT_READY_BIT: u32 = 4;
+    pub const TMS_JOIN_IN_VALID_BIT: u32 = 8;
+    pub const TMS_JOIN_IN_LAST_BIT: u32 = 16;
+    pub const TMS_JOIN_MASK_SHIFT: u32 = 5;
+    pub const TMS_JOIN_FULL_MASK: u32 = 31;
+    pub const TMS_JOIN_ACTIVATION_BITS: u32 = 40;
 
     // Reference functions: decoding.
     pub fn tms_dot_dense_digit(code: u32, divisor: u32) -> u32 {
@@ -273,6 +288,25 @@ module TrinityMemoryStreamComputeSpec {
         return TMS_VIEW_VALID_BIT | (mask << TMS_VIEW_MASK_SHIFT) | visible;
     }
 
+    // Reference functions: the hold rule and the join.
+    pub fn tms_storage_holds(out_valid: bool, out_ready: bool) -> bool {
+        return out_valid && !out_ready;
+    }
+    pub fn tms_join_mask(last: bool, tail_mask: u32) -> u32 {
+        if (last) { return tail_mask; }
+        return TMS_JOIN_FULL_MASK;
+    }
+    pub fn tms_join_word(word_valid: bool, word_last: bool, act_valid: bool, dot_ready: bool,
+                         tail_mask: u32) -> u32 {
+        var word: u32 = tms_join_mask(word_last, tail_mask) << TMS_JOIN_MASK_SHIFT;
+        if (word_valid && act_valid && dot_ready) { word = word | TMS_JOIN_FIRE_BIT; }
+        if (act_valid && dot_ready) { word = word | TMS_JOIN_WORD_READY_BIT; }
+        if (word_valid && dot_ready) { word = word | TMS_JOIN_ACT_READY_BIT; }
+        if (word_valid && act_valid) { word = word | TMS_JOIN_IN_VALID_BIT; }
+        if (word_last) { word = word | TMS_JOIN_IN_LAST_BIT; }
+        return word;
+    }
+
     // Invariants: constant expressions, compiled as static assertions.
     invariant beat_fields_have_the_documented_widths {
         assert TMS_DOT_LANES * TMS_DOT_ACTIVATION_BITS == TMS_DOT_ACTIVATION_FIELD_BITS
@@ -318,8 +352,13 @@ module TrinityMemoryStreamComputeSpec {
             && TMS_STORAGE_BASELINE_CODE_WIDTH > TMS_STORAGE_DENSE_CODE_WIDTH
             && TMS_STORAGE_TRITS_PER_WORD == TMS_DOT_LANES;
     }
-    invariant the_storage_join_is_a_recorded_gap {
-        assert TMS_STORAGE_HAS_BACKPRESSURE == 0 && TMS_STORAGE_JOIN_NEEDS_BUFFER == 1;
+    invariant the_storage_join_is_closed {
+        assert TMS_STORAGE_HAS_BACKPRESSURE == 1 && TMS_STORAGE_JOIN_NEEDS_BUFFER == 0;
+    }
+    invariant join_bits_are_distinct_and_below_the_mask {
+        assert TMS_JOIN_FIRE_BIT == 1 && TMS_JOIN_WORD_READY_BIT == 2 && TMS_JOIN_ACT_READY_BIT == 4
+            && TMS_JOIN_IN_VALID_BIT == 8 && TMS_JOIN_IN_LAST_BIT == 16 && TMS_JOIN_MASK_SHIFT == 5
+            && TMS_JOIN_FULL_MASK == 31 && TMS_JOIN_ACTIVATION_BITS == TMS_DOT_ACTIVATION_FIELD_BITS;
     }
     invariant view_packing_uses_the_upper_bits {
         assert TMS_VIEW_VALID_BIT == 32768 && TMS_VIEW_MASK_SHIFT == TMS_DOT_LANE_FIELD_BITS && TMS_VIEW_LANE_FIELD_MASK == 1023;
@@ -434,5 +473,18 @@ module TrinityMemoryStreamComputeSpec {
         assert tms_view_pack(0, 3, false, true) == 3072;
         assert tms_view_pack(0, 31, false, true) == 31744;
         assert tms_view_pack(1365, 31, true, false) == 0;
+    }
+    test "the sequencer holds under backpressure" {
+        assert tms_storage_holds(true, false) && !tms_storage_holds(true, true);
+        assert !tms_storage_holds(false, false) && !tms_storage_holds(false, true);
+    }
+    test "join words" {
+        assert tms_join_word(false, false, false, true, 3) == 992;
+        assert tms_join_word(true, false, true, true, 3) == 1007;
+        assert tms_join_word(true, false, false, true, 3) == 996;
+        assert tms_join_word(false, false, true, true, 3) == 994;
+        assert tms_join_word(true, true, true, false, 3) == 120;
+        assert tms_join_word(true, true, true, true, 7) == 255;
+        assert tms_join_mask(false, 3) == 31 && tms_join_mask(true, 3) == 3;
     }
 }

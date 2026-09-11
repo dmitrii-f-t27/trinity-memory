@@ -267,9 +267,9 @@ def section_bridge(manifest):
 
 def section_stream(work):
     document = load("memory_stream_compute.json")
-    dots, storages, cycles = spec_stream_replay.replay(document, RTL_DIR, work / "traces")
+    dots, storages, joins, cycles = spec_stream_replay.replay(document, RTL_DIR, work / "traces")
     return {"evidence": ["rtl-simulation"], "passed": True, "checks": cycles, "dot_traces": dots, "storage_traces": storages,
-            "compared_cycles": cycles, "simulator": "Icarus Verilog"}
+            "join_traces": joins, "compared_cycles": cycles, "simulator": "Icarus Verilog"}
 
 
 def section_frames(seed):
