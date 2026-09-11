@@ -81,7 +81,7 @@ jobs:
           key: chipdb-xc7a200tfbg484-2-regymm-openxc7-v1
       - name: Generate the chip database
         if: steps.chipdb.outputs.cache-hit != 'true'
-        run: make -C fpga/ax7203 build/fpga/chipdb/xc7a200tfbg484-2.bin CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
+        run: make -C fpga/ax7203 chipdb CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
       - name: Place and route (nextpnr-xilinx, seed search)
         run: make -C fpga/ax7203 pnr CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
       - name: Pack the bitstream
