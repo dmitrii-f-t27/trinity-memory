@@ -202,3 +202,81 @@ For an evidence-backed comparison:
 
 No board run, resource saving, clock frequency, power result, or inference speedup
 is claimed by this package.
+
+## FPGA measurement track (AX7203)
+
+The measurement track of the roadmap (issue #10) runs on one explicitly named
+board. Everything below is reproducible from a clean clone; the device output
+itself is recorded under [`reports/fpga/`](../reports/fpga/README.md) with its
+provenance, and no number from this section appears anywhere else until the
+captured output matches the reference.
+
+| Decision | Value |
+| --- | --- |
+| Board / part | ALINX AX7203, `xc7a200tfbg484-2` (owned hardware; the board `gHashTag/trinity-fpga` builds with) |
+| Clock | On-board 200 MHz LVDS oscillator (`R4`/`T4`) through `IBUFDS`, divided by four to the 50 MHz harness clock; no PLL or MMCM |
+| Configuration | On-board FT232H JTAG, `openFPGALoader -c digilent_hs2`, SRAM only (a power cycle removes the design) |
+| Host link | On-board CP2102N UART, 115200 8N1; the design reports, the host only triggers |
+| Toolchain | yosys `synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7`, nextpnr-xilinx (`--placer sa --router router1 --timing-allow-fail`, seed search), prjxray `fasm2frames` and `xc7frames2bit`, all from the `regymm/openxc7` image; Vivado is not used |
+| Reset | `rst_n` push button (`T6`) synchronized, plus a power-on counter |
+
+**What runs on the device.** [`fpga/ax7203/tms_trace_player.v`](../fpga/ax7203/tms_trace_player.v)
+replays every `dot_trace` and `storage_trace` vector of
+[`conformance/memory_stream_compute.json`](../conformance/memory_stream_compute.json)
+on the generated cores (`build/t27/specs/rtl/{dot_stream,stream_storage,stream_view}.v`,
+pinned compiler). [`tools/generate-fpga-trace-player.py`](../tools/generate-fpga-trace-player.py)
+turns the vectors into a ROM bank with one core instance per parameter set and a
+vector table; the stimulus and expected words use the packing of
+[`tests/tb_spec_dot_trace.v`](../tests/tb_spec_dot_trace.v) and
+[`tests/tb_spec_storage_trace.v`](../tests/tb_spec_storage_trace.v), imported from
+[`tests/spec_stream_replay.py`](../tests/spec_stream_replay.py) so the two cannot drift.
+The wrappers in [`fpga/ax7203/tms_dut_wrappers.v`](../fpga/ax7203/tms_dut_wrappers.v)
+repeat the wiring of `rtl/t27/dot_stream.v` and `rtl/t27/streams.v` with the cores'
+`en` and `rst_n` exposed; arithmetic and state stay in `.t27`.
+
+Each run makes two passes over the 24 vectors (243 cycles):
+
+- *stepped*: a trace cycle is applied with `en` high for exactly one clock; the
+  outputs are captured with the same stimulus still applied, which is the sampling
+  rule of the Icarus testbenches (`in_ready` and `load_ready` are combinational in
+  the inputs), compared with the expected ROM word on the device, and written to
+  the UART as a `C` line;
+- *free-run*: the same vectors without the UART pauses, two harness clocks per
+  trace cycle (one enabled, one holding the stimulus while the outputs are
+  sampled); only the on-device mismatch count per vector is reported.
+
+The report is a stream of fixed 19-byte lines (`tag`, 8 hex digits, 9 hex digits,
+LF): `H` build id and totals, `V` vector start, `C` observed word per cycle, `E`
+device mismatches, six `K` counters (dot: beats accepted, results delivered, input
+stalls, output holds, error results delivered, reset cycles; storage: loads
+accepted, words delivered, lanes delivered, invalid words delivered, starts
+accepted, reset cycles; all evaluated on the handshake values at the consuming
+edge), `F` free-run mismatches, `D` totals. A run starts after configuration and
+again whenever a byte arrives on the UART. LEDs: heartbeat, run active, run
+complete, any mismatch.
+
+**Host side.** [`tools/fpga-capture.py`](../tools/fpga-capture.py) triggers a run,
+reads the stream, compares every `C` line with the manifest independently of the
+device's own comparison, cross-checks the device mismatch counts and the free-run
+counts, and writes a `trinity.fpga-capture.v1` report. The same tool checks the
+pre-silicon run: [`tests/tb_fpga_trace_player.v`](../tests/tb_fpga_trace_player.v)
+simulates the whole design in Icarus, decodes the UART bytes and hands them to the
+tool (`make -C fpga/ax7203 sim`).
+
+```sh
+make -C fpga/ax7203 gen      # generated cores (T27_ROOT), ROM bank, manifest
+make -C fpga/ax7203 sim      # Icarus run of the whole design + host comparison
+make -C fpga/ax7203 bit      # yosys -> nextpnr-xilinx -> fasm2frames -> xc7frames2bit
+make -C fpga/ax7203 flash    # openFPGALoader over the board's FT232H
+make -C fpga/ax7203 capture  # UART capture compared with the reference
+```
+
+The bitstream is also built by the `fpga-ax7203` workflow (chip database cached,
+`.bit`, logs and the pre-silicon capture uploaded as artifacts).
+
+**What this track does not measure.** DDR, power, the Edge Demo classifier (a
+software demo; its device numbers are outside this harness), and any frequency
+beyond what nextpnr reports for the harness clock. A trace cycle in the free-run
+pass takes two harness clocks by construction, so the pass demonstrates
+cycle-exact behaviour at 25 M trace cycles per second, not the cores' maximum
+clock.
