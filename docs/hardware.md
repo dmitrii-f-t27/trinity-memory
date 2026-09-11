@@ -335,6 +335,29 @@ passes ([`reports/fpga/capture-2026-09-11-fb0533e-div.json`](../reports/fpga/cap
 `-tick.json`, raw streams alongside). The conformance lab marks these captures
 current and carries `device_evidence: fpga`.
 
+**Device results, t27 player (2026-09-11, late evening).** Bitstream of commit
+6d0cfa6 (`reports/fpga/build-2026-09-11-6d0cfa6/`, divided-clock variant, 7870
+LUTs and 3612 flip-flops after place and route, nextpnr Fmax 52 MHz for the
+25 MHz clock) configured over the on-board JTAG (`done 1`). Three consecutive
+captures are byte-identical (23040 bytes, 1152 lines)
+([`reports/fpga/capture-2026-09-11-6d0cfa6-div.json`](../reports/fpga/capture-2026-09-11-6d0cfa6-div.json)):
+
+- all 34 trace vectors (18 dot, 9 storage, 7 join; 406 cycles): 0 host
+  mismatches, 0 device mismatches in the stepped and in the free-run pass, so the
+  joined read -> decode -> dot circuit is now device-verified as well;
+- throughput workload: 16 frames x 64 beats, every frame result equal to the
+  host's recomputation; 1024 beats fired in 1089 ticks from the first
+  start to the last result (0.940 beats per tick, 68.1 ticks per
+  64-beat frame, 32 activation stalls = two start-up ticks per frame), load
+  phase 64 ticks. At 25 M ticks per second that is 23.5 M beats per
+  second, 117.6 M lane multiply-accumulates per second, on one joined path
+  clocked by the board's oscillator;
+- Edge Demo: all six fixtures labelled correctly with the accumulators of the
+  fixtures (step_up [480, -480, 0], step_down [-480, 480, 0], alternating [0, 0, 360], offset_step_up [249, -249, 3], offset_step_down [-255, 255, 3], noisy_alternating [1, -1, 341]), latency 7
+  ticks (280 ns) from the start of a fixture to its label, three template rows
+  resident in three storage cores (nine 16-bit elements, 72 code bits, for 36
+  trits) with the whole classifier datapath inside the player's 7870 LUTs.
+
 **What this track does not measure, and why.** DDR and power. DDR3 on the
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open
 flow's support for those primitives is partial (gHashTag/trinity-fpga records an
