@@ -20,6 +20,7 @@
 #include "specs/types.h"
 #include "specs/stream_compute.h"
 #include "rtl_dot_stream.h"
+#include "rtl_stream_join.h"
 #pragma GCC diagnostic pop
 
 static uint32_t random_state = 2709;
@@ -147,11 +148,33 @@ static void sequential_equivalence(void) {
     }
 }
 
+/* The joined path (issue #15): the combinational join of t27/rtl/stream_join.t27,
+ * generated to C as rtl_stream_join.h, against the spec's tms_join_word for every
+ * input combination and every tail mask; the hold rule against its definition. */
+static void storage_join(void) {
+    for (unsigned bits = 0; bits < 16; ++bits) {
+        bool word_valid = (bits & 1) != 0, word_last = (bits & 2) != 0;
+        bool act_valid = (bits & 4) != 0, dot_ready = (bits & 8) != 0;
+        for (uint32_t tail = 0; tail < 256; ++tail) {
+            uint32_t expected = tms_join_word(word_valid, word_last, act_valid, dot_ready, tail);
+            assert(on_comb(word_valid, word_last, act_valid, dot_ready, (uint8_t)tail) == expected);
+            assert(((expected & TMS_JOIN_FIRE_BIT) != 0) == (word_valid && act_valid && dot_ready));
+            assert(((expected & TMS_JOIN_WORD_READY_BIT) != 0) == (act_valid && dot_ready));
+            assert(((expected & TMS_JOIN_ACT_READY_BIT) != 0) == (word_valid && dot_ready));
+            assert(((expected & TMS_JOIN_IN_VALID_BIT) != 0) == (word_valid && act_valid));
+            assert((expected >> TMS_JOIN_MASK_SHIFT) == (word_last ? tail : TMS_JOIN_FULL_MASK));
+        }
+    }
+    assert(tms_storage_holds(true, false) && !tms_storage_holds(true, true) && !tms_storage_holds(false, false));
+    assert(TMS_STORAGE_HAS_BACKPRESSURE == 1 && TMS_STORAGE_JOIN_NEEDS_BUFFER == 0);
+}
+
 int main(void) {
     decoding_masks_and_activations();
     random_beats();
     sequential_equivalence();
+    storage_join();
     printf("PASS spec/memory/stream_compute differential harness: exhaustive decode and masks, 256 x 5 activations, "
-           "20000 random beats, 64 x 400 sequential cycles against the generated on_clock\n");
+           "20000 random beats, 64 x 400 sequential cycles against the generated on_clock, join word exhaustive against the generated on_comb\n");
     return 0;
 }

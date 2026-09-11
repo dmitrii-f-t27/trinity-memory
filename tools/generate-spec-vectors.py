@@ -990,16 +990,19 @@ class StorageModel:
         return (not s["rst"]) and (not self.busy()) and (not s["start"])
 
     def clock(self, s):
+        stall = bool(s.get("out_stall", False))
         if s["load_en"] and self.load_ready(s) and s["load_addr"] < self.words:
             self.memory[s["load_addr"]] = s["load_code"]
-        if not s["rst"] and self.active:
-            if self.read_addr not in self.memory:
-                raise RuntimeError("scenario reads an unloaded word")
-            self.read_code = self.memory[self.read_addr]
         was_active, was_busy, addr = self.active, self.busy(), self.read_addr
         if s["rst"]:
             self.read_addr, self.active, self.valid_q, self.last_q = 0, False, False, False
+        elif self.valid_q and stall:
+            pass  # the presented word, its flags and the address are held (issue #15)
         else:
+            if was_active:
+                if self.read_addr not in self.memory:
+                    raise RuntimeError("scenario reads an unloaded word")
+                self.read_code = self.memory[self.read_addr]
             self.valid_q = self.last_q = False
             if s["start"] and not was_busy:
                 self.read_addr, self.active = 0, True
@@ -1031,8 +1034,9 @@ class StorageScenario:
         self.model = StorageModel(dense, trit_count)
         self.cycles = []
 
-    def cycle(self, rst=False, start=False, load_en=False, load_addr=0, load_code=0):
-        stimulus = {"rst": rst, "start": start, "load_en": load_en, "load_addr": load_addr, "load_code": load_code}
+    def cycle(self, rst=False, start=False, load_en=False, load_addr=0, load_code=0, out_stall=False):
+        stimulus = {"rst": rst, "start": start, "load_en": load_en, "load_addr": load_addr, "load_code": load_code,
+                    "out_stall": out_stall}
         self.cycles.append({"stimulus": stimulus, "expect": self.model.clock(stimulus)})
 
     def code(self, trits):
@@ -1045,6 +1049,96 @@ class StorageScenario:
         return {"id": self.identifier, "kind": "storage_trace", "dense": self.dense, "trit_count": self.trit_count,
                 "words": self.model.words, "tail_mask": self.model.tail_mask, "description": self.description,
                 "cycle_count": len(self.cycles), "cycles": self.cycles}
+
+
+class JoinModel:
+    """The joined path (issue #15): ready-capable storage, the combinational join and the
+    dot pipeline, clocked together exactly as rtl/t27/stream_dot.v wires them."""
+
+    def __init__(self, dense, trit_count, acc_width):
+        self.storage = StorageModel(dense, trit_count)
+        self.dot = DotModel(dense, acc_width)
+        self.dot.minimum, self.dot.maximum = -(1 << (acc_width - 1)), (1 << (acc_width - 1)) - 1
+
+    def join(self, s):
+        """Combinational join values from the current state and the stimulus."""
+        word_valid = self.storage.valid_q
+        word_last = self.storage.valid_q and self.storage.last_q
+        code = self.storage.read_code if word_valid else 0
+        mask = self.storage.tail_mask if word_last else 31
+        dot_stim = {"reset": s["rst"], "in_valid": word_valid and s["act_valid"], "in_code": code,
+                    "in_activations": list(s["act_data"]), "in_mask": mask, "in_last": word_last,
+                    "out_ready": s["out_ready"]}
+        dot_ready = self.dot.comb(dot_stim)["in_ready"]
+        return {"dot_stim": dot_stim, "fire": word_valid and s["act_valid"] and dot_ready,
+                "word_ready": s["act_valid"] and dot_ready, "act_ready": word_valid and dot_ready}
+
+    def clock(self, s):
+        pre = self.join(s)
+        storage_stim = {"rst": s["rst"], "start": s["start"], "load_en": s["load_en"], "load_addr": s["load_addr"],
+                        "load_code": s["load_code"], "out_stall": not pre["word_ready"]}
+        storage_out = self.storage.clock(storage_stim)
+        minimum, maximum = self.dot.minimum, self.dot.maximum
+        accepted, dot_out = self.dot.clock(pre["dot_stim"])
+        self.dot.minimum, self.dot.maximum = minimum, maximum
+        if accepted != pre["fire"]:
+            raise RuntimeError("join model disagrees with the pipeline about the accepted beat")
+        post = self.join(s)
+        return pre["fire"], {"out_result": dot_out["out_result"], "out_error": dot_out["out_error"],
+                             "out_valid": dot_out["out_valid"], "act_ready": post["act_ready"],
+                             "load_ready": storage_out["load_ready"], "busy": storage_out["busy"],
+                             "beat": post["fire"]}
+
+
+class JoinScenario:
+    def __init__(self, identifier, description, dense=True, trit_count=12, acc_width=32):
+        self.identifier, self.description = identifier, description
+        self.dense, self.trit_count, self.acc_width = dense, trit_count, acc_width
+        self.model = JoinModel(dense, trit_count, acc_width)
+        self.cycles = []
+
+    def cycle(self, rst=False, start=False, load_en=False, load_addr=0, load_code=0, act_valid=False,
+              acts=(0, 0, 0, 0, 0), out_ready=True):
+        stimulus = {"rst": rst, "start": start, "load_en": load_en, "load_addr": load_addr, "load_code": load_code,
+                    "act_valid": act_valid, "act_data": list(acts), "out_ready": out_ready}
+        fired, expect = self.model.clock(stimulus)
+        self.cycles.append({"stimulus": stimulus, "expect": expect})
+        return fired
+
+    def code(self, trits):
+        return dense_code(trits) if self.dense else baseline_code(trits)
+
+    def load(self, address, code):
+        self.cycle(load_en=True, load_addr=address, load_code=code)
+
+    def start(self, out_ready=True):
+        self.cycle(start=True, out_ready=out_ready)
+
+    def feed(self, acts, out_ready=True, limit=16):
+        """Present one activation beat until the join fires."""
+        acts = list(acts) + [0] * (5 - len(acts))
+        for _ in range(limit):
+            if self.cycle(act_valid=True, acts=acts, out_ready=out_ready):
+                return
+        raise RuntimeError(f"{self.identifier}: activation beat never accepted")
+
+    def idle(self, cycles=1, out_ready=True):
+        for _ in range(cycles):
+            self.cycle(out_ready=out_ready)
+
+    def results(self):
+        """Results in consumption order: a result is consumed at the edge where it was
+        valid before the edge and out_ready is high (its value is stable until then)."""
+        consumed = []
+        for previous, step in zip(self.cycles, self.cycles[1:]):
+            if previous["expect"]["out_valid"] and step["stimulus"]["out_ready"] and not step["stimulus"]["rst"]:
+                consumed.append((previous["expect"]["out_result"], previous["expect"]["out_error"]))
+        return consumed
+
+    def document(self):
+        return {"id": self.identifier, "kind": "join_trace", "dense": self.dense, "trit_count": self.trit_count,
+                "acc_width": self.acc_width, "words": self.model.storage.words, "tail_mask": self.model.storage.tail_mask,
+                "description": self.description, "cycle_count": len(self.cycles), "cycles": self.cycles}
 
 
 def frame_expectation(weights, activations, acc_width):
@@ -1209,6 +1303,141 @@ def build_stream_compute():
     for _ in range(4):
         s.cycle()
 
+    s = storage("hold_word_under_backpressure", "out_ready low holds the presented word, its mask and the sequencer; the stream resumes where it stopped")
+    for address, trits in enumerate(words):
+        s.load(address, s.code(trits))
+    s.cycle(start=True)
+    s.cycle()
+    s.cycle(out_stall=True)
+    s.cycle(out_stall=True)
+    s.cycle()
+    s.cycle(out_stall=True)
+    s.cycle()
+    s.cycle(out_stall=True)
+    s.cycle(out_stall=True)
+    for _ in range(3):
+        s.cycle()
+    s = storage("stall_without_a_word_changes_nothing", "out_ready low while idle, during loads and during start has no effect")
+    s.cycle(out_stall=True)
+    for address, trits in enumerate(words):
+        s.cycle(load_en=True, load_addr=address, load_code=s.code(trits), out_stall=True)
+    s.cycle(start=True, out_stall=True)
+    for _ in range(5):
+        s.cycle()
+    s = storage("reset_during_hold", "Reset while a word is held aborts the read; the next start replays from word 0")
+    for address, trits in enumerate(words):
+        s.load(address, s.code(trits))
+    s.cycle(start=True)
+    s.cycle()
+    s.cycle(out_stall=True)
+    s.cycle(rst=True, out_stall=True)
+    s.cycle()
+    s.cycle(start=True)
+    for _ in range(5):
+        s.cycle()
+
+    joins = []
+
+    def join(identifier, description, dense=True, trit_count=12, acc_width=32):
+        scenario = JoinScenario(identifier, description, dense, trit_count, acc_width)
+        scenario.cycle(rst=True)
+        scenario.cycle(rst=True)
+        joins.append(scenario)
+        return scenario
+
+    def check_frame(scenario, weights, activations, index=-1):
+        expect = frame_expectation(weights, activations, scenario.acc_width)
+        got = scenario.results()
+        if not got or got[index] != (expect["result"], expect["error"]):
+            raise RuntimeError(f"{scenario.identifier}: joined results {got} differ from the frame reference {expect}")
+
+    weights12 = [1, -1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1]
+    acts12 = [-128, 127, 5, 3, 9, 1, 2, 3, 4, 5, 10, -10]
+    stored12 = [weights12[0:5], weights12[5:10], weights12[10:12]]
+    groups12 = [acts12[0:5], acts12[5:10], acts12[10:12]]
+    s = join("join_three_words_dense", "Three stored words meet three activation beats back to back; the result equals the frame reference")
+    for address, trits in enumerate(stored12):
+        s.load(address, s.code(trits))
+    s.start()
+    for acts in groups12:
+        s.feed(acts)
+    s.idle(4)
+    check_frame(s, weights12, acts12)
+    weights7 = [1, -1, 0, 1, 0, 1, 1]
+    acts7 = [-128, 127, 5, 3, 9, 10, -10]
+    s = join("join_baseline_two_words", "Five-lane two-bit words with a two-lane tail through the joined path", dense=False, trit_count=7)
+    s.load(0, s.code(weights7[0:5]))
+    s.load(1, s.code(weights7[5:7]))
+    s.start()
+    s.feed(acts7[0:5])
+    s.feed(acts7[5:7])
+    s.idle(4)
+    check_frame(s, weights7, acts7)
+    s = join("join_activation_bubbles", "Gaps in the activation stream hold the stored word (word_ready low); nothing is lost")
+    for address, trits in enumerate(stored12):
+        s.load(address, s.code(trits))
+    s.start()
+    s.idle(2)
+    s.feed(groups12[0])
+    s.idle(3)
+    s.feed(groups12[1])
+    s.idle(1)
+    s.feed(groups12[2])
+    s.idle(4)
+    check_frame(s, weights12, acts12)
+    acts12b = [7, -7, 1, 0, 100, -3, 3, 0, 0, 0, -50, 50]
+    s = join("join_output_backpressure", "A held result stalls the pipeline; the next frame's second word waits in the sequencer until the result is consumed")
+    for address, trits in enumerate(stored12):
+        s.load(address, s.code(trits))
+    s.start(out_ready=False)
+    for acts in groups12:
+        s.feed(acts, out_ready=False)
+    s.idle(2, out_ready=False)
+    s.start(out_ready=False)
+    s.feed(acts12b[0:5], out_ready=False)
+    for _ in range(3):
+        if s.cycle(act_valid=True, acts=acts12b[5:10], out_ready=False):
+            raise RuntimeError("join_output_backpressure: a beat fired while the result was held")
+    s.feed(acts12b[5:10])
+    s.feed(acts12b[10:12])
+    s.idle(4)
+    check_frame(s, weights12, acts12, index=0)
+    check_frame(s, weights12, acts12b, index=1)
+    s = join("join_reset_mid_stream", "Reset after an accepted beat drops the frame and the read; a new start replays the stored words")
+    for address, trits in enumerate(stored12):
+        s.load(address, s.code(trits))
+    s.start()
+    s.feed(groups12[0])
+    s.cycle(rst=True, out_ready=False)
+    s.idle(1)
+    s.start()
+    for acts in groups12:
+        s.feed(acts)
+    s.idle(4)
+    check_frame(s, weights12, acts12)
+    weights20 = [1] * 20
+    acts20 = [127] * 20
+    s = join("join_acc12_overflow", "Four full groups of 635 overflow a twelve-bit accumulator through the joined path: error result", trit_count=20, acc_width=12)
+    for address in range(4):
+        s.load(address, s.code(weights20[5 * address:5 * address + 5]))
+    s.start()
+    for group in range(4):
+        s.feed(acts20[5 * group:5 * group + 5])
+    s.idle(4)
+    check_frame(s, weights20, acts20)
+    s = join("join_start_and_loads_ignored_while_streaming", "A second start and a write during the joined read do nothing; the result uses the original words")
+    for address, trits in enumerate(stored12):
+        s.load(address, s.code(trits))
+    s.start()
+    if s.cycle(start=True, act_valid=True, acts=groups12[0]):
+        raise RuntimeError("join_start_and_loads_ignored_while_streaming: a beat fired before the first word")
+    if not s.cycle(load_en=True, load_addr=1, load_code=s.code([1, 1, 1, 1, 1]), act_valid=True, acts=groups12[0]):
+        raise RuntimeError("join_start_and_loads_ignored_while_streaming: the first word did not fire")
+    s.feed(groups12[1])
+    s.feed(groups12[2])
+    s.idle(4)
+    check_frame(s, weights12, acts12)
+
     rng = random.Random(27)
     random_weights = [rng.choice((-1, 0, 1)) for _ in range(37)]
     random_acts = [rng.randint(-128, 127) for _ in range(37)]
@@ -1248,13 +1477,23 @@ def build_stream_compute():
         "runner_packet": {"code": [9, 0], "activations": [49, 10], "mask": [54, 50], "last": 55, "reset": 56, "reset_pending_output": 57,
                           "expected_result": [31, 0], "expected_error": 32,
                           "status": {"argument": -80, "capacity": -81, "overflow": -82, "output": -83, "mismatch": -84, "process": -85, "resource": -86}},
-        "storage": {"module": "ternary_dense5_stream_t27 / ternary_baseline5_stream_t27", "capacity_groups": 64, "max_trits": 320,
+        "storage": {"module": "ternary_stream_adapter_t27 (out_ready exposed); ternary_dense5_stream_t27 / ternary_baseline5_stream_t27 tie out_ready high",
+                    "capacity_groups": 64, "max_trits": 320,
                     "code_widths": {"dense5": 8, "baseline5": 10}, "element_bits": 16,
-                    "signals": ["rst", "start", "busy", "load_en", "load_addr", "load_code", "load_ready", "out_valid", "out_code_valid", "out_last", "out_lane_mask", "out_trits"],
-                    "timing": {"S": "start accepted; busy=1", "S+1+k": "word k visible", "S+WORDS": "last word, out_last=1", "S+WORDS+1": "idle"},
+                    "signals": ["rst", "start", "busy", "load_en", "load_addr", "load_code", "out_ready", "load_ready", "out_valid", "out_code_valid", "out_last", "out_lane_mask", "out_trits"],
+                    "timing": {"S": "start accepted; busy=1", "S+1+k": "word k visible (while out_ready)", "S+WORDS": "last word, out_last=1", "S+WORDS+1": "idle",
+                               "hold": "out_ready low while out_valid holds the word, its flags and the address; the timing resumes where it stopped"},
                     "load_ready": "!rst && !busy && !start && WORDS in 1..64", "reset": "aborts the read, keeps RAM contents",
-                    "backpressure": False, "join_to_dot_stream": "recorded gap: needs a FIFO of WORDS beats or a ready-capable sequencer",
+                    "backpressure": True, "join_to_dot_stream": "closed: ready-capable sequencer -> TrinityStreamJoinT27 -> trinity_dot_stream_t27 in rtl/t27/stream_dot.v, no buffer",
                     "specialized_capacities_simulated": [1, 65, 820, 4096]},
+        "join": {"module": "ternary_stream_dot_t27", "source": "t27/rtl/stream_join.t27 (combinational) wired by rtl/t27/stream_dot.v",
+                 "ports": {"inputs": ["clk", "rst", "start", "load_en", "load_addr", "load_code", "act_valid", "act_data[39:0]", "out_ready"],
+                           "outputs": ["busy", "load_ready", "act_ready", "beat", "out_valid", "out_result[ACC_WIDTH-1:0]", "out_error"],
+                           "parameters": {"DENSE5": [0, 1], "TRIT_COUNT": [1, 320], "ACC_WIDTH": [2, 32]}},
+                 "fire": "word_valid && act_valid && in_ready", "word_ready": "act_valid && in_ready", "act_ready": "word_valid && in_ready",
+                 "in_valid": "word_valid && act_valid", "in_mask": "11111, or the tail mask on the last word", "in_code": "the stored word",
+                 "packed_join_word": "[0] fire, [1] word_ready, [2] act_ready, [3] in_valid, [4] in_last, [12:5] mask",
+                 "activations": "int8 lanes supplied by the activation source; lanes outside the mask must be zero"},
         "view": {"packed": "[15] code valid, [14:10] lane mask, [9:0] visible lanes", "idle": 0, "invalid_code": "mask << 10"},
         "evidence": {"label": "rtl-simulation", "simulator": "Icarus Verilog", "not_claimed": ["fpga", "timing", "utilization", "throughput"]},
     }
@@ -1266,7 +1505,8 @@ def build_stream_compute():
         {"id": "pipeline_latency_follows_the_two_stages", "condition": "accept -> valid: 1 edge; accept -> consume: 2 edges"},
         {"id": "packet_fields_are_contiguous", "condition": "10 + 40 + 5 + 1 + 1 + 1 bits"},
         {"id": "storage_capacity_and_element_width", "condition": "64*5 == 320; 16 >= 10 > 8"},
-        {"id": "the_storage_join_is_a_recorded_gap", "condition": "no backpressure; join needs a buffer"},
+        {"id": "the_storage_join_is_closed", "condition": "backpressure through out_ready; no buffer between storage and the pipeline"},
+        {"id": "join_bits_are_distinct_and_below_the_mask", "condition": "1, 2, 4, 8, 16, shift 5, full mask 31, 40 activation bits"},
         {"id": "view_packing_uses_the_upper_bits", "condition": "valid bit 2^15, mask shift 10"},
     ]
     return {
@@ -1275,16 +1515,18 @@ def build_stream_compute():
         "schema_version": 2,
         "format_family": "Conformance",
         "vector_name": "Trinity Stream Compute traces and frames",
-        "description": "Cycle-exact traces of the framed dot pipeline and the storage sequencer with view, plus frame-level "
-                       "dot products, computed by the cycle models in tools/generate-spec-vectors.py from the contract in the spec. "
-                       "Replayed in Icarus Verilog by tests/spec_stream_replay.py; evidence label rtl-simulation.",
+        "description": "Cycle-exact traces of the framed dot pipeline, the storage sequencer with view (including backpressure) "
+                       "and the joined read -> decode -> dot path, plus frame-level dot products, computed by the cycle models in "
+                       "tools/generate-spec-vectors.py from the contract in the spec. Replayed in Icarus Verilog by "
+                       "tests/spec_stream_replay.py; evidence label rtl-simulation.",
         "created_at": "2026-09-11T00:00:00Z",
         "generator": "tools/generate-spec-vectors.py",
-        "replay": {"traces": "tests/spec_stream_replay.py (tests/tb_spec_dot_trace.v, tests/tb_spec_storage_trace.v)",
+        "replay": {"traces": "tests/spec_stream_replay.py (tests/tb_spec_dot_trace.v, tests/tb_spec_storage_trace.v, tests/tb_spec_join_trace.v)",
                    "frames": "tests/test_spec_stream_compute.py through trinity_memory.rtl_compute"},
         "constants": constants,
         "invariants": invariants,
-        "vectors": [item.document() for item in traces] + [item.document() for item in storages] + frames,
+        "vectors": [item.document() for item in traces] + [item.document() for item in storages]
+                   + [item.document() for item in joins] + frames,
     }
 
 

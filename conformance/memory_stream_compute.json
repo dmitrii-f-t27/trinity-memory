@@ -76,6 +76,54 @@
       ],
       "simulator": "Icarus Verilog"
     },
+    "join": {
+      "act_ready": "word_valid && in_ready",
+      "activations": "int8 lanes supplied by the activation source; lanes outside the mask must be zero",
+      "fire": "word_valid && act_valid && in_ready",
+      "in_code": "the stored word",
+      "in_mask": "11111, or the tail mask on the last word",
+      "in_valid": "word_valid && act_valid",
+      "module": "ternary_stream_dot_t27",
+      "packed_join_word": "[0] fire, [1] word_ready, [2] act_ready, [3] in_valid, [4] in_last, [12:5] mask",
+      "ports": {
+        "inputs": [
+          "clk",
+          "rst",
+          "start",
+          "load_en",
+          "load_addr",
+          "load_code",
+          "act_valid",
+          "act_data[39:0]",
+          "out_ready"
+        ],
+        "outputs": [
+          "busy",
+          "load_ready",
+          "act_ready",
+          "beat",
+          "out_valid",
+          "out_result[ACC_WIDTH-1:0]",
+          "out_error"
+        ],
+        "parameters": {
+          "ACC_WIDTH": [
+            2,
+            32
+          ],
+          "DENSE5": [
+            0,
+            1
+          ],
+          "TRIT_COUNT": [
+            1,
+            320
+          ]
+        }
+      },
+      "source": "t27/rtl/stream_join.t27 (combinational) wired by rtl/t27/stream_dot.v",
+      "word_ready": "act_valid && in_ready"
+    },
     "pipeline": {
       "accept_to_consume_edges": 2,
       "accept_to_valid_edges": 1,
@@ -116,17 +164,17 @@
       }
     },
     "storage": {
-      "backpressure": false,
+      "backpressure": true,
       "capacity_groups": 64,
       "code_widths": {
         "baseline5": 10,
         "dense5": 8
       },
       "element_bits": 16,
-      "join_to_dot_stream": "recorded gap: needs a FIFO of WORDS beats or a ready-capable sequencer",
+      "join_to_dot_stream": "closed: ready-capable sequencer -> TrinityStreamJoinT27 -> trinity_dot_stream_t27 in rtl/t27/stream_dot.v, no buffer",
       "load_ready": "!rst && !busy && !start && WORDS in 1..64",
       "max_trits": 320,
-      "module": "ternary_dense5_stream_t27 / ternary_baseline5_stream_t27",
+      "module": "ternary_stream_adapter_t27 (out_ready exposed); ternary_dense5_stream_t27 / ternary_baseline5_stream_t27 tie out_ready high",
       "reset": "aborts the read, keeps RAM contents",
       "signals": [
         "rst",
@@ -135,6 +183,7 @@
         "load_en",
         "load_addr",
         "load_code",
+        "out_ready",
         "load_ready",
         "out_valid",
         "out_code_valid",
@@ -150,9 +199,10 @@
       ],
       "timing": {
         "S": "start accepted; busy=1",
-        "S+1+k": "word k visible",
+        "S+1+k": "word k visible (while out_ready)",
         "S+WORDS": "last word, out_last=1",
-        "S+WORDS+1": "idle"
+        "S+WORDS+1": "idle",
+        "hold": "out_ready low while out_valid holds the word, its flags and the address; the timing resumes where it stopped"
       }
     },
     "view": {
@@ -162,7 +212,7 @@
     }
   },
   "created_at": "2026-09-11T00:00:00Z",
-  "description": "Cycle-exact traces of the framed dot pipeline and the storage sequencer with view, plus frame-level dot products, computed by the cycle models in tools/generate-spec-vectors.py from the contract in the spec. Replayed in Icarus Verilog by tests/spec_stream_replay.py; evidence label rtl-simulation.",
+  "description": "Cycle-exact traces of the framed dot pipeline, the storage sequencer with view (including backpressure) and the joined read -> decode -> dot path, plus frame-level dot products, computed by the cycle models in tools/generate-spec-vectors.py from the contract in the spec. Replayed in Icarus Verilog by tests/spec_stream_replay.py; evidence label rtl-simulation.",
   "format_family": "Conformance",
   "generator": "tools/generate-spec-vectors.py",
   "invariants": [
@@ -195,8 +245,12 @@
       "id": "storage_capacity_and_element_width"
     },
     {
-      "condition": "no backpressure; join needs a buffer",
-      "id": "the_storage_join_is_a_recorded_gap"
+      "condition": "backpressure through out_ready; no buffer between storage and the pipeline",
+      "id": "the_storage_join_is_closed"
+    },
+    {
+      "condition": "1, 2, 4, 8, 16, shift 5, full mask 31, 40 activation bits",
+      "id": "join_bits_are_distinct_and_below_the_mask"
     },
     {
       "condition": "valid bit 2^15, mask shift 10",
@@ -206,7 +260,7 @@
   "module": "TrinityMemoryStreamComputeSpec",
   "replay": {
     "frames": "tests/test_spec_stream_compute.py through trinity_memory.rtl_compute",
-    "traces": "tests/spec_stream_replay.py (tests/tb_spec_dot_trace.v, tests/tb_spec_storage_trace.v)"
+    "traces": "tests/spec_stream_replay.py (tests/tb_spec_dot_trace.v, tests/tb_spec_storage_trace.v, tests/tb_spec_join_trace.v)"
   },
   "schema_version": 2,
   "spec_path": "specs/memory/stream_compute.t27",
@@ -4227,6 +4281,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -4245,6 +4300,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -4263,6 +4319,7 @@
             "load_addr": 0,
             "load_code": 146,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4281,6 +4338,7 @@
             "load_addr": 1,
             "load_code": 121,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4299,6 +4357,7 @@
             "load_addr": 2,
             "load_code": 125,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4317,6 +4376,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -4335,6 +4395,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4353,6 +4414,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4371,6 +4433,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4389,6 +4452,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4407,6 +4471,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4425,6 +4490,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4455,6 +4521,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -4473,6 +4540,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -4491,6 +4559,7 @@
             "load_addr": 0,
             "load_code": 146,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4509,6 +4578,7 @@
             "load_addr": 1,
             "load_code": 121,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4527,6 +4597,7 @@
             "load_addr": 2,
             "load_code": 125,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4545,6 +4616,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -4563,6 +4635,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -4581,6 +4654,7 @@
             "load_addr": 1,
             "load_code": 242,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4599,6 +4673,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4617,6 +4692,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4635,6 +4711,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4653,6 +4730,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4671,6 +4749,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -4689,6 +4768,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4707,6 +4787,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4725,6 +4806,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4743,6 +4825,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4761,6 +4844,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4779,6 +4863,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4809,6 +4894,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -4827,6 +4913,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -4845,6 +4932,7 @@
             "load_addr": 0,
             "load_code": 146,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4863,6 +4951,7 @@
             "load_addr": 1,
             "load_code": 121,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4881,6 +4970,7 @@
             "load_addr": 2,
             "load_code": 125,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4899,6 +4989,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -4917,6 +5008,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4935,6 +5027,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -4953,6 +5046,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -4971,6 +5065,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -4989,6 +5084,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5007,6 +5103,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5025,6 +5122,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5043,6 +5141,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5061,6 +5160,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5079,6 +5179,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5109,6 +5210,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -5127,6 +5229,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -5145,6 +5248,7 @@
             "load_addr": 0,
             "load_code": 122,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5163,6 +5267,7 @@
             "load_addr": 1,
             "load_code": 243,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5181,6 +5286,7 @@
             "load_addr": 2,
             "load_code": 118,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5199,6 +5305,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -5217,6 +5324,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5235,6 +5343,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5253,6 +5362,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5271,6 +5381,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5289,6 +5400,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5307,6 +5419,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5337,6 +5450,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -5355,6 +5469,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -5373,6 +5488,7 @@
             "load_addr": 0,
             "load_code": 73,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5391,6 +5507,7 @@
             "load_addr": 1,
             "load_code": 5,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5409,6 +5526,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -5427,6 +5545,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5445,6 +5564,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5463,6 +5583,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5481,6 +5602,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5499,6 +5621,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5529,6 +5652,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -5547,6 +5671,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": true,
             "start": false
           }
@@ -5565,6 +5690,7 @@
             "load_addr": 0,
             "load_code": 120,
             "load_en": true,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5583,6 +5709,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": true
           }
@@ -5601,6 +5728,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5619,6 +5747,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5637,6 +5766,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5655,6 +5785,7 @@
             "load_addr": 0,
             "load_code": 0,
             "load_en": false,
+            "out_stall": false,
             "rst": false,
             "start": false
           }
@@ -5667,6 +5798,4174 @@
       "tail_mask": 1,
       "trit_count": 1,
       "words": 1
+    },
+    {
+      "cycle_count": 17,
+      "cycles": [
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 73,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 73,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 73,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 3,
+            "out_last": true,
+            "out_trits": 5,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 3,
+            "out_last": true,
+            "out_trits": 5,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 3,
+            "out_last": true,
+            "out_trits": 5,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "out_ready low holds the presented word, its mask and the sequencer; the stream resumes where it stopped",
+      "id": "hold_word_under_backpressure",
+      "kind": "storage_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
+    },
+    {
+      "cycle_count": 12,
+      "cycles": [
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 73,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 3,
+            "out_last": true,
+            "out_trits": 5,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "out_ready low while idle, during loads and during start has no effect",
+      "id": "stall_without_a_word_changes_nothing",
+      "kind": "storage_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
+    },
+    {
+      "cycle_count": 16,
+      "cycles": [
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 73,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 73,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 73,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 31,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": true,
+            "load_ready": false,
+            "out_code_valid": true,
+            "out_lane_mask": 3,
+            "out_last": true,
+            "out_trits": 5,
+            "out_valid": true
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "busy": false,
+            "load_ready": true,
+            "out_code_valid": false,
+            "out_lane_mask": 0,
+            "out_last": false,
+            "out_trits": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_stall": false,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "Reset while a word is held aborts the read; the next start replays from word 0",
+      "id": "reset_during_hold",
+      "kind": "storage_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
+    },
+    {
+      "acc_width": 32,
+      "cycle_count": 14,
+      "cycles": [
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              10,
+              -10,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "Three stored words meet three activation beats back to back; the result equals the frame reference",
+      "id": "join_three_words_dense",
+      "kind": "join_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
+    },
+    {
+      "acc_width": 32,
+      "cycle_count": 12,
+      "cycles": [
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 73,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 1,
+            "load_code": 5,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              10,
+              -10,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": false,
+      "description": "Five-lane two-bit words with a two-lane tail through the joined path",
+      "id": "join_baseline_two_words",
+      "kind": "join_trace",
+      "tail_mask": 3,
+      "trit_count": 7,
+      "words": 2
+    },
+    {
+      "acc_width": 32,
+      "cycle_count": 19,
+      "cycles": [
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              10,
+              -10,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "Gaps in the activation stream hold the stored word (word_ready low); nothing is lost",
+      "id": "join_activation_bubbles",
+      "kind": "join_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
+    },
+    {
+      "acc_width": 32,
+      "cycle_count": 24,
+      "cycles": [
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              10,
+              -10,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              7,
+              -7,
+              1,
+              0,
+              100
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              7,
+              -7,
+              1,
+              0,
+              100
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              -3,
+              3,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              -3,
+              3,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              -3,
+              3,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -3,
+              3,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -50,
+              50,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 14,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 14,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 14,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 14,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "A held result stalls the pipeline; the next frame's second word waits in the sequencer until the result is consumed",
+      "id": "join_output_backpressure",
+      "kind": "join_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
+    },
+    {
+      "acc_width": 32,
+      "cycle_count": 19,
+      "cycles": [
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": false,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              10,
+              -10,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "Reset after an accepted beat drops the frame and the read; a new start replays the stored words",
+      "id": "join_reset_mid_stream",
+      "kind": "join_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
+    },
+    {
+      "acc_width": 12,
+      "cycle_count": 16,
+      "cycles": [
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 242,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 1,
+            "load_code": 242,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 2,
+            "load_code": 242,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 3,
+            "load_code": 242,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              127,
+              127,
+              127,
+              127,
+              127
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              127,
+              127,
+              127,
+              127,
+              127
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              127,
+              127,
+              127,
+              127,
+              127
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              127,
+              127,
+              127,
+              127,
+              127
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              127,
+              127,
+              127,
+              127,
+              127
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": true,
+            "out_result": 0,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": true,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": true,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": true,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "Four full groups of 635 overflow a twelve-bit accumulator through the joined path: error result",
+      "id": "join_acc12_overflow",
+      "kind": "join_trace",
+      "tail_mask": 31,
+      "trit_count": 20,
+      "words": 4
+    },
+    {
+      "acc_width": 32,
+      "cycle_count": 14,
+      "cycles": [
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": true,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 146,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 1,
+            "load_code": 121,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 2,
+            "load_code": 125,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": true
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              -128,
+              127,
+              5,
+              3,
+              9
+            ],
+            "act_valid": true,
+            "load_addr": 1,
+            "load_code": 242,
+            "load_en": true,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": true,
+            "beat": true,
+            "busy": true,
+            "load_ready": false,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": 0,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              10,
+              -10,
+              0,
+              0,
+              0
+            ],
+            "act_valid": true,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": true
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        },
+        {
+          "expect": {
+            "act_ready": false,
+            "beat": false,
+            "busy": false,
+            "load_ready": true,
+            "out_error": false,
+            "out_result": -252,
+            "out_valid": false
+          },
+          "stimulus": {
+            "act_data": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "act_valid": false,
+            "load_addr": 0,
+            "load_code": 0,
+            "load_en": false,
+            "out_ready": true,
+            "rst": false,
+            "start": false
+          }
+        }
+      ],
+      "dense": true,
+      "description": "A second start and a write during the joined read do nothing; the result uses the original words",
+      "id": "join_start_and_loads_ignored_while_streaming",
+      "kind": "join_trace",
+      "tail_mask": 3,
+      "trit_count": 12,
+      "words": 3
     },
     {
       "acc_width": 32,

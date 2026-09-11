@@ -37,3 +37,10 @@ Demo scoring. Roadmap: [epic #3](https://github.com/dmitrii-f-t27/trinity-memory
 - Every change to a spec: rerun `tools/check-specs.sh`, refresh the seal, regenerate the
   vectors with `tools/generate-spec-vectors.py`, and keep `tests/native_spec_types.c` and
   `tests/test_spec_types.py` passing.
+- Wiring adapters are compiled with `iverilog -g2012`: SystemVerilog keywords such as
+  `join` are not valid instance names (`TrinityStreamJoinT27 join (...)` is a syntax
+  error); name the instance `joiner` or similar.
+- Combinational outputs of the generated cores (`in_ready`, `load_ready`) depend on the
+  inputs of the same cycle; a harness that samples them after the consuming edge must keep
+  that cycle's stimulus applied (the rule of `tests/tb_spec_*_trace.v` and of the FPGA
+  trace player's stepped and free-run passes).
