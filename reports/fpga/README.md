@@ -35,6 +35,13 @@ Decision record and captured device output for issue #10. Protocol and flow:
 | --- | --- | --- | --- |
 | `build-2026-09-11-e3e8cfb/` | e3e8cfb | tick enable on the 200 MHz clock (the only variant at that commit) | routed by `heap` seed 1 after six `sa` seeds failed; 2352 LUTs, 1019 FFs, 1 RAMB18; nextpnr Fmax 67.5 MHz for the 200 MHz clock (paths between tick-enabled registers have eight periods); 20230 frames, bitstream 9 730 785 bytes, sha256 in `build.json`; pre-silicon capture PASS |
 
-Status: harness built and verified in Icarus (24 vectors at e3e8cfb, 27 after
-the storage join; 0 mismatches in both passes and both clock variants). Device
-capture: none recorded yet in this directory.
+## Captures
+
+| File | Board / bitstream | Result |
+| --- | --- | --- |
+| `capture-2026-09-11-e3e8cfb.json` (+ `.txt` raw stream, `-run2.json`, `-run3.json`) | ALINX AX7203, idcode `0x3636093`, bitstream `build-2026-09-11-e3e8cfb` (sha256 `198df230…`, header build id `0e6a6ed5` = the PR merge commit the CI built), UART `/dev/cu.usbserial-10` 115200 | PASS: 24 vectors, 243 cycles, 0 host mismatches, 0 device mismatches (stepped), 0 (free-run); three runs byte-identical (17518 bytes) |
+
+Status: the stream-compute trace suites of commit e3e8cfb run on the device and
+match the reference. The storage-join vectors added by #15 (27 + 7 join
+vectors) have not been replayed on the device yet; the lab marks the capture
+stale until a bitstream of the new vector set is captured.
