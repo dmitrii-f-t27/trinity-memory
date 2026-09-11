@@ -6,16 +6,16 @@
 `timescale 1ns/1ps
 `default_nettype none
 module tb_fpga_trace_player;
-    parameter integer CLK_DIV = 4;
-    parameter integer BAUD_DIV = 8;
-    localparam real BIT_NS = 5.0 * CLK_DIV * BAUD_DIV;
+    parameter integer TICK_DIV = 8;
+    parameter integer BAUD_DIV = 4;
+    localparam real BIT_NS = 5.0 * TICK_DIV * BAUD_DIV;
     reg clk200 = 1'b0;
     always #2.5 clk200 = !clk200;
     reg rst_n = 1'b0;
     reg uart_rx = 1'b1;
     wire [3:0] led;
     wire uart_tx;
-    tms_trace_player_ax7203 #(.CLK_DIV(CLK_DIV), .BAUD_DIV(BAUD_DIV), .BUILD_ID(32'h5eedc0de)) dut (
+    tms_trace_player_ax7203 #(.TICK_DIV(TICK_DIV), .BAUD_DIV(BAUD_DIV), .BUILD_ID(32'h5eedc0de)) dut (
         .clk200_p(clk200), .clk200_n(!clk200), .rst_n(rst_n), .led(led), .uart_tx(uart_tx), .uart_rx(uart_rx)
     );
     reg [4095:0] path;
