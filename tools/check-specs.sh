@@ -111,6 +111,9 @@ mkdir -p "$impl/specs"
 for module in codecs container tensorpack json json_writer tensorpack_json bridge client; do
     "$compiler" gen-c "t27/$module.t27" > "$impl/$module.h"
 done
+# The dot pipeline source is generated to C as well, so the harness compares the
+# spec against the same functions that produce the RTL.
+"$compiler" gen-c t27/rtl/dot_stream.t27 > "$impl/rtl_dot_stream.h"
 for spec in $specs; do
     cp "$out/$(basename "$spec" .t27).h" "$impl/specs/"
 done
@@ -126,4 +129,15 @@ for harness in tests/native_spec_*.c; do
     "$cxx" -fsanitize=address,undefined "$out/$name.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/$name"
     "$out/$name"
 done
+# Cycle traces: generate the RTL modules from their executable sources and
+# replay every trace of the stream compute spec in Icarus Verilog.
+mkdir -p "$out/rtl"
+for module in dot_stream stream_storage stream_view; do
+    "$compiler" gen-verilog "t27/rtl/$module.t27" > "$out/rtl/$module.v"
+    if grep -E 'ENTRY POINT REFUSED|NO DATA PORTS|TODO' "$out/rtl/$module.v"; then
+        echo "Incomplete generated RTL: t27/rtl/$module.t27" >&2
+        exit 1
+    fi
+done
+"${PYTHON:-python3}" tests/spec_stream_replay.py --rtl-dir "$out/rtl" --work "$out/traces" --output "$out/traces.json"
 echo "PASS spec gate: $count spec(s) lexed, parsed, typechecked, generated (C, Verilog), tested, sealed; conformance validated; differential harnesses passed"

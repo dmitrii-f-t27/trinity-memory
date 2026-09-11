@@ -8,6 +8,34 @@ five-lane 2-bit decoding. Both feed the same checked addition/subtraction pipeli
 verified by Icarus simulation; synthesis, routed timing, physical device
 measurements, DDR integration, and model-quality measurements are not provided.
 
+## Specification
+
+The contract on this page and the storage sequencer contract in
+[`hardware.md`](hardware.md) are restated as the sealed specification
+[`specs/memory/stream_compute.t27`](../specs/memory/stream_compute.t27): beat
+fields and widths, code limits, prefix-mask and inactive-lane rules, int8
+widening, accumulator widths and bounds, sticky frame errors, the two-stage
+handshake and its latencies, the runner packet layout, and the storage
+sequencer timing with the view packing. Its constant invariants compile as
+`_Static_assert` and its test blocks execute in the generated C runner.
+[`conformance/memory_stream_compute.json`](../conformance/memory_stream_compute.json)
+carries cycle-exact traces (two-beat frames in both modes, an empty frame,
+malformed frames, reset mid-frame and with a pending output, backpressure,
+input bubbles, and the 12-bit limit cases 2047 / -2048 / overflow /
+cancellation after overflow), storage traces (load and read, ignored start and
+writes while busy, reset mid-stream, an invalid word, baseline and single-word
+streams) and frame-level dot products. `tests/spec_stream_replay.py` replays
+the traces in Icarus through `tests/tb_spec_dot_trace.v` and
+`tests/tb_spec_storage_trace.v`; `tests/test_spec_stream_compute.py` runs the
+frames through the native runner; `tests/native_spec_stream_compute.c`
+compares the spec with the C generated from `t27/rtl/dot_stream.t27`, the
+same source the RTL comes from. Every result is `rtl-simulation` evidence.
+
+**Recorded gap.** The storage sequencer has no downstream ready port and is
+not connected to this pipeline; joining them needs a FIFO of `WORDS` beats or a
+ready-capable sequencer. The spec states this as `TMS_STORAGE_HAS_BACKPRESSURE = 0`
+and `TMS_STORAGE_JOIN_NEEDS_BUFFER = 1`; the join is tracked separately.
+
 ## Input and output contract
 
 All transfers occur at rising clock edges. A source transfer requires
