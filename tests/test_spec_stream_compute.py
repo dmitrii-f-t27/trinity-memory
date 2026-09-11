@@ -75,9 +75,11 @@ class SpecStreamComputeConformance(unittest.TestCase):
 
     @unittest.skipUnless(TOOLS and (RTL_DIR / "dot_stream.v").is_file(), "generated RTL or Icarus missing")
     def test_cycle_traces_replay_in_icarus(self):
-        dots, storages, cycles = replay.replay(DOCUMENT, RTL_DIR)
+        dots, storages, joins, cycles = replay.replay(DOCUMENT, RTL_DIR)
         self.assertEqual(dots, len(by_kind("dot_trace")))
         self.assertEqual(storages, len(by_kind("storage_trace")))
+        self.assertEqual(joins, len(by_kind("join_trace")))
+        self.assertGreater(joins, 0)
         self.assertEqual(cycles, sum(vector["cycle_count"] for vector in DOCUMENT["vectors"] if "cycle_count" in vector))
 
     def test_generator_output_is_committed(self):

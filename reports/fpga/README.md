@@ -15,8 +15,9 @@ Decision record and captured device output for issue #10. Protocol and flow:
   `sa` and `heap` placers over seeds 1..6, prjxray) from the `regymm/openxc7`
   image; no Vivado licence involved. The chip database for the part is
   generated once and cached by the `fpga-ax7203` workflow.
-- **Workload:** the 24 cycle-exact trace vectors of
-  `conformance/memory_stream_compute.json` (18 dot, 6 storage; 243 cycles),
+- **Workload:** every `dot_trace` and `storage_trace` vector of
+  `conformance/memory_stream_compute.json` (27 vectors, 18 dot and 9 storage
+  including the backpressure holds; 288 cycles),
   replayed by `fpga/ax7203/tms_trace_player.v`; counters as listed in
   `build/fpga/tms_trace_manifest.json`.
 - **Rented hardware:** none.
