@@ -94,6 +94,15 @@ no interoperability with real 32-byte PUF identities is claimed.
 
 ## Demo meaning
 
+The classifier, its fixtures, the scoring rules and the report fields are stated in
+[`specs/memory/edge_demo.t27`](../specs/memory/edge_demo.t27); the golden model
+containers, the twelve predictions, the thirty-six RTL rows with their seeds and
+the scoring cases are in
+[`conformance/memory_edge_demo.json`](../conformance/memory_edge_demo.json),
+replayed by `tests/test_spec_edge_demo.py` through the native demo, the Bridge
+and the CLI. Byte counts and wall times in the report are labelled by their
+evidence (`emulator` loopback, `rtl-simulation` rows); `fpga` never appears here.
+
 Three hand-authored templates identify rising, falling and alternating signals.
 The six fixed, synthetic fixtures illustrate the full data path. Constant input
 is ambiguous and returns no label. This is not trained ML, a generalization

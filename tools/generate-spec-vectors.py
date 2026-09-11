@@ -21,6 +21,7 @@ BRIDGE_OUTPUT = ROOT / "conformance" / "memory_bridge.json"
 TENSORPACK_OUTPUT = ROOT / "conformance" / "memory_tensorpack.json"
 STREAM_OUTPUT = ROOT / "conformance" / "memory_stream_compute.json"
 LAB_OUTPUT = ROOT / "conformance" / "memory_conformance.json"
+EDGE_OUTPUT = ROOT / "conformance" / "memory_edge_demo.json"
 
 CODECS = {
     "baseline2": {"id": 0, "group_trits": 4, "group_bits": 8, "max_nonzero": None},
@@ -1432,6 +1433,116 @@ def build_conformance():
     }
 
 
+# ---------------------------------------------------------------------------
+# specs/memory/edge_demo.t27
+
+
+EDGE_LABELS = ["rising", "falling", "alternating"]
+EDGE_LIMITATIONS = [
+    "Illustrative synthetic fixtures; no measured generalization accuracy.",
+    "HTTP wall times include native C, JSON and scheduling overhead.",
+    "RTL cycles are simulation evidence, not FPGA throughput or power.",
+    "No physical board, DDR controller, trained checkpoint or ZK proof.",
+]
+
+
+def edge_weight(row, column):
+    if row == 2:
+        return -1 if column % 2 == 0 else 1
+    if row == 0:
+        return -1 if column < 6 else 1
+    return 1 if column < 6 else -1
+
+
+def edge_argmax(scores):
+    top = max(scores)
+    if scores.count(top) > 1:
+        return None
+    return scores.index(top)
+
+
+def build_edge_demo():
+    templates = [[edge_weight(row, column) for column in range(12)] for row in range(3)]
+    weights = [value for row in templates for value in row]
+    fixtures = [
+        ("step_up", [40 * edge_weight(0, c) for c in range(12)]),
+        ("step_down", [40 * edge_weight(1, c) for c in range(12)]),
+        ("alternating", [30 * edge_weight(2, c) for c in range(12)]),
+        ("offset_step_up", [-8, -7, -9, -8, -6, -8, 33, 34, 35, 34, 32, 35]),
+        ("offset_step_down", [36, 35, 33, 35, 34, 36, -8, -9, -7, -8, -8, -6]),
+        ("noisy_alternating", [-25, 29, -27, 31, -28, 30, -26, 28, -29, 32, -25, 31]),
+    ]
+    cases = []
+    for index, (name, samples) in enumerate(fixtures):
+        accumulators = [sum(edge_weight(row, c) * samples[c] for c in range(12)) for row in range(3)]
+        label = edge_argmax([float(a) for a in accumulators])
+        if label != index % 3:
+            raise RuntimeError(f"fixture {name} does not score its own template")
+        cases.append({"name": name, "samples": samples, "expected": EDGE_LABELS[index % 3], "accumulators": accumulators,
+                      "scores": [float(a) for a in accumulators], "label": EDGE_LABELS[label], "ambiguous": False})
+    models = {}
+    for codec in ("dense5", "baseline2"):
+        container = ttpk([{"name": "signal_templates", "shape": [3, 12], "values": weights, "codec": codec,
+                           "scales": [1.0], "scale_axis": None, "axes": ["class", "sample"]}])
+        models[codec] = {"ttpk_hex": container.hex(), "container_bytes": len(container), "container_sha256": sha256_hex(container),
+                         "raw_weight_payload_bytes": payload_bytes(codec, 36)}
+    predictions = [{"codec": codec, "fixture": case["name"], "label": case["label"], "accumulators": case["accumulators"]}
+                   for codec in ("dense5", "baseline2") for case in cases]
+    rtl_rows = [{"codec": codec, "fixture": case["name"], "row": row, "seed": 27 + row, "result": case["accumulators"][row],
+                 "error": False, "weight_count": 12, "groups": 3, "encoded_weight_bits": 3 * (8 if codec == "dense5" else 10)}
+                for codec in ("dense5", "baseline2") for case in cases for row in range(3)]
+    scoring = [
+        {"id": "constant_input_is_ambiguous", "samples": [17] * 12, "scales": [1.0], "accumulators": [0, 0, 0], "label": None, "ambiguous": True},
+        {"id": "per_row_scales_reorder_the_winner", "model": {"shape": [3, 1], "values": [1, 1, -1], "scales": [1.0, 2.0, 0.5], "scale_axis": 0},
+         "samples": [3], "accumulators": [3, 3, -3], "scores": [3.0, 6.0, -1.5], "label": "falling", "ambiguous": False},
+        {"id": "overflowing_scale_is_rejected", "model": {"shape": [3, 1], "values": [1, 1, -1], "scales": [1e308, 1e308, 1.0], "scale_axis": 0},
+         "samples": [3], "error": "finite"},
+        {"id": "two_way_tie_is_ambiguous", "scores": [5.0, 5.0, 1.0], "label": None},
+        {"id": "strict_maximum_wins", "scores": [1.0, 3.0, 2.0], "label": "falling"},
+    ]
+    vectors = ([{"id": f"model_{codec}", "kind": "model", "codec": codec, **model} for codec, model in models.items()]
+               + [{"id": f"fixture_{case['name']}", "kind": "fixture", **case} for case in cases]
+               + [{"id": f"prediction_{p['codec']}_{p['fixture']}", "kind": "prediction", **p} for p in predictions]
+               + [{"id": f"rtl_{r['codec']}_{r['fixture']}_{r['row']}", "kind": "rtl_row", **r} for r in rtl_rows]
+               + [{"id": item["id"], "kind": "scoring", **{k: v for k, v in item.items() if k != "id"}} for item in scoring])
+    return {
+        "module": "TrinityMemoryEdgeDemoSpec",
+        "spec_path": "specs/memory/edge_demo.t27",
+        "schema_version": 2,
+        "format_family": "Conformance",
+        "vector_name": "Trinity Edge Demo",
+        "description": "The template classifier model in both encodings, six fixtures with exact accumulators and labels, "
+                       "twelve predictions, thirty-six RTL rows with their seeds, scoring rules (ties, per-row scales, finiteness) "
+                       "and the report contract, computed from the spec by tools/generate-spec-vectors.py.",
+        "created_at": "2026-09-11T00:00:00Z",
+        "generator": "tools/generate-spec-vectors.py",
+        "constants": {
+            "model": {"name": "signal_templates", "shape": [3, 12], "scales": [1.0], "scale_axis": None, "axes": ["class", "sample"],
+                      "templates": templates, "labels": EDGE_LABELS, "description": "hand-authored ternary template classifier, shape [3,12]"},
+            "fixtures": {"count": 6, "expected_label": "index mod 3", "step_amplitude": 40, "alternating_amplitude": 30},
+            "scoring": {"score": "accumulator * scale (one scale for all rows or one per row)", "label": "strict maximum",
+                        "tie": "ambiguous, label null", "scales": "positive finite; a non-finite score is rejected"},
+            "experiment": {"modes": ["dense5", "baseline2"], "predictions": 12, "rtl_rows": 36, "rtl_seed": "seed + row", "seed_default": 27,
+                           "rtl_seed_max": 4294967293, "server": {"max_request_bytes": 131072, "max_object_bytes": 32768, "max_storage_bytes": 131072,
+                                                                  "max_objects": 4, "max_trits": 16384, "timeout_seconds": 10.0}},
+            "report": {"schema": "trinity.edge-report.v1", "evidence": ["software-loopback-http", "rtl-simulation"], "runtime": "native-t27",
+                       "physical_device_tested": False, "fixture_count": 6,
+                       "mode_fields": ["codec", "capabilities", "container_bytes", "raw_weight_payload_bytes", "container_sha256", "roundtrip_exact", "upload_read_wall_ns", "cases"],
+                       "case_fields": ["name", "samples", "expected", "label", "ambiguous", "accumulators", "scores", "backend", "reference", "rpc_wall_ns", "rtl", "passed"],
+                       "timing_fields": ["upload_read_wall_ns", "rpc_wall_ns"], "limitations": EDGE_LIMITATIONS},
+            "evidence": {"emulator": "loopback HTTP transfer and exact dot", "rtl-simulation": "row replays in Icarus", "fpga": "not produced by this demo"},
+        },
+        "invariants": [
+            {"id": "the_model_is_three_by_twelve", "condition": "3 * 12 == 36"},
+            {"id": "raw_payload_bytes_follow_the_codec_geometry", "condition": "dense5 8 bytes, baseline2 9 bytes for 36 trits"},
+            {"id": "synthetic_accumulators_are_amplitude_times_samples", "condition": "480 == 40 * 12, 360 == 30 * 12"},
+            {"id": "predictions_and_rtl_rows_count_every_fixture_in_every_mode", "condition": "12 == 6 * 2, 36 == 6 * 2 * 3"},
+            {"id": "the_rtl_seed_leaves_room_for_three_rows", "condition": "seed + 2 <= 2^32 - 1"},
+        ],
+        "vectors": vectors,
+    }
+
+
 def render(document):
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -1442,7 +1553,7 @@ def main():
     args = parser.parse_args()
     documents = ((OUTPUT, render(build())), (BRIDGE_OUTPUT, render(build_bridge())),
                  (TENSORPACK_OUTPUT, render(build_tensorpack())), (STREAM_OUTPUT, render(build_stream_compute())),
-                 (LAB_OUTPUT, render(build_conformance())))
+                 (LAB_OUTPUT, render(build_conformance())), (EDGE_OUTPUT, render(build_edge_demo())))
     stale = 0
     for output, text in documents:
         if args.check:
