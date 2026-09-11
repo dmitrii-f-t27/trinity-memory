@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "conformance" / "memory_types.json"
 BRIDGE_OUTPUT = ROOT / "conformance" / "memory_bridge.json"
 TENSORPACK_OUTPUT = ROOT / "conformance" / "memory_tensorpack.json"
+STREAM_OUTPUT = ROOT / "conformance" / "memory_stream_compute.json"
 
 CODECS = {
     "baseline2": {"id": 0, "group_trits": 4, "group_bits": 8, "max_nonzero": None},
@@ -816,6 +817,475 @@ def build_tensorpack():
     }
 
 
+# ---------------------------------------------------------------------------
+# specs/memory/stream_compute.t27 -- cycle models restated from the contract
+
+
+def dense_code(trits):
+    return sum((t + 1) * 3 ** i for i, t in enumerate(list(trits) + [0] * (5 - len(trits))))
+
+
+def baseline_code(trits):
+    return sum(LANE[t] << (2 * i) for i, t in enumerate(list(trits) + [0] * (5 - len(trits))))
+
+
+def dot_decode(code, dense):
+    if dense:
+        if code >= 243:
+            return 0
+        lanes = 0
+        for i in range(5):
+            digit = (code // 3 ** i) % 3
+            lanes |= (2 if digit == 0 else 0 if digit == 1 else 1) << (2 * i)
+        return 1024 | lanes
+    if code >= 1024 or any(((code >> (2 * i)) & 3) == 3 for i in range(5)):
+        return 0
+    return 1024 | code
+
+
+def dot_lane_trit(lanes, lane):
+    code = (lanes >> (2 * lane)) & 3
+    return 1 if code == 1 else -1 if code == 2 else 0
+
+
+def dot_activation(acts, lane):
+    byte = (acts >> (8 * lane)) & 255
+    return byte - 256 if byte >= 128 else byte
+
+
+def dot_group_sum(lanes, acts, mask):
+    return sum(dot_lane_trit(lanes, lane) * dot_activation(acts, lane) for lane in range(5) if (mask >> lane) & 1)
+
+
+def dot_mask_valid(mask, last):
+    return mask in (0, 1, 3, 7, 15, 31) if last else mask == 31
+
+
+def dot_group_valid(lanes, acts, mask, last):
+    if not lanes & 1024 or not dot_mask_valid(mask, last):
+        return False
+    return all((mask >> lane) & 1 or (((lanes >> (2 * lane)) & 3) == 0 and ((acts >> (8 * lane)) & 255) == 0)
+               for lane in range(5))
+
+
+def pack_acts(values):
+    return sum((value & 255) << (8 * lane) for lane, value in enumerate(values))
+
+
+class DotModel:
+    """The framed dot pipeline exactly as specs/memory/stream_compute.t27 states it."""
+
+    def __init__(self, dense, acc_width):
+        self.dense = dense
+        self.minimum = -(1 << (acc_width - 1))
+        self.maximum = (1 << (acc_width - 1)) - 1
+        self.stage_valid = self.stage_error = self.stage_last = self.stage_empty = False
+        self.stage_sum = self.accumulator = self.out_result = 0
+        self.frame_error = self.frame_active = self.out_valid = self.out_error = False
+
+    def comb(self, s):
+        acts = pack_acts(s["in_activations"])
+        decoded = dot_decode(s["in_code"], self.dense)
+        accumulate_ready = (not self.out_valid) or s["out_ready"]
+        next_total = self.accumulator + self.stage_sum
+        return {
+            "accumulate_ready": accumulate_ready,
+            "in_ready": (not s["reset"]) and ((not self.stage_valid) or accumulate_ready),
+            "group_sum": dot_group_sum(decoded, acts, s["in_mask"]),
+            "group_ok": dot_group_valid(decoded, acts, s["in_mask"], s["in_last"]),
+            "next_total": next_total,
+            "next_error": self.frame_error or self.stage_error or next_total < self.minimum
+                          or next_total > self.maximum or (self.stage_empty and self.frame_active),
+        }
+
+    def clock(self, s):
+        c = self.comb(s)
+        accepted = bool(s["in_valid"] and c["in_ready"])
+        if s["reset"]:
+            self.__init__(self.dense, 32)
+            self.minimum, self.maximum = self.minimum, self.maximum
+        else:
+            if self.out_valid and s["out_ready"]:
+                self.out_valid = False
+            if self.stage_valid and c["accumulate_ready"]:
+                self.stage_valid = False
+                if self.stage_last:
+                    self.out_valid = True
+                    self.out_error = c["next_error"]
+                    self.out_result = 0 if c["next_error"] else c["next_total"]
+                    self.accumulator = 0
+                    self.frame_error = self.frame_active = False
+                else:
+                    self.accumulator = 0 if c["next_error"] else c["next_total"]
+                    self.frame_error = c["next_error"]
+                    self.frame_active = True
+            if accepted:
+                self.stage_valid = True
+                self.stage_sum = c["group_sum"]
+                self.stage_error = not c["group_ok"]
+                self.stage_last = bool(s["in_last"])
+                self.stage_empty = s["in_mask"] == 0
+        post = self.comb(s)
+        return accepted, {"in_ready": post["in_ready"], "out_valid": self.out_valid,
+                          "out_result": self.out_result, "out_error": self.out_error}
+
+
+class DotScenario:
+    def __init__(self, identifier, description, dense=True, acc_width=32):
+        self.identifier, self.description, self.dense, self.acc_width = identifier, description, dense, acc_width
+        self.model = DotModel(dense, acc_width)
+        # A fresh model keeps the configured range across the reset shortcut above.
+        self.model.minimum, self.model.maximum = -(1 << (acc_width - 1)), (1 << (acc_width - 1)) - 1
+        self.cycles = []
+
+    def cycle(self, reset=False, in_valid=False, code=0, acts=(0, 0, 0, 0, 0), mask=0, last=False, out_ready=True):
+        stimulus = {"reset": reset, "in_valid": in_valid, "in_code": code, "in_activations": list(acts),
+                    "in_mask": mask, "in_last": last, "out_ready": out_ready}
+        minimum, maximum = self.model.minimum, self.model.maximum
+        accepted, expect = self.model.clock(stimulus)
+        self.model.minimum, self.model.maximum = minimum, maximum
+        self.cycles.append({"stimulus": stimulus, "expect": expect})
+        return accepted
+
+    def reset(self, cycles=2):
+        for _ in range(cycles):
+            self.cycle(reset=True, out_ready=False)
+
+    def beat(self, trits, acts, mask=31, last=False, out_ready=True, limit=16):
+        code = dense_code(trits) if self.dense else baseline_code(trits)
+        return self.beat_code(code, acts, mask, last, out_ready, limit)
+
+    def beat_code(self, code, acts, mask=31, last=False, out_ready=True, limit=16):
+        for _ in range(limit):
+            if self.cycle(in_valid=True, code=code, acts=acts, mask=mask, last=last, out_ready=out_ready):
+                return
+        raise RuntimeError(f"{self.identifier}: beat never accepted")
+
+    def idle(self, cycles=1, out_ready=True):
+        for _ in range(cycles):
+            self.cycle(out_ready=out_ready)
+
+    def document(self):
+        results = [step["expect"]["out_result"] for step in self.cycles if step["expect"]["out_valid"]]
+        return {"id": self.identifier, "kind": "dot_trace", "dense": self.dense, "acc_width": self.acc_width,
+                "description": self.description, "cycle_count": len(self.cycles), "cycles": self.cycles}
+
+
+class StorageModel:
+    """The storage sequencer and view exactly as the contract states them."""
+
+    def __init__(self, dense, trit_count):
+        self.dense, self.words = dense, (trit_count + 4) // 5
+        self.tail_mask = (1 << (trit_count - 5 * (self.words - 1))) - 1
+        self.memory = {}
+        self.read_code, self.read_addr = 0, 0
+        self.active = self.valid_q = self.last_q = False
+
+    def busy(self):
+        return self.active or self.valid_q
+
+    def load_ready(self, s):
+        return (not s["rst"]) and (not self.busy()) and (not s["start"])
+
+    def clock(self, s):
+        if s["load_en"] and self.load_ready(s) and s["load_addr"] < self.words:
+            self.memory[s["load_addr"]] = s["load_code"]
+        if not s["rst"] and self.active:
+            if self.read_addr not in self.memory:
+                raise RuntimeError("scenario reads an unloaded word")
+            self.read_code = self.memory[self.read_addr]
+        was_active, was_busy, addr = self.active, self.busy(), self.read_addr
+        if s["rst"]:
+            self.read_addr, self.active, self.valid_q, self.last_q = 0, False, False, False
+        else:
+            self.valid_q = self.last_q = False
+            if s["start"] and not was_busy:
+                self.read_addr, self.active = 0, True
+            elif was_active:
+                self.valid_q = True
+                if addr == self.words - 1:
+                    self.active, self.last_q = False, True
+                else:
+                    self.read_addr = addr + 1
+        out_valid = self.valid_q
+        out_last = self.valid_q and self.last_q
+        code = self.read_code if self.valid_q else 0
+        packed = 0
+        if out_valid:
+            mask = self.tail_mask if out_last else 31
+            decoded = dot_decode(code, self.dense)
+            if decoded & 1024:
+                visible = sum(decoded & (3 << (2 * lane)) for lane in range(5) if (mask >> lane) & 1)
+                packed = 32768 | (mask << 10) | visible
+            else:
+                packed = mask << 10
+        return {"busy": self.busy(), "load_ready": self.load_ready(s), "out_valid": out_valid, "out_last": out_last,
+                "out_code_valid": bool(packed >> 15), "out_lane_mask": (packed >> 10) & 31, "out_trits": packed & 1023}
+
+
+class StorageScenario:
+    def __init__(self, identifier, description, dense=True, trit_count=12):
+        self.identifier, self.description, self.dense, self.trit_count = identifier, description, dense, trit_count
+        self.model = StorageModel(dense, trit_count)
+        self.cycles = []
+
+    def cycle(self, rst=False, start=False, load_en=False, load_addr=0, load_code=0):
+        stimulus = {"rst": rst, "start": start, "load_en": load_en, "load_addr": load_addr, "load_code": load_code}
+        self.cycles.append({"stimulus": stimulus, "expect": self.model.clock(stimulus)})
+
+    def code(self, trits):
+        return dense_code(trits) if self.dense else baseline_code(trits)
+
+    def load(self, address, code):
+        self.cycle(load_en=True, load_addr=address, load_code=code)
+
+    def document(self):
+        return {"id": self.identifier, "kind": "storage_trace", "dense": self.dense, "trit_count": self.trit_count,
+                "words": self.model.words, "tail_mask": self.model.tail_mask, "description": self.description,
+                "cycle_count": len(self.cycles), "cycles": self.cycles}
+
+
+def frame_expectation(weights, activations, acc_width):
+    """Exact per-group checked accumulation: sticky error, zero result."""
+    minimum, maximum = -(1 << (acc_width - 1)), (1 << (acc_width - 1)) - 1
+    total, error = 0, False
+    groups = max(1, -(-len(weights) // 5))
+    for group in range(groups):
+        total += sum(w * a for w, a in zip(weights[5 * group:5 * group + 5], activations[5 * group:5 * group + 5]))
+        if total < minimum or total > maximum:
+            error = True
+    return {"result": 0 if error else total, "error": error}
+
+
+def build_stream_compute():
+    import random
+    traces = []
+
+    def dot(identifier, description, dense=True, acc_width=32):
+        scenario = DotScenario(identifier, description, dense, acc_width)
+        scenario.reset()
+        traces.append(scenario)
+        return scenario
+
+    s = dot("two_beat_frame_dense", "A full beat then a two-lane final beat; the result is visible one edge after the last beat is accepted")
+    s.beat([1, -1, 0, 1, 0], [-128, 127, 5, 3, 9])
+    s.beat([1, 1, 0, 0, 0], [10, -10, 0, 0, 0], mask=3, last=True)
+    s.idle(4)
+    s = dot("two_beat_frame_baseline", "The same frame in five-lane two-bit mode", dense=False)
+    s.beat([1, -1, 0, 1, 0], [-128, 127, 5, 3, 9])
+    s.beat([1, 1, 0, 0, 0], [10, -10, 0, 0, 0], mask=3, last=True)
+    s.idle(4)
+    s = dot("empty_frame", "Mask 00000 on a single last beat is an empty frame with result zero")
+    s.beat([0, 0, 0, 0, 0], [0, 0, 0, 0, 0], mask=0, last=True)
+    s.idle(4)
+    s = dot("reserved_code_then_recovery", "A reserved dense code produces an error result; the next frame is unaffected")
+    s.beat_code(243, [0, 0, 0, 0, 0], mask=31, last=True)
+    s.idle(2)
+    s.beat([1, 0, 0, 0, 0], [100, 0, 0, 0, 0], mask=1, last=True)
+    s.idle(4)
+    s = dot("mask_hole_rejected", "A final mask with a hole (01011) is malformed")
+    s.beat([0, 0, 0, 0, 0], [0, 0, 0, 0, 0], mask=11, last=True)
+    s.idle(4)
+    s = dot("inactive_lane_activation_rejected", "An activation in a masked-out lane is malformed")
+    s.beat([0, 0, 0, 0, 0], [0, 5, 0, 0, 0], mask=1, last=True)
+    s.idle(4)
+    s = dot("inactive_lane_weight_rejected", "A nonzero trit in a masked-out lane is malformed")
+    s.beat([0, 1, 0, 0, 0], [0, 0, 0, 0, 0], mask=1, last=True)
+    s.idle(4)
+    s = dot("partial_mask_before_last_rejected", "Every beat before the last must carry mask 11111")
+    s.beat([0, 0, 0, 0, 0], [0, 0, 0, 0, 0], mask=3, last=False)
+    s.beat([0, 0, 0, 0, 0], [0, 0, 0, 0, 0], mask=31, last=True)
+    s.idle(4)
+    s = dot("empty_beat_inside_frame_rejected", "Mask 00000 cannot terminate a nonempty frame")
+    s.beat([1, 0, 0, 0, 0], [1, 0, 0, 0, 0], mask=31, last=False)
+    s.beat([0, 0, 0, 0, 0], [0, 0, 0, 0, 0], mask=0, last=True)
+    s.idle(4)
+    s = dot("reset_mid_frame", "Reset after an accepted beat drops the partial frame; in_ready is low during reset")
+    s.beat([1, 1, 1, 1, 1], [1, 1, 1, 1, 1], mask=31, last=False)
+    s.cycle(reset=True, out_ready=False)
+    s.beat([1, 0, 0, 0, 0], [7, 0, 0, 0, 0], mask=1, last=True)
+    s.idle(4)
+    s = dot("reset_with_pending_output", "A result held under backpressure is discarded by reset")
+    s.beat([1, 0, 0, 0, 0], [9, 0, 0, 0, 0], mask=1, last=True, out_ready=False)
+    s.idle(2, out_ready=False)
+    s.cycle(reset=True, out_ready=False)
+    s.idle(2)
+    s = dot("backpressure_holds_result_and_stalls_input", "out_ready low holds the result; a buffered beat stalls in_ready until the result is consumed")
+    s.beat([1, 0, 0, 0, 0], [3, 0, 0, 0, 0], mask=1, last=True, out_ready=False)
+    s.idle(1, out_ready=False)
+    s.beat([1, 1, 0, 0, 0], [2, 2, 0, 0, 0], mask=31, last=False, out_ready=False)
+    for _ in range(3):
+        s.cycle(in_valid=True, code=dense_code([1, 0, 0, 0, 0]), acts=[5, 0, 0, 0, 0], mask=1, last=True, out_ready=False)
+    s.beat([1, 0, 0, 0, 0], [5, 0, 0, 0, 0], mask=1, last=True, out_ready=True)
+    s.idle(5)
+    s = dot("input_bubbles", "Gaps between beats do not change the result")
+    s.beat([1, 0, -1, 0, 0], [10, 20, 30, 40, 50], mask=31, last=False)
+    s.idle(2)
+    s.beat([0, 1, 0, 0, 0], [0, 4, 0, 0, 0], mask=31, last=False)
+    s.idle(3)
+    s.beat([-1, 0, 0, 0, 0], [6, 0, 0, 0, 0], mask=1, last=True)
+    s.idle(4)
+    s = dot("acc12_reaches_2047", "Twelve-bit accumulator: three full groups of 635 plus 142 equal the maximum 2047", acc_width=12)
+    for _ in range(3):
+        s.beat([1, 1, 1, 1, 1], [127, 127, 127, 127, 127], mask=31, last=False)
+    s.beat([1, 1, 0, 0, 0], [127, 15, 0, 0, 0], mask=3, last=True)
+    s.idle(4)
+    s = dot("acc12_reaches_minus_2048", "Twelve-bit accumulator: the minimum -2048 is representable", acc_width=12)
+    for _ in range(3):
+        s.beat([-1, -1, -1, -1, -1], [127, 127, 127, 127, 127], mask=31, last=False)
+    s.beat([-1, -1, 0, 0, 0], [127, 16, 0, 0, 0], mask=3, last=True)
+    s.idle(4)
+    s = dot("acc12_overflow", "Twelve-bit accumulator: 2048 overflows at the final beat and yields an error result", acc_width=12)
+    for _ in range(3):
+        s.beat([1, 1, 1, 1, 1], [127, 127, 127, 127, 127], mask=31, last=False)
+    s.beat([1, 1, 0, 0, 0], [127, 16, 0, 0, 0], mask=3, last=True)
+    s.idle(4)
+    s = dot("acc12_negative_overflow", "Twelve-bit accumulator: -2049 overflows", acc_width=12)
+    for _ in range(3):
+        s.beat([-1, -1, -1, -1, -1], [127, 127, 127, 127, 127], mask=31, last=False)
+    s.beat([-1, -1, 0, 0, 0], [127, 17, 0, 0, 0], mask=3, last=True)
+    s.idle(4)
+    s = dot("acc12_cancellation_after_overflow", "An overflow inside the frame is sticky even when later beats bring the total back", acc_width=12)
+    for _ in range(4):
+        s.beat([1, 1, 1, 1, 1], [127, 127, 127, 127, 127], mask=31, last=False)
+    s.beat([-1, -1, -1, -1, -1], [127, 127, 127, 127, 127], mask=31, last=True)
+    s.idle(4)
+
+    storages = []
+
+    def storage(identifier, description, dense=True, trit_count=12):
+        scenario = StorageScenario(identifier, description, dense, trit_count)
+        scenario.cycle(rst=True)
+        scenario.cycle(rst=True)
+        storages.append(scenario)
+        return scenario
+
+    words = [[1, -1, 0, 1, 0], [0, 0, 0, 0, 0], [1, 1, 0, 0, 0]]
+    s = storage("load_three_words_and_read", "Word k is visible after edge S+1+k; the last word carries the tail mask; idle after S+WORDS+1")
+    for address, trits in enumerate(words):
+        s.load(address, s.code(trits))
+    s.cycle(start=True)
+    for _ in range(6):
+        s.cycle()
+    s = storage("start_and_writes_while_busy_are_ignored", "A second start and a write during the read do nothing; the next read shows the original words")
+    for address, trits in enumerate(words):
+        s.load(address, s.code(trits))
+    s.cycle(start=True)
+    s.cycle(start=True)
+    s.cycle(load_en=True, load_addr=1, load_code=s.code([1, 1, 1, 1, 1]))
+    for _ in range(4):
+        s.cycle()
+    s.cycle(start=True)
+    for _ in range(6):
+        s.cycle()
+    s = storage("reset_mid_stream_preserves_contents", "Reset aborts the read; a new start replays the stored words")
+    for address, trits in enumerate(words):
+        s.load(address, s.code(trits))
+    s.cycle(start=True)
+    s.cycle()
+    s.cycle(rst=True)
+    s.cycle()
+    s.cycle(start=True)
+    for _ in range(6):
+        s.cycle()
+    s = storage("invalid_code_word_zeroes_lanes", "A reserved code yields out_valid=1, out_code_valid=0, zero lanes and the normal mask")
+    s.load(0, s.code([1, 0, 0, 0, 0]))
+    s.load(1, 243)
+    s.load(2, s.code([0, -1, 0, 0, 0]))
+    s.cycle(start=True)
+    for _ in range(6):
+        s.cycle()
+    s = storage("baseline_two_words", "Five-lane two-bit words with a two-lane tail", dense=False, trit_count=7)
+    s.load(0, s.code([1, -1, 0, 1, 0]))
+    s.load(1, s.code([1, 1]))
+    s.cycle(start=True)
+    for _ in range(5):
+        s.cycle()
+    s = storage("single_word_stream", "TRIT_COUNT=1: one word, mask 00001, idle after S+2", dense=True, trit_count=1)
+    s.load(0, s.code([-1]))
+    s.cycle(start=True)
+    for _ in range(4):
+        s.cycle()
+
+    rng = random.Random(27)
+    random_weights = [rng.choice((-1, 0, 1)) for _ in range(37)]
+    random_acts = [rng.randint(-128, 127) for _ in range(37)]
+    frames = []
+
+    def frame(identifier, weights, activations, codec="dense5", acc_width=32, description=""):
+        frames.append({"id": f"frame_{identifier}", "kind": "frame", "codec": codec, "acc_width": acc_width,
+                       "weights": list(weights), "activations": list(activations),
+                       "expect": frame_expectation(weights, activations, acc_width), "description": description})
+
+    frame("random_seed27_dense5", random_weights, random_acts, description="37 random weights and int8 activations")
+    frame("random_seed27_baseline2", random_weights, random_acts, "baseline2")
+    frame("signed_extremes", [-1] * 5, [-128] * 5, description="(-1)(-128) widened before negation gives 640")
+    frame("positive_extremes", [1] * 5, [127] * 5)
+    frame("empty_vector", [], [], description="An empty vector is one empty frame with result 0")
+    frame("partial_group", [1, -1, 0, 1, 0, -1, 1], [127, -128, 55, 2, -90, 3, -4], description="Seven values: a full group and a two-lane tail")
+    frame("acc12_at_max", [1] * 16, [127] * 16, acc_width=12, description="16 x 127 = 2032 fits twelve bits")
+    frame("acc12_at_min", [1] * 16, [-128] * 16, acc_width=12, description="16 x -128 = -2048 fits twelve bits")
+    frame("acc12_overflow", [1] * 17, [127] * 17, acc_width=12, description="2159 exceeds 2047 at the fourth group")
+    frame("acc12_negative_overflow", [1] * 17, [-128] * 17, acc_width=12, description="-2176 is below -2048")
+    frame("acc12_cancellation_after_overflow", [1] * 17 + [-1] * 10, [127] * 27, acc_width=12,
+          description="The total returns to 889 but the frame stays in error")
+
+    constants = {
+        "dot_ports": {"inputs": ["clk", "rst", "in_valid", "in_code[9:0]", "in_activations[39:0]", "in_mask[4:0]", "in_last", "out_ready"],
+                      "outputs": ["in_ready", "out_valid", "out_result[ACC_WIDTH-1:0]", "out_error"],
+                      "parameters": {"DENSE5": [0, 1], "ACC_WIDTH": [2, 32]}, "module": "trinity_dot_stream_t27"},
+        "beat": {"lanes": 5, "lane_encoding": {"00": 0, "01": 1, "10": -1, "11": "invalid"}, "dense_code_limit": 243,
+                 "dense_high_bits_must_be_zero": [9, 8], "baseline_code_limit": 1024, "activation_range": [-128, 127],
+                 "mask_rule": "11111 before the last beat; 00001/00011/00111/01111/11111 on the last beat; 00000 only as a whole empty frame",
+                 "inactive_lanes": "trit code 00 and activation byte 0", "group_sum_range": [-640, 640]},
+        "accumulator": {"widths": [2, 32], "runner_widths": [12, 32], "overflow": "checked after every accepted group; error is sticky, result 0, no wrap or saturate",
+                        "error_result": 0},
+        "pipeline": {"stages": 2, "accept_to_valid_edges": 1, "accept_to_consume_edges": 2,
+                     "in_ready": "!reset && (!stage_valid || !out_valid || out_ready)",
+                     "stable_output": "out_valid, out_result and out_error hold until out_ready", "reset": "synchronous, flushes stage, accumulator, errors and pending output"},
+        "runner_packet": {"code": [9, 0], "activations": [49, 10], "mask": [54, 50], "last": 55, "reset": 56, "reset_pending_output": 57,
+                          "expected_result": [31, 0], "expected_error": 32,
+                          "status": {"argument": -80, "capacity": -81, "overflow": -82, "output": -83, "mismatch": -84, "process": -85, "resource": -86}},
+        "storage": {"module": "ternary_dense5_stream_t27 / ternary_baseline5_stream_t27", "capacity_groups": 64, "max_trits": 320,
+                    "code_widths": {"dense5": 8, "baseline5": 10}, "element_bits": 16,
+                    "signals": ["rst", "start", "busy", "load_en", "load_addr", "load_code", "load_ready", "out_valid", "out_code_valid", "out_last", "out_lane_mask", "out_trits"],
+                    "timing": {"S": "start accepted; busy=1", "S+1+k": "word k visible", "S+WORDS": "last word, out_last=1", "S+WORDS+1": "idle"},
+                    "load_ready": "!rst && !busy && !start && WORDS in 1..64", "reset": "aborts the read, keeps RAM contents",
+                    "backpressure": False, "join_to_dot_stream": "recorded gap: needs a FIFO of WORDS beats or a ready-capable sequencer",
+                    "specialized_capacities_simulated": [1, 65, 820, 4096]},
+        "view": {"packed": "[15] code valid, [14:10] lane mask, [9:0] visible lanes", "idle": 0, "invalid_code": "mask << 10"},
+        "evidence": {"label": "rtl-simulation", "simulator": "Icarus Verilog", "not_claimed": ["fpga", "timing", "utilization", "throughput"]},
+    }
+    invariants = [
+        {"id": "beat_fields_have_the_documented_widths", "condition": "5*8 == 40, 5*2 == 10, valid bit == 2^10"},
+        {"id": "code_limits_are_three_to_the_fifth_and_two_to_the_tenth", "condition": "243 == 3^5 <= 256, 1024 == 2^10"},
+        {"id": "group_sum_bound_is_five_times_the_int8_magnitude", "condition": "640 == 5*128"},
+        {"id": "accumulator_widths_nest", "condition": "2 < 12 <= 32"},
+        {"id": "pipeline_latency_follows_the_two_stages", "condition": "accept -> valid: 1 edge; accept -> consume: 2 edges"},
+        {"id": "packet_fields_are_contiguous", "condition": "10 + 40 + 5 + 1 + 1 + 1 bits"},
+        {"id": "storage_capacity_and_element_width", "condition": "64*5 == 320; 16 >= 10 > 8"},
+        {"id": "the_storage_join_is_a_recorded_gap", "condition": "no backpressure; join needs a buffer"},
+        {"id": "view_packing_uses_the_upper_bits", "condition": "valid bit 2^15, mask shift 10"},
+    ]
+    return {
+        "module": "TrinityMemoryStreamComputeSpec",
+        "spec_path": "specs/memory/stream_compute.t27",
+        "schema_version": 2,
+        "format_family": "Conformance",
+        "vector_name": "Trinity Stream Compute traces and frames",
+        "description": "Cycle-exact traces of the framed dot pipeline and the storage sequencer with view, plus frame-level "
+                       "dot products, computed by the cycle models in tools/generate-spec-vectors.py from the contract in the spec. "
+                       "Replayed in Icarus Verilog by tests/spec_stream_replay.py; evidence label rtl-simulation.",
+        "created_at": "2026-09-11T00:00:00Z",
+        "generator": "tools/generate-spec-vectors.py",
+        "replay": {"traces": "tests/spec_stream_replay.py (tests/tb_spec_dot_trace.v, tests/tb_spec_storage_trace.v)",
+                   "frames": "tests/test_spec_stream_compute.py through trinity_memory.rtl_compute"},
+        "constants": constants,
+        "invariants": invariants,
+        "vectors": [item.document() for item in traces] + [item.document() for item in storages] + frames,
+    }
+
+
 def render(document):
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -825,7 +1295,7 @@ def main():
     parser.add_argument("--check", action="store_true", help="fail if a committed file differs")
     args = parser.parse_args()
     documents = ((OUTPUT, render(build())), (BRIDGE_OUTPUT, render(build_bridge())),
-                 (TENSORPACK_OUTPUT, render(build_tensorpack())))
+                 (TENSORPACK_OUTPUT, render(build_tensorpack())), (STREAM_OUTPUT, render(build_stream_compute())))
     stale = 0
     for output, text in documents:
         if args.check:

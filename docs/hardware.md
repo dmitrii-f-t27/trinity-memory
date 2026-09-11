@@ -37,6 +37,11 @@ The original v0.2 Verilog is preserved only as a
 
 ## Streaming interface
 
+The sequencer timing table below, the tail-mask rule and the view packing are
+restated in [`specs/memory/stream_compute.t27`](../specs/memory/stream_compute.t27)
+and checked cycle by cycle by the storage traces in
+[`conformance/memory_stream_compute.json`](../conformance/memory_stream_compute.json).
+
 Instantiate a stream with a positive `TRIT_COUNT`. The derived memory depth is
 `WORDS = ceil(TRIT_COUNT / 5)`. Keep the derived `WORDS` and `ADDR_WIDTH`
 parameters at their defaults. Both variants use the native
