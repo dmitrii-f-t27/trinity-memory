@@ -37,12 +37,19 @@ optional `id`, `result_keys` and `result_format` (`uuid4-hex32`).
 | `storage_trace` | `dense`, `trit_count`, `cycles[]` | cycle-exact replay of the native storage stream with its view (`tests/tb_spec_storage_trace.v`) |
 | `frame` | `codec`, `acc_width`, `weights`, `activations`, `expect` | a whole dot product through the native runner; result and error must match the checked-accumulation reference |
 
+`memory_conformance.json` (from `specs/memory/conformance.t27`) is the lab manifest rather than a vector list:
+the fixture the native conformance experiment consumes (`fixture_document`, `fixture_text`), the containers it
+uploads and the six corruption blobs, the fixtures it must reject (`invalid_fixtures`, two of them as compact
+recipes), the map from lab sections to the sibling files and their consumers (`sections`), and the catalogue of
+corruption, interruption and reset cases with the vector ids that exercise each (`catalogue`). Its `vectors`
+array lists the fixture vectors, corruption blobs and invalid fixtures for the validator.
+
 `memory_types.json` is generated from `specs/memory/types.t27` by
 `tools/generate-spec-vectors.py` using plain arithmetic and `zlib.crc32`; it does
 not call the native implementation. Consumers that must reproduce every vector:
 
 - native C harnesses `tests/native_spec_*.c` (run by `tools/check-specs.sh`);
-- Python adapters, `tests/test_spec_types.py`, `tests/test_spec_tensorpack.py` (also through the native CLI when built), `tests/test_spec_stream_compute.py` (native runner and Icarus traces); TCP replay `tests/test_spec_bridge.py`; in-process replay `tests/native/test_spec_bridge_vectors.py`; Icarus trace replay `tests/spec_stream_replay.py`;
+- Python adapters, `tests/test_spec_types.py`, `tests/test_spec_tensorpack.py` (also through the native CLI when built), `tests/test_spec_stream_compute.py` (native runner and Icarus traces), `tests/test_spec_conformance.py` (native experiment and the lab report); TCP replay `tests/test_spec_bridge.py`; in-process replay `tests/native/test_spec_bridge_vectors.py`; Icarus trace replay `tests/spec_stream_replay.py`; WASM replay `tests/spec_wasm_replay.mjs`; the lab report `tools/conformance-lab.py`;
 - the same test also fails when the committed file is stale (`--check`).
 
 Validate the files and refresh them:
