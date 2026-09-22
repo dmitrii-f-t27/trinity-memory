@@ -17,23 +17,27 @@ module TrinityBramTritEngineT27;
 // Lane j of a word is stream bits 2j+1:2j; the value 11 reads as zero, so zero
 // has probability 1/2 and +1, -1 have 1/4 each.
 //
-// tools/generate-bram-bench.py specializes FORMAT, LANES, WORDS, SEED, LO_WORDS and
-// HI_WORDS (and the module name) per format; array bounds must be literal constants.
-// The store is two banks addressed with 15 bits, words 0..32767 and the rest:
-// a RAMB36E1 column has a 15-bit address, and with one 16-bit-addressed array
-// yosys adds a block whenever the words above 32K are a multiple of 1024. The
-// banks infer block RAM only with yosys `read_verilog -nomem2reg`; each read
-// register takes its bank's word directly and has no reset value.
+// tools/generate-bram-bench.py specializes FORMAT, LANES, WORDS, SEED and the four
+// bank sizes B0_WORDS..B3_WORDS (and the module name) per format; array bounds
+// must be literal constants. The store is four banks of up to 16384 words (a
+// 14-bit address): with the block RAM library restricted to 1K x 36, yosys maps
+// a bank of up to 16 blocks exactly, while a single deeper array sometimes gets
+// one block more than ceil(words / 1024) (23 552 words -> 24 blocks, 46 080 ->
+// 46, 56 320 -> 56). An unused bank has one word and is never written. The banks
+// infer block RAM only with yosys `read_verilog -nomem2reg`; each read register
+// takes its bank's word directly and has no reset value.
 // Every statement reads a variable before the same tick writes it, so the C and
 // the Verilog backends agree.
 const FORMAT: u32 = 2;
 const LANES: u32 = 22;
 const WORDS: u32 = 90;
 const SEED: u64 = 9090338745056667511;
-const BANK_WORDS: u32 = 32768;
-const BANK_MASK: u32 = 32767;
-const LO_WORDS: u32 = 90;
-const HI_WORDS: u32 = 1;
+const BANK_BITS: u32 = 14;
+const BANK_MASK: u32 = 16383;
+const B0_WORDS: u32 = 90;
+const B1_WORDS: u32 = 1;
+const B2_WORDS: u32 = 1;
+const B3_WORDS: u32 = 1;
 const WORD_MASK: u64 = 68719476735;
 const LANE_PAIRS: u64 = 6148914691236517205;
 const PH_IDLE: u32 = 0;
@@ -41,11 +45,15 @@ const PH_WRITE: u32 = 1;
 const PH_READ: u32 = 2;
 const PH_DONE: u32 = 3;
 
-var mem_lo: [LO_WORDS]u64;
-var mem_hi: [HI_WORDS]u64;
-var rdata_lo: u64;
-var rdata_hi: u64;
-var r_hi: bool = false;
+var mem_b0: [B0_WORDS]u64;
+var mem_b1: [B1_WORDS]u64;
+var mem_b2: [B2_WORDS]u64;
+var mem_b3: [B3_WORDS]u64;
+var rdata_b0: u64;
+var rdata_b1: u64;
+var rdata_b2: u64;
+var rdata_b3: u64;
+var r_bank: u32 = 0;
 var phase: u32 = 0;
 var w_addr: u32 = 0;
 var w_state: u64 = 0;
@@ -123,9 +131,11 @@ fn rotl1(x: u64) -> u64 {
     return (x << 1) | (x >> 63);
 }
 
-fn select_bank(hi: bool, lo_word: u64, hi_word: u64) -> u64 {
-    if (hi) { return hi_word; }
-    return lo_word;
+fn select_bank(bank: u32, w0: u64, w1: u64, w2: u64, w3: u64) -> u64 {
+    if (bank == 0) { return w0; }
+    if (bank == 1) { return w1; }
+    if (bank == 2) { return w2; }
+    return w3;
 }
 
 // Module-level (combinational) rather than locals of on_clock: gen-verilog
@@ -133,11 +143,15 @@ fn select_bank(hi: bool, lo_word: u64, hi_word: u64) -> u64 {
 var enc_lanes: u64;
 var rdata: u64;
 var got: u64;
+var w_bank: u32;
+var w_off: u32;
 var words_out: u32;
 var format_out: u32;
 var lanes_out: u32;
 enc_lanes = lanes_from(w_state);
-rdata = select_bank(r_hi, rdata_lo, rdata_hi);
+rdata = select_bank(r_bank, rdata_b0, rdata_b1, rdata_b2, rdata_b3);
+w_bank = w_addr >> BANK_BITS;
+w_off = w_addr & BANK_MASK;
 got = dec_out & lane_mask(LANES);
 words_out = WORDS;
 format_out = FORMAT;
@@ -165,10 +179,14 @@ fn on_clock(start: bool, enc_word: u64, dec_out: u64) {
             done = false;
         }
     } else if (phase == PH_WRITE) {
-        if (w_addr < BANK_WORDS) {
-            mem_lo[w_addr] = enc_word & WORD_MASK;
+        if (w_bank == 0) {
+            mem_b0[w_off] = enc_word & WORD_MASK;
+        } else if (w_bank == 1) {
+            mem_b1[w_off] = enc_word & WORD_MASK;
+        } else if (w_bank == 2) {
+            mem_b2[w_off] = enc_word & WORD_MASK;
         } else {
-            mem_hi[w_addr & BANK_MASK] = enc_word & WORD_MASK;
+            mem_b3[w_off] = enc_word & WORD_MASK;
         }
         write_ticks = write_ticks + 1;
         w_state = advance(w_state, LANES << 1);
@@ -198,9 +216,11 @@ fn on_clock(start: bool, enc_word: u64, dec_out: u64) {
             checked = checked + 1;
         }
         if (r_issue) {
-            rdata_lo = mem_lo[r_addr & BANK_MASK];
-            rdata_hi = mem_hi[r_addr & BANK_MASK];
-            r_hi = r_addr >= BANK_WORDS;
+            rdata_b0 = mem_b0[r_addr & BANK_MASK];
+            rdata_b1 = mem_b1[r_addr & BANK_MASK];
+            rdata_b2 = mem_b2[r_addr & BANK_MASK];
+            rdata_b3 = mem_b3[r_addr & BANK_MASK];
+            r_bank = r_addr >> BANK_BITS;
             r_valid = true;
             if (r_addr == WORDS - 1) { r_issue = false; } else { r_addr = r_addr + 1; }
         } else {
@@ -218,5 +238,5 @@ test counts_and_weights {
     assert_eq(weighted(1, 7), 8);
 }
 test rotate_left { assert_eq(rotl1(9223372036854775808), 1); }
-test bank_select { assert_eq(select_bank(false, 5, 7), 5); assert_eq(select_bank(true, 5, 7), 7); }
+test bank_select { assert_eq(select_bank(0, 5, 6, 7, 8), 5); assert_eq(select_bank(3, 5, 6, 7, 8), 8); }
 endmodule
