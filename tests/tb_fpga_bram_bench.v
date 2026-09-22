@@ -10,6 +10,7 @@ module tb_fpga_bram_bench;
     parameter integer CLOCK_MODE = 1;
     parameter integer TICK_DIV = 8;
     parameter integer BAUD_DIV = 4;
+    parameter integer ONLY = -1;
     localparam real BIT_NS = 5.0 * TICK_DIV * BAUD_DIV;
     reg clk200 = 1'b0;
     always #2.5 clk200 = !clk200;
@@ -17,7 +18,7 @@ module tb_fpga_bram_bench;
     reg uart_rx = 1'b1;
     wire [3:0] led;
     wire uart_tx;
-    tms_bram_bench_ax7203 #(.CLOCK_MODE(CLOCK_MODE), .TICK_DIV(TICK_DIV), .BAUD_DIV(BAUD_DIV), .BUILD_ID(32'h5eedc0de)) dut (
+    tms_bram_bench_ax7203 #(.CLOCK_MODE(CLOCK_MODE), .TICK_DIV(TICK_DIV), .BAUD_DIV(BAUD_DIV), .ONLY(ONLY), .BUILD_ID(32'h5eedc0de)) dut (
         .clk200_p(clk200), .clk200_n(!clk200), .rst_n(rst_n), .led(led), .uart_tx(uart_tx), .uart_rx(uart_rx)
     );
     reg [4095:0] path;

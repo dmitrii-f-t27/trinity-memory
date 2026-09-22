@@ -68,18 +68,30 @@ def parse(data: bytes):
 
 
 def compare(run, manifest):
+    """Compare every engine the run reports (matched by format) with the manifest.
+
+    A bitstream may carry all three layouts or one (ONLY in tms_bram_bench.v); the
+    engines it announces must all be present and each must match its layout.
+    """
     rows, ok = [], True
-    if run["format"] != manifest["report_format"] or run["engines_announced"] != len(manifest["engines"]):
+    reported = [e for e in run["engines"].values() if "format" in e]
+    if (run["format"] != manifest["report_format"] or not reported
+            or run["engines_announced"] != len(run["engines"]) or len(reported) != len(run["engines"])):
         ok = False
-    for index, expect in enumerate(manifest["engines"]):
-        got = run["engines"].get(index, {})
+    by_format = {e["format"]: e for e in manifest["engines"]}
+    for got in sorted(reported, key=lambda e: e["engine"]):
+        expect = by_format.get(got["format"])
+        if expect is None:
+            ok = False
+            continue
+        index = got["engine"]
         want = {"format": expect["format"], "lanes": expect["lanes"], "words": expect["words"],
                 "write_ticks": expect["write_ticks"], "read_ticks": expect["read_ticks"], "bad_words": 0,
                 "invalid_groups": 0, "pos": expect["pos"], "neg": expect["neg"], "dot": expect["dot"],
                 "chk40": expect["chk"] & B40}
         diffs = {k: {"expected": v, "device": got.get(k)} for k, v in want.items() if got.get(k) != v}
         ok = ok and not diffs
-        rows.append({"engine": index, "name": expect["name"], "match": not diffs, "differences": diffs,
+        rows.append({"engine": index, "format": expect["format"], "name": expect["name"], "match": not diffs, "differences": diffs,
                      "device": got, "expected": want,
                      "trits": expect["trits"], "physical_bits_per_trit": expect["physical_bits_per_trit"],
                      "ramb36_at_1k_x_36": expect["ramb36_at_1k_x_36"],

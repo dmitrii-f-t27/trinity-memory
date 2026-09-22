@@ -113,6 +113,7 @@ clean:
 #   make -C fpga/ax7203 bram-bit bram-flash bram-capture
 BRAM_TRITS     ?= 1013760
 BRAM_SIM_TRITS ?= 1980
+BRAM_ONLY      ?= -1        # -1: all three layouts in one bitstream; 0 b2, 1 d5, 2 d5d2: that layout alone
 BRAM_BUILD     ?= $(BUILD)/bram
 BRAM_SIMBUILD  ?= $(BUILD)/bram-sim
 BRAM_TOP       := tms_bram_bench_ax7203
@@ -144,7 +145,7 @@ bram-gen: $(call bram_sources,$(BRAM_BUILD))
 
 bram-sim: $(call bram_sources,$(BRAM_SIMBUILD))
 	@for mode in 1 0; do \
-	  iverilog -g2012 -Ptb_fpga_bram_bench.CLOCK_MODE=$$mode -o $(BRAM_SIMBUILD)/bench_$$mode.vvp -s tb_fpga_bram_bench \
+	  iverilog -g2012 -Ptb_fpga_bram_bench.CLOCK_MODE=$$mode -Ptb_fpga_bram_bench.ONLY=$(BRAM_ONLY) -o $(BRAM_SIMBUILD)/bench_$$mode.vvp -s tb_fpga_bram_bench \
 	    $(CURDIR)/sim/xilinx_stubs.v $(call bram_sources,$(BRAM_SIMBUILD)) $(ROOT)/tests/tb_fpga_bram_bench.v || exit 1; \
 	  (cd $(BRAM_SIMBUILD) && vvp bench_$$mode.vvp +capture=$(BRAM_SIMBUILD)/sim_capture_$$mode.txt | tail -2) || exit 1; \
 	  python3 $(ROOT)/tools/fpga-bram-capture.py --from-file $(BRAM_SIMBUILD)/sim_capture_$$mode.txt \
@@ -153,7 +154,7 @@ bram-sim: $(call bram_sources,$(BRAM_SIMBUILD))
 
 bram-synth: $(BRAM_BUILD)/$(BRAM_TOP).json
 $(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD)) $(CURDIR)/brams_x36.txt
-	$(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
+	$(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set ONLY $(BRAM_ONLY) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
 
 # Cells of each layout on its own (engine + encoder + decoder, tms_bram_ooc.v),
 # synthesized out of context with the same yosys flags as the bench.

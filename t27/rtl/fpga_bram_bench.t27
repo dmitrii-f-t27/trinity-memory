@@ -1,14 +1,15 @@
 module TrinityFpgaBramBenchT27;
 
 // Sequencer of the block-RAM trit packing bench (fpga/ax7203/tms_bram_bench.v
-// wires it to three engines, t27/rtl/bram_trit_engine.t27 specialized per format,
-// the line emitter and the UART). One run: a header line, one start pulse to
-// every engine, a wait until all three are done, eight report lines per engine,
-// a totals line. A run starts after reset and again on a UART start bit that
+// wires it to up to three engines, t27/rtl/bram_trit_engine.t27 specialized per
+// format, the line emitter and the UART; `engines` is how many slots are
+// populated, from slot 0, and an empty slot is tied done with zero results).
+// One run: a header line, one start pulse to every engine, a wait until all are
+// done, eight report lines per populated engine, a totals line. A run starts after reset and again on a UART start bit that
 // arrives while the bench is idle; edges during a run are ignored, so a trigger
 // byte with several falling edges still starts exactly one run.
 // Report lines (tag, a, b), b is 40 bits:
-//   H a=run number            b=(REPORT_FORMAT << 32) | engines
+//   H a=run number            b=(REPORT_FORMAT << 32) | populated engines
 //   P a=(engine << 16) | (format << 8) | lanes     b=words
 //   Q write ticks  S read ticks  M words whose decoded lanes differ
 //   I invalid groups  N (+1 count << 20) | -1 count  U dot product (two's complement)
@@ -25,7 +26,6 @@ const S_WAIT: u32 = 5;
 const S_FIELD: u32 = 6;
 const S_TOTAL: u32 = 7;
 
-const ENGINES: u32 = 3;
 const FIELDS: u32 = 8;
 const REPORT_FORMAT: u64 = 1;
 const B40: u64 = 1099511627775;
@@ -96,7 +96,7 @@ fn field_b(f: u32, words: u32, wt: u32, rt: u32, bad: u32, inv: u32,
     return chk & B40;
 }
 
-fn on_clock(uart_rx: bool, line_idle: bool,
+fn on_clock(uart_rx: bool, line_idle: bool, engines: u32,
             d0: bool, words0: u32, fmt0: u32, lanes0: u32, wt0: u32, rt0: u32, bad0: u32, inv0: u32, pos0: u32, neg0: u32, dot0: i64, chk0: u64,
             d1: bool, words1: u32, fmt1: u32, lanes1: u32, wt1: u32, rt1: u32, bad1: u32, inv1: u32, pos1: u32, neg1: u32, dot1: i64, chk1: u64,
             d2: bool, words2: u32, fmt2: u32, lanes2: u32, wt2: u32, rt2: u32, bad2: u32, inv2: u32, pos2: u32, neg2: u32, dot2: i64, chk2: u64) {
@@ -115,7 +115,7 @@ fn on_clock(uart_rx: bool, line_idle: bool,
             line_tag = TAG_H;
             line_a = runs + 1;
             runs = runs + 1;
-            line_b = (REPORT_FORMAT << 32) | (ENGINES as u64);
+            line_b = (REPORT_FORMAT << 32) | (engines as u64);
             line_go = true;
             after_line = S_START;
             state = S_LINE_START;
@@ -153,7 +153,7 @@ fn on_clock(uart_rx: bool, line_idle: bool,
         state = S_LINE_START;
         if (field == FIELDS - 1) {
             field = 0;
-            if (engine == ENGINES - 1) { after_line = S_TOTAL; } else { engine = engine + 1; after_line = S_FIELD; }
+            if (engine + 1 >= engines) { after_line = S_TOTAL; } else { engine = engine + 1; after_line = S_FIELD; }
         } else {
             field = field + 1;
             after_line = S_FIELD;
