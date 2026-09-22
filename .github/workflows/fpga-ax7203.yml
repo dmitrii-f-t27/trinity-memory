@@ -1,6 +1,7 @@
 name: fpga-ax7203
 
-# Bitstream for the AX7203 (XC7A200T-FBG484-2) trace player on the open flow:
+# Bitstreams for the AX7203 (XC7A200T-FBG484-2) trace player and the block-RAM
+# trit packing bench on the open flow:
 # pinned t27c -> generated cores -> Icarus pre-silicon run -> yosys ->
 # nextpnr-xilinx -> prjxray -> .bit, all inside regymm/openxc7 (the image
 # gHashTag/trinity-fpga builds this board with). The chip database is cached
@@ -15,6 +16,11 @@ on:
       - 'tools/generate-fpga-trace-player.py'
       - 'tools/fpga-capture.py'
       - 'tests/tb_fpga_trace_player.v'
+      - 'tests/tb_fpga_bram_bench.v'
+      - 'tools/generate-bram-bench.py'
+      - 'tools/bram_trit_model.py'
+      - 'tools/fpga-bram-capture.py'
+      - 'tools/fpga_uart.py'
       - 't27/rtl/**'
       - 'conformance/memory_stream_compute.json'
       - '.github/workflows/fpga-ax7203.yml'
@@ -25,6 +31,11 @@ on:
       - 'tools/generate-fpga-trace-player.py'
       - 'tools/fpga-capture.py'
       - 'tests/tb_fpga_trace_player.v'
+      - 'tests/tb_fpga_bram_bench.v'
+      - 'tools/generate-bram-bench.py'
+      - 'tools/bram_trit_model.py'
+      - 'tools/fpga-bram-capture.py'
+      - 'tools/fpga_uart.py'
       - 't27/rtl/**'
       - 'conformance/memory_stream_compute.json'
       - '.github/workflows/fpga-ax7203.yml'
@@ -140,3 +151,26 @@ jobs:
       - name: Timing and utilization summary
         run: |
           grep -E "Max frequency|Info: Device utilisation|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/nextpnr.log | head -40 || true
+      - name: Block-RAM trit packing bench (generate, Icarus run, host comparison)
+        run: make -C fpga/ax7203 bram-gen bram-sim
+      - name: Block-RAM bench bitstream (yosys -nomem2reg, nextpnr-xilinx, prjxray)
+        run: |
+          make -C fpga/ax7203 bram-bit CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
+          grep -E "RAMB|LUT[1-6]|FDRE|FDCE|Number of cells" build/fpga/bram/yosys_stat.txt | head -20
+          grep -E "Max frequency|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/bram/nextpnr.log | head -30 || true
+      - name: Upload the block-RAM bench
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax7203-bram-bench
+          path: |
+            build/fpga/bram/tms_bram_bench_ax7203.bit
+            build/fpga/bram/bram_bench_manifest.json
+            build/fpga/bram/bram_trit_engine_*.t27
+            build/fpga/bram/yosys_stat.txt
+            build/fpga/bram/yosys.log
+            build/fpga/bram/nextpnr*.log
+            build/fpga/bram-sim/sim_capture_*.txt
+            build/fpga/bram-sim/sim_capture_*.json
+          retention-days: 90
+          if-no-files-found: warn
