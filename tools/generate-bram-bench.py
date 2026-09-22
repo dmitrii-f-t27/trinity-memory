@@ -30,6 +30,7 @@ SOURCES = ["t27/rtl/bram_trit_engine.t27", "t27/rtl/bram_trit_codec.t27", "t27/r
 MODULES = {model.FMT_B2: "TrinityBramTritEngineB2T27", model.FMT_D5: "TrinityBramTritEngineD5T27",
            model.FMT_D5D2: "TrinityBramTritEngineD5D2T27"}
 RAMB36_WORDS_36 = 1024   # a RAMB36E1 in its 1K x 36 configuration
+BANK_WORDS = 32768       # words per engine bank (15-bit address, see bram_trit_engine.t27)
 RAMB36_BITS = 36 * 1024
 
 
@@ -47,6 +48,8 @@ def specialize(fmt: int, words: int, seed: int) -> str:
     text = substitute(text, r"^const LANES: u32 = \d+;$", f"const LANES: u32 = {model.LANES[fmt]};")
     text = substitute(text, r"^const WORDS: u32 = \d+;$", f"const WORDS: u32 = {words};")
     text = substitute(text, r"^const SEED: u64 = \d+;$", f"const SEED: u64 = {seed};")
+    text = substitute(text, r"^const LO_WORDS: u32 = \d+;$", f"const LO_WORDS: u32 = {min(words, BANK_WORDS)};")
+    text = substitute(text, r"^const HI_WORDS: u32 = \d+;$", f"const HI_WORDS: u32 = {max(1, words - BANK_WORDS)};")
     return text
 
 
@@ -79,7 +82,8 @@ def main() -> None:
             "used_bits_per_word": 36 if fmt != model.FMT_D5 else 32,
             "physical_bits_per_trit": 36 / lanes,
             "payload_bits_per_trit": {model.FMT_B2: 2.0, model.FMT_D5: 1.6, model.FMT_D5D2: 36 / 22}[fmt],
-            "ramb36_at_1k_x_36": math.ceil(words / RAMB36_WORDS_36),
+            "ramb36_at_1k_x_36": math.ceil(min(words, BANK_WORDS) / RAMB36_WORDS_36)
+                                 + math.ceil(max(0, words - BANK_WORDS) / RAMB36_WORDS_36),
             "trits_per_ramb36": RAMB36_WORDS_36 * lanes,
         })
         engines.append(result)
