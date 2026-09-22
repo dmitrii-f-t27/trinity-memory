@@ -30,7 +30,12 @@ stream-compute trace vectors including the joined read -> decode -> dot path mat
 the reference, a streaming workload delivered 0.94 beats per tick (23.5 M beats/s at
 25 M ticks/s) with every result recomputed by the host, and the Edge Demo classifier
 labelled all six fixtures on the device in 7 ticks each
-([reports/fpga](reports/fpga/README.md)). DDR and power remain unmeasured.
+([reports/fpga](reports/fpga/README.md)). On 2026-09-22 the block-RAM packing bench,
+also t27, stored one 1 013 760-trit tensor on the device in 55, 50 and 45 RAMB36E1
+(two bits per trit, dense5 bytes, dense5 plus a dense2 nibble in the parity bits:
+2.000, 1.800 and 1.636 bits per trit) and read every word back without error, 18, 20
+and 22 trits per read ([docs/hardware.md](docs/hardware.md)). DDR and power remain
+unmeasured.
 
 ## Five directions, one reproducible chain
 
