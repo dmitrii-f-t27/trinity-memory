@@ -18,6 +18,13 @@ DBPART    := xc7a200t
 TOP       := tms_trace_player_ax7203
 IMAGE     ?= regymm/openxc7:latest
 DOCKER    ?= docker run --rm -v "$(ROOT):/work" -w /work $(IMAGE)
+# Each tool runs from the repository root with repository-relative paths: in the
+# image by default, or natively, e.g. YOSYS="cd $$PWD && yosys" and
+# NEXTPNR="cd $$PWD && ../tools-native/nextpnr-xilinx/build/nextpnr-xilinx" (the
+# same nextpnr-xilinx revision built for the host; it reads the image's chip database).
+YOSYS     ?= $(DOCKER) yosys
+NEXTPNR   ?= $(DOCKER) nextpnr-xilinx
+PACK      ?= $(DOCKER)
 CHIPDB    ?= $(BUILD)/chipdb/$(PART).bin
 SEEDS     ?= 1 2 3 4 5 6
 PLACERS   ?= sa heap
@@ -65,7 +72,7 @@ sim: gen
 synth: $(BUILD)/$(TOP).json
 $(BUILD)/$(TOP).json: $(SOURCES)
 	mkdir -p $(BUILD)
-	$(DOCKER) yosys -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(TOP); $(YOSYS_SYNTH) -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
+	$(YOSYS) -q -l $(call REL,$(BUILD))/yosys.log -p "read_verilog $(foreach s,$(SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(TOP); $(YOSYS_SYNTH) -top $(TOP); setundef -zero -params; tee -o $(call REL,$(BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BUILD))/$(TOP).json"
 
 chipdb: $(CHIPDB)
 $(CHIPDB):
@@ -76,7 +83,7 @@ pnr: $(BUILD)/$(TOP).fasm
 $(BUILD)/$(TOP).fasm: $(BUILD)/$(TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc
 	@rm -f $@; ok=0; for p in $(PLACERS); do for s in $(SEEDS); do \
 	  echo "nextpnr placer $$p seed $$s"; \
-	  $(DOCKER) nextpnr-xilinx --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
+	  $(NEXTPNR) --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
 	    --json $(call REL,$(BUILD))/$(TOP).json --write $(call REL,$(BUILD))/$(TOP)_routed.json \
 	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer $$p --router router1 --timing-allow-fail \
 	    > $(BUILD)/nextpnr_$${p}_seed$$s.log 2>&1 || true; \
@@ -86,7 +93,7 @@ $(BUILD)/$(TOP).fasm: $(BUILD)/$(TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.
 
 bit: $(BUILD)/$(TOP).bit
 $(BUILD)/$(TOP).bit: $(BUILD)/$(TOP).fasm
-	$(DOCKER) bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $(PART) $(call REL,$<) $(call REL,$(BUILD))/$(TOP).frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$(PART)/part.yaml --part_name $(PART) --frm_file $(call REL,$(BUILD))/$(TOP).frames --output_file $(call REL,$@)"
+	$(PACK) bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $(PART) $(call REL,$<) $(call REL,$(BUILD))/$(TOP).frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$(PART)/part.yaml --part_name $(PART) --frm_file $(call REL,$(BUILD))/$(TOP).frames --output_file $(call REL,$@)"
 	@echo "frames: $$(wc -l < $(BUILD)/$(TOP).frames) lines; bit: $$(wc -c < $@) bytes"
 
 detect:
@@ -115,10 +122,7 @@ BRAM_TRITS     ?= 1013760
 BRAM_SIM_TRITS ?= 1980
 BRAM_ONLY      ?= -1        # -1: all three layouts in one bitstream; 0 b2, 1 d5, 2 d5d2: that layout alone
 # All three layouts in one bitstream (150 RAMB36E1) do not route with nextpnr-xilinx;
-# the device builds are one layout each, heap placer first, router2. NEXTPNR may be a
-# native build of the same revision, run from the repository root, e.g.
-#   NEXTPNR="cd $$PWD && ../tools-native/nextpnr-xilinx/build/nextpnr-xilinx"
-NEXTPNR        ?= $(DOCKER) nextpnr-xilinx
+# the device builds are one layout each, heap placer first, router2.
 BRAM_PLACERS   ?= heap sa
 BRAM_ROUTER    ?= router2
 BRAM_BUILD     ?= $(BUILD)/bram
@@ -161,13 +165,13 @@ bram-sim: $(call bram_sources,$(BRAM_SIMBUILD))
 
 bram-synth: $(BRAM_BUILD)/$(BRAM_TOP).json
 $(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD)) $(CURDIR)/brams_x36.txt
-	$(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set ONLY $(BRAM_ONLY) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
+	$(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set ONLY $(BRAM_ONLY) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
 
 # Cells of each layout on its own (engine + encoder + decoder, tms_bram_ooc.v),
 # synthesized out of context with the same yosys flags as the bench.
 bram-ooc: $(call bram_sources,$(BRAM_BUILD))
 	@for f in 0 1 2; do \
-	  $(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/ooc_$$f.log -p "read_verilog -nomem2reg $(foreach s,$(filter-out %/tms_bram_bench.v,$(call bram_sources,$(BRAM_BUILD))),$(call REL,$(s))) $(call REL,$(CURDIR))/tms_bram_ooc.v; chparam -set FORMAT $$f tms_bram_ooc; $(call bram_synth,tms_bram_ooc); tee -o $(call REL,$(BRAM_BUILD))/ooc_$$f.stat stat" || exit 1; \
+	  $(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/ooc_$$f.log -p "read_verilog -nomem2reg $(foreach s,$(filter-out %/tms_bram_bench.v,$(call bram_sources,$(BRAM_BUILD))),$(call REL,$(s))) $(call REL,$(CURDIR))/tms_bram_ooc.v; chparam -set FORMAT $$f tms_bram_ooc; $(call bram_synth,tms_bram_ooc); tee -o $(call REL,$(BRAM_BUILD))/ooc_$$f.stat stat" || exit 1; \
 	  echo "layout $$f: $$(grep -E 'RAMB36E1|RAMB18E1' $(BRAM_BUILD)/ooc_$$f.stat | tr -s ' ' | tr '\n' ' ')"; \
 	done
 
@@ -185,7 +189,7 @@ $(BRAM_BUILD)/$(BRAM_TOP).fasm: $(BRAM_BUILD)/$(BRAM_TOP).json $(CHIPDB) $(CURDI
 
 bram-bit: $(BRAM_BUILD)/$(BRAM_TOP).bit
 $(BRAM_BUILD)/$(BRAM_TOP).bit: $(BRAM_BUILD)/$(BRAM_TOP).fasm
-	$(DOCKER) bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $(PART) $(call REL,$<) $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$(PART)/part.yaml --part_name $(PART) --frm_file $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).frames --output_file $(call REL,$@)"
+	$(PACK) bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $(PART) $(call REL,$<) $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$(PART)/part.yaml --part_name $(PART) --frm_file $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).frames --output_file $(call REL,$@)"
 	@echo "frames: $$(wc -l < $(BRAM_BUILD)/$(BRAM_TOP).frames) lines; bit: $$(wc -c < $@) bytes"
 
 bram-flash: $(BRAM_BUILD)/$(BRAM_TOP).bit
