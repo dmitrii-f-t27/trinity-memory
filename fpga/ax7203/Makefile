@@ -114,6 +114,13 @@ clean:
 BRAM_TRITS     ?= 1013760
 BRAM_SIM_TRITS ?= 1980
 BRAM_ONLY      ?= -1        # -1: all three layouts in one bitstream; 0 b2, 1 d5, 2 d5d2: that layout alone
+# All three layouts in one bitstream (150 RAMB36E1) do not route with nextpnr-xilinx;
+# the device builds are one layout each, heap placer first, router2. NEXTPNR may be a
+# native build of the same revision, run from the repository root, e.g.
+#   NEXTPNR="cd $$PWD && ../tools-native/nextpnr-xilinx/build/nextpnr-xilinx"
+NEXTPNR        ?= $(DOCKER) nextpnr-xilinx
+BRAM_PLACERS   ?= heap sa
+BRAM_ROUTER    ?= router2
 BRAM_BUILD     ?= $(BUILD)/bram
 BRAM_SIMBUILD  ?= $(BUILD)/bram-sim
 BRAM_TOP       := tms_bram_bench_ax7203
@@ -166,11 +173,11 @@ bram-ooc: $(call bram_sources,$(BRAM_BUILD))
 
 bram-pnr: $(BRAM_BUILD)/$(BRAM_TOP).fasm
 $(BRAM_BUILD)/$(BRAM_TOP).fasm: $(BRAM_BUILD)/$(BRAM_TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc
-	@rm -f $@; ok=0; for p in $(PLACERS); do for s in $(SEEDS); do \
-	  echo "nextpnr placer $$p seed $$s"; \
-	  $(DOCKER) nextpnr-xilinx --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
+	@rm -f $@; ok=0; for p in $(BRAM_PLACERS); do for s in $(SEEDS); do \
+	  echo "nextpnr placer $$p seed $$s router $(BRAM_ROUTER)"; \
+	  $(NEXTPNR) --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
 	    --json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json --write $(call REL,$(BRAM_BUILD))/$(BRAM_TOP)_routed.json \
-	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer $$p --router router1 --timing-allow-fail \
+	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer $$p --router $(BRAM_ROUTER) --timing-allow-fail \
 	    > $(BRAM_BUILD)/nextpnr_$${p}_seed$$s.log 2>&1 || true; \
 	  if [ -s $@ ] && ! grep -q "Failed to find a route" $(BRAM_BUILD)/nextpnr_$${p}_seed$$s.log; then ok=$$p/$$s; cp $(BRAM_BUILD)/nextpnr_$${p}_seed$$s.log $(BRAM_BUILD)/nextpnr.log; break 2; fi; \
 	  rm -f $@; done; done; \

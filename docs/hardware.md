@@ -138,6 +138,10 @@ scales, and metadata also affect the deployed cost. The 10-bit baseline uses the
 same five-lane group boundary for a controlled RTL comparison; it is not the
 Python byte-oriented `baseline2` file framing.
 
+The physical comparison is the block-RAM packing bench below ("Block-RAM trit
+packing"): the same tensor in three 36-bit word layouts, synthesized, placed,
+routed and run on the AX7203.
+
 ## Reproduce the functional checks
 
 From the repository root, with the pinned compiler checkout in `T27_ROOT`,
@@ -203,8 +207,9 @@ For an evidence-backed comparison:
    Keep synthesis estimates, routed results, board measurements, and full-model
    accuracy/throughput results in separate columns.
 
-No board run, resource saving, clock frequency, power result, or inference speedup
-is claimed by this package.
+The generic Vivado script above has not been run. The open-flow board runs and
+the block-RAM resource comparison are in the next section; no power result or
+inference speedup is claimed by this package.
 
 ## FPGA measurement track (AX7203)
 
@@ -367,6 +372,112 @@ the tick enable now fans out to about 3600 registers and its single-cycle path
 does not hold at 200 MHz. The earlier, ten-times smaller tick design (1019
 flip-flops, e3e8cfb) did run; the variant stays a fallback for small designs
 only, and the divided-clock variant is the device variant of the player.
+
+**Block-RAM trit packing (2026-09-22).** The stream modules keep every group in
+a 16-bit array element, so the players above say nothing about the memory a
+packed layout saves. The packing bench measures it in the device's block RAM
+([`fpga/ax7203/tms_bram_bench.v`](../fpga/ax7203/tms_bram_bench.v)): three
+engines store the same 1 013 760 trits, each in its own array of 36-bit words,
+the width of a RAMB36E1 in its 1K x 36 configuration.
+
+| Layout | Trits per word | Word | Words | Bits per trit | RAMB36 at 1K x 36 |
+| --- | ---: | --- | ---: | ---: | ---: |
+| `b2` | 18 | two bits per trit (the lane code of the RTL decoders) | 56 320 | 2.000 | 55 |
+| `d5` | 20 | four dense5 bytes; bits 35:32 unused, as in any byte-oriented layout | 50 688 | 1.800 | 50 |
+| `d5d2` | 22 | four dense5 bytes and a dense2 nibble (two trits, 3^2 = 9 <= 16) in bits 35:32, the parity bits | 46 080 | 1.636 | 45 |
+
+`d5d2` is the 22-trit, 36-bit allocation that [format.md](format.md) computes
+for `dense22`, built from five small decoders (four dense5, one dense2) instead
+of a base-3^22 divider; the 35-bit `dense22` stream codec itself is not used.
+log2(3) = 1.585 bits per trit is the floor.
+
+Each engine writes its words from one trit stream (a 64-bit Fibonacci LFSR,
+feedback s0^s1^s3^s4, two stream bits per trit, the value 11 read as zero, so a
+trit is 0 with probability 1/2 and +1 or -1 with 1/4 each; the state 2K steps
+later is 2K four-input XORs, so one word is produced per clock), reads every
+word back one per clock, decodes it, compares the lanes with the regenerated
+stream and reports the ticks of both phases, the words that differ, the invalid
+groups, the counts of +1 and -1, the dot product with the activations
+`(i mod 8) + 1` and a rotate-xor checksum of the stored words. The same trits
+are stored by all three, so all three must report the same counts and dot
+product; the host recomputes everything from
+[`tools/bram_trit_model.py`](../tools/bram_trit_model.py), an independent
+statement of the rules. Every rule is t27:
+[`bram_trit_codec.t27`](../t27/rtl/bram_trit_codec.t27) (encoder and decoder of
+the three layouts), [`bram_trit_engine.t27`](../t27/rtl/bram_trit_engine.t27)
+(the store, specialized per layout by
+[`tools/generate-bram-bench.py`](../tools/generate-bram-bench.py)) and
+[`fpga_bram_bench.t27`](../t27/rtl/fpga_bram_bench.t27) (sequencer and report);
+the arrays become block RAM with yosys `read_verilog -nomem2reg`.
+
+```sh
+make -C fpga/ax7203 bram-gen bram-sim     # t27 engines, Icarus run of the bench, host comparison
+make -C fpga/ax7203 bram-bit bram-flash   # open flow, SRAM configuration
+make -C fpga/ax7203 bram-capture PORT=/dev/cu.usbserial-110
+make -C fpga/ax7203 bram-ooc              # cells of each layout out of context
+```
+
+**Mapping.** Each engine is written against 36-bit words, so the synthesis maps
+every layout the same way: `fpga/ax7203/brams_x36.txt` restricts yosys'
+block-RAM library to the RAMB36E1 1K x 36 configuration, and the store is four
+banks of up to 16 384 words. Left to itself, yosys put the 56 320-word b2 array
+into 63 blocks of 8K x 4 (fewer output multiplexers, but a RAMB36 holds 32 Kbit
+in a 4-bit mode instead of 36, and a word is spread over nine blocks); a single
+array deeper than 16 blocks sometimes got one block more than ceil(words/1024)
+(23 552 words -> 24, 46 080 -> 46, 56 320 -> 56), while every bank of up to 16
+blocks maps exactly.
+
+**Synthesis (2026-09-22, yosys 0.69, `make bram-ooc`: one engine with its
+encoder and decoder at a time).**
+
+| Layout | RAMB36E1 | LUT | FF | Encoder LUT | Decoder LUT |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `b2` | 55 | 2 502 | 576 | 0 | 96 |
+| `d5` | 50 | 2 673 | 573 | 133 | 125 |
+| `d5d2` | 45 | 2 554 | 648 | 146 | 136 |
+
+The encoder and decoder columns are the codec synthesized alone; the `b2`
+decoder's LUTs count and clear invalid `11` lanes, the `b2` encoder is wiring.
+72 of the `d5d2` flip-flops hold its unused fourth bank (one word). The whole
+bench (three engines, sequencer, UART) synthesizes to 150 RAMB36E1, 8 959 LUTs
+and 2 188 flip-flops.
+
+**Place and route, and the device (2026-09-22).** With all three engines in one
+bitstream (150 RAMB36E1, ~9k LUTs) nextpnr-xilinx did not finish routing
+(router1 still had ~12.5k of 64k arcs left after half an hour, router2 reported
+~27k overused wires in its first iteration), so each layout is built on its own
+(`BRAM_ONLY=0/1/2`, the same harness in every bitstream). Builds of commit
+e8fecf2 ([`reports/fpga/build-2026-09-22-e8fecf2-bram-*`](../reports/fpga/README.md):
+yosys 0.69; nextpnr-xilinx 45a986b built natively, `heap` placer seed 1,
+`router2`; prjxray) and three captures per layout on the AX7203, identical
+except for the run number in the header
+([`reports/fpga/bram-capture-2026-09-22-e8fecf2-*`](../reports/fpga/README.md)):
+
+| Layout | RAMB36E1 placed | LUT | FF | Fmax estimate | Words written | Read ticks | Trits per read | Bad words | Invalid groups |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `b2` | 55 | 3 336 | 1 039 | 37.7 MHz | 56 320 | 56 321 | 18 | 0 | 0 |
+| `d5` | 50 | 3 563 | 1 036 | 31.9 MHz | 50 688 | 50 689 | 20 | 0 | 0 |
+| `d5d2` | 45 | 3 460 | 1 111 | 31.4 MHz | 46 080 | 46 081 | 22 | 0 | 0 |
+
+LUTs and flip-flops include the harness every bitstream shares (UART, line
+emitter, sequencer, tick and reset). All three report +1 = 253 229,
+-1 = 253 385 and the dot product -674, the host model's values, after every
+stored word was read back and matched the regenerated stream lane by lane: the
+three bitstreams hold the same tensor, and every layout decodes on the device
+at one word per enabled clock.
+
+For this 1 013 760-trit tensor, dense5 bytes need 5 blocks fewer than two bits
+per trit (50 instead of 55, -9.1%) and dense5 with a dense2 nibble in the
+parity bits 10 fewer (45, -18.2%): 18 432, 20 480 and 22 528 trits per RAMB36.
+At one word per read, the tensor streams out in 56 321, 50 689 and 46 081
+enabled clocks (2.25, 2.03 and 1.84 ms at 25 MHz from the board's oscillator):
+18, 20 and 22 trits per read port per clock. The price is the codec: 125 and
+136 LUTs to decode 20 and 22 trits per word (133 and 146 to encode) in a
+133 800-LUT device. The Fmax column is nextpnr's estimate for the 25 MHz
+clock, not a measurement; the device ran every layout at 25 MHz. Not measured
+here: external memory (the same argument for DDR needs a DDR3 controller,
+below), power, and the 72-bit simple dual-port mode, where nine dense5 bytes
+would hold 45 trits (1.600 bits per trit) but a t27 word is at most 64 bits.
 
 **What this track does not measure, and why.** DDR and power. DDR3 on the
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open

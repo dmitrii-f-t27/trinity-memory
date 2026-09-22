@@ -151,26 +151,29 @@ jobs:
       - name: Timing and utilization summary
         run: |
           grep -E "Max frequency|Info: Device utilisation|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/nextpnr.log | head -40 || true
-      - name: Block-RAM trit packing bench (generate, Icarus run, host comparison)
-        run: make -C fpga/ax7203 bram-gen bram-sim
-      - name: Block-RAM bench bitstream (yosys -nomem2reg, nextpnr-xilinx, prjxray)
+      - name: Block-RAM trit packing bench (generate, Icarus run of all three layouts and of each alone)
         run: |
-          make -C fpga/ax7203 bram-bit CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
-          grep -E "RAMB|LUT[1-6]|FDRE|FDCE|Number of cells" build/fpga/bram/yosys_stat.txt | head -20
-          grep -E "Max frequency|Info: +[A-Z0-9_]+: +[0-9]+/ *[0-9]+" build/fpga/bram/nextpnr.log | head -30 || true
+          make -C fpga/ax7203 bram-gen bram-sim
+          for only in 0 1 2; do make -C fpga/ax7203 bram-sim BRAM_ONLY=$only BRAM_SIMBUILD=${{ github.workspace }}/build/fpga/bram-sim-$only; done
+      - name: Block-RAM bench bitstreams, one layout each (yosys -nomem2reg, 1K x 36 library, nextpnr-xilinx heap/router2, prjxray)
+        run: |
+          for only in 0 1 2; do
+            make -C fpga/ax7203 bram-bit BRAM_ONLY=$only BRAM_BUILD=${{ github.workspace }}/build/fpga/bram-$only CHIPDB=${{ github.workspace }}/build/fpga/chipdb/xc7a200tfbg484-2.bin
+            grep -E "RAMB36E1|LUT[1-6]|FD[CR]E" build/fpga/bram-$only/yosys_stat.txt | head -12
+            grep -E "Max frequency|RAMB36E1:" build/fpga/bram-$only/nextpnr.log | head -4 || true
+          done
       - name: Upload the block-RAM bench
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ax7203-bram-bench
           path: |
-            build/fpga/bram/tms_bram_bench_ax7203.bit
-            build/fpga/bram/bram_bench_manifest.json
+            build/fpga/bram-*/tms_bram_bench_ax7203.bit
+            build/fpga/bram-*/bram_bench_manifest.json
             build/fpga/bram/bram_trit_engine_*.t27
-            build/fpga/bram/yosys_stat.txt
-            build/fpga/bram/yosys.log
-            build/fpga/bram/nextpnr*.log
-            build/fpga/bram-sim/sim_capture_*.txt
-            build/fpga/bram-sim/sim_capture_*.json
+            build/fpga/bram-*/yosys_stat.txt
+            build/fpga/bram-*/nextpnr*.log
+            build/fpga/bram-sim*/sim_capture_*.txt
+            build/fpga/bram-sim*/sim_capture_*.json
           retention-days: 90
           if-no-files-found: warn

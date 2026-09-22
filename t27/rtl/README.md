@@ -100,5 +100,6 @@ with original commit and byte hashes recorded in
   branch of another function makes yosys spend minutes in `proc`; such values
   are computed into locals first and selected afterwards.
 
-Evidence from these tests is RTL simulation. FPGA place-and-route, inferred
-RAM width, timing, board behavior, DDR/HBM throughput and power are unmeasured.
+Evidence from these tests is RTL simulation. Board runs, block RAM mapping and
+place-and-route of the FPGA designs built from these modules are recorded in
+`docs/hardware.md` and `reports/fpga/`; DDR/HBM throughput and power are unmeasured.
