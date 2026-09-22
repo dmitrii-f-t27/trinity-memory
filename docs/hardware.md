@@ -272,7 +272,10 @@ Each run makes two passes over every trace vector (34 vectors: 18 dot, 9 storage
   labels the fixture; the device reports label, accumulators and the latency in
   ticks from the start to the result for each of the six fixtures.
 
-The report is a stream of fixed 20-byte lines (`tag`, 8 hex digits, 10 hex
+A start is accepted only while the player is idle (since 2026-09-22): a trigger
+byte has up to five falling edges, and the player used to queue one of them
+behind the run it had just started, so one byte gave two runs
+(`reports/fpga/trigger-ab-2026-09-22.json`). The report is a stream of fixed 20-byte lines (`tag`, 8 hex digits, 10 hex
 digits, LF): `H` format and totals, `V` vector start, `C` observed word per
 cycle, `E` device mismatches, six `K` counters (dot: beats accepted, results
 delivered, input stalls, output holds, error results delivered, reset cycles;
@@ -282,8 +285,8 @@ activation stalls, output holds, loads accepted, reset cycles; all evaluated on
 the handshake values at the consuming edge), `F` free-run mismatches, `W`/`R`/`T`
 workload frames, results and totals, `X`/`A` Edge label with latency and the
 three accumulators, `D` totals. A run starts after configuration and again
-whenever a start bit arrives on the UART. LEDs: heartbeat, run active, run
-complete, any mismatch.
+when a start bit arrives on the UART while the player is idle. LEDs: heartbeat,
+run active, run complete, any mismatch.
 
 **Host side.** [`tools/fpga-capture.py`](../tools/fpga-capture.py) triggers a run,
 reads the stream, compares every `C` line with the manifest independently of the
