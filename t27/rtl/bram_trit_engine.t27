@@ -1,0 +1,198 @@
+module TrinityBramTritEngineT27;
+
+// One block-RAM trit store of the packing experiment (fpga/ax7203/tms_bram_bench.v).
+// A run writes WORDS words, each packing LANES trits of the trit stream in
+// FORMAT (t27/rtl/bram_trit_codec.t27 encodes and decodes), then reads every word
+// back, one read per enabled clock, and checks the decoded lanes against the
+// regenerated stream. It reports the ticks of both phases, the words whose
+// decoded lanes differ, the invalid groups, the count of +1 and -1 trits, the dot
+// product with the activations (index mod 8) + 1 and a rotate-xor checksum of
+// the stored words. The same trit stream is stored by every format, so every
+// engine must report the same counts and dot product.
+//
+// Trit stream: a 64-bit Fibonacci LFSR, one step = out s[0], feedback
+// s[0]^s[1]^s[3]^s[4] into bit 63. For n <= 60 steps every feedback bit reads
+// only original state bits, so a word's 2*LANES stream bits are the low bits of
+// the state and `advance` computes the state 2*LANES steps later in one clock.
+// Lane j of a word is stream bits 2j+1:2j; the value 11 reads as zero, so zero
+// has probability 1/2 and +1, -1 have 1/4 each.
+//
+// tools/generate-bram-bench.py specializes FORMAT, LANES, WORDS and SEED (and the
+// module name) per format; the array bound must be a literal constant. The
+// memory infers block RAM only with yosys `read_verilog -nomem2reg`: the read
+// register `rdata` takes `mem[r_addr]` directly and has no reset value.
+// Every statement reads a variable before the same tick writes it, so the C and
+// the Verilog backends agree.
+const FORMAT: u32 = 2;
+const LANES: u32 = 22;
+const WORDS: u32 = 90;
+const SEED: u64 = 9090338745056667511;
+const WORD_MASK: u64 = 68719476735;
+const LANE_PAIRS: u64 = 6148914691236517205;
+const PH_IDLE: u32 = 0;
+const PH_WRITE: u32 = 1;
+const PH_READ: u32 = 2;
+const PH_DONE: u32 = 3;
+
+var mem: [WORDS]u64;
+var rdata: u64;
+var phase: u32 = 0;
+var w_addr: u32 = 0;
+var w_state: u64 = 0;
+var r_addr: u32 = 0;
+var r_issue: bool = false;
+var r_valid: bool = false;
+var r_state: u64 = 0;
+var checked: u32 = 0;
+var act_base: u32 = 0;
+var write_ticks: u32 = 0;
+var read_ticks: u32 = 0;
+var bad_words: u32 = 0;
+var invalid_groups: u32 = 0;
+var pos: u32 = 0;
+var neg: u32 = 0;
+var dot: i64 = 0;
+var chk: u64 = 0;
+var done: bool = false;
+
+fn lane_mask(lanes: u32) -> u64 {
+    var one: u64 = 1;
+    return (one << (lanes << 1)) - 1;
+}
+
+// The LFSR state n single steps later (n <= 44 here).
+fn advance(s: u64, n: u32) -> u64 {
+    var next: u64 = s >> n;
+    var k: u32 = 0;
+    while (k < 44) {
+        if (k < n) {
+            var fb: u64 = ((s >> k) ^ (s >> (k + 1)) ^ (s >> (k + 3)) ^ (s >> (k + 4))) & 1;
+            next = next | (fb << (64 - n + k));
+        }
+        k = k + 1;
+    }
+    return next;
+}
+
+// Lane codes of the word that starts at state s: every 11 pair becomes 00.
+fn lanes_from(s: u64) -> u64 {
+    var both: u64 = s & (s >> 1) & LANE_PAIRS;
+    return (s ^ (both | (both << 1))) & lane_mask(LANES);
+}
+
+fn count_code(lanes: u64, want: u64) -> u32 {
+    var n: u32 = 0;
+    var j: u32 = 0;
+    while (j < 22) {
+        if (j < LANES) {
+            if (((lanes >> (j << 1)) & 3) == want) { n = n + 1; }
+        }
+        j = j + 1;
+    }
+    return n;
+}
+
+// Sum of trit * activation over the word's lanes; the activation of global trit
+// index i is (i mod 8) + 1 and base = (index of lane 0) mod 8.
+fn weighted(lanes: u64, base: u32) -> i64 {
+    var sum: i64 = 0;
+    var j: u32 = 0;
+    while (j < 22) {
+        if (j < LANES) {
+            var code: u64 = (lanes >> (j << 1)) & 3;
+            var act: i64 = (((base + j) & 7) + 1) as i64;
+            if (code == 1) { sum = sum + act; }
+            if (code == 2) { sum = sum - act; }
+        }
+        j = j + 1;
+    }
+    return sum;
+}
+
+fn rotl1(x: u64) -> u64 {
+    return (x << 1) | (x >> 63);
+}
+
+// Module-level (combinational) rather than locals of on_clock: gen-verilog
+// declares an on_clock local where it appears, which plain Verilog rejects.
+var enc_lanes: u64;
+var got: u64;
+var words_out: u32;
+var format_out: u32;
+var lanes_out: u32;
+enc_lanes = lanes_from(w_state);
+got = dec_out & lane_mask(LANES);
+words_out = WORDS;
+format_out = FORMAT;
+lanes_out = LANES;
+
+// enc_word = encode(FORMAT, enc_lanes) and dec_out = decode(FORMAT, rdata) come
+// from the two codec instances of the adapter.
+fn on_clock(start: bool, enc_word: u64, dec_out: u64) {
+    if (phase == PH_IDLE || phase == PH_DONE) {
+        if (start) {
+            phase = PH_WRITE;
+            w_addr = 0;
+            w_state = SEED;
+            r_valid = false;
+            checked = 0;
+            act_base = 0;
+            write_ticks = 0;
+            read_ticks = 0;
+            bad_words = 0;
+            invalid_groups = 0;
+            pos = 0;
+            neg = 0;
+            dot = 0;
+            chk = 0;
+            done = false;
+        }
+    } else if (phase == PH_WRITE) {
+        mem[w_addr] = enc_word & WORD_MASK;
+        write_ticks = write_ticks + 1;
+        w_state = advance(w_state, LANES << 1);
+        if (w_addr == WORDS - 1) {
+            phase = PH_READ;
+            r_addr = 0;
+            r_issue = true;
+            r_state = SEED;
+        } else {
+            w_addr = w_addr + 1;
+        }
+    } else if (phase == PH_READ) {
+        read_ticks = read_ticks + 1;
+        if (r_valid) {
+            if (got != lanes_from(r_state)) { bad_words = bad_words + 1; }
+            invalid_groups = invalid_groups + (((dec_out >> 48) & 255) as u32);
+            pos = pos + count_code(got, 1);
+            neg = neg + count_code(got, 2);
+            dot = dot + weighted(got, act_base);
+            chk = rotl1(chk) ^ (rdata & WORD_MASK);
+            r_state = advance(r_state, LANES << 1);
+            act_base = (act_base + LANES) & 7;
+            if (checked == WORDS - 1) {
+                phase = PH_DONE;
+                done = true;
+            }
+            checked = checked + 1;
+        }
+        if (r_issue) {
+            rdata = mem[r_addr];
+            r_valid = true;
+            if (r_addr == WORDS - 1) { r_issue = false; } else { r_addr = r_addr + 1; }
+        } else {
+            r_valid = false;
+        }
+    }
+}
+
+test lane_mask_widths { assert_eq(lane_mask(18), 68719476735); assert_eq(lane_mask(22), 17592186044415); }
+test one_step_shifts_in_the_feedback { assert_eq(advance(1, 1), 9223372036854775808); assert_eq(advance(2, 1), 9223372036854775809); }
+test pair_eleven_reads_as_zero { assert_eq(lanes_from(15) & 15, 0); assert_eq(lanes_from(6) & 15, 6); }
+test counts_and_weights {
+    assert_eq(count_code(1 | (2 << 2) | (1 << 4), 1), 2);
+    assert_eq(weighted(1 | (2 << 2) | (1 << 4), 0), 1 - 2 + 3);
+    assert_eq(weighted(1, 7), 8);
+}
+test rotate_left { assert_eq(rotl1(9223372036854775808), 1); }
+endmodule

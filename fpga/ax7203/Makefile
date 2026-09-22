@@ -33,7 +33,8 @@ SOURCES   := $(foreach c,$(CORES),$(RTL)/$(c).v) $(BUILD)/fpga_trace_rom.v \
              $(CURDIR)/tms_dut_wrappers.v $(BUILD)/tms_trace_bank.v $(CURDIR)/tms_trace_player.v
 REL       = $(patsubst $(ROOT)/%,%,$(1))
 
-.PHONY: gen sim synth chipdb pnr bit flash capture detect clean
+.PHONY: gen sim synth chipdb pnr bit flash capture detect clean \
+        bram-gen bram-sim bram-synth bram-pnr bram-bit bram-flash bram-capture
 
 gen: $(BUILD)/tms_trace_bank.v $(BUILD)/fpga_trace_rom.v $(foreach c,$(CORES),$(RTL)/$(c).v)
 
@@ -98,4 +99,75 @@ capture:
 	python3 $(ROOT)/tools/fpga-capture.py --port $(PORT) --manifest $(BUILD)/tms_trace_manifest.json --output $(BUILD)/capture.json --raw $(BUILD)/capture.txt --label "$(LABEL)"
 
 clean:
-	rm -rf $(BUILD)/sim $(BUILD)/$(TOP).* $(BUILD)/nextpnr*.log $(BUILD)/yosys*.log $(BUILD)/yosys_stat.txt
+	rm -rf $(BUILD)/sim $(BUILD)/$(TOP).* $(BUILD)/nextpnr*.log $(BUILD)/yosys*.log $(BUILD)/yosys_stat.txt \
+	       $(BRAM_BUILD) $(BRAM_SIMBUILD)
+
+# ---- block-RAM trit packing bench (tms_bram_bench.v) ----
+# Three engines store the same BRAM_TRITS trits in three 36-bit word layouts
+# (b2: 18, d5: 20, d5d2: 22 trits per word); tools/generate-bram-bench.py writes
+# one t27 engine per layout and the manifest the host compares with. The bench
+# needs `read_verilog -nomem2reg`, otherwise yosys turns the engines' arrays
+# (written in a process with an asynchronous reset) into flip-flops.
+#
+#   make -C fpga/ax7203 bram-gen bram-sim            generated cores, Icarus run, host comparison
+#   make -C fpga/ax7203 bram-bit bram-flash bram-capture
+BRAM_TRITS     ?= 1013760
+BRAM_SIM_TRITS ?= 1980
+BRAM_BUILD     ?= $(BUILD)/bram
+BRAM_SIMBUILD  ?= $(BUILD)/bram-sim
+BRAM_TOP       := tms_bram_bench_ax7203
+BRAM_CORES     := fpga_tick fpga_reset fpga_uart_tx fpga_line_emitter fpga_bram_bench bram_trit_codec
+BRAM_FORMATS   := b2 d5 d5d2
+BRAM_CORE_V    := $(foreach c,$(BRAM_CORES),$(RTL)/$(c).v)
+BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/tools/generate-bram-bench.py $(ROOT)/tools/bram_trit_model.py
+bram_sources    = $(BRAM_CORE_V) $(foreach f,$(BRAM_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
+
+$(BRAM_BUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS)
+	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_TRITS) --output-dir $(BRAM_BUILD)
+$(BRAM_SIMBUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS)
+	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_SIM_TRITS) --output-dir $(BRAM_SIMBUILD)
+$(BRAM_BUILD)/bram_trit_engine_%.v: $(BRAM_BUILD)/bram_bench_manifest.json
+	@test -x "$(T27C)" || { echo "T27_ROOT must point at the pinned compiler checkout (native/compiler.lock)"; exit 1; }
+	"$(T27C)" gen-verilog $(BRAM_BUILD)/bram_trit_engine_$*.t27 > $@
+$(BRAM_SIMBUILD)/bram_trit_engine_%.v: $(BRAM_SIMBUILD)/bram_bench_manifest.json
+	@test -x "$(T27C)" || { echo "T27_ROOT must point at the pinned compiler checkout (native/compiler.lock)"; exit 1; }
+	"$(T27C)" gen-verilog $(BRAM_SIMBUILD)/bram_trit_engine_$*.t27 > $@
+
+bram-gen: $(call bram_sources,$(BRAM_BUILD))
+
+bram-sim: $(call bram_sources,$(BRAM_SIMBUILD))
+	@for mode in 1 0; do \
+	  iverilog -g2012 -Ptb_fpga_bram_bench.CLOCK_MODE=$$mode -o $(BRAM_SIMBUILD)/bench_$$mode.vvp -s tb_fpga_bram_bench \
+	    $(CURDIR)/sim/xilinx_stubs.v $(call bram_sources,$(BRAM_SIMBUILD)) $(ROOT)/tests/tb_fpga_bram_bench.v || exit 1; \
+	  (cd $(BRAM_SIMBUILD) && vvp bench_$$mode.vvp +capture=$(BRAM_SIMBUILD)/sim_capture_$$mode.txt | tail -2) || exit 1; \
+	  python3 $(ROOT)/tools/fpga-bram-capture.py --from-file $(BRAM_SIMBUILD)/sim_capture_$$mode.txt \
+	    --manifest $(BRAM_SIMBUILD)/bram_bench_manifest.json --output $(BRAM_SIMBUILD)/sim_capture_$$mode.json | tail -1 || exit 1; \
+	done
+
+bram-synth: $(BRAM_BUILD)/$(BRAM_TOP).json
+$(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD))
+	$(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(BRAM_TOP); $(YOSYS_SYNTH) -top $(BRAM_TOP); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
+
+bram-pnr: $(BRAM_BUILD)/$(BRAM_TOP).fasm
+$(BRAM_BUILD)/$(BRAM_TOP).fasm: $(BRAM_BUILD)/$(BRAM_TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc
+	@rm -f $@; ok=0; for p in $(PLACERS); do for s in $(SEEDS); do \
+	  echo "nextpnr placer $$p seed $$s"; \
+	  $(DOCKER) nextpnr-xilinx --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
+	    --json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json --write $(call REL,$(BRAM_BUILD))/$(BRAM_TOP)_routed.json \
+	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer $$p --router router1 --timing-allow-fail \
+	    > $(BRAM_BUILD)/nextpnr_$${p}_seed$$s.log 2>&1 || true; \
+	  if [ -s $@ ] && ! grep -q "Failed to find a route" $(BRAM_BUILD)/nextpnr_$${p}_seed$$s.log; then ok=$$p/$$s; cp $(BRAM_BUILD)/nextpnr_$${p}_seed$$s.log $(BRAM_BUILD)/nextpnr.log; break 2; fi; \
+	  rm -f $@; done; done; \
+	  [ "$$ok" != 0 ] || { echo "no placer/seed routed"; exit 1; }; echo "routed with placer/seed $$ok"
+
+bram-bit: $(BRAM_BUILD)/$(BRAM_TOP).bit
+$(BRAM_BUILD)/$(BRAM_TOP).bit: $(BRAM_BUILD)/$(BRAM_TOP).fasm
+	$(DOCKER) bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $(PART) $(call REL,$<) $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$(PART)/part.yaml --part_name $(PART) --frm_file $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).frames --output_file $(call REL,$@)"
+	@echo "frames: $$(wc -l < $(BRAM_BUILD)/$(BRAM_TOP).frames) lines; bit: $$(wc -c < $@) bytes"
+
+bram-flash: $(BRAM_BUILD)/$(BRAM_TOP).bit
+	openFPGALoader -c $(CABLE) $<
+
+bram-capture:
+	python3 $(ROOT)/tools/fpga-bram-capture.py --port $(PORT) --manifest $(BRAM_BUILD)/bram_bench_manifest.json \
+	  --output $(BRAM_BUILD)/capture.json --raw $(BRAM_BUILD)/capture.txt --label "$(LABEL)"
