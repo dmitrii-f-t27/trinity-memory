@@ -34,7 +34,7 @@ SOURCES   := $(foreach c,$(CORES),$(RTL)/$(c).v) $(BUILD)/fpga_trace_rom.v \
 REL       = $(patsubst $(ROOT)/%,%,$(1))
 
 .PHONY: gen sim synth chipdb pnr bit flash capture detect clean \
-        bram-gen bram-sim bram-synth bram-pnr bram-bit bram-flash bram-capture
+        bram-gen bram-sim bram-synth bram-pnr bram-bit bram-flash bram-capture bram-ooc
 
 gen: $(BUILD)/tms_trace_bank.v $(BUILD)/fpga_trace_rom.v $(foreach c,$(CORES),$(RTL)/$(c).v)
 
@@ -121,6 +121,13 @@ BRAM_FORMATS   := b2 d5 d5d2
 BRAM_CORE_V    := $(foreach c,$(BRAM_CORES),$(RTL)/$(c).v)
 BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/tools/generate-bram-bench.py $(ROOT)/tools/bram_trit_model.py
 bram_sources    = $(BRAM_CORE_V) $(foreach f,$(BRAM_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
+# synth_xilinx with the block RAM library restricted to the 1K x 36 configuration
+# (brams_x36.txt): every layout is mapped the same way, one 36-bit word per RAMB36
+# word, parity bits in use. $(1) is the top module.
+bram_synth      = $(YOSYS_SYNTH) -top $(1) -run :map_memory; \
+                  memory_libmap -lib +/xilinx/lutrams_xc5v.txt -lib $(call REL,$(CURDIR))/brams_x36.txt; \
+                  techmap -map +/xilinx/lutrams_xc5v_map.v -map +/xilinx/brams_xc6v_map.v; \
+                  $(YOSYS_SYNTH) -top $(1) -run map_ffram:
 
 $(BRAM_BUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS)
 	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_TRITS) --output-dir $(BRAM_BUILD)
@@ -145,8 +152,16 @@ bram-sim: $(call bram_sources,$(BRAM_SIMBUILD))
 	done
 
 bram-synth: $(BRAM_BUILD)/$(BRAM_TOP).json
-$(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD))
-	$(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(BRAM_TOP); $(YOSYS_SYNTH) -top $(BRAM_TOP); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
+$(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD)) $(CURDIR)/brams_x36.txt
+	$(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
+
+# Cells of each layout on its own (engine + encoder + decoder, tms_bram_ooc.v),
+# synthesized out of context with the same yosys flags as the bench.
+bram-ooc: $(call bram_sources,$(BRAM_BUILD))
+	@for f in 0 1 2; do \
+	  $(DOCKER) yosys -q -l $(call REL,$(BRAM_BUILD))/ooc_$$f.log -p "read_verilog -nomem2reg $(foreach s,$(filter-out %/tms_bram_bench.v,$(call bram_sources,$(BRAM_BUILD))),$(call REL,$(s))) $(call REL,$(CURDIR))/tms_bram_ooc.v; chparam -set FORMAT $$f tms_bram_ooc; $(call bram_synth,tms_bram_ooc); tee -o $(call REL,$(BRAM_BUILD))/ooc_$$f.stat stat" || exit 1; \
+	  echo "layout $$f: $$(grep -E 'RAMB36E1|RAMB18E1' $(BRAM_BUILD)/ooc_$$f.stat | tr -s ' ' | tr '\n' ' ')"; \
+	done
 
 bram-pnr: $(BRAM_BUILD)/$(BRAM_TOP).fasm
 $(BRAM_BUILD)/$(BRAM_TOP).fasm: $(BRAM_BUILD)/$(BRAM_TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc

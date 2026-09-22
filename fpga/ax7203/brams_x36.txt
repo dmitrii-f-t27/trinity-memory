@@ -1,0 +1,41 @@
+# Block RAM library for the trit packing bench: the 7-series RAMB36E1 in its
+# 1K x 36 configuration only (true dual port, 32 data bits plus the 4 parity
+# bits of the 9-bit bytes). A copy of yosys' techlibs/xilinx/brams_xc4v.txt with
+# every other width, the RAMB18 half mode, the 72-bit simple dual port and the
+# cascade removed; the cells are the ones brams_xc6v_map.v maps.
+#
+# Why: left to itself, yosys chose 8K x 4 slices for the 56 320-word b2 array
+# (63 blocks) to save output multiplexers. In a 4-bit-wide mode a RAMB36 stores
+# 32 Kbit, not 36, and a 36-bit word is spread over nine blocks; the layouts
+# under test are defined on the 36-bit word, so all three are mapped the same
+# way: ceil(words / 1024) blocks, each word in one block, parity bits in use.
+
+ram block $__XILINX_BLOCKRAM_TDP_ {
+	byte 9;
+	option "MODE" "FULL" {
+		abits 15;
+		widths 1 2 4 9 18 36 per_port;
+		cost 257;
+	}
+	init any;
+	port srsw "A" "B" {
+		# abits and widths above keep the geometry ladder (32K x 1 ... 1K x 36);
+		# the port admits only the 36-bit width.
+		width mix 36;
+		clock posedge;
+		clken;
+		rdsrst any gated_clken;
+		rdinit any;
+		portoption "WRITE_MODE" "NO_CHANGE" {
+			rdwr no_change;
+		}
+		portoption "WRITE_MODE" "WRITE_FIRST" {
+			rdwr new;
+		}
+		portoption "WRITE_MODE" "READ_FIRST" {
+			rdwr old;
+			wrtrans all old;
+		}
+		optional_rw;
+	}
+}
