@@ -8,7 +8,8 @@ module TrinityFpgaTracePlayerT27;
 // throughput workload (64 stored words, WORKLOAD_FRAMES frames of 64 beats,
 // activations from a closed formula, results reported), the Edge Demo fixtures
 // (three template rows in lockstep, label, accumulators and latency reported),
-// then the totals. A run starts after reset and again on any UART start bit.
+// then the totals. A run starts after reset and again on a UART start bit that
+// arrives while the player is idle.
 // Every statement reads a variable before the same tick writes it, so the C
 // and the Verilog backends agree.
 const S_IDLE: u32 = 0;
@@ -173,7 +174,9 @@ fn on_clock(uart_rx: bool, line_idle: bool, stimulus: u64, expected: u64, entry:
             edge_fixtures: u32, edge_act_ready: bool, edge_beat: bool, edge_done: bool,
             edge_acc0: i32, edge_acc1: i32, edge_acc2: i32, edge_label: u32) {
     line_go = false;
-    if (rx3 && !rx2) { trigger_pending = true; }
+    // A start is accepted only while idle: a trigger byte has up to five falling
+    // edges, and queueing the later ones made one byte start two runs (2026-09-22).
+    if (rx3 && !rx2 && state == S_IDLE) { trigger_pending = true; }
     rx3 = rx2;
     rx2 = rx1;
     rx1 = uart_rx;

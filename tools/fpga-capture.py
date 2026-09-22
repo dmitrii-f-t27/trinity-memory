@@ -17,32 +17,12 @@ import datetime as dt
 import json
 import re
 import sys
-import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+from fpga_uart import read_port  # noqa: E402
 LINE = re.compile(r"^([HVCEKFWRTXAD])([0-9a-f]{8})([0-9a-f]{10})$")
-
-
-def read_port(port, baud, timeout, trigger, settle=0.5):
-    import serial  # pyserial
-
-    with serial.Serial(port, baud, timeout=0.2) as link:
-        # Opening the port can glitch the device's RX line, which the player takes as a start
-        # bit; let any run that started that way finish before discarding it and triggering ours.
-        time.sleep(settle)
-        link.reset_input_buffer()
-        if trigger:
-            link.write(b"r")
-        deadline = time.monotonic() + timeout
-        data = bytearray()
-        while time.monotonic() < deadline:
-            chunk = link.read(4096)
-            if chunk:
-                data += chunk
-                if b"\nD" in data and data.endswith(b"\n") and data[data.rfind(b"\nD"):].count(b"\n") >= 2:
-                    break
-        return bytes(data)
 
 
 def parse(text):
@@ -182,6 +162,9 @@ def main():
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--no-trigger", action="store_true", help="do not send a byte to restart the run")
     parser.add_argument("--settle", type=float, default=0.5, help="seconds to wait after opening the port before triggering")
+    parser.add_argument("--quiet", type=float, default=0.5, help="then wait until the line has been silent this long")
+    parser.add_argument("--trigger-byte", type=lambda v: int(v, 0), default=0xFF,
+                        help="byte sent to start a run (default 0xff: one falling edge, so one run)")
     parser.add_argument("--from-file", help="parse a previously captured byte stream instead of a port")
     parser.add_argument("--manifest", default=str(ROOT / "build" / "fpga" / "tms_trace_manifest.json"))
     parser.add_argument("--output", help="write the JSON report here")
@@ -193,7 +176,7 @@ def main():
         data = Path(args.from_file).read_bytes()
         source = {"file": args.from_file}
     elif args.port:
-        data = read_port(args.port, args.baud, args.timeout, not args.no_trigger, args.settle)
+        data = read_port(args.port, args.baud, args.timeout, not args.no_trigger, args.settle, args.quiet, args.trigger_byte)
         source = {"port": args.port, "baud": args.baud}
     else:
         parser.error("give --port or --from-file")
@@ -203,7 +186,7 @@ def main():
     if not runs:
         print("no run header in the capture", file=sys.stderr)
         sys.exit(1)
-    run = runs[-1] if runs[-1]["done"] else runs[0]
+    run = next((r for r in runs if r["done"]), runs[0])
     ok, report = compare(run, manifest)
     workload, workload_ok = compare_workload(run, manifest)
     edge, edge_ok = compare_edge(run, manifest)
