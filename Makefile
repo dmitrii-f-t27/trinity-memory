@@ -35,3 +35,15 @@ check-specs:
 .PHONY: upstream-15193
 upstream-15193: t27
 	PYTHON=$(PYTHON) sh tests/upstream/run-llamacpp-15193.sh
+
+# Ternary Check (issue #32) from a clean clone: fetch the pinned fixture
+# ranges (strict), build the t27 library, store the BitNet tensors with the
+# pinned llama.cpp quantizers, and write reports/ternary-check.json,
+# reports/ternary-check.html and reports/ternary-check/repro/. OFFLINE=1 uses
+# the caches only; ternary-check-verify compares with the committed files.
+.PHONY: ternary-check ternary-check-verify
+ternary-check:
+	PYTHON=$(PYTHON) OFFLINE=$(OFFLINE) sh tools/ternary-check.sh
+
+ternary-check-verify:
+	PYTHON=$(PYTHON) OFFLINE=$(OFFLINE) sh tools/ternary-check.sh --check
