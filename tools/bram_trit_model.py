@@ -219,6 +219,49 @@ def rom_results(fmt: int, trits, verify: bool = True, pipe: int = 0) -> dict:
             "pos": pos, "neg": neg, "dot": dot, "chk": chk, "lanes_check": lchk, "pipe": pipe}
 
 
+MATVEC_LATENCY = 25   # ticks after the last read: decode, accumulate, then 22 outputs picked and summed
+
+
+def matvec_order(trits, rows: int, cols: int, lanes: int) -> list[int]:
+    """The trits of a rows x cols matrix (row-major) in the order the matrix-vector
+    store keeps them: word k of group g holds column k of rows g*lanes .. g*lanes+lanes-1,
+    lane j row g*lanes + j."""
+    if rows % lanes:
+        raise ValueError(f"rows ({rows}) must be a multiple of {lanes}")
+    out = []
+    for g in range(rows // lanes):
+        for c in range(cols):
+            out += [trits[(g * lanes + j) * cols + c] for j in range(lanes)]
+    return out
+
+
+def act_words(acts) -> list[int]:
+    """The activation vector as 32-bit words of four signed bytes, element c in byte
+    c mod 4 of word c / 4 (the last word padded with zeros)."""
+    padded = list(acts) + [0] * (-len(acts) % 4)
+    return [sum((padded[i + b] & 0xFF) << (8 * b) for b in range(4)) for i in range(0, len(padded), 4)]
+
+
+def matvec_results(fmt: int, trits, acts, rows: int, cols: int) -> dict:
+    """What the matrix-vector store (t27/rtl/bram_trit_matvec.t27) must report for
+    y = W x, W the rows x cols trit matrix (row-major) and x the int8 vector: pos and
+    neg count the outputs above and below zero, dot is their sum, chk the rotate-xor
+    checksum of the outputs in row order (64-bit two's complement), which the store
+    also compares with its own (bad_words)."""
+    lanes = LANES[fmt]
+    ordered = matvec_order(trits, rows, cols, lanes)
+    words = len(ordered) // lanes
+    ys = [sum(t * a for t, a in zip(trits[r * cols:(r + 1) * cols], acts)) for r in range(rows)]
+    ychk = 0
+    for y in ys:
+        ychk = rotl1(ychk) ^ (y & MASK64)
+    return {"format": fmt, "name": FORMAT_NAMES[fmt], "lanes": lanes, "words": words, "trits": rows * cols,
+            "write_ticks": 0, "read_ticks": words + MATVEC_LATENCY, "bad_words": 0, "invalid_groups": 0,
+            "pos": sum(1 for y in ys if y > 0), "neg": sum(1 for y in ys if y < 0),
+            "dot": sum(ys), "chk": ychk, "rows": rows, "cols": cols, "outputs": ys,
+            "weights": {"plus": sum(1 for t in trits if t == 1), "minus": sum(1 for t in trits if t == -1)}}
+
+
 def stream_trits(count: int, seed: int = DEFAULT_SEED) -> list[int]:
     """The first `count` trits of the stream, one LFSR step per stream bit."""
     state, out = seed, []
