@@ -29,3 +29,9 @@ t27-test:
 
 check-specs:
 	PYTHON=$(PYTHON) sh tools/check-specs.sh
+
+# llama.cpp issue 15193: upstream TQ1_0/TQ2_0 storage and CPU kernels against
+# the t27 decoders (docs/upstream/llama.cpp-15193.md). Fetches pinned sources.
+.PHONY: upstream-15193
+upstream-15193: t27
+	PYTHON=$(PYTHON) sh tests/upstream/run-llamacpp-15193.sh
