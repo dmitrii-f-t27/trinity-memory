@@ -1,8 +1,10 @@
 /* Independent acceptance harness for t27/formats.t27. The reference decoders
- * below follow the loop order of the upstream sources pinned in specs/formats/
- * (llama.cpp e6ab7c1a, PrismML fork bdc23b56, microsoft/BitNet 0b341e58,
- * transformers 2c4914fb, onnxruntime 2ecddca3), not the index formulas of the
- * t27 module, so a shared mistake cannot pass both. */
+ * below follow the loop order of the upstream sources pinned in
+ * specs/formats/upstream.lock.json (llama.cpp e6ab7c1a, PrismML fork bdc23b56,
+ * microsoft/BitNet 0b341e58, transformers 2c4914fb, MLX 59d600b5, onnxruntime
+ * 2ecddca3), not the index formulas of the t27 module, so a shared mistake
+ * cannot pass both. tests/native_spec_formats.c ties the same module to the
+ * sealed specs in specs/formats/ and replays conformance/formats_*.json. */
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -78,16 +80,17 @@ static uint32_t ref_block(int format, const uint8_t *block, int32_t *y) {
 }
 
 /* bitnet.cpp canonical I2_S (QK_I2_S = 128): byte p of block b holds
- * c[128b+p]<<6 | c[128b+p+32]<<4 | c[128b+p+64]<<2 | c[128b+p+96]. */
+ * c[128b+p]<<6 | c[128b+p+32]<<4 | c[128b+p+64]<<2 | c[128b+p+96].
+ * Code 3 is undefined upstream and reported as code - 1 = +2. */
 static void ref_i2s(const uint8_t *data, size_t count, int32_t *y) {
     for (size_t b = 0; b < count / 128; ++b)
         for (size_t p = 0; p < 32; ++p) {
             uint8_t v = data[32 * b + p];
             int32_t c0 = v >> 6, c1 = (v >> 4) & 3, c2 = (v >> 2) & 3, c3 = v & 3;
-            y[128 * b + p] = c0 == 3 ? 3 : c0 - 1;
-            y[128 * b + p + 32] = c1 == 3 ? 3 : c1 - 1;
-            y[128 * b + p + 64] = c2 == 3 ? 3 : c2 - 1;
-            y[128 * b + p + 96] = c3 == 3 ? 3 : c3 - 1;
+            y[128 * b + p] = c0 - 1;
+            y[128 * b + p + 32] = c1 - 1;
+            y[128 * b + p + 64] = c2 - 1;
+            y[128 * b + p + 96] = c3 - 1;
         }
 }
 
@@ -138,6 +141,10 @@ static void differential_random_blocks(void) {
             for (size_t i = 0; i < BLOCKS * bytes; ++i) data[i] = (uint8_t)next_random();
             int64_t outside = tf_decode_blocks(format, data, BLOCKS * bytes, BLOCKS * per,
                                                got, BLOCKS * per, scales, BLOCKS);
+            bool nonfinite = false;
+            for (size_t b = 0; b < BLOCKS; ++b)
+                nonfinite |= (ref_block(format, data + b * bytes, want) & 0x7c00) == 0x7c00;
+            if (nonfinite) { assert(outside == TF_ERR_SCALE_NONFINITE); continue; }
             assert(outside >= 0);
             int64_t expected_outside = 0;
             for (size_t b = 0; b < BLOCKS; ++b) {
@@ -265,7 +272,7 @@ static void i2s(void) {
         int64_t outside = tf_decode_i2s(data, sizeof data, N, back, N, &scale);
         ref_i2s(data, N, ref);
         int64_t threes = 0;
-        for (size_t i = 0; i < N; ++i) threes += ref[i] == 3;
+        for (size_t i = 0; i < N; ++i) threes += ref[i] == 2;
         assert(outside == threes && memcmp(back, ref, sizeof ref) == 0);
     }
     assert(tf_i2s_trailer_nonzero(data, sizeof data, N) == 0);
@@ -350,7 +357,7 @@ static size_t build_gguf(uint8_t *g, uint32_t alignment, bool prism, uint64_t *s
     at = put_u64(g, at, prism ? 4 : 3);
     at = put_str(g, at, "general.architecture");
     at = put_u32(g, at, 8);
-    at = put_str(g, at, "bitnet-b1.58");
+    at = put_str(g, at, prism ? "qwen35" : "bitnet-b1.58");
     at = put_str(g, at, "tokenizer.ggml.tokens");
     at = put_u32(g, at, 9);
     at = put_u32(g, at, 8);
@@ -413,6 +420,209 @@ static void gguf(void) {
     assert(tf_gguf_tensor_bytes(&info) == 1024 / 128 * 28);
     g[4] = 2;
     assert(tf_gguf_find(g, end, name_d, sizeof name_d - 1, &info) == TF_ERR_CONTAINER);
+}
+
+
+/* A two-tensor GGUF with a chosen architecture, types and second offset
+ * (0: the aligned end of the first tensor). */
+static size_t build_gguf_pair(uint8_t *g, const char *arch, bool prism, uint32_t first_type,
+                              uint64_t first_ne0, uint32_t second_type, uint64_t second_offset) {
+    size_t at = 0;
+    at = put_u32(g, at, 0x46554747);
+    at = put_u32(g, at, 3);
+    at = put_u64(g, at, 2);
+    at = put_u64(g, at, prism ? 2 : 1);
+    at = put_str(g, at, "general.architecture");
+    at = put_u32(g, at, 8);
+    at = put_str(g, at, arch);
+    if (prism) {
+        at = put_str(g, at, "prism.hadamard.block_size");
+        at = put_u32(g, at, 4);
+        at = put_u32(g, at, 1024);
+    }
+    at = put_str(g, at, "a.weight");
+    at = put_u32(g, at, 2);
+    at = put_u64(g, at, first_ne0);
+    at = put_u64(g, at, 2);
+    at = put_u32(g, at, first_type);
+    at = put_u64(g, at, 0);
+    at = put_str(g, at, "b.weight");
+    at = put_u32(g, at, 1);
+    at = put_u64(g, at, 256);
+    at = put_u32(g, at, second_type);
+    at = put_u64(g, at, second_offset);
+    return at;
+}
+
+static int32_t gguf_check_of(const char *arch, bool prism, uint32_t first_type, uint64_t first_ne0,
+                             uint32_t second_type, uint64_t second_offset, const char *which) {
+    static uint8_t g[1024];
+    TFTensorInfo info;
+    size_t end = build_gguf_pair(g, arch, prism, first_type, first_ne0, second_type, second_offset);
+    assert(tf_gguf_find(g, end, (uint8_t *)which, strlen(which), &info) == 0);
+    return tf_gguf_check(&info);
+}
+
+static void gguf_checks(void) {
+    /* Namespace markers decide ids 36, 38, 42, 142 and 143. */
+    assert(gguf_check_of("llama", false, 42, 256, 0, 160, "a.weight") == TF_Q2_0);
+    assert(gguf_check_of("qwen35", true, 42, 256, 0, 160, "a.weight") == TF_Q2_0);
+    assert(gguf_check_of("qwen35", true, 142, 256, 0, 160, "a.weight") == TF_PQ2_0);
+    assert(gguf_check_of("qwen35", true, 143, 256, 0, 160, "a.weight") == TF_PTQ1_0);
+    assert(gguf_check_of("llama", false, 143, 256, 0, 160, "a.weight") == 0);
+    assert(gguf_check_of("bitnet-b1.58", false, 42, 256, 0, 160, "a.weight") == TF_ERR_LAYOUT_UNSUPPORTED);
+    assert(gguf_check_of("llama", false, 42, 256, 36, 160, "a.weight") == TF_ERR_LAYOUT_UNSUPPORTED);
+    assert(gguf_check_of("llama", false, 38, 256, 0, 160, "a.weight") == TF_ERR_LAYOUT_UNSUPPORTED);
+    assert(gguf_check_of("bitnet-b1.58", true, 42, 256, 0, 160, "a.weight") == TF_ERR_TYPE_AMBIGUOUS);
+    assert(gguf_check_of("bitnet-b1.58", true, 143, 256, 0, 160, "a.weight") == TF_ERR_TYPE_AMBIGUOUS);
+    assert(gguf_check_of("bitnet-b1.58", true, 35, 256, 0, 160, "a.weight") == TF_TQ2_0);
+    assert(gguf_check_of("bitnet-b1.58", false, 36, 256, 0, 544, "a.weight") == TF_I2_S);
+    assert(gguf_check_of("llama", false, 36, 256, 0, 544, "a.weight") == TF_I2_S);
+    /* Offsets: alignment 32, and a tensor may not run into the next one. */
+    assert(gguf_check_of("llama", false, 0, 256, 42, 161, "b.weight") == TF_ERR_MISALIGNED);
+    assert(gguf_check_of("llama", false, 42, 256, 0, 128, "a.weight") == TF_ERR_EXTENT);
+    assert(gguf_check_of("llama", false, 42, 256, 0, 144, "a.weight") == TF_Q2_0); /* exact fit */
+    assert(gguf_check_of("llama", false, 42, 100, 0, 160, "a.weight") == TF_ERR_LENGTH);
+    assert(gguf_check_of("llama", false, 0, 256, 42, 160, "b.weight") == TF_Q2_0);
+    assert(gguf_check_of("llama", false, 42, 256, 0, 0, "a.weight") == TF_Q2_0);
+}
+
+static void scale_classes_and_flags(void) {
+    assert(tf_scale_class(0x3c00, TF_KIND_F16) == 0 && tf_scale_class(0x0000, TF_KIND_F16) == 1);
+    assert(tf_scale_class(0x8000, TF_KIND_F16) == 1 && tf_scale_class(0xbc00, TF_KIND_F16) == 2);
+    assert(tf_scale_class(0x7c00, TF_KIND_F16) == TF_ERR_SCALE_NONFINITE);
+    assert(tf_scale_class(0x7e00, TF_KIND_F16) == TF_ERR_SCALE_NONFINITE);
+    assert(tf_scale_class(0x0001, TF_KIND_F16) == 0 && tf_scale_class(0x7bff, TF_KIND_F16) == 0);
+    assert(tf_scale_class(0x7f80, TF_KIND_BF16) == TF_ERR_SCALE_NONFINITE && tf_scale_class(0xbf80, TF_KIND_BF16) == 2);
+    assert(tf_scale_class(0x7f800000, TF_KIND_F32) == TF_ERR_SCALE_NONFINITE && tf_scale_class(0x80000000, TF_KIND_F32) == 1);
+    int64_t flags[TF_FLAG_COUNT] = {0};
+    uint32_t words[4] = {0x3c00, 0x0000, 0xbc00, 0x8000};
+    assert(tf_scales_check(words, 4, TF_KIND_F16, flags) == 0);
+    assert(flags[TF_FLAG_SCALE_ZERO] == 2 && flags[TF_FLAG_SCALE_NEGATIVE] == 1);
+    words[3] = 0xfc00;
+    assert(tf_scales_check(words, 4, TF_KIND_F16, flags) == TF_ERR_SCALE_NONFINITE);
+    assert(flags[TF_FLAG_SCALE_ZERO] == 2 && flags[TF_FLAG_SCALE_NEGATIVE] == 1);
+
+    /* Canonical base-3 bytes are exactly the ceiling-rule images. */
+    bool qs_image[256] = {false}, qh_image[256] = {false};
+    for (unsigned q = 0; q < 243; ++q) qs_image[(q * 256 + 242) / 243] = true;
+    for (unsigned q = 0; q < 81; ++q) qh_image[(3 * q * 256 + 242) / 243] = true;
+    int qs_count = 0, qh_count = 0;
+    for (unsigned b = 0; b < 256; ++b) {
+        assert(tf_b3_canonical(b, 5) == qs_image[b] && tf_b3_canonical(b, 4) == qh_image[b]);
+        qs_count += qs_image[b]; qh_count += qh_image[b];
+    }
+    assert(qs_count == 243 && qh_count == 81);
+
+    /* Block flags against an independent count on random blocks. */
+    static uint8_t data[4 * 66];
+    for (size_t f = 0; f < sizeof block_formats / sizeof block_formats[0]; ++f) {
+        int format = block_formats[f];
+        size_t per = tf_block_elements(format), bytes = tf_block_bytes(format);
+        size_t scale_at = tf_scale_offset(format);
+        for (int round = 0; round < 200; ++round) {
+            for (size_t i = 0; i < 4 * bytes; ++i) data[i] = (uint8_t)next_random();
+            int64_t want_zero = 0, want_negative = 0, want_noncanonical = 0;
+            bool nonfinite = false;
+            for (size_t b = 0; b < 4; ++b) {
+                uint32_t d = (uint32_t)data[b * bytes + scale_at] | (uint32_t)data[b * bytes + scale_at + 1] << 8;
+                if ((d & 0x7c00) == 0x7c00) nonfinite = true;
+                else if ((d & 0x7fff) == 0) ++want_zero;
+                else if (d & 0x8000) ++want_negative;
+                if (format == TF_TQ1_0 || format == TF_PTQ1_0) {
+                    size_t five = format == TF_TQ1_0 ? 48 : 24, four = format == TF_TQ1_0 ? 4 : 2;
+                    for (size_t j = 0; j < five; ++j) want_noncanonical += !qs_image[data[b * bytes + j]];
+                    for (size_t j = 0; j < four; ++j) want_noncanonical += !qh_image[data[b * bytes + five + j]];
+                }
+            }
+            static int32_t y[4 * 256];
+            uint32_t sc[4];
+            int64_t decoded = tf_decode_blocks(format, data, 4 * bytes, 4 * per, y, 4 * per, sc, 4);
+            int64_t status = tf_block_flags(format, data, 4 * bytes, 4 * per, flags);
+            if (nonfinite) {
+                assert(decoded == TF_ERR_SCALE_NONFINITE && status == TF_ERR_SCALE_NONFINITE);
+                for (size_t i = 0; i < TF_FLAG_COUNT; ++i) assert(flags[i] == 0);
+                continue;
+            }
+            assert(status == 0 && decoded == flags[TF_FLAG_OUTSIDE_TERNARY]);
+            assert(flags[TF_FLAG_SCALE_ZERO] == want_zero && flags[TF_FLAG_SCALE_NEGATIVE] == want_negative);
+            assert(flags[TF_FLAG_NONCANONICAL_BASE3] == want_noncanonical);
+        }
+    }
+}
+
+static void onnx2_and_mlx2(void) {
+    enum { N = 3, K = 70, BS = 32, ROW = 3 * 8, ZROW = 1 };
+    static int32_t w[N * K], back[N * K];
+    static uint8_t data[N * ROW], again[N * ROW];
+    uint8_t zp[N * ZROW] = {0x1B, 0x26, 0x39}; /* blocks 3,2,1 / 2,1,2 / 1,2,3 */
+    for (int round = 0; round < 200; ++round) {
+        for (size_t r = 0; r < N; ++r)
+            for (size_t k = 0; k < K; ++k) {
+                int z = (zp[r] >> (2 * (k / BS))) & 3;
+                w[r * K + k] = (int32_t)(next_random() % 4) - z; /* every code 0..3 */
+            }
+        assert(tf_encode_onnx2(w, N, K, BS, zp, sizeof zp, data, sizeof data) == (int64_t)sizeof data);
+        int64_t outside = 0;
+        for (size_t i = 0; i < N * K; ++i) outside += w[i] < -1 || w[i] > 1;
+        assert(tf_decode_onnx2(data, sizeof data, N, K, BS, zp, sizeof zp, back, N * K) == outside);
+        assert(memcmp(w, back, sizeof w) == 0);
+        for (size_t r = 0; r < N; ++r)
+            for (size_t k = 0; k < K; ++k) {
+                int z = (zp[r] >> (2 * (k / BS))) & 3;
+                assert((((data[r * ROW + k / 4] >> (2 * (k % 4))) & 3) - z) == w[r * K + k]);
+            }
+        assert(tf_onnx2_padding_nonzero(data, sizeof data, N, K, BS) == 0);
+    }
+    /* Default zero point 2: code 0 is -2, code 3 is +1. */
+    memset(data, 0, sizeof data);
+    data[0] = 0xC0; /* k = 3 holds code 3 */
+    assert(tf_decode_onnx2(data, sizeof data, N, K, BS, zp, 0, back, N * K) == N * K - 1);
+    assert(back[0] == -2 && back[3] == 1);
+    data[ROW - 1] = 0x40; /* k = 95 is padding (K = 70) */
+    assert(tf_onnx2_padding_nonzero(data, sizeof data, N, K, BS) == 1);
+    assert(tf_decode_onnx2(data, sizeof data - 1, N, K, BS, zp, 0, back, N * K) == TF_ERR_LENGTH);
+    assert(tf_decode_onnx2(data, sizeof data, N, K, 24, zp, 0, back, N * K) == TF_ERR_LENGTH);
+    assert(tf_decode_onnx2(data, sizeof data, N, K, BS, zp, 2, back, N * K) == TF_ERR_LENGTH);
+    assert(tf_decode_onnx2(data, sizeof data, N, K, BS, zp, 0, back, N * K - 1) == TF_ERR_CAPACITY);
+    /* Encoders validate every code before writing. */
+    memset(again, 0xAA, sizeof again);
+    w[5] = 2 - ((zp[0] >> 0) & 3) + 2; /* code 4 */
+    assert(tf_encode_onnx2(w, N, K, BS, zp, sizeof zp, again, sizeof again) == TF_ERR_CODE);
+    for (size_t i = 0; i < sizeof again; ++i) assert(again[i] == 0xAA);
+
+    /* MLX: zero point 1 and a group of 32, 64 or 128 dividing the row. */
+    enum { R = 2, C = 128 };
+    static int32_t m[R * C], m2[R * C];
+    static uint8_t words[R * C / 4];
+    for (size_t i = 0; i < R * C; ++i) m[i] = (int32_t)(next_random() % 3) - 1;
+    assert(tf_encode_mlx2(m, R, C, 64, words, sizeof words) == (int64_t)sizeof words);
+    assert(tf_decode_mlx2(words, sizeof words, R, C, 64, m2, R * C) == 0 && memcmp(m, m2, sizeof m) == 0);
+    assert(tf_decode_mlx2(words, sizeof words, R, C, 48, m2, R * C) == TF_ERR_LENGTH);
+    assert(tf_decode_mlx2(words, sizeof words, R, 96, 64, m2, R * C) == TF_ERR_LENGTH);
+    int64_t flags[TF_FLAG_COUNT] = {0};
+    uint32_t scales[3] = {0x3c00, 0x0000, 0xb800}, biases[3] = {0xbc00, 0x8000, 0x3c00};
+    assert(tf_affine_check(scales, biases, 3, TF_KIND_F16, flags) == 0);
+    assert(flags[TF_FLAG_AFFINE_NOT_TERNARY] == 1 && flags[TF_FLAG_SCALE_ZERO] == 1 && flags[TF_FLAG_SCALE_NEGATIVE] == 1);
+    biases[2] = 0x7c00;
+    assert(tf_affine_check(scales, biases, 3, TF_KIND_F16, flags) == TF_ERR_SCALE_NONFINITE);
+
+    /* I2_S flags and the non-finite scale. */
+    static uint8_t i2[128 / 4 + 32];
+    int32_t t[128] = {0};
+    int32_t v[128];
+    uint32_t sc;
+    assert(tf_encode_i2s(t, 128, 0xbf800000u, i2, sizeof i2) == (int64_t)sizeof i2);
+    i2[0] = 0xFF; i2[40] = 9;
+    assert(tf_i2s_flags(i2, sizeof i2, 128, flags) == 0);
+    assert(flags[TF_FLAG_OUTSIDE_TERNARY] == 4 && flags[TF_FLAG_SCALE_NEGATIVE] == 1 && flags[TF_FLAG_TRAILER_NONZERO] == 1);
+    assert(tf_decode_i2s(i2, sizeof i2, 128, v, 128, &sc) == 4 && v[0] == 2 && v[96] == 2);
+    i2[35] = 0x7f; i2[34] = 0xc0;
+    assert(tf_decode_i2s(i2, sizeof i2, 128, v, 128, &sc) == TF_ERR_SCALE_NONFINITE);
+    assert(tf_i2s_flags(i2, sizeof i2, 128, flags) == TF_ERR_SCALE_NONFINITE);
+    t[7] = 2;
+    memset(i2, 0x55, sizeof i2);
+    assert(tf_encode_i2s(t, 128, 0x3f800000u, i2, sizeof i2) == TF_ERR_CODE && i2[0] == 0x55 && i2[32] == 0x55);
 }
 
 static void safetensors(void) {
@@ -501,6 +711,7 @@ static void rejections(void) {
 }
 
 int main(void) {
+    test_tf_worked_examples_q1_q2(); /* the test block of t27/formats.t27 itself */
     differential_random_blocks();
     base3_round_trip_and_canonical_bytes();
     worked_examples();
@@ -509,10 +720,13 @@ int main(void) {
     linear2();
     scale_words();
     gguf();
+    gguf_checks();
+    scale_classes_and_flags();
+    onnx2_and_mlx2();
     safetensors();
     absmean();
     scale_layouts();
     rejections();
-    puts("PASS formats: TQ1_0, TQ2_0, Q2_0, Q1_0, PQ2_0, PTQ1_0, I2_S, HF packed, linear 2-bit, GGUF, safetensors");
+    puts("PASS formats: TQ1_0, TQ2_0, Q2_0, Q1_0, PQ2_0, PTQ1_0, I2_S, HF packed, MLX 2-bit, ONNX 2-bit, flags, GGUF checks, safetensors");
     return 0;
 }

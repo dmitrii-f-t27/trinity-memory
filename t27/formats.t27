@@ -1,10 +1,14 @@
 // External ternary weight-packing formats: reference decoders and encoders.
 // Each layout restates the upstream source pinned in specs/formats/ (llama.cpp,
-// the PrismML fork, bitnet.cpp, Hugging Face transformers, MLX, ONNX Runtime).
+// the PrismML fork, bitnet.cpp, Hugging Face transformers, MLX, ONNX Runtime;
+// commits and file blobs in specs/formats/upstream.lock.json).
 // Decoders emit one i32 per weight: the stored code minus the format's zero
 // point, so -1, 0 and +1 are ternary and anything else is reported, never
 // hidden. Scales are returned as raw bit patterns. Caller-owned buffers, no
 // allocation; input and output ranges must not overlap.
+// Status classes (specs/formats/OWNERS.md): a negative return rejects the
+// input; conditions that upstream readers accept silently are counted as
+// flags (TF_FLAG_*) and never change a decoded value.
 module TrinityMemoryFormats {
     const TF_ERR_FORMAT: i32 = -50;
     const TF_ERR_LENGTH: i32 = -51;
@@ -14,6 +18,21 @@ module TrinityMemoryFormats {
     const TF_ERR_TRUNCATED: i32 = -55;
     const TF_ERR_CONTAINER: i32 = -56;
     const TF_ERR_NOT_FOUND: i32 = -57;
+    const TF_ERR_SCALE_NONFINITE: i32 = -58;
+    const TF_ERR_TYPE_AMBIGUOUS: i32 = -59;
+    const TF_ERR_LAYOUT_UNSUPPORTED: i32 = -60;
+    const TF_ERR_MISALIGNED: i32 = -61;
+    const TF_ERR_EXTENT: i32 = -62;
+
+    // Flag slots of a caller-owned []i64 of TF_FLAG_COUNT entries.
+    const TF_FLAG_OUTSIDE_TERNARY: usize = 0;
+    const TF_FLAG_NONCANONICAL_BASE3: usize = 1;
+    const TF_FLAG_SCALE_NEGATIVE: usize = 2;
+    const TF_FLAG_SCALE_ZERO: usize = 3;
+    const TF_FLAG_TRAILER_NONZERO: usize = 4;
+    const TF_FLAG_PADDING_NONZERO: usize = 5;
+    const TF_FLAG_AFFINE_NOT_TERNARY: usize = 6;
+    const TF_FLAG_COUNT: usize = 7;
 
     // Block formats: one fp16 scale per block, codes inside the block.
     const TF_TQ1_0: i32 = 1;   // llama.cpp, ggml type 34
@@ -25,7 +44,8 @@ module TrinityMemoryFormats {
     // Tensor formats: layout depends on the whole tensor shape.
     const TF_I2_S: i32 = 7;       // bitnet.cpp, ggml type 36, f32 scale per tensor
     const TF_HF_PACKED: i32 = 8;  // transformers BitNet uint8, stride N/4 along dim 0
-    const TF_LINEAR2: i32 = 9;    // MLX 2-bit words and ONNX MatMulNBits bits=2
+    const TF_LINEAR2: i32 = 9;    // MLX 2-bit words (and any row-linear 2-bit layout)
+    const TF_ONNX2: i32 = 10;     // ONNX Runtime MatMulNBits bits=2, per-block zero points
 
     // ---- little-endian helpers -------------------------------------------------
     fn tf_read_u16(data: []u8, offset: usize) -> u32 {
@@ -83,6 +103,56 @@ module TrinityMemoryFormats {
     // bfloat16 is the upper half of a binary32 word.
     fn tf_bf16_value(bits: u32) -> f64 { return tf_f32_value((bits & 65535) << 16); }
 
+    // Class of one scale word of `kind` (TF_KIND_F16, _BF16, _F32; 16-bit
+    // kinds use the low half of the word): 0 positive, 1 zero of either sign,
+    // 2 negative, or TF_ERR_SCALE_NONFINITE for NaN and infinity.
+    fn tf_scale_class(word: u32, kind: i32) -> i32 {
+        var exponent: u32 = 0;
+        var top: u32 = 255;
+        var magnitude: u32 = 0;
+        var sign: u32 = 0;
+        if (kind == TF_KIND_F16) {
+            exponent = (word >> 10) & 31; top = 31;
+            magnitude = word & 32767; sign = (word >> 15) & 1;
+        } else {
+            if (kind == TF_KIND_BF16) {
+                exponent = (word >> 7) & 255;
+                magnitude = word & 32767; sign = (word >> 15) & 1;
+            } else {
+                exponent = (word >> 23) & 255;
+                magnitude = word & 2147483647; sign = (word >> 31) & 1;
+            }
+        }
+        if (exponent == top) { return TF_ERR_SCALE_NONFINITE; }
+        if (magnitude == 0) { return 1; }
+        if (sign != 0) { return 2; }
+        return 0;
+    }
+
+    // Validates `count` scale words before counting anything: the first NaN or
+    // infinity returns TF_ERR_SCALE_NONFINITE and leaves `flags` unchanged.
+    // Otherwise adds the zero and negative words to their flag slots.
+    fn tf_scales_check(words: []u32, count: usize, kind: i32, flags: []i64) -> i64 {
+        var i: usize = 0;
+        while (i < count) {
+            if (tf_scale_class(words[i], kind) < 0) { return TF_ERR_SCALE_NONFINITE as i64; }
+            i = i + 1;
+        }
+        i = 0;
+        while (i < count) {
+            var sclass: i32 = tf_scale_class(words[i], kind);
+            if (sclass == 1) { flags[TF_FLAG_SCALE_ZERO] = flags[TF_FLAG_SCALE_ZERO] + 1; }
+            if (sclass == 2) { flags[TF_FLAG_SCALE_NEGATIVE] = flags[TF_FLAG_SCALE_NEGATIVE] + 1; }
+            i = i + 1;
+        }
+        return 0;
+    }
+
+    fn tf_flags_clear(flags: []i64) -> void {
+        var i: usize = 0;
+        while (i < TF_FLAG_COUNT) { flags[i] = 0; i = i + 1; }
+    }
+
     // ---- block geometry -------------------------------------------------------
     fn tf_block_elements(format: i32) -> usize {
         if (format == TF_TQ1_0 || format == TF_TQ2_0) { return 256; }
@@ -108,16 +178,45 @@ module TrinityMemoryFormats {
         return 0;
     }
 
-    // Our identifier for a ggml tensor type; 0 when it is not a ternary layout.
-    fn tf_format_of_ggml(ggml_type: u32, prism: bool) -> i32 {
+    // Our identifier for a ggml tensor type in a GGUF file, given the file's
+    // namespace markers: `prism` (a key starting "prism.") and `bitnet`
+    // (general.architecture "bitnet-b1.58", or any tensor of type 36 or 38).
+    // Ids 34, 35 and 41 mean the same layout in all three namespaces. 36 is
+    // I2_S and 38 TL1 only in bitnet.cpp; 42 is Q2_0 (group 64) in ggml-org
+    // and PrismML but TL2 in bitnet.cpp; 142 and 143 exist only in PrismML.
+    // An id whose meaning differs between two marked namespaces is
+    // TF_ERR_TYPE_AMBIGUOUS; TL1 and TL2 are TF_ERR_LAYOUT_UNSUPPORTED (no
+    // storage contract); 0 when the id is not a ternary layout.
+    fn tf_format_of_gguf(ggml_type: u32, prism: bool, bitnet: bool) -> i32 {
         if (ggml_type == 34) { return TF_TQ1_0; }
         if (ggml_type == 35) { return TF_TQ2_0; }
         if (ggml_type == 41) { return TF_Q1_0; }
-        if (ggml_type == 42) { return TF_Q2_0; }
-        if (ggml_type == 36) { return TF_I2_S; }
+        if (ggml_type == 36 || ggml_type == 38 || ggml_type == 42 || ggml_type == 142 || ggml_type == 143) {
+            if (prism && bitnet) { return TF_ERR_TYPE_AMBIGUOUS; }
+        }
+        if (ggml_type == 36) {
+            if (bitnet) { return TF_I2_S; }
+            return 0;
+        }
+        if (ggml_type == 38) {
+            if (bitnet) { return TF_ERR_LAYOUT_UNSUPPORTED; }
+            return 0;
+        }
+        if (ggml_type == 42) {
+            if (bitnet) { return TF_ERR_LAYOUT_UNSUPPORTED; }
+            return TF_Q2_0;
+        }
         if (prism && ggml_type == 142) { return TF_PQ2_0; }
         if (prism && ggml_type == 143) { return TF_PTQ1_0; }
         return 0;
+    }
+
+    // The id alone: types 36 and 38 carry the bitnet.cpp marker themselves.
+    // Rejections map to 0. Readers of whole files use tf_gguf_check.
+    fn tf_format_of_ggml(ggml_type: u32, prism: bool) -> i32 {
+        var format: i32 = tf_format_of_gguf(ggml_type, prism, ggml_type == 36 || ggml_type == 38);
+        if (format < 0) { return 0; }
+        return format;
     }
 
     // ---- base-3 layouts (TQ1_0, PTQ1_0) ---------------------------------------
@@ -179,9 +278,31 @@ module TrinityMemoryFormats {
         return (code as i32) - 1;
     }
 
+    // Shape and scale checks shared by the block readers, in this order:
+    // FORMAT, LENGTH (count not whole blocks, size not count's blocks), then
+    // SCALE_NONFINITE for the first block whose fp16 d is NaN or infinite
+    // (ggml_validate_row_data). Returns the block count.
+    fn tf_blocks_valid(format: i32, data: []u8, size: usize, count: usize) -> i64 {
+        var per: usize = tf_block_elements(format);
+        if (per == 0) { return TF_ERR_FORMAT as i64; }
+        if (count % per != 0) { return TF_ERR_LENGTH as i64; }
+        var blocks: usize = count / per;
+        var bytes: usize = tf_block_bytes(format);
+        if (size % bytes != 0 || size / bytes != blocks) { return TF_ERR_LENGTH as i64; }
+        var b: usize = 0;
+        while (b < blocks) {
+            var word: u32 = tf_read_u16(data, b * bytes + tf_scale_offset(format));
+            if (tf_scale_class(word, TF_KIND_F16) < 0) { return TF_ERR_SCALE_NONFINITE as i64; }
+            b = b + 1;
+        }
+        return blocks as i64;
+    }
+
     // Decodes `count` weights (a whole number of blocks) into `values` and one
     // raw fp16 word per block into `scales`. Returns how many weights fall
-    // outside {-1, 0, +1} (the +2 code of the 2-bit layouts), or an error.
+    // outside {-1, 0, +1} (the +2 code of the 2-bit layouts), or an error:
+    // tf_blocks_valid's, with CAPACITY checked after LENGTH and before the
+    // scales. Nothing is written on error.
     fn tf_decode_blocks(format: i32, data: []u8, size: usize, count: usize,
                         values: []i32, value_capacity: usize,
                         scales: []u32, scale_capacity: usize) -> i64 {
@@ -192,6 +313,8 @@ module TrinityMemoryFormats {
         var bytes: usize = tf_block_bytes(format);
         if (size % bytes != 0 || size / bytes != blocks) { return TF_ERR_LENGTH as i64; }
         if (count > value_capacity || blocks > scale_capacity) { return TF_ERR_CAPACITY as i64; }
+        var valid: i64 = tf_blocks_valid(format, data, size, count);
+        if (valid < 0) { return valid; }
         var outside: i64 = 0;
         var b: usize = 0;
         while (b < blocks) {
@@ -207,6 +330,62 @@ module TrinityMemoryFormats {
             b = b + 1;
         }
         return outside;
+    }
+
+    // A base-3 byte is canonical when the upstream quantizer can write it: it
+    // equals the ceiling rule applied to the digits it decodes to. qs bytes
+    // carry five digits; qh bytes carry four, and the quantizer multiplies
+    // their value by 3 once more (the fifth digit is always 0). 13 of the 256
+    // qs values and 175 of the 256 qh values are not canonical; they decode
+    // like some canonical byte, so upstream accepts them silently.
+    fn tf_b3_canonical(byte: u32, digits: usize) -> bool {
+        var q: u32 = 0;
+        var n: usize = 0;
+        while (n < digits) { q = q * 3 + ((tf_b3_value(byte, n) + 1) as u32); n = n + 1; }
+        if (digits == 4) { q = q * 3; }
+        return (q * 256 + 242) / 243 == byte;
+    }
+
+    // Flags of `count` weights in a block format (flags holds TF_FLAG_COUNT
+    // slots, cleared first): outside_ternary (2-bit code 3), noncanonical_base3
+    // (TQ1_0, PTQ1_0 bytes), scale_zero and scale_negative (fp16 d). Returns 0
+    // or tf_blocks_valid's rejection, with `flags` left cleared.
+    fn tf_block_flags(format: i32, data: []u8, size: usize, count: usize, flags: []i64) -> i64 {
+        tf_flags_clear(flags);
+        var valid: i64 = tf_blocks_valid(format, data, size, count);
+        if (valid < 0) { return valid; }
+        var blocks: usize = valid as usize;
+        var per: usize = tf_block_elements(format);
+        var bytes: usize = tf_block_bytes(format);
+        var b: usize = 0;
+        while (b < blocks) {
+            var base: usize = b * bytes;
+            var sclass: i32 = tf_scale_class(tf_read_u16(data, base + tf_scale_offset(format)), TF_KIND_F16);
+            if (sclass == 1) { flags[TF_FLAG_SCALE_ZERO] = flags[TF_FLAG_SCALE_ZERO] + 1; }
+            if (sclass == 2) { flags[TF_FLAG_SCALE_NEGATIVE] = flags[TF_FLAG_SCALE_NEGATIVE] + 1; }
+            var e: usize = 0;
+            while (e < per) {
+                if (tf_block_value(format, data, base, e) > 1) {
+                    flags[TF_FLAG_OUTSIDE_TERNARY] = flags[TF_FLAG_OUTSIDE_TERNARY] + 1;
+                }
+                e = e + 1;
+            }
+            if (format == TF_TQ1_0 || format == TF_PTQ1_0) {
+                var wide: usize = tf_b3_wide(format);
+                var five: usize = wide + wide / 2;
+                var j: usize = 0;
+                while (j < five + wide / 8) {
+                    var digits: usize = 5;
+                    if (j >= five) { digits = 4; }
+                    if (!tf_b3_canonical(data[base + j] as u32, digits)) {
+                        flags[TF_FLAG_NONCANONICAL_BASE3] = flags[TF_FLAG_NONCANONICAL_BASE3] + 1;
+                    }
+                    j = j + 1;
+                }
+            }
+            b = b + 1;
+        }
+        return 0;
     }
 
     fn tf_code_allowed(format: i32, value: i32) -> bool {
@@ -293,36 +472,44 @@ module TrinityMemoryFormats {
     }
 
     // ---- I2_S (bitnet.cpp) ----------------------------------------------------
-    // n weights in 128-weight blocks of 32 bytes; byte p of block b holds
-    // weights 128b+p, +32, +64, +96 at bit 6, 4, 2, 0. Then one little-endian
-    // f32 scale and a 28-byte trailer (see tf_i2s_trailer_nonzero). Codes 0, 1, 2 mean -1, 0, +1; code 3 decodes
-    // to 0 upstream and is reported here as the value 3.
+    // The x86 ACT_PARALLEL layout (the default build: include/gemm-config.h
+    // defines ACT_PARALLEL): n weights in 128-weight blocks of 32 bytes; byte
+    // p of block b holds weights 128b+p, +32, +64, +96 at bit 6, 4, 2, 0. Then
+    // one little-endian f32 scale at byte n/4 and a 28-byte trailer (see
+    // tf_i2s_trailer_nonzero). Codes 0, 1, 2 mean -1, 0, +1. The quantizers
+    // never write code 3 and no dequantizer defines it; it is reported as
+    // code - 1 = +2, like the other 2-bit layouts, and counted as outside.
+    // The ARM (QK 64) and 1x4 row-interleaved layouts store the same codes in
+    // other bytes; their bytes are valid here and decode to other weights.
     fn tf_i2s_bytes(count: usize) -> usize { return count / 4 + 32; }
 
+    // LENGTH (count 0 or not whole blocks, size not n/4 + 32), CAPACITY, then
+    // SCALE_NONFINITE for a NaN or infinite f32 scale. Nothing is written on
+    // error.
     fn tf_decode_i2s(data: []u8, size: usize, count: usize, values: []i32, value_capacity: usize,
                      scale: []u32) -> i64 {
         if (count == 0 || count % 128 != 0) { return TF_ERR_LENGTH as i64; }
         if (size != tf_i2s_bytes(count)) { return TF_ERR_LENGTH as i64; }
         if (count > value_capacity) { return TF_ERR_CAPACITY as i64; }
+        var word: u32 = tf_read_u32(data, count / 4);
+        if (tf_scale_class(word, TF_KIND_F32) < 0) { return TF_ERR_SCALE_NONFINITE as i64; }
         var outside: i64 = 0;
         var e: usize = 0;
         while (e < count) {
             var within: usize = e % 128;
             var byte: u32 = data[32 * (e / 128) + within % 32] as u32;
             var code: u32 = (byte >> (6 - 2 * (within / 32))) & 3;
-            var value: i32 = (code as i32) - 1;
-            if (code == 3) { value = 3; outside = outside + 1; }
-            values[e] = value;
+            if (code == 3) { outside = outside + 1; }
+            values[e] = (code as i32) - 1;
             e = e + 1;
         }
-        scale[0] = tf_read_u32(data, count / 4);
+        scale[0] = word;
         return outside;
     }
 
-    // Nonzero bytes among the 28 that follow the scale. bitnet.cpp's current
-    // converter writes zeros there and the dequantizer never reads them, so a
-    // nonzero trailer is harmless for inference but makes a file impossible to
-    // reproduce byte for byte.
+    // Nonzero bytes among the 28 that follow the scale. The dequantizer never
+    // reads them; bitnet.cpp's Python converter writes zeros, while its C
+    // quantize_i2_s leaves whatever the reused output buffer held.
     fn tf_i2s_trailer_nonzero(data: []u8, size: usize, count: usize) -> i64 {
         if (count == 0 || count % 128 != 0 || size != tf_i2s_bytes(count)) { return TF_ERR_LENGTH as i64; }
         var nonzero: i64 = 0;
@@ -334,15 +521,46 @@ module TrinityMemoryFormats {
         return nonzero;
     }
 
+    // Flags of an I2_S tensor (cleared first): outside_ternary (code 3),
+    // scale_zero or scale_negative (the f32 scale), trailer_nonzero (bytes).
+    // Returns 0 or tf_decode_i2s's rejection, without CAPACITY.
+    fn tf_i2s_flags(data: []u8, size: usize, count: usize, flags: []i64) -> i64 {
+        tf_flags_clear(flags);
+        if (count == 0 || count % 128 != 0 || size != tf_i2s_bytes(count)) { return TF_ERR_LENGTH as i64; }
+        var word: u32 = tf_read_u32(data, count / 4);
+        var sclass: i32 = tf_scale_class(word, TF_KIND_F32);
+        if (sclass < 0) { return TF_ERR_SCALE_NONFINITE as i64; }
+        if (sclass == 1) { flags[TF_FLAG_SCALE_ZERO] = 1; }
+        if (sclass == 2) { flags[TF_FLAG_SCALE_NEGATIVE] = 1; }
+        var p: usize = 0;
+        while (p < count / 4) {
+            var byte: u32 = data[p] as u32;
+            var slot: u32 = 0;
+            while (slot < 4) {
+                if (((byte >> (2 * slot)) & 3) == 3) {
+                    flags[TF_FLAG_OUTSIDE_TERNARY] = flags[TF_FLAG_OUTSIDE_TERNARY] + 1;
+                }
+                slot = slot + 1;
+            }
+            p = p + 1;
+        }
+        flags[TF_FLAG_TRAILER_NONZERO] = tf_i2s_trailer_nonzero(data, size, count);
+        return 0;
+    }
+
     fn tf_encode_i2s(values: []i32, count: usize, scale: u32, out: []u8, capacity: usize) -> i64 {
         if (count == 0 || count % 128 != 0) { return TF_ERR_LENGTH as i64; }
         var size: usize = tf_i2s_bytes(count);
         if (capacity < size) { return TF_ERR_CAPACITY as i64; }
+        var check: usize = 0;
+        while (check < count) {
+            if (values[check] < -1 || values[check] > 1) { return TF_ERR_CODE as i64; }
+            check = check + 1;
+        }
         var i: usize = 0;
         while (i < size) { out[i] = 0; i = i + 1; }
         var e: usize = 0;
         while (e < count) {
-            if (values[e] < -1 || values[e] > 1) { return TF_ERR_CODE as i64; }
             var within: usize = e % 128;
             var at: usize = 32 * (e / 128) + within % 32;
             var code: u32 = (values[e] + 1) as u32;
@@ -387,6 +605,11 @@ module TrinityMemoryFormats {
         var stride: usize = rows / 4;
         if (stride > capacity / cols) { return TF_ERR_CAPACITY as i64; }
         var size: usize = stride * cols;
+        var check: usize = 0;
+        while (check < rows * cols) {
+            if (values[check] < -1 || values[check] > 1) { return TF_ERR_CODE as i64; }
+            check = check + 1;
+        }
         var z: usize = 0;
         while (z < size) { out[z] = 0; z = z + 1; }
         var i: usize = 0;
@@ -394,7 +617,6 @@ module TrinityMemoryFormats {
             var k: usize = 0;
             while (k < cols) {
                 var value: i32 = values[i * cols + k];
-                if (value < -1 || value > 1) { return TF_ERR_CODE as i64; }
                 var at: usize = (i % stride) * cols + k;
                 out[at] = ((out[at] as u32) | (((value + 1) as u32) << (2 * (i / stride)))) as u8;
                 k = k + 1;
@@ -404,12 +626,13 @@ module TrinityMemoryFormats {
         return size as i64;
     }
 
-    // ---- Linear 2-bit rows (MLX 2-bit words, ONNX MatMulNBits bits=2) --------
+    // ---- Linear 2-bit rows ------------------------------------------------------
     // Row n starts at n * row_bytes; weight k sits in byte k/4 at bits 2(k%4),
     // low bits first (MLX: uint32 words little-endian, 16 codes per word; ONNX:
-    // blocks of bs weights, bs a multiple of 4, rows padded to whole blocks).
-    // value = code - zero_point: MLX's ternary convention bias = -scale is
-    // zero_point 1; ONNX's default zero point for bits=2 is 2.
+    // blocks of bs weights, rows padded to whole blocks). value = code -
+    // zero_point for every weight: MLX's ternary convention bias = -scale is
+    // zero_point 1; ONNX's default zero point for bits=2 is 2. tf_decode_mlx2
+    // and tf_decode_onnx2 (per-block zero points) add each format's rules.
     fn tf_decode_linear2(data: []u8, size: usize, rows: usize, cols: usize, row_bytes: usize,
                          zero_point: i32, values: []i32, value_capacity: usize) -> i64 {
         if (rows == 0 || cols == 0 || row_bytes < (cols + 3) / 4) { return TF_ERR_LENGTH as i64; }
@@ -436,6 +659,12 @@ module TrinityMemoryFormats {
         if (rows == 0 || cols == 0 || row_bytes < (cols + 3) / 4) { return TF_ERR_LENGTH as i64; }
         if (rows > capacity / row_bytes) { return TF_ERR_CAPACITY as i64; }
         var size: usize = rows * row_bytes;
+        var check: usize = 0;
+        while (check < rows * cols) {
+            var shifted: i32 = values[check] + zero_point;
+            if (shifted < 0 || shifted > 3) { return TF_ERR_CODE as i64; }
+            check = check + 1;
+        }
         var z: usize = 0;
         while (z < size) { out[z] = 0; z = z + 1; }
         var n: usize = 0;
@@ -443,7 +672,6 @@ module TrinityMemoryFormats {
             var k: usize = 0;
             while (k < cols) {
                 var code: i32 = values[n * cols + k] + zero_point;
-                if (code < 0 || code > 3) { return TF_ERR_CODE as i64; }
                 var at: usize = n * row_bytes + k / 4;
                 out[at] = ((out[at] as u32) | ((code as u32) << (2 * (k % 4)))) as u8;
                 k = k + 1;
@@ -451,6 +679,162 @@ module TrinityMemoryFormats {
             n = n + 1;
         }
         return size as i64;
+    }
+
+    // ---- MLX 2-bit affine (ml-explore/mlx mlx/ops.cpp) ------------------------
+    // w: uint32 [rows, cols/16]; code k of a row sits in bits 2(k%16) of word
+    // k/16, which little-endian puts in byte k/4 at bits 2(k%4). scales and
+    // biases: [rows, cols/group], group 32, 64 or 128; value = scale*q + bias.
+    // A group is ternary exactly when bias == -scale; its trit is then q - 1
+    // (zero point 1) and code 3 is +2.
+    fn tf_mlx2_group_valid(cols: usize, group: usize) -> bool {
+        if (group != 32 && group != 64 && group != 128) { return false; }
+        return cols % group == 0;
+    }
+
+    fn tf_decode_mlx2(data: []u8, size: usize, rows: usize, cols: usize, group: usize,
+                      values: []i32, value_capacity: usize) -> i64 {
+        if (rows == 0 || cols == 0 || !tf_mlx2_group_valid(cols, group)) { return TF_ERR_LENGTH as i64; }
+        return tf_decode_linear2(data, size, rows, cols, cols / 4, 1, values, value_capacity);
+    }
+
+    fn tf_encode_mlx2(values: []i32, rows: usize, cols: usize, group: usize, out: []u8, capacity: usize) -> i64 {
+        if (rows == 0 || cols == 0 || !tf_mlx2_group_valid(cols, group)) { return TF_ERR_LENGTH as i64; }
+        return tf_encode_linear2(values, rows, cols, cols / 4, 1, out, capacity);
+    }
+
+    // Scales and biases of `count` groups, both of `kind`. A NaN or infinite
+    // scale or bias returns TF_ERR_SCALE_NONFINITE before anything is counted;
+    // otherwise adds scale_zero and scale_negative (scales only; a bias may
+    // have either sign) and affine_not_ternary (bias != -scale) to `flags`.
+    fn tf_affine_check(scales: []u32, biases: []u32, count: usize, kind: i32, flags: []i64) -> i64 {
+        var i: usize = 0;
+        while (i < count) {
+            if (tf_scale_class(scales[i], kind) < 0 || tf_scale_class(biases[i], kind) < 0) {
+                return TF_ERR_SCALE_NONFINITE as i64;
+            }
+            i = i + 1;
+        }
+        var status: i64 = tf_scales_check(scales, count, kind, flags);
+        if (status < 0) { return status; }
+        flags[TF_FLAG_AFFINE_NOT_TERNARY] = flags[TF_FLAG_AFFINE_NOT_TERNARY] + tf_affine_not_ternary(scales, biases, count, kind);
+        return 0;
+    }
+
+    // ---- ONNX Runtime com.microsoft.MatMulNBits, bits = 2 ---------------------
+    // B: uint8 (N, k_blocks, block_size/4) with k_blocks = ceil(K/block_size):
+    // weight (n, k) sits in byte n*k_blocks*block_size/4 + k/4 at bits 2(k%4).
+    // zero_points: absent (zp_size 0; every block uses 2^(bits-1) = 2) or
+    // packed uint8 (N, ceil(k_blocks/4)): block b of row n in byte
+    // n*ceil(k_blocks/4) + b/4 at bits 2(b%4). value = code - zero point, so
+    // under the default code 0 is -2. Codes at k >= K in the last block are
+    // padding. block_size is a power of two, at least 16.
+    fn tf_onnx2_geometry(n: usize, k: usize, block_size: usize) -> bool {
+        if (n == 0 || k == 0 || block_size < 16) { return false; }
+        return (block_size & (block_size - 1)) == 0;
+    }
+
+    fn tf_onnx2_row_bytes(k: usize, block_size: usize) -> usize {
+        return ((k + block_size - 1) / block_size) * (block_size / 4);
+    }
+
+    fn tf_onnx2_zp_row(k: usize, block_size: usize) -> usize {
+        return ((k + block_size - 1) / block_size + 3) / 4;
+    }
+
+    fn tf_onnx2_zero_point(zero_points: []u8, zp_size: usize, n: usize, b: usize, zp_row: usize) -> i32 {
+        if (zp_size == 0) { return 2; }
+        var byte: u32 = zero_points[n * zp_row + b / 4] as u32;
+        return ((byte >> (2 * (b % 4))) & 3) as i32;
+    }
+
+    // LENGTH when the geometry is invalid, size is not N rows of whole blocks,
+    // or zp_size is neither 0 nor N*ceil(k_blocks/4).
+    fn tf_onnx2_valid(size: usize, n: usize, k: usize, block_size: usize, zp_size: usize) -> i64 {
+        if (!tf_onnx2_geometry(n, k, block_size)) { return TF_ERR_LENGTH as i64; }
+        var row: usize = tf_onnx2_row_bytes(k, block_size);
+        if (size % row != 0 || size / row != n) { return TF_ERR_LENGTH as i64; }
+        var zp_row: usize = tf_onnx2_zp_row(k, block_size);
+        if (zp_size != 0 && (zp_size % zp_row != 0 || zp_size / zp_row != n)) { return TF_ERR_LENGTH as i64; }
+        return 0;
+    }
+
+    // Decodes N*K weights, row n first. Returns the count outside {-1, 0, +1}.
+    fn tf_decode_onnx2(data: []u8, size: usize, n: usize, k: usize, block_size: usize,
+                       zero_points: []u8, zp_size: usize, values: []i32, value_capacity: usize) -> i64 {
+        var valid: i64 = tf_onnx2_valid(size, n, k, block_size, zp_size);
+        if (valid < 0) { return valid; }
+        if (n > value_capacity / k) { return TF_ERR_CAPACITY as i64; }
+        var row: usize = tf_onnx2_row_bytes(k, block_size);
+        var zp_row: usize = tf_onnx2_zp_row(k, block_size);
+        var outside: i64 = 0;
+        var r: usize = 0;
+        while (r < n) {
+            var c: usize = 0;
+            while (c < k) {
+                var code: u32 = ((data[r * row + c / 4] as u32) >> (2 * (c % 4))) & 3;
+                var value: i32 = (code as i32) - tf_onnx2_zero_point(zero_points, zp_size, r, c / block_size, zp_row);
+                if (value < -1 || value > 1) { outside = outside + 1; }
+                values[r * k + c] = value;
+                c = c + 1;
+            }
+            r = r + 1;
+        }
+        return outside;
+    }
+
+    // Inverse of tf_decode_onnx2; padding codes are written as 0. CODE when a
+    // value plus its block's zero point leaves 0..3. Nothing is written on error.
+    fn tf_encode_onnx2(values: []i32, n: usize, k: usize, block_size: usize,
+                       zero_points: []u8, zp_size: usize, out: []u8, capacity: usize) -> i64 {
+        if (!tf_onnx2_geometry(n, k, block_size)) { return TF_ERR_LENGTH as i64; }
+        var row: usize = tf_onnx2_row_bytes(k, block_size);
+        var zp_row: usize = tf_onnx2_zp_row(k, block_size);
+        if (zp_size != 0 && (zp_size % zp_row != 0 || zp_size / zp_row != n)) { return TF_ERR_LENGTH as i64; }
+        if (n > capacity / row) { return TF_ERR_CAPACITY as i64; }
+        var r: usize = 0;
+        while (r < n) {
+            var c: usize = 0;
+            while (c < k) {
+                var code: i32 = values[r * k + c] + tf_onnx2_zero_point(zero_points, zp_size, r, c / block_size, zp_row);
+                if (code < 0 || code > 3) { return TF_ERR_CODE as i64; }
+                c = c + 1;
+            }
+            r = r + 1;
+        }
+        var z: usize = 0;
+        while (z < n * row) { out[z] = 0; z = z + 1; }
+        r = 0;
+        while (r < n) {
+            var c2: usize = 0;
+            while (c2 < k) {
+                var code2: i32 = values[r * k + c2] + tf_onnx2_zero_point(zero_points, zp_size, r, c2 / block_size, zp_row);
+                var at: usize = r * row + c2 / 4;
+                out[at] = ((out[at] as u32) | ((code2 as u32) << (2 * (c2 % 4)))) as u8;
+                c2 = c2 + 1;
+            }
+            r = r + 1;
+        }
+        return (n * row) as i64;
+    }
+
+    // Nonzero codes in the padding of each row (k >= K in the last block).
+    // ONNX Runtime never reads them.
+    fn tf_onnx2_padding_nonzero(data: []u8, size: usize, n: usize, k: usize, block_size: usize) -> i64 {
+        var valid: i64 = tf_onnx2_valid(size, n, k, block_size, 0);
+        if (valid < 0) { return valid; }
+        var row: usize = tf_onnx2_row_bytes(k, block_size);
+        var nonzero: i64 = 0;
+        var r: usize = 0;
+        while (r < n) {
+            var c: usize = k;
+            while (c < row * 4) {
+                if ((((data[r * row + c / 4] as u32) >> (2 * (c % 4))) & 3) != 0) { nonzero = nonzero + 1; }
+                c = c + 1;
+            }
+            r = r + 1;
+        }
+        return nonzero;
     }
 
     // ---- GGUF v3 tensor lookup ------------------------------------------------
@@ -469,6 +853,8 @@ module TrinityMemoryFormats {
         name_at: u64,
         name_size: u64,
         tensors: u64,
+        bitnet: bool,
+        next_offset: u64,
     }
 
     fn tf_same(data: []u8, at: usize, size: usize, text: []u8, text_size: usize) -> bool {
@@ -541,7 +927,9 @@ module TrinityMemoryFormats {
     // Walks a GGUF v3 prefix and fills `info` for tensor `name`: its ggml type,
     // dims (ne[0] first, the contiguous one), and the absolute byte offset
     // data_start + offset. Returns 0, TF_ERR_NOT_FOUND, TF_ERR_TRUNCATED (read
-    // at least info.needed bytes and retry) or TF_ERR_CONTAINER.
+    // at least info.needed bytes and retry) or TF_ERR_CONTAINER. It also sets
+    // the namespace markers info.prism and info.bitnet (tf_format_of_gguf) and
+    // info.next_offset, the nearest tensor offset above this one (0 if none).
     fn tf_gguf_find(data: []u8, size: usize, name: []u8, name_size: usize, info: *TFTensorInfo) -> i32 {
         return tf_gguf_select(data, size, name, name_size, 0, false, info);
     }
@@ -556,6 +944,7 @@ module TrinityMemoryFormats {
                       info: *TFTensorInfo) -> i32 {
         info.needed = 24; info.alignment = 32; info.prism = false; info.dims = 0;
         info.name_at = 0; info.name_size = 0; info.tensors = 0;
+        info.bitnet = false; info.next_offset = 0; info.offset = 0; info.tensor_type = 0;
         info.d0 = 1; info.d1 = 1; info.d2 = 1; info.d3 = 1;
         if (size < 24) { return TF_ERR_TRUNCATED; }
         if (tf_read_u32(data, 0) != 0x46554747 || tf_read_u32(data, 4) != 3) { return TF_ERR_CONTAINER; }
@@ -581,10 +970,19 @@ module TrinityMemoryFormats {
             if (key_size > 5 && tf_same_text(data, key_at, 6, "prism.", 6)) { info.prism = true; }
             var next: i64 = tf_gguf_skip(data, size, value_at, vtype, info);
             if (next < 0) { return next as i32; }
+            // bitnet.cpp's converter names its architecture "bitnet-b1.58";
+            // ggml-org llama.cpp has no such architecture (src/llama-arch.cpp).
+            if (vtype == 8 && tf_same_text(data, key_at, key_size as usize, "general.architecture", 20)) {
+                var arch_size: u64 = tf_read_u64(data, value_at as usize);
+                if (tf_same_text(data, (value_at + 8) as usize, arch_size as usize, "bitnet-b1.58", 12)) {
+                    info.bitnet = true;
+                }
+            }
             pos = next as u64;
             k = k + 1;
         }
         var found: bool = false;
+        var records: u64 = pos;
         var t: u64 = 0;
         while (t < tensors) {
             if (pos + 8 > (size as u64)) { info.needed = pos + 8; return TF_ERR_TRUNCATED; }
@@ -595,6 +993,8 @@ module TrinityMemoryFormats {
             if (dims == 0 || dims > 4) { return TF_ERR_CONTAINER; }
             var record_end: u64 = pos + 12 + length + 8 * (dims as u64) + 12;
             if (record_end > (size as u64)) { info.needed = record_end; return TF_ERR_TRUNCATED; }
+            var record_type: u32 = tf_read_u32(data, (pos + 12 + length + 8 * (dims as u64)) as usize);
+            if (record_type == 36 || record_type == 38) { info.bitnet = true; }
             var hit: bool = false;
             if (by_index) { hit = t == index; }
             else { hit = tf_same(data, (pos + 8) as usize, length as usize, name, name_size); }
@@ -619,6 +1019,20 @@ module TrinityMemoryFormats {
         info.data_start = start;
         info.needed = start;
         if (!found) { return TF_ERR_NOT_FOUND; }
+        // Second walk over the complete records: the nearest offset above this
+        // tensor's bounds its extent (0 when it is the last one).
+        var walk: u64 = records;
+        var u: u64 = 0;
+        while (u < tensors) {
+            var u_length: u64 = tf_read_u64(data, walk as usize);
+            var u_dims: u64 = tf_read_u32(data, (walk + 8 + u_length) as usize) as u64;
+            var u_offset: u64 = tf_read_u64(data, (walk + 12 + u_length + 8 * u_dims + 4) as usize);
+            if (u_offset > info.offset && (info.next_offset == 0 || u_offset < info.next_offset)) {
+                info.next_offset = u_offset;
+            }
+            walk = walk + 12 + u_length + 8 * u_dims + 12;
+            u = u + 1;
+        }
         return 0;
     }
 
@@ -627,14 +1041,34 @@ module TrinityMemoryFormats {
         return info.d0 * info.d1 * info.d2 * info.d3;
     }
 
-    // Stored bytes of a GGUF tensor in one of our ternary layouts, 0 otherwise.
+    // Stored bytes of a GGUF tensor in one of our ternary layouts, 0 otherwise
+    // (including types that tf_format_of_gguf rejects).
     fn tf_gguf_tensor_bytes(info: *TFTensorInfo) -> u64 {
-        var format: i32 = tf_format_of_ggml(info.tensor_type, info.prism);
+        var format: i32 = tf_format_of_gguf(info.tensor_type, info.prism, info.bitnet);
+        if (format <= 0) { return 0; }
         var count: u64 = tf_tensor_elements(info);
         if (format == TF_I2_S) { return count / 4 + 32; }
         var per: u64 = tf_block_elements(format) as u64;
         if (per == 0 || info.d0 % per != 0) { return 0; }
         return (count / per) * (tf_block_bytes(format) as u64);
+    }
+
+    // Checks one tensor record found by tf_gguf_find or tf_gguf_nth, in this
+    // order: the type id under the file's namespace markers (TYPE_AMBIGUOUS,
+    // LAYOUT_UNSUPPORTED), the offset against general.alignment (MISALIGNED;
+    // gguf.cpp requires aligned, contiguous offsets), for a ternary layout the
+    // row length (LENGTH when ne[0] is not whole blocks) and the extent
+    // (EXTENT when its bytes run past the next tensor's offset). Returns our
+    // format id, or 0 for a type that is not a ternary layout.
+    fn tf_gguf_check(info: *TFTensorInfo) -> i32 {
+        var format: i32 = tf_format_of_gguf(info.tensor_type, info.prism, info.bitnet);
+        if (format < 0) { return format; }
+        if (info.offset % info.alignment != 0) { return TF_ERR_MISALIGNED; }
+        if (format == 0) { return 0; }
+        var bytes: u64 = tf_gguf_tensor_bytes(info);
+        if (bytes == 0) { return TF_ERR_LENGTH; }
+        if (info.next_offset != 0 && info.offset + bytes > info.next_offset) { return TF_ERR_EXTENT; }
+        return format;
     }
 
     // ---- BitNet b1.58 absmean ternarization from bf16 master weights -------
