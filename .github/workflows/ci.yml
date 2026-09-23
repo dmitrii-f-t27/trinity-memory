@@ -79,6 +79,62 @@ jobs:
         with:
           name: native-t27-evidence
           path: build/t27/
+  upstream-15193:
+    # llama.cpp issue 15193 harness: pinned upstream TQ1_0/TQ2_0 functions
+    # against the t27 decoders; x86_64 AVX2 natively on Ubuntu, NEON on macOS.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      CC: clang
+      CXX: clang++
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned compiler
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+      - name: Install build tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld libssl-dev
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        # Apple clang has no wasm32 target; tools/build-t27-wasm.sh uses zig.
+        run: brew install zig lld
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-${{ runner.os }}-${{ runner.arch }}-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - uses: actions/cache@v4
+        with:
+          path: build/fixtures
+          key: fixtures-${{ hashFiles('fixtures/manifest.lock.json') }}
+      - name: Generate the t27 decoders
+        run: sh tools/build-t27.sh
+      - name: Upstream sources, random blocks and real tensors, every CPU variant
+        run: PYTHON=python sh tests/upstream/run-llamacpp-15193.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: upstream-15193-${{ matrix.os }}
+          path: |
+            build/upstream/15193/*.log
+            build/upstream/15193/summary.txt
   python:
     needs: native
     runs-on: ubuntu-latest
