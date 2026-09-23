@@ -1,0 +1,44 @@
+{
+ "schema": "trinity.fpga-trigger-ab.v1",
+ "date": "2026-09-22",
+ "board": "ALINX AX7203 S/N 000469, UART /dev/cu.usbserial-110 115200 8N1",
+ "method": "open the port, wait until the line has been quiet for 0.5 s, send one byte, read for 5 s, count report headers (H lines); one run of the t27 player is 15200 bytes",
+ "old_player": {
+  "bitstream": "CI run 34625573482 (master f07a667), sha256 fb98bb90...",
+  "rule": "any falling edge of RX queues a start",
+  "results": [
+   {
+    "trigger": "0x72 ('r', three falling edges)",
+    "bytes": 30400,
+    "runs": 2
+   },
+   {
+    "trigger": "0x55 (five falling edges)",
+    "bytes": 30400,
+    "runs": 2
+   },
+   {
+    "trigger": "0xff (start bit only)",
+    "bytes": 15200,
+    "runs": 1
+   }
+  ]
+ },
+ "fixed_player": {
+  "bitstream": "reports/fpga/build-2026-09-22-941c16c-player",
+  "rule": "a falling edge of RX starts a run only while idle, read from the old shift-register values (t27/rtl/fpga_trace_player.t27)",
+  "results": [
+   {
+    "trigger": "0x72",
+    "bytes": 15200,
+    "runs": 1
+   },
+   {
+    "trigger": "0x55",
+    "bytes": 15200,
+    "runs": 1
+   }
+  ]
+ },
+ "captures": "three captures of the 941c16c player (two with 0x72, one with 0xff): PASS, 34 vectors, one run each"
+}

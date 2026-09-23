@@ -60,6 +60,9 @@ def main():
     parser.add_argument("--source", default="", help="where the build ran (CI run id or 'local')")
     parser.add_argument("--part", default="xc7a200tfbg484-2")
     parser.add_argument("--top", default="tms_trace_player_ax7203")
+    parser.add_argument("--flow", default="yosys synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7; nextpnr-xilinx --placer sa "
+                        "--router router1 --timing-allow-fail; prjxray fasm2frames + xc7frames2bit (regymm/openxc7 image)",
+                        help="free-text description of the flow that built this bitstream")
     parser.add_argument("--output", required=True, help="report directory to create")
     args = parser.parse_args()
     src = Path(args.artifact_dir)
@@ -69,8 +72,7 @@ def main():
         "schema": "trinity.fpga-build.v1",
         "written_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "commit": args.commit, "source": args.source, "part": args.part, "top": args.top,
-        "flow": "yosys synth_xilinx -flatten -abc9 -nocarry -nodsp -family xc7; nextpnr-xilinx --placer sa --router router1 "
-                "--timing-allow-fail; prjxray fasm2frames + xc7frames2bit (regymm/openxc7 image)",
+        "flow": args.flow,
         "files": {},
     }
     for name in ("yosys_stat.txt", "nextpnr.log"):  # yosys.log is megabytes; its hash is enough

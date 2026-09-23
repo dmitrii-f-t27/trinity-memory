@@ -10,7 +10,9 @@ Trinity описана в [README](../README.md), этапы развития �
 формат файла и согласованные с ним RTL-декодеры. На синтетическом наборе из
 65 536 весов dense5 занимает 13 108 байт против 16 384 у 2-битного baseline;
 при структурном ограничении разреженности — 8 192 байта. Веса восстанавливаются
-точно. Измерения на физической FPGA и оценка качества модели — следующий этап».
+точно. На плате AX7203 тот же подход проверен в блочной памяти: 45 блоков RAMB36
+вместо 55 на один тензор. Оценка качества модели, DDR и энергопотребление —
+следующий этап».
 
 Источник чисел: [`../reports/benchmark.json`](../reports/benchmark.json).
 Спецификация и воспроизведение: [`../README.md`](../README.md),
@@ -24,15 +26,17 @@ Trinity описана в [README](../README.md), этапы развития �
 3. Изменить пять тритов в интерактивном кодировщике: один байт на входе,
    пять двухбитных lanes на выходе декодера.
 4. Запустить `make check`: Python проверяет кодеки/контейнер, Icarus симулирует RTL.
-5. Показать план измерения FPGA. Числа по байтам уже подтверждены; частота,
-   энергопотребление, физические BRAM и tokens/s требуют отдельного измерения.
+5. Показать измерения на FPGA: число блоков BRAM для трёх раскладок одного тензора
+   (55 / 50 / 45 RAMB36E1, [hardware.md](hardware.md)). Энергопотребление, DDR и
+   tokens/s требуют отдельного измерения.
 
 ## English draft for a repository description
 
 Reproducible ternary weight storage experiments: lossless dense and structured
 sparse codecs, a checksummed binary format, matching Verilog decoders, exhaustive
-simulation tests, and an offline benchmark report. Hardware and model-quality
-validation remain separate next steps.
+simulation tests, an offline benchmark report, and block-RAM packing measured on an
+AX7203 FPGA (45 RAMB36 instead of 55 for the same tensor). Model quality, DDR and
+power remain separate next steps.
 
 ## Дальнейшая интеграция
 

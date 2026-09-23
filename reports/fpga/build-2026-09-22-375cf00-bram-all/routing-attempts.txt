@@ -1,0 +1,41 @@
+# All three layouts in one bitstream (commit 375cf00, BRAM_TRITS 1013760): place-and-route attempts, 2026-09-22
+# Netlist: yosys 0.69 native, this directory's yosys_stat.txt (150 RAMB36E1). nextpnr-xilinx 45a986b, --freq 200 --timing-allow-fail.
+# The heap attempts were stopped by hand (router1 and router2 still far from done);
+# the sa attempts failed in placement (nextpnr-xilinx A5FF validity check).
+# The last lines of each log follow.
+
+## nextpnr_heap_seed1.log -- regymm/openxc7 image (amd64 under emulation)
+Info: Max frequency for clock    'clk': 26.92 MHz (FAIL at 200.00 MHz)
+Info: Routing 64789 arcs.
+Info:      84000 |    13091      70908 |  400   600 |     12555|     304.07    2899.95|
+Info:      85000 |    13491      71508 |  400   600 |     12490|     460.62    3360.57|
+
+## nextpnr_heap_seed1.log -- native arm64 build
+Info: Max frequency for clock    'clk': 28.61 MHz (FAIL at 200.00 MHz)
+Info: Routing 64387 arcs.
+Info:      83000 |    11080      71919 |  251   749 |     12565|      96.13    1946.70|
+Info:      84000 |    11257      72742 |  177   823 |     12608|     211.47    2158.17|
+
+## nextpnr_heap_seed1_router2.log -- native arm64 build
+Info: Max frequency for clock    'clk': 28.61 MHz (FAIL at 200.00 MHz)
+Info:     iter=1 wires=456879 overused=27602 overuse=36338 archfail=NA
+Info: Running main router loop...
+Info:     iter=1 wires=456879 overused=27602 overuse=36338 archfail=NA
+
+## nextpnr_heap_seed2_router2.log -- native arm64 build
+Info: Max frequency for clock    'clk': 24.50 MHz (FAIL at 200.00 MHz)
+Info:     iter=1 wires=440821 overused=24594 overuse=30377 archfail=NA
+Info: Running main router loop...
+Info:     iter=1 wires=440821 overused=24594 overuse=30377 archfail=NA
+
+## nextpnr_sa_seed3_router2.log -- native arm64 build
+ERROR: post-placement validity check failed for Bel 'SLICE_X136Y245/A5FF' (no cell)
+ERROR: Placing design failed.
+ERROR: Placing design failed.
+0 warnings, 2 errors
+
+## nextpnr_sa_seed4_router1.log -- native arm64 build
+ERROR: post-placement validity check failed for Bel 'SLICE_X132Y225/A5FF' (no cell)
+ERROR: Placing design failed.
+ERROR: Placing design failed.
+0 warnings, 2 errors
