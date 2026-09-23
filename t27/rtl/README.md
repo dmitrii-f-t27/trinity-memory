@@ -39,6 +39,15 @@ with original commit and byte hashes recorded in
   ignored writes/starts while busy, reset abort that preserves RAM contents,
   final lane masking and invalid-code zeroing in native functions.
 
+- Block-RAM trit packing bench (`bram_trit_codec.t27`, `bram_trit_engine.t27`,
+  `fpga_bram_bench.t27`, wired by `fpga/ax7203/tms_bram_bench.v`): encoder and
+  decoder of three 36-bit word layouts (18, 20 and 22 trits per word), a store
+  that writes a 64-bit LFSR trit stream, reads it back one word per clock and
+  checks every lane, and the sequencer that reports the results over the UART.
+  `tests/test_bram_trit_packing.py` compares the generated C with
+  `tools/bram_trit_model.py` on random inputs; `make -C fpga/ax7203 bram-sim`
+  runs the whole bench in Icarus. See `docs/hardware.md`, "Block-RAM trit packing".
+
 ## Current compiler boundaries
 
 - `trinity_dot_stream_t27` supports `ACC_WIDTH=2..32`; the native accumulator is
@@ -74,6 +83,26 @@ with original commit and byte hashes recorded in
 - The compiler adds `clk`, `rst_n`, `en`, `ready` ports. Adapters tie its
   `rst_n/en` high and route the original synchronous `rst` to the native
   `reset` argument. Memory data has no reset initializer.
+- Arrays become block RAM only with yosys `read_verilog -nomem2reg` (the array
+  write sits in a process with an asynchronous reset), a read register assigned
+  straight from the array and no reset value on it. Integer types are
+  `u8/u16/u32/u64`: an unknown width such as `u36` silently becomes 32 bits, so a
+  36-bit word is a masked `u64`.
+- `gen-c` emits constants as untyped macros (shift a typed local, not a constant,
+  past bit 31) and initializes a module array with `= 0`, which C rejects; the
+  C tests of `bram_trit_engine.t27` rewrite that one line to `= {0}`.
+- `gen-c` does not lower the module-level assignments of a clocked module, so
+  the generated C `on_clock` of such a module is not a model of it (the C runner
+  checks its functions; the module as a whole is checked in Verilog).
+- Locals of `on_clock` are declared where they appear in the generated Verilog,
+  which plain Verilog rejects after a statement; intermediate values are
+  module-level assignments instead.
+- `*` lowers to a 64-step shift-add function and a division of a `u64` by a
+  constant to a 64-bit divider; constant multiplies are written as shifts and
+  adds, digit arithmetic is 16 bits wide. A heavy function called inside a
+  branch of another function makes yosys spend minutes in `proc`; such values
+  are computed into locals first and selected afterwards.
 
-Evidence from these tests is RTL simulation. FPGA place-and-route, inferred
-RAM width, timing, board behavior, DDR/HBM throughput and power are unmeasured.
+Evidence from these tests is RTL simulation. Board runs, block RAM mapping and
+place-and-route of the FPGA designs built from these modules are recorded in
+`docs/hardware.md` and `reports/fpga/`; DDR/HBM throughput and power are unmeasured.

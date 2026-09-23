@@ -66,8 +66,9 @@ DDR throughput, power, or model quality.
 
 **Deliverable:** buildable packed and 2-bit baseline designs for an explicitly
 identified board/device, using the same logical fixture and output interface.
-AX7203 is the candidate in the initial research note; exact part, clock, loader,
-memory policy, and toolchain must be verified before implementation.
+AX7203 was the candidate in the initial research note and is now the board in use
+(XC7A200T-FBG484-2, 25 MHz, open flow; see hardware.md): the packed and 2-bit
+layouts are built and compared there ("Block-RAM trit packing").
 
 **Acceptance evidence:**
 

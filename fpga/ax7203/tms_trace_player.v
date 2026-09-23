@@ -101,7 +101,7 @@ module tms_trace_player_ax7203 #(
         .edge_label(edge_ambiguous ? 32'd7 : {30'd0, edge_label}),
         .state(), .after_line(), .vector(vector), .addr(addr), .cyc(), .stim_q(stim_q), .exp_q(), .obs_q(), .pre_q(),
         .dut_en(dut_en), .dut_reset(dut_reset), .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
-        .mism(), .mism_total(), .free_total(), .kidx(), .wait_cnt(), .auto_started(), .trigger_pending(),
+        .mism(), .mism_total(), .free_total(), .kidx(), .wait_cnt(), .auto_started(),
         .run_done(run_done), .mism_seen(mism_seen), .free_first(), .rx1(), .rx2(), .rx3(),
         .wl_reset(wl_reset), .wl_start(wl_start), .wl_load_en(wl_load_en), .wl_load_addr(wl_load_addr),
         .wl_act_valid(wl_act_valid), .wl_beat_index(), .wl_frame(), .wl_ticks(), .wl_beats(), .wl_stalls(), .wl_done(), .wl_load_ticks(),

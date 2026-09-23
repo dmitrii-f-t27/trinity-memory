@@ -30,7 +30,12 @@ stream-compute trace vectors including the joined read -> decode -> dot path mat
 the reference, a streaming workload delivered 0.94 beats per tick (23.5 M beats/s at
 25 M ticks/s) with every result recomputed by the host, and the Edge Demo classifier
 labelled all six fixtures on the device in 7 ticks each
-([reports/fpga](reports/fpga/README.md)). DDR and power remain unmeasured.
+([reports/fpga](reports/fpga/README.md)). On 2026-09-22 the block-RAM packing bench,
+also t27, stored one 1 013 760-trit tensor on the device in 55, 50 and 45 RAMB36E1
+(two bits per trit, dense5 bytes, dense5 plus a dense2 nibble in the parity bits:
+2.000, 1.800 and 1.636 bits per trit) and read every word back without error, 18, 20
+and 22 trits per read ([docs/hardware.md](docs/hardware.md)). DDR and power remain
+unmeasured.
 
 ## Five directions, one reproducible chain
 
@@ -184,9 +189,12 @@ transfer throughput if bandwidth alone limits performance. This is a model,
 not measured FPGA or inference speed. Python timings are median wall times
 from three repetitions after warm-up, not optimized CPU-kernel performance.
 
-Physical BRAM allocation, LUT use, routed timing, DDR throughput, power, and
-model quality are **not yet measured**. Continuous 27/35-bit software packing
-does not establish the physical cost of a memory device.
+For the three 36-bit word layouts, block-RAM allocation, LUT and flip-flop use
+and timing estimates are reported by the open flow (yosys, nextpnr-xilinx) for the
+AX7203's part, and all three layouts ran on the board without error
+([docs/hardware.md](docs/hardware.md), "Block-RAM trit packing"). DDR throughput,
+power, and model quality are **not yet measured**. Continuous 27/35-bit software
+packing does not establish the physical cost of a memory device.
 
 ## Place in Trinity
 
