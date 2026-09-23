@@ -103,12 +103,30 @@ if grep -q 'WARN' "$out/conformance.log"; then
     exit 1
 fi
 "${PYTHON:-python3}" tools/generate-spec-vectors.py --check
+# A seal alone does not pass for the format contracts: each spec under
+# specs/formats needs its vectors (conformance/formats_<name>.json naming the
+# spec) and a differential harness that includes its header; after the
+# harnesses run, one of them must report replaying those vectors.
+format_specs=
+if [ -d specs/formats ]; then format_specs=$(find specs/formats -name '*.t27' | sort); fi
+for spec in $format_specs; do
+    name=$(basename "$spec" .t27)
+    vectors="conformance/formats_$name.json"
+    if [ ! -f "$vectors" ] || ! grep -q "\"spec_path\": \"$spec\"" "$vectors"; then
+        echo "No vectors for $spec: generate $vectors with tools/generate-spec-vectors.py" >&2
+        exit 1
+    fi
+    if ! grep -l "#include \"specs/$name.h\"" tests/native_spec_*.c >/dev/null; then
+        echo "No differential harness includes specs/$name.h" >&2
+        exit 1
+    fi
+done
 # Differential harnesses: spec constants and rules against the executable
 # implementation. Implementation headers are generated next to the spec headers
 # (build/t27/specs/impl) so both can be included from one translation unit.
 impl="$out/impl"
 mkdir -p "$impl/specs"
-for module in codecs container tensorpack json json_writer tensorpack_json bridge client compute; do
+for module in codecs container tensorpack json json_writer tensorpack_json bridge client compute formats; do
     "$compiler" gen-c "t27/$module.t27" > "$impl/$module.h"
 done
 # The dot pipeline source is generated to C as well, so the harness compares the
@@ -128,7 +146,15 @@ for harness in tests/native_spec_*.c; do
     "$cc" $cflags -I "$impl" -c "$harness" -o "$out/$name.o"
     # shellcheck disable=SC2086
     "$cxx" -fsanitize=address,undefined "$out/$name.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/$name"
-    "$out/$name"
+    "$out/$name" > "$out/$name.log" 2>&1 || { cat "$out/$name.log" >&2; exit 1; }
+    cat "$out/$name.log"
+done
+for spec in $format_specs; do
+    vectors="conformance/formats_$(basename "$spec" .t27).json"
+    if ! grep -Eq "^replayed $vectors: [1-9][0-9]* vectors" "$out"/native_spec_*.log; then
+        echo "No differential harness replayed $vectors" >&2
+        exit 1
+    fi
 done
 # Cycle traces: generate the RTL modules from their executable sources and
 # replay every trace of the stream compute spec in Icarus Verilog.

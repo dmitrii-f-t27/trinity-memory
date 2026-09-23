@@ -1,0 +1,127 @@
+// SPDX-License-Identifier: Apache-2.0
+// specs/formats/hf_bitnet.t27 -- Hugging Face transformers BitNet packed weights
+// Restates upstream huggingface/transformers@2c4914fb939fe9de0d8e7a798af4684d552f18b4
+// src/transformers/integrations/bitnet.py: :14 (VALUES_PER_ITEM 4), :17-53
+// (pack_weights: T + 1 shifted by 2i into row r of a [ceil(rows/4), cols]
+// uint8 tensor), :56-121 (unpack_weights: slot i of packed row r is row
+// i*rows/4 + r, minus 1), :139-142 (BitLinear buffers: weight uint8
+// [out_features // 4, in_features], weight_scale [1] in the model dtype),
+// :180-181 (BitLinear divides by weight_scale), :245-292 (AutoBitLinear, used
+// offline by microsoft/bitnet-b1.58-2B-4T at 04c3b9ad whose config.json has
+// linear_class autobitlinear, quantization_mode offline and bfloat16:
+// output * weight_scale, so a weight is its trit times weight_scale).
+// rows is out_features (dimension 0). pack_weights pads rows to a multiple of
+// 4 but unpack_weights returns 4 * (rows / 4) rows and the BitLinear buffer
+// floors, so rows % 4 != 0 has no storage here.
+// phi^2 + 1/phi^2 = 3 | TRINITY
+module TrinityFormatsHfBitnetSpec {
+    pub const TFS_HF_ERR_LENGTH: i32 = -51;
+    pub const TFS_HF_ERR_CAPACITY: i32 = -52;
+    pub const TFS_HF_ERR_CODE: i32 = -53;
+    pub const TFS_HF_ERR_SCALE_NONFINITE: i32 = -58;
+    pub const TFS_HF_FLAG_OUTSIDE_TERNARY: u32 = 0;
+    pub const TFS_HF_FLAG_SCALE_NEGATIVE: u32 = 2;
+    pub const TFS_HF_FLAG_SCALE_ZERO: u32 = 3;
+
+    pub const TFS_HF_PACKED: i32 = 8;
+    pub const TFS_HF_VALUES_PER_ITEM: u32 = 4;
+    pub const TFS_HF_CODE_BITS: u32 = 2;
+    pub const TFS_HF_SCALE_BITS_BF16: u32 = 16;
+
+    // Weight (i, k) of a [rows, cols] tensor: packed row i % (rows/4), bits 2 * (i / (rows/4)).
+    pub fn tfs_hf_weight(data: []u8, rows: usize, cols: usize, i: usize, k: usize) -> i32 {
+        var stride: usize = rows / 4;
+        return ((((data[(i % stride) * cols + k] as u32) >> (2 * (i / stride))) & 3) as i32) - 1;
+    }
+
+    // LENGTH (empty shape, rows % 4 != 0, size != rows/4 * cols), CAPACITY,
+    // else the number of code-3 (+2) weights.
+    pub fn tfs_hf_decode(data: []u8, size: usize, rows: usize, cols: usize, values: []i32, value_capacity: usize) -> i64 {
+        if (rows == 0 || cols == 0 || rows % 4 != 0) { return TFS_HF_ERR_LENGTH as i64; }
+        if (size % cols != 0 || size / cols != rows / 4) { return TFS_HF_ERR_LENGTH as i64; }
+        if (rows > value_capacity / cols) { return TFS_HF_ERR_CAPACITY as i64; }
+        var outside: i64 = 0;
+        // unpack_weights order: slot i covers rows [i*rows/4, (i+1)*rows/4).
+        var slot: usize = 0;
+        while (slot < 4) {
+            var r: usize = 0;
+            while (r < rows / 4) {
+                var k: usize = 0;
+                while (k < cols) {
+                    var w: i32 = ((((data[r * cols + k] as u32) >> (2 * slot)) & 3) as i32) - 1;
+                    if (w > 1) { outside = outside + 1; }
+                    values[(slot * (rows / 4) + r) * cols + k] = w;
+                    k = k + 1;
+                }
+                r = r + 1;
+            }
+            slot = slot + 1;
+        }
+        return outside;
+    }
+
+    // pack_weights with T in {-1, 0, 1}; LENGTH, CAPACITY, CODE before writing.
+    pub fn tfs_hf_encode(values: []i32, rows: usize, cols: usize, out: []u8, capacity: usize) -> i64 {
+        if (rows == 0 || cols == 0 || rows % 4 != 0) { return TFS_HF_ERR_LENGTH as i64; }
+        if (rows / 4 > capacity / cols) { return TFS_HF_ERR_CAPACITY as i64; }
+        var i: usize = 0;
+        while (i < rows * cols) {
+            if (values[i] < -1 || values[i] > 1) { return TFS_HF_ERR_CODE as i64; }
+            i = i + 1;
+        }
+        i = 0;
+        while (i < (rows / 4) * cols) { out[i] = 0; i = i + 1; }
+        var slot: usize = 0;
+        while (slot < 4) {
+            var r: usize = 0;
+            while (r < rows / 4) {
+                var k: usize = 0;
+                while (k < cols) {
+                    var code: u32 = (values[(slot * (rows / 4) + r) * cols + k] + 1) as u32;
+                    out[r * cols + k] = ((out[r * cols + k] as u32) | (code << (2 * slot))) as u8;
+                    k = k + 1;
+                }
+                r = r + 1;
+            }
+            slot = slot + 1;
+        }
+        return ((rows / 4) * cols) as i64;
+    }
+
+    // weight_scale as bfloat16: 0 positive, 1 zero, 2 negative, ERR_SCALE_NONFINITE.
+    pub fn tfs_hf_bf16_class(word: u32) -> i32 {
+        if ((word & 0x7f80) == 0x7f80) { return TFS_HF_ERR_SCALE_NONFINITE; }
+        if ((word & 0x7fff) == 0) { return 1; }
+        if ((word & 0x8000) != 0) { return 2; }
+        return 0;
+    }
+
+    invariant hf_four_codes_per_byte { assert TFS_HF_VALUES_PER_ITEM * TFS_HF_CODE_BITS == 8; }
+    invariant hf_scale_is_one_word_per_tensor { assert TFS_HF_SCALE_BITS_BF16 == 16; }
+
+    test "hf unpack example from the transformers docstring" {
+        var packed: [4]u8 = [161, 24, 144, 10];
+        var v: [16]i32;
+        assert tfs_hf_decode(packed, 4, 8, 2, v, 16) == 0;
+        assert v[0] == 0 && v[1] == -1 && v[2] == -1 && v[3] == 1 && v[4] == -1 && v[5] == 1;
+        assert v[6] == -1 && v[7] == 1 && v[8] == 1 && v[9] == 0 && v[10] == 0 && v[11] == -1;
+        assert v[12] == 1 && v[13] == -1 && v[14] == 1 && v[15] == -1;
+        var again: [4]u8;
+        assert tfs_hf_encode(v, 8, 2, again, 4) == 4;
+        assert again[0] == 161 && again[1] == 24 && again[2] == 144 && again[3] == 10;
+        assert tfs_hf_weight(packed, 8, 2, 7, 1) == -1;
+    }
+    test "hf rejections and scale classes" {
+        var packed: [4]u8 = [255, 24, 144, 10];
+        var v: [16]i32;
+        assert tfs_hf_decode(packed, 4, 8, 2, v, 16) == 4;
+        assert tfs_hf_decode(packed, 4, 6, 2, v, 16) == TFS_HF_ERR_LENGTH;
+        assert tfs_hf_decode(packed, 3, 8, 2, v, 16) == TFS_HF_ERR_LENGTH;
+        assert tfs_hf_decode(packed, 4, 8, 2, v, 15) == TFS_HF_ERR_CAPACITY;
+        assert tfs_hf_encode(v, 8, 2, packed, 4) == TFS_HF_ERR_CODE;
+        // BitNet b1.58 2B4T layer-0 weight_scale values (bf16).
+        assert tfs_hf_bf16_class(16284) == 0 && tfs_hf_bf16_class(16394) == 0;
+        assert tfs_hf_bf16_class(32704) == TFS_HF_ERR_SCALE_NONFINITE && tfs_hf_bf16_class(65408) == TFS_HF_ERR_SCALE_NONFINITE;
+        assert tfs_hf_bf16_class(32768) == 1 && tfs_hf_bf16_class(49024) == 2;
+    }
+}

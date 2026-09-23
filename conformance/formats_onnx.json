@@ -1,0 +1,476 @@
+{
+  "constants": {
+    "errors": {
+      "capacity": -52,
+      "code": -53,
+      "container": -56,
+      "extent": -62,
+      "format": -50,
+      "layout_unsupported": -60,
+      "length": -51,
+      "misaligned": -61,
+      "not_found": -57,
+      "padding": -54,
+      "scale_nonfinite": -58,
+      "truncated": -55,
+      "type_ambiguous": -59
+    },
+    "flags": {
+      "affine_not_ternary": 6,
+      "noncanonical_base3": 1,
+      "outside_ternary": 0,
+      "padding_nonzero": 5,
+      "scale_negative": 2,
+      "scale_zero": 3,
+      "trailer_nonzero": 4
+    },
+    "format_ids": {
+      "HF_PACKED": 8,
+      "I2_S": 7,
+      "LINEAR2": 9,
+      "ONNX2": 10,
+      "PQ2_0": 5,
+      "PTQ1_0": 6,
+      "Q1_0": 4,
+      "Q2_0": 3,
+      "TQ1_0": 1,
+      "TQ2_0": 2
+    },
+    "onnx": {
+      "b_shape": "(N, ceil(K / block_size), block_size / 4) uint8",
+      "bits": 2,
+      "bits_per_weight": "2 + scale_bits / block_size (+ zero points)",
+      "default_zero_point": 2,
+      "id": 10,
+      "min_block_size": 16,
+      "value": "(code - zero_point) * scale",
+      "zero_points": "(N, ceil(k_blocks / 4)) uint8, 2 bits per block, low bits first"
+    },
+    "silent": {
+      "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
+      "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
+      "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+    }
+  },
+  "created_at": "2026-09-23T00:00:00Z",
+  "description": "MatMulNBits 2-bit weights with default and packed zero points, padding and scales. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "format_family": "Conformance",
+  "generator": "tools/generate-spec-vectors.py",
+  "invariants": [
+    {
+      "condition": "(4096 * 2 + 32 * 16) * 8 == 17 * 4096",
+      "id": "onnx_example_is_17_8_bits_per_weight"
+    }
+  ],
+  "module": "TrinityFormatsOnnxSpec",
+  "schema_version": 2,
+  "spec_path": "specs/formats/onnx.t27",
+  "upstream": {
+    "onnxruntime": {
+      "commit": "2ecddca37183e39694d02f2dae222bed9931c9af",
+      "files": [
+        "docs/ContribOperators.md",
+        "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc",
+        "onnxruntime/core/mlas/lib/q4_dq.cpp"
+      ],
+      "repo": "microsoft/onnxruntime"
+    }
+  },
+  "vector_name": "ONNX Runtime MatMulNBits bits=2",
+  "vectors": [
+    {
+      "block_size": 16,
+      "data_hex": "db000000",
+      "description": "Default zero point 2: +1, 0, -1, +1 are codes 3, 2, 1, 3",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "0100ff01"
+      },
+      "id": "onnx_default_zero_point",
+      "k": 4,
+      "kind": "onnx",
+      "n": 1,
+      "scale_kind": "F16",
+      "scale_words": [
+        15360
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "data_hex": "ba77955fdb7fdd7779667abe7fff699aad07000000000000ea6efe9e79efead7b9e56a6d9be6efeea705000000000000d9fba977b5a666fafbdbf55eba97ebaf750b000000000000",
+      "description": "K = 70 with block 32: three blocks per row, the last one padded with zero codes",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "0000010001ff01ffffffff000101ffff0100ff01010101ffff01ff0101ff01ffff0001ff00ff00ff000001ff00010100010101ff01010101ff0000ff0000ff00ff01000001ff00000001000100ff000101010001ff00ff0001ff010100010000000101ffff01ff000100ffff0001000000ffff0100ff0100ff0000ff0001010100010001000101ff0000ffffff00ff0101000101ff00000001ff01ffffff010000ff000000ff00ff00000101010001010100ff01ffff01010001ffff0000010001ffff000100000101010000ffff01ff0100"
+      },
+      "id": "onnx_padded_rows",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "data_hex": "8551993e3e6fe892b429c4c62df3e736e60e0000000000006bafb98558e10c6d44229208316029a02205000000000000f68be4712a70b2408ef5bca3f26e4a822707000000000000",
+      "description": "Packed per-block zero points 3, 2, 1 / 2, 1, 2 / 1, 2, 3; every code 0..3 occurs, so values outside +-1 are flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 51,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 51,
+        "values_hex": "fefefdfffefdfefefefffeffff0000fdff0000fd0000fffefdffff00fffdfefffeff0100ff0000fefefffe0100fffe01ff0100fe01fe010101ff000100ff01fe010001020102010000ff01010000ff000100fffffe00fe00fffffffe0001fe01fefeff0100ffff00ff0001ff01ff01ff0001ff01ffff00ff02ffffff0100000101ffffff010100fe00feffff010002020201ff01ff00010200ff0200010101ffffff020001ff0201ffffff000001fe00ffff0101fe01010001fe000000fe0101000100ff0000feff00fefe0000fefffd00fe"
+      },
+      "flag_class": "outside_ternary",
+      "id": "onnx_packed_zero_points",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": "1b2639"
+    },
+    {
+      "block_size": 16,
+      "data_hex": "00000000",
+      "description": "Under the default zero point code 0 is -2, which a ternary tensor never uses; flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 16,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 16,
+        "values_hex": "fefefefefefefefefefefefefefefefe"
+      },
+      "flag_class": "outside_ternary",
+      "id": "onnx_code0_is_minus_2",
+      "k": 16,
+      "kind": "onnx",
+      "n": 1,
+      "scale_kind": "F16",
+      "scale_words": [
+        15360
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "data_hex": "ba77955fdb7fdd7779667abe7fff699aad57555555555555ea6efe9e79efead7b9e56a6d9be6efeea755555555555555d9fba977b5a666fafbdbf55eba97ebaf755b555555555555",
+      "description": "Padding codes (k >= K) are never read; nonzero ones are flagged",
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 78,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "0000010001ff01ffffffff000101ffff0100ff01010101ffff01ff0101ff01ffff0001ff00ff00ff000001ff00010100010101ff01010101ff0000ff0000ff00ff01000001ff00000001000100ff000101010001ff00ff0001ff010100010000000101ffff01ff000100ffff0001000000ffff0100ff0100ff0000ff0001010100010001000101ff0000ffffff00ff0101000101ff00000001ff01ffffff010000ff000000ff00ff00000101010001010100ff01ffff01010001ffff0000010001ffff000100000101010000ffff01ff0100"
+      },
+      "flag_class": "padding_nonzero",
+      "id": "onnx_padding_nonzero",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "data_hex": "ba77955fdb7fdd7779667abe7fff699aad07000000000000ea6efe9e79efead7b9e56a6d9be6efeea705000000000000d9fba977b5a666fafbdbf55eba97ebaf750b000000000000",
+      "description": "A negative block scale; flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 1,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "0000010001ff01ffffffff000101ffff0100ff01010101ffff01ff0101ff01ffff0001ff00ff00ff000001ff00010100010101ff01010101ff0000ff0000ff00ff01000001ff00000001000100ff000101010001ff00ff0001ff010100010000000101ffff01ff000100ffff0001000000ffff0100ff0100ff0000ff0001010100010001000101ff0000ffffff00ff0101000101ff00000001ff01ffffff010000ff000000ff00ff00000101010001010100ff01ffff01010001ffff0000010001ffff000100000101010000ffff01ff0100"
+      },
+      "flag_class": "scale_negative",
+      "id": "onnx_negative_scale",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        44646,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "data_hex": "ba77955fdb7fdd7779667abe7fff699aad07000000000000ea6efe9e79efead7b9e56a6d9be6efeea705000000000000d9fba977b5a666fafbdbf55eba97ebaf750b000000000000",
+      "description": "f32 scales (the scales share the type of input A)",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "0000010001ff01ffffffff000101ffff0100ff01010101ffff01ff0101ff01ffff0001ff00ff00ff000001ff00010100010101ff01010101ff0000ff0000ff00ff01000001ff00000001000100ff000101010001ff00ff0001ff010100010000000101ffff01ff000100ffff0001000000ffff0100ff0100ff0000ff0001010100010001000101ff0000ffffff00ff0101000101ff00000001ff01ffffff010000ff000000ff00ff00000101010001010100ff01ffff01010001ffff0000010001ffff000100000101010000ffff01ff0100"
+      },
+      "id": "onnx_f32_scales",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F32",
+      "scale_words": [
+        1028443341,
+        1028443341,
+        1028443341,
+        1028443341,
+        1028443341,
+        1028443341,
+        1028443341,
+        1028443341,
+        1028443341
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "data_hex": "ba77955fdb7fdd7779667abe7fff699aad07000000000000ea6efe9e79efead7b9e56a6d9be6efeea705000000000000d9fba977b5a666fafbdbf55eba97ebaf750b000000000000",
+      "description": "A NaN block scale",
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": -58,
+        "status": 0,
+        "values_hex": "0000010001ff01ffffffff000101ffff0100ff01010101ffff01ff0101ff01ffff0001ff00ff00ff000001ff00010100010101ff01010101ff0000ff0000ff00ff01000001ff00000001000100ff000101010001ff00ff0001ff010100010000000101ffff01ff000100ffff0001000000ffff0100ff0100ff0000ff0001010100010001000101ff0000ffffff00ff0101000101ff00000001ff01ffffff010000ff000000ff00ff00000101010001010100ff01ffff01010001ffff0000010001ffff000100000101010000ffff01ff0100"
+      },
+      "id": "onnx_scale_nan",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        11878,
+        11878,
+        11878,
+        32256,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 24,
+      "data_hex": "ba77955fdb7fdd7779667abe7fff699aad07000000000000ea6efe9e79efead7b9e56a6d9be6efeea705000000000000d9fba977b5a666fafbdbf55eba97ebaf750b000000000000",
+      "description": "block_size must be a power of two, at least 16",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "id": "onnx_block_size_24",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 8,
+      "data_hex": "ba770000",
+      "description": "block_size 8 is below the minimum of 16",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "id": "onnx_block_size_8",
+      "k": 8,
+      "kind": "onnx",
+      "n": 1,
+      "scale_kind": "F16",
+      "scale_words": [
+        15360
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "data_hex": "8551993e3e6fe892b429c4c62df3e736e60e0000000000006bafb98558e10c6d44229208316029a02205000000000000f68be4712a70b2408ef5bca3f26e4a822707000000000000",
+      "description": "zero_points must be N * ceil(k_blocks / 4) bytes",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "id": "onnx_zero_points_size",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": "1b26"
+    },
+    {
+      "block_size": 32,
+      "data_hex": "ba77955fdb7fdd7779667abe7fff699aad07000000000000ea6efe9e79efead7b9e56a6d9be6efeea705000000000000d9fba977b5a666fafbdbf55eba97ebaf750b0000000000",
+      "description": "One byte short of three rows",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "id": "onnx_size_mismatch",
+      "k": 70,
+      "kind": "onnx",
+      "n": 3,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878,
+        11878
+      ],
+      "zero_points_hex": ""
+    },
+    {
+      "block_size": 32,
+      "description": "Value -2 in row 0, block 2 (zero point 1) would be code -1; nothing is written",
+      "error_class": "code",
+      "expect": {
+        "status": -53
+      },
+      "id": "onnx_encode_rejects_code_below_0",
+      "k": 70,
+      "kind": "onnx_encode",
+      "n": 3,
+      "values_hex": "fefefdfffefdfefefefffeffff0000fdff0000fd0000fffefdffff00fffdfefffeff0100ff0000fefefffe0100fffe01ff0100fe01fe010101ff000100ff01fe0100fe020102010000ff01010000ff000100fffffe00fe00fffffffe0001fe01fefeff0100ffff00ff0001ff01ff01ff0001ff01ffff00ff02ffffff0100000101ffffff010100fe00feffff010002020201ff01ff00010200ff0200010101ffffff020001ff0201ffffff000001fe00ffff0101fe01010001fe000000fe0101000100ff0000feff00fefe0000fefffd00fe",
+      "zero_points_hex": "1b2639"
+    }
+  ]
+}

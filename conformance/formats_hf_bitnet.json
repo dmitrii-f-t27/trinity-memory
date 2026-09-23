@@ -1,0 +1,305 @@
+{
+  "constants": {
+    "errors": {
+      "capacity": -52,
+      "code": -53,
+      "container": -56,
+      "extent": -62,
+      "format": -50,
+      "layout_unsupported": -60,
+      "length": -51,
+      "misaligned": -61,
+      "not_found": -57,
+      "padding": -54,
+      "scale_nonfinite": -58,
+      "truncated": -55,
+      "type_ambiguous": -59
+    },
+    "flags": {
+      "affine_not_ternary": 6,
+      "noncanonical_base3": 1,
+      "outside_ternary": 0,
+      "padding_nonzero": 5,
+      "scale_negative": 2,
+      "scale_zero": 3,
+      "trailer_nonzero": 4
+    },
+    "format_ids": {
+      "HF_PACKED": 8,
+      "I2_S": 7,
+      "LINEAR2": 9,
+      "ONNX2": 10,
+      "PQ2_0": 5,
+      "PTQ1_0": 6,
+      "Q1_0": 4,
+      "Q2_0": 3,
+      "TQ1_0": 1,
+      "TQ2_0": 2
+    },
+    "hf_packed": {
+      "bits_per_weight": "2 + 16/n",
+      "code": "T + 1 at bits 2*(i / (rows/4))",
+      "id": 8,
+      "packed_shape": "[rows/4, cols] uint8",
+      "value": "trit * weight_scale (AutoBitLinear, offline)",
+      "values_per_byte": 4,
+      "weight_scale": "[1] in the model dtype (BF16)"
+    },
+    "silent": {
+      "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
+      "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
+      "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+    }
+  },
+  "created_at": "2026-09-23T00:00:00Z",
+  "description": "Packed uint8 BitNet weights and their bf16 weight_scale, with a real row of BitNet b1.58 2B4T. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "format_family": "Conformance",
+  "generator": "tools/generate-spec-vectors.py",
+  "invariants": [
+    {
+      "condition": "4 * 2 == 8",
+      "id": "hf_four_codes_per_byte"
+    }
+  ],
+  "module": "TrinityFormatsHfBitnetSpec",
+  "schema_version": 2,
+  "spec_path": "specs/formats/hf_bitnet.t27",
+  "upstream": {
+    "transformers": {
+      "commit": "2c4914fb939fe9de0d8e7a798af4684d552f18b4",
+      "files": [
+        "src/transformers/integrations/bitnet.py"
+      ],
+      "repo": "huggingface/transformers"
+    }
+  },
+  "vector_name": "transformers BitNet packed weights",
+  "vectors": [
+    {
+      "cols": 2,
+      "data_hex": "a118900a",
+      "description": "The unpack_weights docstring example: packed [[161, 24], [144, 10]] is an 8 x 2 tensor",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "00ffff01ff01ff01010000ff01ff01ff"
+      },
+      "id": "hf_docstring_example",
+      "kind": "hf_packed",
+      "rows": 8,
+      "scale_kind": "BF16",
+      "scale_word": 16256
+    },
+    {
+      "cols": 5,
+      "data_hex": "49a10551a811a42641418509658152",
+      "description": "Deterministic codes, 12 rows (stride 3) and 5 columns",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "00000000ff00ff010000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
+      },
+      "id": "hf_random_12x5",
+      "kind": "hf_packed",
+      "rows": 12,
+      "scale_kind": "BF16",
+      "scale_word": 16284
+    },
+    {
+      "cols": 16,
+      "data_hex": "5541555055545545414055416a455551",
+      "description": "Packed row 0, columns 0..15 of BitNet b1.58 2B4T layers.0.self_attn.q_proj.weight (U8 [640, 2560]) holds rows 0, 640, 1280 and 1920; read as a 4 x 16 tensor with the tensor's bf16 weight_scale 1.21875",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "000000ff00ff000000ff00000100000000ff00ff00000000ffff00ff010000ff00ff0000000000ffffff00ff01ff000000000000000000000000000000000000"
+      },
+      "id": "hf_real_q_proj_rows_0_640_1280_1920",
+      "kind": "hf_packed",
+      "rows": 4,
+      "scale_kind": "BF16",
+      "scale_word": 16284,
+      "source": {
+        "begin": 672931828,
+        "end": 672931844,
+        "file": "model.safetensors",
+        "repo": "microsoft/bitnet-b1.58-2B-4T",
+        "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+        "sha256": "7e7e687fa112a8abd1c462d10475f998866a7cfc17cbe6ab8bf8984318083945",
+        "tensor": "model.layers.0.self_attn.q_proj.weight"
+      }
+    },
+    {
+      "cols": 5,
+      "data_hex": "c9a10551a811a42641418509658152",
+      "description": "Code 3 unpacks to +2; flagged",
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 1,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 1,
+        "values_hex": "00000000ff00ff010000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000201ff0001ff01ff000001ff000100"
+      },
+      "flag_class": "outside_ternary",
+      "id": "hf_code3",
+      "kind": "hf_packed",
+      "rows": 12,
+      "scale_kind": "BF16",
+      "scale_word": 16284
+    },
+    {
+      "cols": 5,
+      "data_hex": "49a10551a811a42641418509658152",
+      "description": "A negative weight_scale; flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 1,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": 0,
+        "status": 0,
+        "values_hex": "00000000ff00ff010000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
+      },
+      "flag_class": "scale_negative",
+      "id": "hf_negative_scale",
+      "kind": "hf_packed",
+      "rows": 12,
+      "scale_kind": "BF16",
+      "scale_word": 49052
+    },
+    {
+      "cols": 5,
+      "data_hex": "49a10551a811a42641418509658152",
+      "description": "A NaN weight_scale",
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": -58,
+        "status": 0,
+        "values_hex": "00000000ff00ff010000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
+      },
+      "id": "hf_scale_nan",
+      "kind": "hf_packed",
+      "rows": 12,
+      "scale_kind": "BF16",
+      "scale_word": 32704
+    },
+    {
+      "cols": 5,
+      "data_hex": "49a10551a811a42641418509658152",
+      "description": "A negative infinite weight_scale",
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_status": -58,
+        "status": 0,
+        "values_hex": "00000000ff00ff010000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
+      },
+      "id": "hf_scale_inf",
+      "kind": "hf_packed",
+      "rows": 12,
+      "scale_kind": "BF16",
+      "scale_word": 65408
+    },
+    {
+      "cols": 5,
+      "data_hex": "49a10551a811a42641418509658152",
+      "description": "rows % 4 != 0 has no storage in the packed tensor",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "id": "hf_rows_not_multiple_of_4",
+      "kind": "hf_packed",
+      "rows": 10,
+      "scale_kind": "BF16",
+      "scale_word": 16284
+    },
+    {
+      "cols": 5,
+      "data_hex": "49a10551a811a426414185096581",
+      "description": "One packed byte missing",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "id": "hf_size_mismatch",
+      "kind": "hf_packed",
+      "rows": 12,
+      "scale_kind": "BF16",
+      "scale_word": 16284
+    },
+    {
+      "cols": 5,
+      "description": "pack_weights stores -1, 0, +1 only; nothing is written",
+      "error_class": "code",
+      "expect": {
+        "status": -53
+      },
+      "id": "hf_encode_rejects_minus_2",
+      "kind": "hf_encode",
+      "rows": 12,
+      "values_hex": "00000000ff00fffe0000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
+    }
+  ]
+}

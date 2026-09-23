@@ -1,0 +1,495 @@
+{
+  "constants": {
+    "errors": {
+      "capacity": -52,
+      "code": -53,
+      "container": -56,
+      "extent": -62,
+      "format": -50,
+      "layout_unsupported": -60,
+      "length": -51,
+      "misaligned": -61,
+      "not_found": -57,
+      "padding": -54,
+      "scale_nonfinite": -58,
+      "truncated": -55,
+      "type_ambiguous": -59
+    },
+    "flags": {
+      "affine_not_ternary": 6,
+      "noncanonical_base3": 1,
+      "outside_ternary": 0,
+      "padding_nonzero": 5,
+      "scale_negative": 2,
+      "scale_zero": 3,
+      "trailer_nonzero": 4
+    },
+    "format_ids": {
+      "HF_PACKED": 8,
+      "I2_S": 7,
+      "LINEAR2": 9,
+      "ONNX2": 10,
+      "PQ2_0": 5,
+      "PTQ1_0": 6,
+      "Q1_0": 4,
+      "Q2_0": 3,
+      "TQ1_0": 1,
+      "TQ2_0": 2
+    },
+    "mlx": {
+      "bits": 2,
+      "bits_per_weight": {
+        "128": "9/4",
+        "32": "3",
+        "64": "5/2"
+      },
+      "codes_per_word": 16,
+      "groups": [
+        32,
+        64,
+        128
+      ],
+      "id": 9,
+      "value": "scale * q + bias; ternary iff bias == -scale",
+      "zero_point": 1
+    },
+    "silent": {
+      "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
+      "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
+      "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+    }
+  },
+  "created_at": "2026-09-23T00:00:00Z",
+  "description": "MLX 2-bit codes with per-group scales and biases, with a real Bonsai group. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "format_family": "Conformance",
+  "generator": "tools/generate-spec-vectors.py",
+  "invariants": [
+    {
+      "condition": "4 * (128 * 2 + 16 + 16) == 9 * 128",
+      "id": "mlx_bits_per_weight_group_128"
+    }
+  ],
+  "module": "TrinityFormatsMlxSpec",
+  "schema_version": 2,
+  "spec_path": "specs/formats/mlx.t27",
+  "upstream": {
+    "mlx": {
+      "commit": "59d600b5e64c238427d0f8d897ab7c682ef4d3d2",
+      "files": [
+        "mlx/ops.cpp"
+      ],
+      "repo": "ml-explore/mlx"
+    }
+  },
+  "vector_name": "MLX 2-bit affine",
+  "vectors": [
+    {
+      "bias_words": [
+        48128
+      ],
+      "cols": 32,
+      "data_hex": "5255559556555555",
+      "description": "Sixteen codes per little-endian uint32 word, low bits first",
+      "encode": true,
+      "expect": {
+        "affine_status": 0,
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 0,
+        "values_hex": "01ff000000000000000000000000000101000000000000000000000000000000"
+      },
+      "group": 32,
+      "id": "mlx_worked_example",
+      "kind": "mlx",
+      "rows": 1,
+      "scale_kind": "F16",
+      "scale_words": [
+        15360
+      ]
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        45056,
+        44032
+      ],
+      "cols": 128,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a6512041261168068",
+      "description": "Two rows of 128 weights, groups of 64, bias = -scale",
+      "encode": true,
+      "expect": {
+        "affine_status": 0,
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 0,
+        "values_hex": "00ff00000100ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
+      },
+      "group": 64,
+      "id": "mlx_random_group_64",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        41445
+      ],
+      "cols": 128,
+      "data_hex": "525069454a1a06061486260248a010168a092240a25951a48a98054545502902",
+      "description": "Row 0, group 0 of Ternary Bonsai 2 27B layers.0.mlp.down_proj (U32 words, F16 scale and bias); the trits equal the first PTQ1_0 block of the same tensor",
+      "encode": true,
+      "expect": {
+        "affine_status": 0,
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 0,
+        "values_hex": "01ff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff"
+      },
+      "group": 128,
+      "id": "mlx_real_bonsai_down_proj_row0_group0",
+      "kind": "mlx",
+      "rows": 1,
+      "scale_kind": "F16",
+      "scale_words": [
+        8677
+      ],
+      "source": {
+        "bias": {
+          "begin": 7862603622,
+          "end": 7862603624,
+          "file": "model.safetensors",
+          "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+          "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+          "sha256": "8f52cd4763acc3c5887d1542f5ac4e9155eeff9121a7e18db2962a2057e0715a",
+          "tensor": "language_model.model.layers.0.mlp.down_proj.biases"
+        },
+        "scale": {
+          "begin": 2424018438,
+          "end": 2424018440,
+          "file": "model.safetensors",
+          "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+          "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+          "sha256": "9f38501341e4d35cb49ac0286f62c7cda4b9d69066afef78f3aa3c6b8c299cb4",
+          "tensor": "language_model.model.layers.0.mlp.down_proj.scales"
+        },
+        "weight": {
+          "begin": 7016633766,
+          "end": 7016633798,
+          "file": "model.safetensors",
+          "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+          "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+          "sha256": "ab01f1c6bb14417d97f44c25d50c0a5a86ab80ab27f5151774914fa67b381361",
+          "tensor": "language_model.model.layers.0.mlp.down_proj.weight"
+        }
+      }
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        45056,
+        44032
+      ],
+      "cols": 128,
+      "data_hex": "518e862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a6512041261168068",
+      "description": "Code 3 with bias = -scale is +2; flagged",
+      "encode": true,
+      "expect": {
+        "affine_status": 0,
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 1,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 1,
+        "values_hex": "00ff00000102ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
+      },
+      "flag_class": "outside_ternary",
+      "group": 64,
+      "id": "mlx_code3",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        0,
+        44032
+      ],
+      "cols": 128,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a6512041261168068",
+      "description": "A group whose bias is not -scale holds affine, not ternary, values; flagged",
+      "encode": true,
+      "expect": {
+        "affine_status": 0,
+        "flags": {
+          "affine_not_ternary": 1,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 0,
+        "values_hex": "00ff00000100ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
+      },
+      "flag_class": "affine_not_ternary",
+      "group": 64,
+      "id": "mlx_group_not_ternary",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        11878,
+        43520,
+        45056,
+        44032
+      ],
+      "cols": 128,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a6512041261168068",
+      "description": "A negative scale with bias = -scale; flagged",
+      "encode": true,
+      "expect": {
+        "affine_status": 0,
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 1,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 0,
+        "values_hex": "00ff00000100ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
+      },
+      "flag_class": "scale_negative",
+      "group": 64,
+      "id": "mlx_negative_scale",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        44646,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        45056,
+        44032
+      ],
+      "cols": 128,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a6512041261168068",
+      "description": "A NaN scale",
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "affine_status": -58,
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 0,
+        "values_hex": "00ff00000100ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
+      },
+      "group": 64,
+      "id": "mlx_scale_nan",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        32256,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        45056,
+        64512
+      ],
+      "cols": 128,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a6512041261168068",
+      "description": "An infinite bias",
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "affine_status": -58,
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "status": 0,
+        "values_hex": "00ff00000100ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
+      },
+      "group": 64,
+      "id": "mlx_bias_inf",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        45056,
+        44032
+      ],
+      "cols": 128,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a6512041261168068",
+      "description": "Group sizes are 32, 64 or 128",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "group": 48,
+      "id": "mlx_group_48",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        45056,
+        44032
+      ],
+      "cols": 96,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092",
+      "description": "96 columns are not whole groups of 64",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "group": 64,
+      "id": "mlx_cols_not_divisible",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "bias_words": [
+        44646,
+        43520,
+        45056,
+        44032
+      ],
+      "cols": 128,
+      "data_hex": "5186862658aa860a68626460959549aa412669042a5a5869a458946085a89805250a5421559691495525181a20a5a092518562050519916a65120412",
+      "description": "One word missing",
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "group": 64,
+      "id": "mlx_size_mismatch",
+      "kind": "mlx",
+      "rows": 2,
+      "scale_kind": "F16",
+      "scale_words": [
+        11878,
+        10752,
+        12288,
+        11264
+      ]
+    },
+    {
+      "cols": 128,
+      "description": "A 2-bit code holds q = 0..3, values -1..2; nothing is written",
+      "error_class": "code",
+      "expect": {
+        "status": -53
+      },
+      "group": 64,
+      "id": "mlx_encode_rejects_value_3",
+      "kind": "mlx_encode",
+      "rows": 2,
+      "values_hex": "00ff00030100ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
+    }
+  ]
+}
