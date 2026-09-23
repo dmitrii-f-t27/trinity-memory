@@ -1,4 +1,4 @@
-# Ternary Check: first results on real checkpoints (2026-09-22)
+# Ternary Check: first results on real checkpoints (2026-09-22, corrected 2026-09-23)
 
 Stage 1 of the roadmap (#27): decode the same real tensors from every public
 ternary weight-packing format and compare them trit for trit and scale for
@@ -33,22 +33,29 @@ sha256 of every range is in `fixtures/manifest.lock.json`.
 
 Details:
 
-1. **BitNet scales differ between the two inference formats in every tensor.**
-   The packed checkpoint stores `weight_scale` as bf16 and the GGUF stores an
-   f32 scale after each I2_S tensor. All 210 ternary tensors differ; the
-   relative difference is 0.14% at the median and 0.36% at most (layer 4
-   `attn_output`), which is the size of bf16 rounding. The integer
-   accumulators of a matrix-vector product are therefore identical between
-   the two formats, and the outputs differ by the ratio of the two scales.
-2. **The packed trits use the bf16-rounded scale as the rounding threshold.**
-   Every weight that differs between the packed checkpoint and the documented
-   online rule (`transformers` `WeightQuant`: `s = 1 / mean|w|` in float32,
-   `round(w * s)`, clamp) sits exactly at `|w| = 0.5 × weight_scale`
-   (0.609375 for `q_proj`, 1.078125 for `down_proj`), with the packed value
-   ±1 where the online rule gives 0. No differing weight lies within 1e-5 of
-   the online threshold, so float32 reduction order does not explain it.
-   Running the bf16 checkpoint in its configured online mode therefore uses
-   different ternary weights from the packed checkpoint in these tensors.
+1. **BitNet stores one scale at two precisions.** The packed checkpoint
+   stores `weight_scale` as bf16 and the GGUF stores an f32 scale after each
+   I2_S tensor. In all 210 ternary tensors the bf16 value is exactly the
+   f32 value rounded to bf16, so the two differ by 0.14% at the median and
+   0.36% at most (layer 4 `attn_output`). The trits of the two tensors we
+   compared are identical, so the integer accumulators of a matrix-vector
+   product agree and the outputs differ by the ratio of the two scales.
+2. **The packed trits cannot be recomputed from the published bf16 weights.**
+   Applying `transformers` `WeightQuant` (`s = 1 / mean|w|` in float32,
+   `round(w * s)`, clamp) to the bf16 master weights gives trits that differ
+   from the packed checkpoint for 79,719 weights of layer 0 `q_proj` (1.22%)
+   and 101,673 of layer 0 `down_proj` (0.57%). All of them have the single
+   bf16 value nearest the rounding threshold, `|w| = 0.5 × weight_scale`
+   (0.609375 and 1.078125), and the packed file does not treat that value
+   one way: in `q_proj` 79,719 of the 163,223 weights with it are ±1 and
+   83,504 are 0 (48.8% ±1), in `down_proj` 101,673 of 1,009,468 (10.1%).
+   Weights with the same bf16 value get different trits, so no rule applied
+   to the published bf16 values reproduces the packed trits. That fits
+   ternarization from higher-precision weights before the bf16 export, which
+   we cannot check. Microsoft's model card labels the bf16 repository for
+   training and fine-tuning; its config sets `quantization_mode: online`, so
+   loading it for inference in `transformers` uses these slightly different
+   trits.
 3. **I2_S trailers are not zero.** Each I2_S tensor ends with a 32-byte
    trailer: the f32 scale, then 28 bytes. The current bitnet.cpp converter
    (`utils/convert-hf-to-gguf-bitnet.py`, `quantize_to_i2_s` at `0b341e58`)
@@ -71,8 +78,17 @@ Details:
   or speed.
 - Two BitNet tensors and one Bonsai tensor were compared trit for trit;
   the BitNet scale comparison covers all 210 ternary tensors.
-- The explanation in item 2 is what the data shows; the pipeline that
-  produced the published files was not available to us.
+- The pipeline that produced the published files was not available to us;
+  item 2 reports what the data rule out, not how the files were made.
+
+## Layouts
+
+Decoded by `t27/formats.t27`: llama.cpp TQ1_0, TQ2_0 and Q2_0; the PrismML
+fork's PQ2_0 and PTQ1_0; bitnet.cpp I2_S; transformers BitNet packed uint8;
+linear 2-bit rows (MLX affine 2-bit, ONNX Runtime `MatMulNBits` with
+`bits=2`); and llama.cpp Q1_0, which is binary. Not yet decoded: STQ1_0
+(open llama.cpp PR #22836) and the bitnet.cpp lookup-table layouts TL1 and
+TL2.
 
 ## Reproduce
 
