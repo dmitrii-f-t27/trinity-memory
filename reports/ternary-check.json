@@ -1,0 +1,2826 @@
+{
+ "schema": "trinity.ternary-check.v1",
+ "issue": "dmitrii-f-t27/trinity-memory#32",
+ "reproduce": "make ternary-check (python3 -m trinity_memory.ternary_check --check compares)",
+ "compiler": {
+  "repo": "gHashTag/t27",
+  "commit": "bff21b85b206a0dd367876343e56dcd8312d81ba"
+ },
+ "fixtures": "fixtures/manifest.json, consumer ternary_check",
+ "run_metadata": "excluded: timings and the host of a run are written to build/ternary-check/run.json",
+ "comparison": "trits compared value by value; scales compared weight by weight as exact values (an f16 and a bf16 word of the same number are equal)",
+ "taxonomy": {
+  "cell_status": {
+   "match": 0,
+   "mismatch": 1,
+   "not-representable": 2
+  },
+  "explanations": {
+   "scale_bf16_rounding": {
+    "code": 1,
+    "text": "every differing scale pair is a bf16 word and an f32 word, and the bf16 word is the f32 word rounded to nearest-even (item 1 of docs/ternary-check.md)"
+   },
+   "tie_split": {
+    "code": 2,
+    "text": "every differing trit is at a weight whose bf16 master value is +-0.5 x weight_scale, and the packed checkpoint stores both 0 and +-1 for that value, so no rule applied to the published bf16 values gives the packed trits (item 2 of docs/ternary-check.md)"
+   },
+   "scale_zero_weights": {
+    "code": 3,
+    "text": "scales differ only at weights whose trit is 0 in both tensors, so every weight dequantizes to the same value: the llama.cpp TQ1_0/TQ2_0 quantizers store d = 0 for a block of zero weights"
+   },
+   "unexplained": {
+    "code": 4,
+    "text": "the difference is not one of the explained patterns"
+   }
+  },
+  "reasons": {
+   "shape": {
+    "code": 0,
+    "unit": "the format's geometry does not tile the tensor's shape"
+   },
+   "binary_only": {
+    "code": 1,
+    "unit": "weights equal to 0"
+   },
+   "code_outside": {
+    "code": 2,
+    "unit": "weights outside the format's codes"
+   },
+   "group_scales_differ": {
+    "code": 3,
+    "unit": "stored scale groups that span reference scales of different values"
+   },
+   "scale_precision": {
+    "code": 4,
+    "unit": "reference scale words without an exact word of the format's scale type"
+   }
+  },
+  "provenance": {
+   "reference": "the published bytes this tensor's other cells are compared with: third-party evidence",
+   "published": "bytes of a pinned public checkpoint, decoded by t27: third-party evidence",
+   "t27_round_trip": "written by the t27 encoder and read back by the t27 decoder: shows that the format can hold the tensor; not third-party evidence",
+   "upstream_encoder": "written by the pinned llama.cpp reference quantizer from the dequantized tensor, read by the t27 decoder: third-party evidence",
+   "not_written": "nothing is written: t27 (tmx_representable) decides from the reference trits and scales that the format cannot hold the tensor, so neither the t27 encoder nor an upstream writer runs; not third-party evidence",
+   "derived": "trits computed by t27 from published bf16 master weights with the transformers WeightQuant rule; not a storage format"
+  },
+  "errors": {
+   "format": -50,
+   "length": -51,
+   "capacity": -52,
+   "code": -53,
+   "padding": -54,
+   "truncated": -55,
+   "container": -56,
+   "not_found": -57,
+   "scale_nonfinite": -58,
+   "type_ambiguous": -59,
+   "layout_unsupported": -60,
+   "misaligned": -61,
+   "extent": -62
+  },
+  "flags": {
+   "outside_ternary": 0,
+   "noncanonical_base3": 1,
+   "scale_negative": 2,
+   "scale_zero": 3,
+   "trailer_nonzero": 4,
+   "padding_nonzero": 5,
+   "affine_not_ternary": 6
+  },
+  "source": "t27/matrix.t27 (TMX_*) and t27/formats.t27 (TF_ERR_*, TF_FLAG_*); specs/formats/OWNERS.md"
+ },
+ "upstream": {
+  "llama.cpp": {
+   "repo": "ggml-org/llama.cpp",
+   "commit": "e6ab7c1a41054a888ada952eab4c886444c2f5ad",
+   "lock": "tests/upstream/llama.cpp.lock.json",
+   "files": {
+    "ggml/src/ggml-common.h": "0061131b615c5721fc88a78feeb22c1f8c450f1c2646a317d80796a653bf595c",
+    "ggml/src/ggml-cpu/arch/arm/quants.c": "9fccd3897db24c9df89b8431b588175894e5f54697cf45768d0c6e6c5544093e",
+    "ggml/src/ggml-cpu/arch/x86/quants.c": "3c489fdc77e3ab484a5f188bff9c60c0e9483c951ed65c1a562a04c249d5628e",
+    "ggml/src/ggml-cpu/quants.c": "a61f1011e49d05b5f99d352b158d5b8e36cf008294bb0db309f72bdd7f1d4e35",
+    "ggml/src/ggml-quants.c": "7878680cc60493f98469a116e9b14af8b84789292ccf891c249230b2fa3d157f"
+   },
+   "functions": [
+    "ggml/src/ggml-quants.c:621-626",
+    "ggml/src/ggml-quants.c:2316-2412",
+    "ggml/src/ggml-quants.c:2428-2484"
+   ],
+   "writer": "tests/upstream/encode_llamacpp_tq.c, built by tests/upstream/run-llamacpp-matrix.sh",
+   "input": "w = t * weight_scale in float: t decoded from the HF packed checkpoint by t27, weight_scale its bf16 value (exact in f16); one quantize call per row",
+   "applies_to": "BitNet tensors; Bonsai tensors are not representable in TQ1_0 or TQ2_0"
+  }
+ },
+ "formats": [
+  {
+   "id": "hf_packed",
+   "name": "HF packed uint8 + bf16 weight_scale",
+   "t27_format": 8,
+   "scale_dtype": "BF16",
+   "scale_group": 0,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "i2_s",
+   "name": "I2_S (bitnet.cpp)",
+   "t27_format": 7,
+   "scale_dtype": "F32",
+   "scale_group": 0,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "ptq1_0",
+   "name": "PTQ1_0 (PrismML)",
+   "t27_format": 6,
+   "scale_dtype": "F16",
+   "scale_group": 128,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "pq2_0",
+   "name": "PQ2_0 (PrismML)",
+   "t27_format": 5,
+   "scale_dtype": "F16",
+   "scale_group": 128,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "q2_0",
+   "name": "Q2_0, group 64 (llama.cpp)",
+   "t27_format": 3,
+   "scale_dtype": "F16",
+   "scale_group": 64,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "mlx_2bit",
+   "name": "MLX 2-bit affine, group 128",
+   "t27_format": 9,
+   "scale_dtype": "F16",
+   "scale_group": 128,
+   "group_argument": 128,
+   "writer": "t27"
+  },
+  {
+   "id": "tq1_0",
+   "name": "TQ1_0 (llama.cpp)",
+   "t27_format": 1,
+   "scale_dtype": "F16",
+   "scale_group": 256,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "tq2_0",
+   "name": "TQ2_0 (llama.cpp)",
+   "t27_format": 2,
+   "scale_dtype": "F16",
+   "scale_group": 256,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "q1_0",
+   "name": "Q1_0, binary (llama.cpp)",
+   "t27_format": 4,
+   "scale_dtype": "F16",
+   "scale_group": 128,
+   "group_argument": 0,
+   "writer": "t27"
+  },
+  {
+   "id": "onnx_2bit",
+   "name": "ONNX MatMulNBits bits=2, block 128",
+   "t27_format": 10,
+   "scale_dtype": "F16",
+   "scale_group": 128,
+   "group_argument": 128,
+   "writer": "t27"
+  },
+  {
+   "id": "tq1_0_llamacpp",
+   "name": "TQ1_0 by llama.cpp quantize_row_tq1_0_ref",
+   "t27_format": 1,
+   "scale_dtype": "F16",
+   "scale_group": 256,
+   "group_argument": 0,
+   "writer": "llama.cpp quantize_row_tq1_0_ref"
+  },
+  {
+   "id": "tq2_0_llamacpp",
+   "name": "TQ2_0 by llama.cpp quantize_row_tq2_0_ref",
+   "t27_format": 2,
+   "scale_dtype": "F16",
+   "scale_group": 256,
+   "group_argument": 0,
+   "writer": "llama.cpp quantize_row_tq2_0_ref"
+  }
+ ],
+ "tensors": [
+  {
+   "id": "bitnet-q_proj",
+   "model": "BitNet b1.58 2B4T",
+   "family": "bitnet",
+   "names": {
+    "hf": "model.layers.0.self_attn.q_proj.weight",
+    "gguf": "blk.0.attn_q.weight"
+   },
+   "shape": [
+    2560,
+    2560
+   ],
+   "weights": 6553600,
+   "reference": {
+    "column": "hf_packed",
+    "source": [
+     {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors",
+      "range": [
+       672931828,
+       674570228
+      ]
+     },
+     {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors",
+      "range": [
+       656760922,
+       656760924
+      ]
+     }
+    ],
+    "trits_sha256_le": "6964ba331c4343f47f5ea013545c59ded5517d072e3a5ba7f590490117fa6392",
+    "scale": {
+     "dtype": "BF16",
+     "group": 0,
+     "count": 1,
+     "first_word": 16284
+    }
+   }
+  },
+  {
+   "id": "bitnet-down_proj",
+   "model": "BitNet b1.58 2B4T",
+   "family": "bitnet",
+   "names": {
+    "hf": "model.layers.0.mlp.down_proj.weight",
+    "gguf": "blk.0.ffn_down.weight"
+   },
+   "shape": [
+    2560,
+    6912
+   ],
+   "weights": 17694720,
+   "reference": {
+    "column": "hf_packed",
+    "source": [
+     {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors",
+      "range": [
+       657612788,
+       662036468
+      ]
+     },
+     {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors",
+      "range": [
+       656736848,
+       656736850
+      ]
+     }
+    ],
+    "trits_sha256_le": "12d119b01166e1e8d77d7bd6027d1bb8d16b70009543e45862c4c814c3eaffee",
+    "scale": {
+     "dtype": "BF16",
+     "group": 0,
+     "count": 1,
+     "first_word": 16394
+    }
+   }
+  },
+  {
+   "id": "bonsai-ffn_down",
+   "model": "Ternary Bonsai 2 27B",
+   "family": "bonsai",
+   "names": {
+    "gguf": "blk.0.ffn_down.weight",
+    "mlx": "language_model.model.layers.0.mlp.down_proj"
+   },
+   "shape": [
+    5120,
+    17408
+   ],
+   "weights": 89128960,
+   "reference": {
+    "column": "ptq1_0",
+    "source": [
+     {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+      "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+      "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "range": [
+       585748832,
+       605245792
+      ]
+     }
+    ],
+    "trits_sha256_le": "39ab72301bb62a2a6ae07e3586a5afbf04c31203e28186fa92bb4f5eb1a256e1",
+    "scale": {
+     "dtype": "F16",
+     "group": 128,
+     "count": 696320,
+     "first_word": 8677
+    }
+   },
+   "runtime_requirements": {
+    "hadamard_rotation": true,
+    "evidence": "every GGUF file of this tensor declares prism.* metadata (prism.hadamard.*)",
+    "note": "the PrismML runtime rotates activations at inference; the rotation is not storage, so it is no reason for a cell: every cell compares stored trits and scales"
+   }
+  }
+ ],
+ "cells": [
+  {
+   "id": "bitnet-q_proj--hf_packed",
+   "tensor": "bitnet-q_proj",
+   "format": "hf_packed",
+   "provenance": "reference",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors",
+     "range": [
+      672931828,
+      674570228
+     ]
+    },
+    {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors",
+     "range": [
+      656760922,
+      656760924
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "BF16",
+    "group": 0,
+    "count": 1,
+    "first_word": 16284,
+    "words_sha256_le": "83bd539e7eaf43f419423b979a2248db7e0e40ba5af7f9077afc8067ef239db9",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 1638402,
+   "bits_per_weight": 2.00000244140625,
+   "metadata": {
+    "container": "safetensors",
+    "bytes": 0,
+    "bits_per_weight": 2.00000244140625,
+    "note": "a safetensors tensor has no record or padding of its own; the JSON header belongs to the whole file (file overhead, not counted per tensor)"
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   }
+  },
+  {
+   "id": "bitnet-q_proj--i2_s",
+   "tensor": "bitnet-q_proj",
+   "format": "i2_s",
+   "provenance": "published",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+     "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+     "file": "ggml-model-i2_s.gguf",
+     "range": [
+      680399648,
+      682038080
+     ]
+    }
+   ],
+   "status": "mismatch",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F32",
+    "group": 0,
+    "count": 1,
+    "first_word": 1067189103,
+    "words_sha256_le": "8644e080ba31b4464a182c9601732340cf234fbe9da046f199b4ccea67811795",
+    "differ": 6553600,
+    "first": 0,
+    "explanation": "scale_bf16_rounding"
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 28,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 1638432,
+   "bits_per_weight": 2.0000390625,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 59,
+    "bits_per_weight": 2.000111083984375,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 19,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
+   "t27_reencode": {
+    "differ_bytes": 28,
+    "first": 1638404,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   },
+   "repro": "reports/ternary-check/repro/bitnet-q_proj--i2_s.json"
+  },
+  {
+   "id": "bitnet-q_proj--ptq1_0",
+   "tensor": "bitnet-q_proj",
+   "format": "ptq1_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 51200,
+    "first_word": 15584,
+    "words_sha256_le": "9b5f5c59c7f6f21d5103c5b0d9ff446c0de78b682d2eaff4f3b905406fe5b350",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 1433600,
+   "bits_per_weight": 1.75,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.75,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "5558183e6de4de508e7b2bdb18d080ce5579687fe43af2c6e54e029ca1f315cd"
+  },
+  {
+   "id": "bitnet-q_proj--pq2_0",
+   "tensor": "bitnet-q_proj",
+   "format": "pq2_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 51200,
+    "first_word": 15584,
+    "words_sha256_le": "9b5f5c59c7f6f21d5103c5b0d9ff446c0de78b682d2eaff4f3b905406fe5b350",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 1740800,
+   "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "fcb3a90e8e44f46fb9cf7f95d0cf740bd4185a45d369c1360eabb3368af8bfa0"
+  },
+  {
+   "id": "bitnet-q_proj--q2_0",
+   "tensor": "bitnet-q_proj",
+   "format": "q2_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 64,
+    "count": 102400,
+    "first_word": 15584,
+    "words_sha256_le": "0ed765b016bc8a76de5c098ed5d58fc89689771df5b5d6a2ae24fde380d6b6e0",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 1843200,
+   "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "bc0fb710036bb824c503c636ca238df381dd8415bcbd8bcda16cee2ec4aaede0"
+  },
+  {
+   "id": "bitnet-q_proj--mlx_2bit",
+   "tensor": "bitnet-q_proj",
+   "format": "mlx_2bit",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 51200,
+    "first_word": 15584,
+    "words_sha256_le": "9b5f5c59c7f6f21d5103c5b0d9ff446c0de78b682d2eaff4f3b905406fe5b350",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 1843200,
+   "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "4961f64d80fe2dac9300caffbb1d49932711380771564e084efa8ee68c086d60"
+  },
+  {
+   "id": "bitnet-q_proj--tq1_0",
+   "tensor": "bitnet-q_proj",
+   "format": "tq1_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 25600,
+    "first_word": 15584,
+    "words_sha256_le": "d05ccf04b9835d81ef6bcb284def9f235b6371d4a015d1cfb0adf4c469622d6b",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 1382400,
+   "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "99787af55cad9480df3458c7893b239528737eaeafc6d6de01c39fb7a208db41"
+  },
+  {
+   "id": "bitnet-q_proj--tq2_0",
+   "tensor": "bitnet-q_proj",
+   "format": "tq2_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 25600,
+    "first_word": 15584,
+    "words_sha256_le": "d05ccf04b9835d81ef6bcb284def9f235b6371d4a015d1cfb0adf4c469622d6b",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 1689600,
+   "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "e97ed4eb1c21ef77a7614b85b690b12bbf28048d6b7afb454126433e3c9592d0"
+  },
+  {
+   "id": "bitnet-q_proj--q1_0",
+   "tensor": "bitnet-q_proj",
+   "format": "q1_0",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "binary_only",
+     "count": 3251715,
+     "of": 6553600,
+     "first": 0,
+     "unit": "weights equal to 0"
+    }
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
+  },
+  {
+   "id": "bitnet-q_proj--onnx_2bit",
+   "tensor": "bitnet-q_proj",
+   "format": "onnx_2bit",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 51200,
+    "first_word": 15584,
+    "words_sha256_le": "9b5f5c59c7f6f21d5103c5b0d9ff446c0de78b682d2eaff4f3b905406fe5b350",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 1740800,
+   "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "ab273abc1a994cf47e59526c3cd01597ed6e0dfba57d75f25dbf5a3aa299424f"
+  },
+  {
+   "id": "bitnet-q_proj--tq1_0_llamacpp",
+   "tensor": "bitnet-q_proj",
+   "format": "tq1_0_llamacpp",
+   "provenance": "upstream_encoder",
+   "evidence": "third-party",
+   "source": [
+    {
+     "upstream": "llama.cpp",
+     "writer": "quantize_row_tq1_0_ref",
+     "file": "build/upstream/matrix/bitnet-q_proj.tq1_0",
+     "range": [
+      0,
+      1382400
+     ]
+    }
+   ],
+   "status": "mismatch",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 25600,
+    "first_word": 15584,
+    "words_sha256_le": "01073aac742777249f3651056644a8399c349f04acb56af0a8de47af365fee1a",
+    "differ": 12800,
+    "first": 3934464,
+    "explanation": "scale_zero_weights"
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 50,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 1382400,
+   "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   },
+   "bytes_sha256": "34b8a84b6349621eff56adf9d9f3d5aab8ec0669d12b1ff525382c4db13ab8e4",
+   "t27_round_trip_bytes": {
+    "differ_bytes": 100,
+    "first": 829978,
+    "note": "against the bytes of cell bitnet-q_proj--tq1_0, where the t27 writer is given the reference scale for every block"
+   },
+   "repro": "reports/ternary-check/repro/bitnet-q_proj--tq1_0_llamacpp.json"
+  },
+  {
+   "id": "bitnet-q_proj--tq2_0_llamacpp",
+   "tensor": "bitnet-q_proj",
+   "format": "tq2_0_llamacpp",
+   "provenance": "upstream_encoder",
+   "evidence": "third-party",
+   "source": [
+    {
+     "upstream": "llama.cpp",
+     "writer": "quantize_row_tq2_0_ref",
+     "file": "build/upstream/matrix/bitnet-q_proj.tq2_0",
+     "range": [
+      0,
+      1689600
+     ]
+    }
+   ],
+   "status": "mismatch",
+   "trits": {
+    "compared": 6553600,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 25600,
+    "first_word": 15584,
+    "words_sha256_le": "01073aac742777249f3651056644a8399c349f04acb56af0a8de47af365fee1a",
+    "differ": 12800,
+    "first": 3934464,
+    "explanation": "scale_zero_weights"
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 50,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 1689600,
+   "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   },
+   "bytes_sha256": "b2dea7f42cacfd08ed780df979f6f28240026795b1f5c87ca8c16fc7da23dc58",
+   "t27_round_trip_bytes": {
+    "differ_bytes": 100,
+    "first": 1014418,
+    "note": "against the bytes of cell bitnet-q_proj--tq2_0, where the t27 writer is given the reference scale for every block"
+   },
+   "repro": "reports/ternary-check/repro/bitnet-q_proj--tq2_0_llamacpp.json"
+  },
+  {
+   "id": "bitnet-down_proj--hf_packed",
+   "tensor": "bitnet-down_proj",
+   "format": "hf_packed",
+   "provenance": "reference",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors",
+     "range": [
+      657612788,
+      662036468
+     ]
+    },
+    {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors",
+     "range": [
+      656736848,
+      656736850
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "BF16",
+    "group": 0,
+    "count": 1,
+    "first_word": 16394,
+    "words_sha256_le": "a39718bebdedbcab4b4049fad7cd199e2a4fc34398487b0829d1ea650561d4a0",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 4423682,
+   "bits_per_weight": 2.000000904224537,
+   "metadata": {
+    "container": "safetensors",
+    "bytes": 0,
+    "bits_per_weight": 2.000000904224537,
+    "note": "a safetensors tensor has no record or padding of its own; the JSON header belongs to the whole file (file overhead, not counted per tensor)"
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   }
+  },
+  {
+   "id": "bitnet-down_proj--i2_s",
+   "tensor": "bitnet-down_proj",
+   "format": "i2_s",
+   "provenance": "published",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+     "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+     "file": "ggml-model-i2_s.gguf",
+     "range": [
+      665032320,
+      669456032
+     ]
+    }
+   ],
+   "status": "mismatch",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F32",
+    "group": 0,
+    "count": 1,
+    "first_word": 1074426172,
+    "words_sha256_le": "42fb390eba8ce45a6c04ad7fa2d3b9d6495507eb8bc0367d722e7722f98b1bde",
+    "differ": 17694720,
+    "first": 0,
+    "explanation": "scale_bf16_rounding"
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 28,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 4423712,
+   "bits_per_weight": 2.0000144675925924,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 2.000042046440972,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
+   "t27_reencode": {
+    "differ_bytes": 28,
+    "first": 4423684,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   },
+   "repro": "reports/ternary-check/repro/bitnet-down_proj--i2_s.json"
+  },
+  {
+   "id": "bitnet-down_proj--ptq1_0",
+   "tensor": "bitnet-down_proj",
+   "format": "ptq1_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 138240,
+    "first_word": 16464,
+    "words_sha256_le": "ad70ba39eb59eabf94c807327565884fd6d166a99b54a651b75c582359eb23dc",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 3870720,
+   "bits_per_weight": 1.75,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.75,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "8e5511aa5ea7f01141a52b9382f253f3a243661b00dd3e7136c28b6cfbd8ae19"
+  },
+  {
+   "id": "bitnet-down_proj--pq2_0",
+   "tensor": "bitnet-down_proj",
+   "format": "pq2_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 138240,
+    "first_word": 16464,
+    "words_sha256_le": "ad70ba39eb59eabf94c807327565884fd6d166a99b54a651b75c582359eb23dc",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 4700160,
+   "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "3997a743e3291883771ca4f8a818d186ae5956e749172f6be1afbde64a24a1a7"
+  },
+  {
+   "id": "bitnet-down_proj--q2_0",
+   "tensor": "bitnet-down_proj",
+   "format": "q2_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 64,
+    "count": 276480,
+    "first_word": 16464,
+    "words_sha256_le": "a16b72bc0e351fead9299606f0cbabe53a5f99fb4ddc0ce17c0e98c032637490",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 4976640,
+   "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "d12b36fa9568ec1f7f381604c23cde269cf3a0b902268178796e92af61f5825e"
+  },
+  {
+   "id": "bitnet-down_proj--mlx_2bit",
+   "tensor": "bitnet-down_proj",
+   "format": "mlx_2bit",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 138240,
+    "first_word": 16464,
+    "words_sha256_le": "ad70ba39eb59eabf94c807327565884fd6d166a99b54a651b75c582359eb23dc",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 4976640,
+   "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "217d7390420e6b898ae4302d71df1f24839b035ea331ddcdfbebfd69afee2fab"
+  },
+  {
+   "id": "bitnet-down_proj--tq1_0",
+   "tensor": "bitnet-down_proj",
+   "format": "tq1_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 69120,
+    "first_word": 16464,
+    "words_sha256_le": "f4e499cbd68d3f0f60b214fa661c64bfafe7270b767060b81bc2500bcbdff7f6",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 3732480,
+   "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "7d658bbe612c951dc53c7ee6b42c56a820b1ffee5c8a4bccbcb258a2c34415cb"
+  },
+  {
+   "id": "bitnet-down_proj--tq2_0",
+   "tensor": "bitnet-down_proj",
+   "format": "tq2_0",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 69120,
+    "first_word": 16464,
+    "words_sha256_le": "f4e499cbd68d3f0f60b214fa661c64bfafe7270b767060b81bc2500bcbdff7f6",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 4561920,
+   "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "c032780f9245f4ecfe37fe117f0b6f16b5a76cfb72734c60b1f7e4beabe99888"
+  },
+  {
+   "id": "bitnet-down_proj--q1_0",
+   "tensor": "bitnet-down_proj",
+   "format": "q1_0",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "binary_only",
+     "count": 6761794,
+     "of": 17694720,
+     "first": 1,
+     "unit": "weights equal to 0"
+    }
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
+  },
+  {
+   "id": "bitnet-down_proj--onnx_2bit",
+   "tensor": "bitnet-down_proj",
+   "format": "onnx_2bit",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 138240,
+    "first_word": 16464,
+    "words_sha256_le": "ad70ba39eb59eabf94c807327565884fd6d166a99b54a651b75c582359eb23dc",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 4700160,
+   "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "be147d056a961a95aecdb1ec7f22ff74d1552e1eb7ec0331d6ecba0f2e06dd9c"
+  },
+  {
+   "id": "bitnet-down_proj--tq1_0_llamacpp",
+   "tensor": "bitnet-down_proj",
+   "format": "tq1_0_llamacpp",
+   "provenance": "upstream_encoder",
+   "evidence": "third-party",
+   "source": [
+    {
+     "upstream": "llama.cpp",
+     "writer": "quantize_row_tq1_0_ref",
+     "file": "build/upstream/matrix/bitnet-down_proj.tq1_0",
+     "range": [
+      0,
+      3732480
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 69120,
+    "first_word": 16464,
+    "words_sha256_le": "f4e499cbd68d3f0f60b214fa661c64bfafe7270b767060b81bc2500bcbdff7f6",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 3732480,
+   "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   },
+   "bytes_sha256": "7d658bbe612c951dc53c7ee6b42c56a820b1ffee5c8a4bccbcb258a2c34415cb",
+   "t27_round_trip_bytes": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "against the bytes of cell bitnet-down_proj--tq1_0, where the t27 writer is given the reference scale for every block"
+   }
+  },
+  {
+   "id": "bitnet-down_proj--tq2_0_llamacpp",
+   "tensor": "bitnet-down_proj",
+   "format": "tq2_0_llamacpp",
+   "provenance": "upstream_encoder",
+   "evidence": "third-party",
+   "source": [
+    {
+     "upstream": "llama.cpp",
+     "writer": "quantize_row_tq2_0_ref",
+     "file": "build/upstream/matrix/bitnet-down_proj.tq2_0",
+     "range": [
+      0,
+      4561920
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 17694720,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 256,
+    "count": 69120,
+    "first_word": 16464,
+    "words_sha256_le": "f4e499cbd68d3f0f60b214fa661c64bfafe7270b767060b81bc2500bcbdff7f6",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 4561920,
+   "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   },
+   "bytes_sha256": "c032780f9245f4ecfe37fe117f0b6f16b5a76cfb72734c60b1f7e4beabe99888",
+   "t27_round_trip_bytes": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "against the bytes of cell bitnet-down_proj--tq2_0, where the t27 writer is given the reference scale for every block"
+   }
+  },
+  {
+   "id": "bonsai-ffn_down--hf_packed",
+   "tensor": "bonsai-ffn_down",
+   "format": "hf_packed",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "group_scales_differ",
+     "count": 1,
+     "of": 1,
+     "first": 128,
+     "unit": "stored scale groups that span reference scales of different values"
+    },
+    {
+     "reason": "scale_precision",
+     "count": 608946,
+     "of": 696320,
+     "first": 0,
+     "unit": "reference scale words without an exact word of the format's scale type"
+    }
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
+  },
+  {
+   "id": "bonsai-ffn_down--i2_s",
+   "tensor": "bonsai-ffn_down",
+   "format": "i2_s",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "group_scales_differ",
+     "count": 1,
+     "of": 1,
+     "first": 128,
+     "unit": "stored scale groups that span reference scales of different values"
+    }
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
+  },
+  {
+   "id": "bonsai-ffn_down--ptq1_0",
+   "tensor": "bonsai-ffn_down",
+   "format": "ptq1_0",
+   "provenance": "reference",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+     "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+     "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+     "range": [
+      585748832,
+      605245792
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 89128960,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 696320,
+    "first_word": 8677,
+    "words_sha256_le": "7784869c45cfb0cd87da4fc13939625916d2f29d4bfb45d14841d17cb64e85b0",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 19496960,
+   "bits_per_weight": 1.75,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 1.750005475212546,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   }
+  },
+  {
+   "id": "bonsai-ffn_down--pq2_0",
+   "tensor": "bonsai-ffn_down",
+   "format": "pq2_0",
+   "provenance": "published",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+     "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+     "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+     "range": [
+      708874592,
+      732549472
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 89128960,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 696320,
+    "first_word": 8677,
+    "words_sha256_le": "7784869c45cfb0cd87da4fc13939625916d2f29d4bfb45d14841d17cb64e85b0",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 23674880,
+   "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 2.125005475212546,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   }
+  },
+  {
+   "id": "bonsai-ffn_down--q2_0",
+   "tensor": "bonsai-ffn_down",
+   "format": "q2_0",
+   "provenance": "published",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf-dev",
+     "revision": "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
+     "file": "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf",
+     "range": [
+      749916512,
+      774984032
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 89128960,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 64,
+    "count": 1392640,
+    "first_word": 8677,
+    "words_sha256_le": "31ad98cc202fa8d73c7eb665a2ae9520430c0688cc76aaa7c3342bab7748f9cc",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 25067520,
+   "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 2.250005475212546,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   }
+  },
+  {
+   "id": "bonsai-ffn_down--mlx_2bit",
+   "tensor": "bonsai-ffn_down",
+   "format": "mlx_2bit",
+   "provenance": "published",
+   "evidence": "third-party",
+   "source": [
+    {
+     "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+     "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+     "file": "model.safetensors",
+     "range": [
+      7016633766,
+      7038916006
+     ]
+    },
+    {
+     "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+     "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+     "file": "model.safetensors",
+     "range": [
+      2424018438,
+      2425411078
+     ]
+    },
+    {
+     "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+     "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+     "file": "model.safetensors",
+     "range": [
+      7862603622,
+      7863996262
+     ]
+    }
+   ],
+   "status": "match",
+   "trits": {
+    "compared": 89128960,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 696320,
+    "first_word": 8677,
+    "words_sha256_le": "7784869c45cfb0cd87da4fc13939625916d2f29d4bfb45d14841d17cb64e85b0",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "flags": {
+    "outside_ternary": 0,
+    "noncanonical_base3": 0,
+    "scale_negative": 0,
+    "scale_zero": 0,
+    "trailer_nonzero": 0,
+    "padding_nonzero": 0,
+    "affine_not_ternary": 0
+   },
+   "stored_bytes": 25067520,
+   "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "safetensors",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "a safetensors tensor has no record or padding of its own; the JSON header belongs to the whole file (file overhead, not counted per tensor)"
+   },
+   "t27_reencode": {
+    "differ_bytes": 0,
+    "first": -1,
+    "note": "the t27 writer given the decoded trits and scale words, against the stored code bytes"
+   }
+  },
+  {
+   "id": "bonsai-ffn_down--tq1_0",
+   "tensor": "bonsai-ffn_down",
+   "format": "tq1_0",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "group_scales_differ",
+     "count": 347140,
+     "of": 348160,
+     "first": 128,
+     "unit": "stored scale groups that span reference scales of different values"
+    }
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
+  },
+  {
+   "id": "bonsai-ffn_down--tq2_0",
+   "tensor": "bonsai-ffn_down",
+   "format": "tq2_0",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "group_scales_differ",
+     "count": 347140,
+     "of": 348160,
+     "first": 128,
+     "unit": "stored scale groups that span reference scales of different values"
+    }
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
+  },
+  {
+   "id": "bonsai-ffn_down--q1_0",
+   "tensor": "bonsai-ffn_down",
+   "format": "q1_0",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "binary_only",
+     "count": 29214453,
+     "of": 89128960,
+     "first": 2,
+     "unit": "weights equal to 0"
+    }
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
+  },
+  {
+   "id": "bonsai-ffn_down--onnx_2bit",
+   "tensor": "bonsai-ffn_down",
+   "format": "onnx_2bit",
+   "provenance": "t27_round_trip",
+   "evidence": "t27",
+   "status": "match",
+   "trits": {
+    "compared": 89128960,
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "scales": {
+    "dtype": "F16",
+    "group": 128,
+    "count": 696320,
+    "first_word": 8677,
+    "words_sha256_le": "7784869c45cfb0cd87da4fc13939625916d2f29d4bfb45d14841d17cb64e85b0",
+    "differ": 0,
+    "first": -1,
+    "explanation": null
+   },
+   "outside_ternary": 0,
+   "stored_bytes": 23674880,
+   "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
+   "bytes_sha256": "c83d3030c26f34b0ccf3e96f0326ad7c28964919f1096b56c1dc77ff939e146d"
+  },
+  {
+   "id": "bonsai-ffn_down--tq1_0_llamacpp",
+   "tensor": "bonsai-ffn_down",
+   "format": "tq1_0_llamacpp",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "group_scales_differ",
+     "count": 347140,
+     "of": 348160,
+     "first": 128,
+     "unit": "stored scale groups that span reference scales of different values"
+    }
+   ],
+   "note": "decided by t27 before writing; the llama.cpp quantizer is not run"
+  },
+  {
+   "id": "bonsai-ffn_down--tq2_0_llamacpp",
+   "tensor": "bonsai-ffn_down",
+   "format": "tq2_0_llamacpp",
+   "provenance": "not_written",
+   "evidence": "t27",
+   "status": "not-representable",
+   "reasons": [
+    {
+     "reason": "group_scales_differ",
+     "count": 347140,
+     "of": 348160,
+     "first": 128,
+     "unit": "stored scale groups that span reference scales of different values"
+    }
+   ],
+   "note": "decided by t27 before writing; the llama.cpp quantizer is not run"
+  }
+ ],
+ "derived": [
+  {
+   "id": "bitnet-q_proj--bf16_absmean",
+   "tensor": "bitnet-q_proj",
+   "format": "bf16_absmean",
+   "provenance": "derived",
+   "evidence": "derived",
+   "derivation": "transformers WeightQuant on the bf16 master weights: s = 1 / max(mean|w|, 1e-5), round(w * s) half to even, clamp to [-1, 1] (t27 tf_absmean_bf16, f64)",
+   "source": {
+    "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+    "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+    "file": "model.safetensors",
+    "range": [
+     779290664,
+     792397864
+    ]
+   },
+   "status": "mismatch",
+   "trits": {
+    "compared": 6553600,
+    "differ": 79719,
+    "first": 35,
+    "explanation": "tie_split"
+   },
+   "scales": {
+    "compared": false,
+    "mean_abs": 1.2188504981180044,
+    "s": 0.8204451666090913,
+    "note": "the derivation has no stored scale word; the packed weight_scale is compared in the reference cell"
+   },
+   "boundary_weights": 0,
+   "ties": {
+    "tie_word": 16156,
+    "tie_value": 0.609375,
+    "tie_times_s": 0.499958773402415,
+    "positive": {
+     "packed_nonzero": 39708,
+     "packed_zero": 41560
+    },
+    "negative": {
+     "packed_nonzero": 40011,
+     "packed_zero": 41944
+    },
+    "differ_at_ties": 79719,
+    "differ_elsewhere": 0,
+    "first_elsewhere": -1,
+    "derived_nonzero_at_ties": 0
+   },
+   "triple_check": {
+    "tensor": "bitnet-q_proj",
+    "bf16_absmean_vs_hf_packed": {
+     "compared": 6553600,
+     "differ": 79719,
+     "first": 35,
+     "explanation": "tie_split"
+    },
+    "hf_packed_vs_i2_s": {
+     "compared": 6553600,
+     "differ": 0,
+     "first": -1,
+     "explanation": null
+    },
+    "bf16_absmean_vs_i2_s": {
+     "compared": 6553600,
+     "differ": 79719,
+     "first": 35,
+     "explanation": "tie_split"
+    },
+    "holds": {
+     "packed_equals_i2_s": true,
+     "absmean_equals_packed": false
+    }
+   },
+   "repro": "reports/ternary-check/repro/bitnet-q_proj--bf16_absmean.json"
+  },
+  {
+   "id": "bitnet-down_proj--bf16_absmean",
+   "tensor": "bitnet-down_proj",
+   "format": "bf16_absmean",
+   "provenance": "derived",
+   "evidence": "derived",
+   "derivation": "transformers WeightQuant on the bf16 master weights: s = 1 / max(mean|w|, 1e-5), round(w * s) half to even, clamp to [-1, 1] (t27 tf_absmean_bf16, f64)",
+   "source": {
+    "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+    "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+    "file": "model.safetensors",
+    "range": [
+     656714280,
+     692103720
+    ]
+   },
+   "status": "mismatch",
+   "trits": {
+    "compared": 17694720,
+    "differ": 101673,
+    "first": 165,
+    "explanation": "tie_split"
+   },
+   "scales": {
+    "compared": false,
+    "mean_abs": 2.16314335625935,
+    "s": 0.4622902116525767,
+    "note": "the derivation has no stored scale word; the packed weight_scale is compared in the reference cell"
+   },
+   "boundary_weights": 0,
+   "ties": {
+    "tie_word": 16266,
+    "tie_value": 1.078125,
+    "tie_times_s": 0.49840663443793426,
+    "positive": {
+     "packed_nonzero": 50812,
+     "packed_zero": 453819
+    },
+    "negative": {
+     "packed_nonzero": 50861,
+     "packed_zero": 453976
+    },
+    "differ_at_ties": 101673,
+    "differ_elsewhere": 0,
+    "first_elsewhere": -1,
+    "derived_nonzero_at_ties": 0
+   },
+   "triple_check": {
+    "tensor": "bitnet-down_proj",
+    "bf16_absmean_vs_hf_packed": {
+     "compared": 17694720,
+     "differ": 101673,
+     "first": 165,
+     "explanation": "tie_split"
+    },
+    "hf_packed_vs_i2_s": {
+     "compared": 17694720,
+     "differ": 0,
+     "first": -1,
+     "explanation": null
+    },
+    "bf16_absmean_vs_i2_s": {
+     "compared": 17694720,
+     "differ": 101673,
+     "first": 165,
+     "explanation": "tie_split"
+    },
+    "holds": {
+     "packed_equals_i2_s": true,
+     "absmean_equals_packed": false
+    }
+   },
+   "repro": "reports/ternary-check/repro/bitnet-down_proj--bf16_absmean.json"
+  }
+ ],
+ "summary": {
+  "tensors": 3,
+  "columns": 12,
+  "storage_formats": 10,
+  "cells": 36,
+  "status": {
+   "match": 23,
+   "mismatch": 4,
+   "not-representable": 9
+  },
+  "provenance": {
+   "not_written": 9,
+   "published": 5,
+   "reference": 3,
+   "t27_round_trip": 15,
+   "upstream_encoder": 4
+  },
+  "families": {
+   "bitnet": {
+    "columns": 12,
+    "storage_formats": 10,
+    "third_party_formats": [
+     "hf_packed",
+     "i2_s",
+     "tq1_0_llamacpp",
+     "tq2_0_llamacpp"
+    ]
+   },
+   "bonsai": {
+    "columns": 12,
+    "storage_formats": 10,
+    "third_party_formats": [
+     "mlx_2bit",
+     "pq2_0",
+     "ptq1_0",
+     "q2_0"
+    ]
+   }
+  },
+  "derived_cells": 2,
+  "mismatches_with_repro": 6
+ },
+ "matvec": {
+  "schema": "trinity.ternary-check.matvec.v1",
+  "issue": "dmitrii-f-t27/trinity-memory#33",
+  "reproduce": "python3 -m trinity_memory.matvec --check",
+  "compiler": {
+   "repo": "gHashTag/t27",
+   "commit": "bff21b85b206a0dd367876343e56dcd8312d81ba"
+  },
+  "fixtures": "fixtures/manifest.json, consumer layer0_matvec",
+  "activations": {
+   "generator": "cpython-random.Random(seed).randint(-128,127)",
+   "seed": 27,
+   "count": 17408,
+   "dtype": "int8",
+   "sha256_le": "1987f31010ec5241e9d434f20548a884e656dd3e4dff9b2dba4ee837d6a0b8c6",
+   "first": [
+    117,
+    13,
+    18,
+    -28,
+    -91,
+    -95,
+    2,
+    42
+   ]
+  },
+  "arithmetic": {
+   "activations": "x[i] = CPython random.Random(27).randint(-128, 127), drawn in index order by t27 tmv_activations (t27/random.t27); the vector for n columns is the first n draws",
+   "accumulators": "W is the decoded [out_features, in_features] trit matrix (row r, column k); p[r][j] = sum over k in group j (64 columns) of W[r][k] * x[k], each one tm_dot_i64 call (t27/compute.t27) on the row widened to i64; y_int[r] = sum_j p[r][j] in i64. 64 divides every scale group here (64 for Q2_0, 128 for PTQ1_0, PQ2_0 and MLX)",
+   "bitnet_float_step": "y[r] = y_int[r] * weight_scale in f64: bf16 weight_scale for the transformers packed checkpoint, the f32 scale after the I2_S codes for bitnet.cpp. transformers 2c4914fb src/transformers/integrations/bitnet.py:292, AutoBitLinear.forward (config linear_class autobitlinear, quantization_mode offline): output = output * self.weight_scale, a multiplication; BitLinear (:181) divides but is not the class this checkpoint uses. |y_int| < 2^29 and a scale has at most 24 significant bits, so each product is exact and order-free",
+   "bonsai_float_step": "y[r] = sum over j ascending of f16(scale of partial j) * p[r][j], summed in f64 left to right from 0; each product is exact (|p| < 2^29), the running sum rounds to nearest-even when it needs more than 53 bits. Exact integer form: sum_j (f16 * 2^24) * p[r][j] in checked i64, the exact value times 2^24. For MLX (w = q * scale + bias) this equals the affine result only in groups where bias = -scale, counted by groups_where_bias_is_not_minus_scale",
+   "activation_scale": "x stands for quantized activations with one scale per token: the model output is the float step divided by that scale (transformers ActQuant, bitnet.py:235-236: scale = 127 / max|x|), a common factor for every format of the same tensor, so it is left out. How each runtime quantizes activations is not modeled",
+   "hadamard": "the Bonsai GGUF files carry prism.hadamard.* metadata (prism_metadata true): the PrismML runtime applies a Walsh-Hadamard rotation at inference. It is a runtime transform, not storage: the stored trits and scales are identical in all four formats, and the products here use them as stored, without the rotation, so y is not the model's layer output"
+  },
+  "statuses": {
+   "format": -50,
+   "length": -51,
+   "capacity": -52,
+   "code": -53,
+   "scale_nonfinite": -58
+  },
+  "tensors": [
+   {
+    "model": "BitNet b1.58 2B4T",
+    "tensor": {
+     "hf": "model.layers.0.self_attn.q_proj.weight",
+     "gguf": "blk.0.attn_q.weight",
+     "shape": [
+      2560,
+      2560
+     ],
+     "weights": 6553600
+    },
+    "x": {
+     "count": 2560,
+     "sha256_le": "14910f836b6da885c8d75b0f7a9ce3e344313d10e736a30e6481b182939b4631",
+     "first": [
+      117,
+      13,
+      18,
+      -28,
+      -91,
+      -95,
+      2,
+      42
+     ]
+    },
+    "formats": {
+     "hf_packed": {
+      "source": {
+       "repo": "microsoft/bitnet-b1.58-2B-4T",
+       "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+       "file": "model.safetensors"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "36cd5b74dd266694fba934cf683ae9156a62d64bed0412591355e369e72c78b4",
+       "first": [
+        -2561,
+        2660,
+        -52,
+        -2385,
+        1269,
+        3446,
+        3451,
+        -2365
+       ],
+       "max_abs": 10924
+      },
+      "partials": {
+       "group": 64,
+       "count": 102400,
+       "sha256_le": "fc21e6dfa92294d3a7f6f155bfa4bef1133fb829facc7b686c554ec54bc24a80",
+       "max_abs": 2039
+      },
+      "float_step": {
+       "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+       "scale": {
+        "dtype": "BF16",
+        "word": 16284,
+        "value": 1.21875
+       },
+       "sha256_le": "7066c69cf62258a47ab1e8ddca86c5219f8fde30200014411d35595138f95e04",
+       "first": [
+        -3121.21875,
+        3241.875,
+        -63.375,
+        -2906.71875,
+        1546.59375,
+        4199.8125,
+        4205.90625,
+        -2882.34375
+       ]
+      }
+     },
+     "I2_S": {
+      "source": {
+       "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+       "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+       "file": "ggml-model-i2_s.gguf"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "36cd5b74dd266694fba934cf683ae9156a62d64bed0412591355e369e72c78b4",
+       "first": [
+        -2561,
+        2660,
+        -52,
+        -2385,
+        1269,
+        3446,
+        3451,
+        -2365
+       ],
+       "max_abs": 10924
+      },
+      "partials": {
+       "group": 64,
+       "count": 102400,
+       "sha256_le": "fc21e6dfa92294d3a7f6f155bfa4bef1133fb829facc7b686c554ec54bc24a80",
+       "max_abs": 2039
+      },
+      "float_step": {
+       "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+       "scale": {
+        "dtype": "F32",
+        "word": 1067189103,
+        "value": 1.2188547849655151
+       },
+       "sha256_le": "052628f0a92809af95e6a80c55d5cca979c4db9d672ef21a893278d9c5d52008",
+       "first": [
+        -3121.4871042966843,
+        3242.1537280082703,
+        -63.38044881820679,
+        -2906.9686621427536,
+        1546.7267221212387,
+        4200.173588991165,
+        4206.267862915993,
+        -2882.5915664434433
+       ]
+      }
+     },
+     "bf16_absmean": {
+      "source": {
+       "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+       "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+       "file": "model.safetensors"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "d44ba151c37986de15ae12059e8a458c2e27a2e3be5e810c58c610860a64ed0b",
+       "first": [
+        -1086,
+        3089,
+        267,
+        -3005,
+        1115,
+        2802,
+        2644,
+        -2906
+       ],
+       "max_abs": 10841
+      },
+      "partials": {
+       "group": 64,
+       "count": 102400,
+       "sha256_le": "fc2c59937447f5eadb4777563608413443d7d616ee6d60455756602109da3b56",
+       "max_abs": 2061
+      },
+      "derived": "absmean ternarization of the bf16 master weights by t27 tf_absmean_bf16 (transformers WeightQuant in f64); not a published storage format",
+      "float_step": null
+     }
+    },
+    "comparisons": [
+     {
+      "a": "hf_packed",
+      "b": "I2_S",
+      "trits": {
+       "differ": 0,
+       "first": -1
+      },
+      "accumulator_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "partials": {
+       "differ": 0,
+       "first": -1
+      },
+      "float_step_rows": {
+       "differ": 2560,
+       "first": 0
+      },
+      "float_step_note": "equal integers times two different scale values, the bf16 weight_scale and the f32 I2_S scale (item 1 of docs/ternary-check.md); the products are exact, so exactly the rows with y_int = 0 agree"
+     },
+     {
+      "a": "hf_packed",
+      "b": "bf16_absmean",
+      "trits": {
+       "differ": 79719,
+       "first": 35
+      },
+      "accumulator_rows": {
+       "differ": 2529,
+       "first": 0
+      },
+      "partials": {
+       "differ": 50762,
+       "first": 0
+      },
+      "difference_tensor": {
+       "nonzero": 79719,
+       "rows_with_nonzero": 2534,
+       "y_difference": {
+        "sha256_le": "e5030725436554de4f4556eb61026cd305f2efca3078835982df9174d692be33",
+        "first": [
+         -1475,
+         -429,
+         -319,
+         620,
+         154,
+         644,
+         807,
+         541
+        ]
+       },
+       "rows_where_y_a_minus_y_b_is_not_D_x": {
+        "differ": 0,
+        "first": -1
+       }
+      }
+     }
+    ]
+   },
+   {
+    "model": "BitNet b1.58 2B4T",
+    "tensor": {
+     "hf": "model.layers.0.mlp.down_proj.weight",
+     "gguf": "blk.0.ffn_down.weight",
+     "shape": [
+      2560,
+      6912
+     ],
+     "weights": 17694720
+    },
+    "x": {
+     "count": 6912,
+     "sha256_le": "30c7c094beca03af6c22afecaa13657a1e7ad0241f980d61b145b7d610cf6d08",
+     "first": [
+      117,
+      13,
+      18,
+      -28,
+      -91,
+      -95,
+      2,
+      42
+     ]
+    },
+    "formats": {
+     "hf_packed": {
+      "source": {
+       "repo": "microsoft/bitnet-b1.58-2B-4T",
+       "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+       "file": "model.safetensors"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "ea29b8aed8b0280a30b9ae2fd96445e2f7cb4700e65b029c17f9c21a85670e6e",
+       "first": [
+        2375,
+        4149,
+        -3986,
+        -11707,
+        14011,
+        -4605,
+        -747,
+        6983
+       ],
+       "max_abs": 18753
+      },
+      "partials": {
+       "group": 64,
+       "count": 276480,
+       "sha256_le": "b6324e917fb00d6d2140a77a8d7296752f5911347c0382c40828259972b4889c",
+       "max_abs": 2323
+      },
+      "float_step": {
+       "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+       "scale": {
+        "dtype": "BF16",
+        "word": 16394,
+        "value": 2.15625
+       },
+       "sha256_le": "deacd8c2364163d524b22770d52e53a6c30b971355184b2e988628112cf8c963",
+       "first": [
+        5121.09375,
+        8946.28125,
+        -8594.8125,
+        -25243.21875,
+        30211.21875,
+        -9929.53125,
+        -1610.71875,
+        15057.09375
+       ]
+      }
+     },
+     "I2_S": {
+      "source": {
+       "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+       "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+       "file": "ggml-model-i2_s.gguf"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "ea29b8aed8b0280a30b9ae2fd96445e2f7cb4700e65b029c17f9c21a85670e6e",
+       "first": [
+        2375,
+        4149,
+        -3986,
+        -11707,
+        14011,
+        -4605,
+        -747,
+        6983
+       ],
+       "max_abs": 18753
+      },
+      "partials": {
+       "group": 64,
+       "count": 276480,
+       "sha256_le": "b6324e917fb00d6d2140a77a8d7296752f5911347c0382c40828259972b4889c",
+       "max_abs": 2323
+      },
+      "float_step": {
+       "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+       "scale": {
+        "dtype": "F32",
+        "word": 1074426172,
+        "value": 2.163161277770996
+       },
+       "sha256_le": "3ac32c76e38025bd1425e693276e1bff29691fdfd7cce5824f9985600c5b491b",
+       "first": [
+        5137.508034706116,
+        8974.956141471863,
+        -8622.36085319519,
+        -25324.12907886505,
+        30308.052662849426,
+        -9961.357684135437,
+        -1615.881474494934,
+        15105.355202674866
+       ]
+      }
+     },
+     "bf16_absmean": {
+      "source": {
+       "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+       "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+       "file": "model.safetensors"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "767747b3eee83feedeb5094b1fbf4c2f6860c96da5fb8162abe01fdc4264dc84",
+       "first": [
+        1872,
+        3708,
+        -3628,
+        -11946,
+        13960,
+        -5845,
+        -1088,
+        6560
+       ],
+       "max_abs": 18408
+      },
+      "partials": {
+       "group": 64,
+       "count": 276480,
+       "sha256_le": "1978b28e8d930624dd0fb8f3733ae63b647cbfe3acbf6187d0c93fd811b5074e",
+       "max_abs": 2292
+      },
+      "derived": "absmean ternarization of the bf16 master weights by t27 tf_absmean_bf16 (transformers WeightQuant in f64); not a published storage format",
+      "float_step": null
+     }
+    },
+    "comparisons": [
+     {
+      "a": "hf_packed",
+      "b": "I2_S",
+      "trits": {
+       "differ": 0,
+       "first": -1
+      },
+      "accumulator_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "partials": {
+       "differ": 0,
+       "first": -1
+      },
+      "float_step_rows": {
+       "differ": 2560,
+       "first": 0
+      },
+      "float_step_note": "equal integers times two different scale values, the bf16 weight_scale and the f32 I2_S scale (item 1 of docs/ternary-check.md); the products are exact, so exactly the rows with y_int = 0 agree"
+     },
+     {
+      "a": "hf_packed",
+      "b": "bf16_absmean",
+      "trits": {
+       "differ": 101673,
+       "first": 165
+      },
+      "accumulator_rows": {
+       "differ": 2549,
+       "first": 0
+      },
+      "partials": {
+       "differ": 84494,
+       "first": 2
+      },
+      "difference_tensor": {
+       "nonzero": 101673,
+       "rows_with_nonzero": 2550,
+       "y_difference": {
+        "sha256_le": "4559e9a54a4a0ce8ba2c754b773753c87783aa03067a9d1239f31b64736fc649",
+        "first": [
+         503,
+         441,
+         -358,
+         239,
+         51,
+         1240,
+         341,
+         423
+        ]
+       },
+       "rows_where_y_a_minus_y_b_is_not_D_x": {
+        "differ": 0,
+        "first": -1
+       }
+      }
+     }
+    ]
+   },
+   {
+    "model": "Ternary Bonsai 2 27B",
+    "tensor": {
+     "gguf": "blk.0.ffn_down.weight",
+     "mlx": "language_model.model.layers.0.mlp.down_proj",
+     "shape": [
+      5120,
+      17408
+     ],
+     "weights": 89128960
+    },
+    "x": {
+     "count": 17408,
+     "sha256_le": "1987f31010ec5241e9d434f20548a884e656dd3e4dff9b2dba4ee837d6a0b8c6",
+     "first": [
+      117,
+      13,
+      18,
+      -28,
+      -91,
+      -95,
+      2,
+      42
+     ]
+    },
+    "formats": {
+     "PTQ1_0": {
+      "source": {
+       "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+       "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+       "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+       "first": [
+        2395,
+        -16744,
+        -801,
+        -1377,
+        11708,
+        -2537,
+        -5469,
+        6584
+       ],
+       "max_abs": 36778
+      },
+      "partials": {
+       "group": 64,
+       "count": 1392640,
+       "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+       "max_abs": 2364
+      },
+      "float_step": {
+       "scale": {
+        "dtype": "F16",
+        "group": 128,
+        "count": 696320,
+        "partials_per_scale": 2
+       },
+       "f64": {
+        "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+        "first": [
+         26.915611267089844,
+         -202.77806854248047,
+         -3.2950363159179688,
+         -16.735031127929688,
+         143.97399139404297,
+         -27.556907653808594,
+         -73.49837493896484,
+         69.86248016357422
+        ]
+       },
+       "exact_times_2_24": {
+        "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+        "first": [
+         451569024,
+         -3402051456,
+         -55281536,
+         -280767232,
+         2415482752,
+         -462328192,
+         -1233098112,
+         1172097920
+        ]
+       },
+       "rows_where_f64_is_not_exact": {
+        "differ": 0,
+        "first": -1
+       }
+      },
+      "prism_metadata": true
+     },
+     "PQ2_0": {
+      "source": {
+       "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+       "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+       "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+       "first": [
+        2395,
+        -16744,
+        -801,
+        -1377,
+        11708,
+        -2537,
+        -5469,
+        6584
+       ],
+       "max_abs": 36778
+      },
+      "partials": {
+       "group": 64,
+       "count": 1392640,
+       "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+       "max_abs": 2364
+      },
+      "float_step": {
+       "scale": {
+        "dtype": "F16",
+        "group": 128,
+        "count": 696320,
+        "partials_per_scale": 2
+       },
+       "f64": {
+        "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+        "first": [
+         26.915611267089844,
+         -202.77806854248047,
+         -3.2950363159179688,
+         -16.735031127929688,
+         143.97399139404297,
+         -27.556907653808594,
+         -73.49837493896484,
+         69.86248016357422
+        ]
+       },
+       "exact_times_2_24": {
+        "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+        "first": [
+         451569024,
+         -3402051456,
+         -55281536,
+         -280767232,
+         2415482752,
+         -462328192,
+         -1233098112,
+         1172097920
+        ]
+       },
+       "rows_where_f64_is_not_exact": {
+        "differ": 0,
+        "first": -1
+       }
+      },
+      "prism_metadata": true
+     },
+     "Q2_0": {
+      "source": {
+       "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf-dev",
+       "revision": "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
+       "file": "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+       "first": [
+        2395,
+        -16744,
+        -801,
+        -1377,
+        11708,
+        -2537,
+        -5469,
+        6584
+       ],
+       "max_abs": 36778
+      },
+      "partials": {
+       "group": 64,
+       "count": 1392640,
+       "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+       "max_abs": 2364
+      },
+      "float_step": {
+       "scale": {
+        "dtype": "F16",
+        "group": 64,
+        "count": 1392640,
+        "partials_per_scale": 1
+       },
+       "f64": {
+        "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+        "first": [
+         26.915611267089844,
+         -202.77806854248047,
+         -3.2950363159179688,
+         -16.735031127929688,
+         143.97399139404297,
+         -27.556907653808594,
+         -73.49837493896484,
+         69.86248016357422
+        ]
+       },
+       "exact_times_2_24": {
+        "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+        "first": [
+         451569024,
+         -3402051456,
+         -55281536,
+         -280767232,
+         2415482752,
+         -462328192,
+         -1233098112,
+         1172097920
+        ]
+       },
+       "rows_where_f64_is_not_exact": {
+        "differ": 0,
+        "first": -1
+       }
+      },
+      "prism_metadata": true
+     },
+     "mlx_2bit": {
+      "source": {
+       "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+       "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+       "file": "model.safetensors"
+      },
+      "status": "ok",
+      "accumulators": {
+       "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+       "first": [
+        2395,
+        -16744,
+        -801,
+        -1377,
+        11708,
+        -2537,
+        -5469,
+        6584
+       ],
+       "max_abs": 36778
+      },
+      "partials": {
+       "group": 64,
+       "count": 1392640,
+       "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+       "max_abs": 2364
+      },
+      "float_step": {
+       "scale": {
+        "dtype": "F16",
+        "group": 128,
+        "count": 696320,
+        "partials_per_scale": 2
+       },
+       "f64": {
+        "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+        "first": [
+         26.915611267089844,
+         -202.77806854248047,
+         -3.2950363159179688,
+         -16.735031127929688,
+         143.97399139404297,
+         -27.556907653808594,
+         -73.49837493896484,
+         69.86248016357422
+        ]
+       },
+       "exact_times_2_24": {
+        "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+        "first": [
+         451569024,
+         -3402051456,
+         -55281536,
+         -280767232,
+         2415482752,
+         -462328192,
+         -1233098112,
+         1172097920
+        ]
+       },
+       "rows_where_f64_is_not_exact": {
+        "differ": 0,
+        "first": -1
+       },
+       "groups_where_bias_is_not_minus_scale": 0
+      }
+     }
+    },
+    "comparisons": [
+     {
+      "a": "PTQ1_0",
+      "b": "PQ2_0",
+      "partials": {
+       "differ": 0,
+       "first": -1
+      },
+      "accumulator_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "float_step_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "exact_rows": {
+       "differ": 0,
+       "first": -1
+      }
+     },
+     {
+      "a": "PTQ1_0",
+      "b": "Q2_0",
+      "partials": {
+       "differ": 0,
+       "first": -1
+      },
+      "accumulator_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "float_step_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "exact_rows": {
+       "differ": 0,
+       "first": -1
+      }
+     },
+     {
+      "a": "PTQ1_0",
+      "b": "mlx_2bit",
+      "partials": {
+       "differ": 0,
+       "first": -1
+      },
+      "accumulator_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "float_step_rows": {
+       "differ": 0,
+       "first": -1
+      },
+      "exact_rows": {
+       "differ": 0,
+       "first": -1
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

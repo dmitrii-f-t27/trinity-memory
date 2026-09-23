@@ -14,7 +14,7 @@ if "$cc" --version | grep -qi clang; then warning_flags=-Wno-parentheses-equalit
 "$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/platform.c -o build/t27/platform-test.o
 "$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/process.c -o build/t27/process-test.o
 case $(uname -s) in Darwin) crypto_flags=; shared_flags=-dynamiclib; extension=dylib;; *) crypto_flags="-lcrypto -ldl"; shared_flags=-shared; extension=so;; esac
-for module in codecs compute tensorpack json formats ternary_contract tensorpack_json tensorpack_cli http bridge client random rtl_driver; do
+for module in codecs compute tensorpack json formats ternary_contract tensorpack_json tensorpack_cli http bridge client random matvec matrix rtl_driver; do
     # Test executables always keep assertions, ASan and UBSan enabled.
     # shellcheck disable=SC2086
     "$cc" -std=c11 -Wall -Wextra -Werror $warning_flags -O1 -g \
@@ -50,6 +50,8 @@ done
 node tests/native/test_wasm.mjs
 node tests/spec_formats_wasm_replay.mjs
 node tests/ternary_contract_wasm_replay.mjs
+node tests/matvec_wasm.mjs
+node tests/matrix_wasm.mjs
 "${PYTHON:-python3}" -m unittest discover -s tests/native -v
 "${PYTHON:-python3}" tests/t27_rtl.py --compiler "$T27_ROOT/target/release/t27c"
 "${PYTHON:-python3}" tests/t27_storage.py --compiler "$T27_ROOT/target/release/t27c"
