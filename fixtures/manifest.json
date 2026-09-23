@@ -21,7 +21,7 @@
  "consumers": {
   "ternary_check": "python3 -m trinity_memory.ternary_check (reports/ternary-check/2026-09-22.json)",
   "bitnet_audit": "python3 tools/bitnet_audit.py (reports/ternary-check/bitnet-audit-2026-09-23.json); its scales.rows also reproduce the 210 i2s_f32 and hf_packed_bf16 values of reports/ternary-check/bitnet-scales-2026-09-22.json, whose f32 scale words are the first 4 bytes of the I2_S trailer ranges",
-  "layer0_matvec": "planned layer-0 int8-activation matvec on decoded weights (#33), not implemented yet; it tags the same 36 ranges ternary_check reads and adds none"
+  "layer0_matvec": "python3 -m trinity_memory.matvec (reports/ternary-check/matvec-2026-09-23.json), the layer-0 int8-activation matvec of #33 through t27/matvec.t27; tests/matvec_wasm.mjs replays it in formats.wasm. It reads the same 36 ranges ternary_check reads and adds none"
  },
  "models": [
   {

@@ -49,6 +49,7 @@ done
 "${PYTHON:-python3}" tests/native/test_cli_complete.py --binary build/t27/trinity-memory-t27 --output build/t27/cli-parity.json
 node tests/native/test_wasm.mjs
 node tests/spec_formats_wasm_replay.mjs
+node tests/matvec_wasm.mjs
 "${PYTHON:-python3}" -m unittest discover -s tests/native -v
 "${PYTHON:-python3}" tests/t27_rtl.py --compiler "$T27_ROOT/target/release/t27c"
 "${PYTHON:-python3}" tests/t27_storage.py --compiler "$T27_ROOT/target/release/t27c"
