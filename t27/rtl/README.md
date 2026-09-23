@@ -91,6 +91,9 @@ with original commit and byte hashes recorded in
 - `gen-c` emits constants as untyped macros (shift a typed local, not a constant,
   past bit 31) and initializes a module array with `= 0`, which C rejects; the
   C tests of `bram_trit_engine.t27` rewrite that one line to `= {0}`.
+- `gen-c` does not lower the module-level assignments of a clocked module, so
+  the generated C `on_clock` of such a module is not a model of it (the C runner
+  checks its functions; the module as a whole is checked in Verilog).
 - Locals of `on_clock` are declared where they appear in the generated Verilog,
   which plain Verilog rejects after a statement; intermediate values are
   module-level assignments instead.

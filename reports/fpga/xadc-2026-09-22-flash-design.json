@@ -1,0 +1,38 @@
+{
+ "schema": "trinity.xadc-reading.v1",
+ "label": "XADC with the board's flash-resident design running (before any SRAM configuration this session)",
+ "read_at": "2026-09-22T19:08:00Z (approximate)",
+ "tool": "openFPGALoader -c digilent_hs2 --read-xadc",
+ "note": "transcribed from the session log: the raw outputs were printed, not saved. The first reading is with the board's flash-resident design running; the second was taken three minutes after the trace player was configured into SRAM (19:12 UTC), and its maxtemp is the XADC peak since power-on, reached while the flash-resident design ran",
+ "xadc": {
+  "temp": 83.5452,
+  "maxtemp": 83.922,
+  "mintemp": 25.6545,
+  "raw": {
+   "0": 46381,
+   "1": 21739,
+   "2": 39099,
+   "3": 0,
+   "4": 0,
+   "5": 0,
+   "6": 21745,
+   "7": 0
+  },
+  "vccint": 0.994629,
+  "maxvccint": 0.996094,
+  "minvccint": 0.993896,
+  "vccaux": 1.78931,
+  "maxvccaux": 1.7915,
+  "minvccaux": 1.78931
+ },
+ "later_reading": {
+  "read_at": "2026-09-22T19:15:57Z",
+  "design": "t27 trace player of f07a667 in SRAM",
+  "xadc": {
+   "temp": 55.167,
+   "maxtemp": 87.3902,
+   "vccint": 0.993896,
+   "vccaux": 1.79077
+  }
+ }
+}

@@ -71,7 +71,10 @@ bits are rejected, giving a unique canonical representation.
 `dense22` is a **35-bit stream codec**, not an implemented BRAM mapping.
 If each 22-weight group occupies a separate 36-bit word, allocation is
 36/22 ≈ 1.63636 bpw. Independently byte-aligned groups would cost
-40/22 ≈ 1.81818 bpw. Physical block count, routing and decoder cost require synthesis.
+40/22 ≈ 1.81818 bpw. The block-RAM bench measures such a word on the AX7203 with
+four dense5 bytes and a dense2 nibble in the parity bits instead of the base-3^22
+code: 45 RAMB36E1 for 1 013 760 trits against 55 at two bits per trit, 136 LUTs to
+decode a word ([hardware.md](hardware.md), "Block-RAM trit packing").
 RTL implemented here covers dense5, sparse41 decoding and dense5/baseline5 streaming.
 
 ## File container

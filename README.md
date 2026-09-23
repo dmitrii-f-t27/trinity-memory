@@ -189,9 +189,11 @@ transfer throughput if bandwidth alone limits performance. This is a model,
 not measured FPGA or inference speed. Python timings are median wall times
 from three repetitions after warm-up, not optimized CPU-kernel performance.
 
-Physical BRAM allocation, LUT use, routed timing, DDR throughput, power, and
-model quality are **not yet measured**. Continuous 27/35-bit software packing
-does not establish the physical cost of a memory device.
+Block-RAM allocation, LUT and flip-flop use and nextpnr timing estimates are
+measured on the AX7203 with the open flow for the three 36-bit word layouts
+([docs/hardware.md](docs/hardware.md), "Block-RAM trit packing"). DDR throughput,
+power, and model quality are **not yet measured**. Continuous 27/35-bit software
+packing does not establish the physical cost of a memory device.
 
 ## Place in Trinity
 
