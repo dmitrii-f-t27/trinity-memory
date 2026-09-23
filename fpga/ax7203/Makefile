@@ -135,8 +135,8 @@ BRAM_TRITS     ?= 1013760
 BRAM_SIM_TRITS ?= 1980
 BRAM_ONLY      ?= -1
 override BRAM_ONLY := $(strip $(BRAM_ONLY))
-ifneq ($(words $(BRAM_ONLY)) $(filter -1 0 1 2,$(BRAM_ONLY)),1 $(BRAM_ONLY))
-$(error BRAM_ONLY must be -1 (all three layouts), 0 (b2), 1 (d5) or 2 (d5d2), not '$(BRAM_ONLY)')
+ifneq ($(words $(BRAM_ONLY)) $(filter -1 0 1 2 3,$(BRAM_ONLY)),1 $(BRAM_ONLY))
+$(error BRAM_ONLY must be -1 (all three layouts), 0 (b2), 1 (d5), 2 (d5d2) or 3 (d5p, with BRAM_ROM), not '$(BRAM_ONLY)')
 endif
 BRAM_SUFFIX    := $(if $(filter -1,$(BRAM_ONLY)),,-$(BRAM_ONLY))
 # yosys chparam does not take a negative literal; -1 is the Verilog default anyway.
@@ -161,7 +161,7 @@ BRAM_BUILD     ?= $(BUILD)/$(BRAM_KIND)$(BRAM_SUFFIX)
 BRAM_SIMBUILD  ?= $(BUILD)/$(BRAM_KIND)-sim$(BRAM_SUFFIX)
 BRAM_TOP       := tms_bram_bench_ax7203
 BRAM_CORES     := fpga_tick fpga_reset fpga_uart_tx fpga_line_emitter fpga_bram_bench bram_trit_codec
-BRAM_FORMATS   := b2 d5 d5d2
+BRAM_FORMATS   := b2 d5 d5d2 $(if $(BRAM_ROM),d5p)
 BRAM_CORE_V    := $(foreach c,$(BRAM_CORES),$(RTL)/$(c).v)
 # Every source whose hash the manifest records (tools/generate-bram-bench.py, SOURCES).
 BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/t27/rtl/bram_trit_codec.t27 $(ROOT)/t27/rtl/fpga_bram_bench.t27 \
@@ -170,7 +170,7 @@ BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/t27/rtl/bram_trit
 bram_sources    = $(BRAM_CORE_V) $(foreach f,$(BRAM_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
 # Synthesis of one layout reads only that layout's engine: the adapter elaborates
 # one slot, and in ROM mode yosys needs minutes per engine for the initializers.
-BRAM_SYNTH_FORMATS := $(if $(filter 0,$(BRAM_ONLY)),b2,$(if $(filter 1,$(BRAM_ONLY)),d5,$(if $(filter 2,$(BRAM_ONLY)),d5d2,$(BRAM_FORMATS))))
+BRAM_SYNTH_FORMATS := $(if $(filter 0,$(BRAM_ONLY)),b2,$(if $(filter 1,$(BRAM_ONLY)),d5,$(if $(filter 2,$(BRAM_ONLY)),d5d2,$(if $(filter 3,$(BRAM_ONLY)),d5p,$(BRAM_FORMATS)))))
 bram_synth_sources = $(BRAM_CORE_V) $(foreach f,$(BRAM_SYNTH_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
 # synth_xilinx with the block RAM library restricted to the 1K x 36 configuration
 # (brams_x36.txt): every layout is mapped the same way, one 36-bit word per RAMB36

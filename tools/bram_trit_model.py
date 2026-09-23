@@ -7,9 +7,14 @@ uses it for the manifest; tools/fpga-bram-capture.py for the comparison.
 """
 from __future__ import annotations
 
-FMT_B2, FMT_D5, FMT_D5D2 = 0, 1, 2
-FORMAT_NAMES = {FMT_B2: "b2", FMT_D5: "d5", FMT_D5D2: "d5d2"}
+FMT_B2, FMT_D5, FMT_D5D2, FMT_D5P = 0, 1, 2, 3
+FORMAT_NAMES = {FMT_B2: "b2", FMT_D5: "d5", FMT_D5D2: "d5d2", FMT_D5P: "d5p"}
 LANES = {FMT_B2: 18, FMT_D5: 20, FMT_D5D2: 22}
+# d5p (read-only store only): a pair of 36-bit words holds 45 trits. Each word has
+# four dense5 bytes (20 trits) in bits 31:0; the two parity nibbles together are one
+# more dense5 byte, low nibble in the first word and high nibble in the second, whose
+# five trits follow the second word's twenty. Its trits per pair are PAIR_LANES.
+PAIR_LANES = 45
 WORD_BITS = 36
 WORD_MASK = (1 << WORD_BITS) - 1
 MASK64 = (1 << 64) - 1
@@ -150,29 +155,65 @@ def words_of_trits(fmt: int, trits) -> list[tuple[int, int]]:
     return out
 
 
+def dense5(digits) -> int:
+    return sum(d * 3 ** i for i, d in enumerate(digits))
+
+
+def pair_words(trits) -> list[tuple[int, int]]:
+    """(lanes, stored word) of every word of the d5p layout: per 45 trits, word A holds
+    lanes 0-19 (trits 0-19) and word B lanes 0-24 (trits 20-39, then 40-44 from the
+    parity byte P = dense5(trits 40-44), P[3:0] in A's bits 35:32, P[7:4] in B's)."""
+    if len(trits) % PAIR_LANES:
+        raise ValueError(f"{len(trits)} trits are not a whole number of {PAIR_LANES}-trit pairs")
+    out = []
+    for g in range(0, len(trits), PAIR_LANES):
+        group = trits[g:g + PAIR_LANES]
+        lanes_a = sum(lane_of_trit(t) << (2 * j) for j, t in enumerate(group[:20]))
+        lanes_b = sum(lane_of_trit(t) << (2 * j) for j, t in enumerate(group[20:45]))
+        parity = dense5([t + 1 for t in group[40:45]])
+        word_a = encode_word(FMT_D5, lanes_a) | ((parity & 15) << 32)
+        word_b = encode_word(FMT_D5, lanes_b & ((1 << 40) - 1)) | ((parity >> 4) << 32)
+        out += [(lanes_a, word_a), (lanes_b, word_b)]
+    return out
+
+
+def decode_pair(word_a: int, word_b: int) -> tuple[int, int, int]:
+    """(lanes of A, lanes of B, invalid groups) as the d5p store decodes a pair."""
+    lanes_a, bad_a = decode_word(FMT_D5, word_a & ((1 << 32) - 1))
+    lanes_b, bad_b = decode_word(FMT_D5, word_b & ((1 << 32) - 1))
+    parity = ((word_b >> 32) & 15) << 4 | ((word_a >> 32) & 15)
+    if parity < 243:
+        for i in range(5):
+            lanes_b |= lane_of_digit((parity // 3 ** i) % 3) << (2 * (20 + i))
+        return lanes_a, lanes_b, bad_a + bad_b
+    return lanes_a, lanes_b, bad_a + bad_b + 1
+
+
 def rom_results(fmt: int, trits, verify: bool = True, pipe: int = 0) -> dict:
     """What the read-only store (t27/rtl/bram_trit_rom.t27) must report for a fixed
     trit sequence: the engine's fields with no write phase, plus lanes_check, the
     rotate-xor checksum of the decoded lanes the store compares itself with. With
     pipe = 1 (three more register stages) a run takes three ticks more."""
-    k = LANES[fmt]
+    k = PAIR_LANES if fmt == FMT_D5P else LANES[fmt]
     pos = neg = dot = chk = lchk = 0
-    words = words_of_trits(fmt, trits)
+    words = pair_words(trits) if fmt == FMT_D5P else words_of_trits(fmt, trits)
+    if verify and fmt == FMT_D5P:
+        for w in range(0, len(words), 2):
+            a, b, bad = decode_pair(words[w][1], words[w + 1][1])
+            assert (a, b, bad) == (words[w][0], words[w + 1][0], 0), (w, hex(words[w][1]), hex(words[w + 1][1]))
     for w, (lanes, word) in enumerate(words):
-        if verify:
+        if verify and fmt != FMT_D5P:
             back, bad = decode_word(fmt, word)
             assert back == lanes and bad == 0, (fmt, w, hex(lanes), hex(word))
-        base = w * k
-        for j in range(k):
-            t = trits[base + j]
-            if t == 1:
-                pos += 1
-                dot += ((base + j) & 7) + 1
-            elif t == -1:
-                neg += 1
-                dot -= ((base + j) & 7) + 1
         chk = rotl1(chk) ^ word
         lchk = rotl1(lchk) ^ lanes
+    for i, t in enumerate(trits):
+        if t == 1:
+            pos += 1
+            dot += (i & 7) + 1
+        elif t == -1:
+            neg += 1
+            dot -= (i & 7) + 1
     return {"format": fmt, "name": FORMAT_NAMES[fmt], "lanes": k, "words": len(words), "trits": len(trits),
             "write_ticks": 0, "read_ticks": len(words) + (4 if pipe else 1), "bad_words": 0, "invalid_groups": 0,
             "pos": pos, "neg": neg, "dot": dot, "chk": chk, "lanes_check": lchk, "pipe": pipe}

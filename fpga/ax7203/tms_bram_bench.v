@@ -12,6 +12,8 @@
 //   format 0: b2   (18 trits per word, two bits per trit)
 //   format 1: d5   (20 trits per word, four dense5 bytes, bits 35:32 unused)
 //   format 2: d5d2 (22 trits per word, four dense5 bytes and a dense2 nibble in bits 35:32)
+//   format 3: d5p (read-only store only; 45 trits per pair of words, the two parity
+//             nibbles forming one more dense5 byte; ONLY = 3)
 // ONLY = -1 builds all three (slots 0, 1, 2 = formats 0, 1, 2); ONLY = 0, 1 or 2
 // builds that format alone in slot 0, which keeps the placement small enough for
 // nextpnr-xilinx to route (all three need 150 RAMB36E1 and ~9k LUTs).
@@ -116,6 +118,18 @@ module tms_bram_bench_ax7203 #(
             TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd0), .x(lanes), .result(word));
             TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd1), .x(rdata), .result(dec));
             TrinityBramTritEngineD5T27 eng (
+                .clk(clk), .rst_n(!rst), .en(tick), .ready(),
+                .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
+                .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),
+                .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
+                .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
+            );
+        end else if (F0 == 3) begin : slot0_d5p
+            // The bytes of every word decode as d5; the store decodes the pair's parity byte.
+            wire [63:0] lanes, word, rdata, dec;
+            TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd0), .x(lanes), .result(word));
+            TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd1), .x(rdata), .result(dec));
+            TrinityBramTritEngineD5PT27 eng (
                 .clk(clk), .rst_n(!rst), .en(tick), .ready(),
                 .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
                 .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),

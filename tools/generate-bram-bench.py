@@ -37,7 +37,7 @@ ROM_TEMPLATE = ROOT / "t27" / "rtl" / "bram_trit_rom.t27"
 SOURCES = ["t27/rtl/bram_trit_engine.t27", "t27/rtl/bram_trit_codec.t27", "t27/rtl/fpga_bram_bench.t27",
            "tools/bram_trit_model.py", "tools/generate-bram-bench.py"]
 MODULES = {model.FMT_B2: "TrinityBramTritEngineB2T27", model.FMT_D5: "TrinityBramTritEngineD5T27",
-           model.FMT_D5D2: "TrinityBramTritEngineD5D2T27"}
+           model.FMT_D5D2: "TrinityBramTritEngineD5D2T27", model.FMT_D5P: "TrinityBramTritEngineD5PT27"}
 RAMB36_WORDS_36 = 1024   # a RAMB36E1 in its 1K x 36 configuration
 BANK_WORDS = 16384       # words per engine bank (14-bit address, see bram_trit_engine.t27)
 BANKS = 4
@@ -79,8 +79,13 @@ def initializer(bank: int, words: list[int]) -> str:
 def specialize_rom(fmt: int, words: list[int], lanes_check: int, pipe: int = 0) -> str:
     text = ROM_TEMPLATE.read_text(encoding="utf-8")
     text = substitute(text, r"^module TrinityBramTritRomT27;$", f"module {MODULES[fmt]};")
+    pair = fmt == model.FMT_D5P
+    lanes, byte_lanes, lanes_out = (25, 20, model.PAIR_LANES) if pair else (model.LANES[fmt],) * 3
     text = substitute(text, r"^const FORMAT: u32 = \d+;$", f"const FORMAT: u32 = {fmt};")
-    text = substitute(text, r"^const LANES: u32 = \d+;$", f"const LANES: u32 = {model.LANES[fmt]};")
+    text = substitute(text, r"^const LANES: u32 = \d+;$", f"const LANES: u32 = {lanes};")
+    text = substitute(text, r"^const BYTE_LANES: u32 = \d+;$", f"const BYTE_LANES: u32 = {byte_lanes};")
+    text = substitute(text, r"^const LANES_OUT: u32 = \d+;$", f"const LANES_OUT: u32 = {lanes_out};")
+    text = substitute(text, r"^const PAIR: u32 = \d+;$", f"const PAIR: u32 = {int(pair)};")
     text = substitute(text, r"^const WORDS: u32 = \d+;$", f"const WORDS: u32 = {len(words)};")
     text = substitute(text, r"^const LANES_CHECK: u64 = \d+;$", f"const LANES_CHECK: u64 = {lanes_check};")
     text = substitute(text, r"^const PIPE: u32 = \d+;$", f"const PIPE: u32 = {pipe};")
@@ -137,25 +142,26 @@ def main() -> None:
     out = Path(args.output_dir)
     out.mkdir(parents=True, exist_ok=True)
     engines = []
-    for fmt in (model.FMT_B2, model.FMT_D5, model.FMT_D5D2):
-        lanes = model.LANES[fmt]
-        words = args.trits // lanes
+    formats = (model.FMT_B2, model.FMT_D5, model.FMT_D5D2) + ((model.FMT_D5P,) if trits is not None else ())
+    for fmt in formats:
+        lanes = model.PAIR_LANES if fmt == model.FMT_D5P else model.LANES[fmt]
+        words = args.trits // lanes * (2 if fmt == model.FMT_D5P else 1)
         path = out / f"bram_trit_engine_{model.FORMAT_NAMES[fmt]}.t27"
         if trits is None:
             path.write_text(specialize(fmt, words, args.seed), encoding="utf-8")
             result = model.engine_results(fmt, words, args.seed, verify=False)
         else:
             result = model.rom_results(fmt, trits, pipe=args.pipe)
-            stored = [word for _, word in model.words_of_trits(fmt, trits)]
+            stored = [word for _, word in (model.pair_words(trits) if fmt == model.FMT_D5P else model.words_of_trits(fmt, trits))]
             path.write_text(specialize_rom(fmt, stored, result["lanes_check"], args.pipe), encoding="utf-8")
         result.update({
             "module": MODULES[fmt], "source": path.name,
             "used_bits_per_word": 36 if fmt != model.FMT_D5 else 32,
-            "physical_bits_per_trit": 36 / lanes,
-            "payload_bits_per_trit": {model.FMT_B2: 2.0, model.FMT_D5: 1.6, model.FMT_D5D2: 36 / 22}[fmt],
+            "physical_bits_per_trit": 36 * words / args.trits,
+            "payload_bits_per_trit": {model.FMT_B2: 2.0, model.FMT_D5: 1.6, model.FMT_D5D2: 36 / 22, model.FMT_D5P: 1.6}[fmt],
             "bank_words": bank_sizes(words),
             "ramb36_at_1k_x_36": sum(math.ceil(size / RAMB36_WORDS_36) for size in bank_sizes(words)),
-            "trits_per_ramb36": RAMB36_WORDS_36 * lanes,
+            "trits_per_ramb36": RAMB36_WORDS_36 * args.trits // words,
         })
         engines.append(result)
     same = {(e["pos"], e["neg"], e["dot"]) for e in engines}
@@ -181,7 +187,7 @@ def main() -> None:
                            "source": json.loads(sidecar.read_text(encoding="utf-8")) if sidecar.exists() else None}
     (out / "bram_bench_manifest.json").write_text(json.dumps(manifest, indent=1) + "\n", encoding="utf-8")
     for e in engines:
-        print(f"{e['name']:>3}: {e['lanes']} trits/word, {e['words']} words, >= {e['ramb36_at_1k_x_36']} RAMB36, "
+        print(f"{e['name']:>3}: {e['lanes']} trits/{'pair' if e['format'] == model.FMT_D5P else 'word'}, {e['words']} words, >= {e['ramb36_at_1k_x_36']} RAMB36, "
               f"{e['physical_bits_per_trit']:.3f} bits/trit; +1 {e['pos']} -1 {e['neg']} dot {e['dot']}")
 
 

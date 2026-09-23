@@ -174,11 +174,38 @@ class BramTritPacking(unittest.TestCase):
             self.assertEqual({key: piped[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")},
                              {key: model.rom_results(fmt, trits)[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")})
 
+    def test_pair_layout_round_trip_and_counts(self):
+        rng = random.Random(34)
+        trits = [rng.choice((-1, 0, 1)) for _ in range(1980)]
+        words = model.pair_words(trits)
+        self.assertEqual(len(words), 1980 // 45 * 2)
+        for w in range(0, len(words), 2):
+            a, b, bad = model.decode_pair(words[w][1], words[w + 1][1])
+            self.assertEqual((a, b, bad), (words[w][0], words[w + 1][0], 0))
+            self.assertLess(words[w][1] | words[w + 1][1], 1 << 36)
+        # a parity byte of 243 or more (high nibble 15 in the second word) is one invalid group
+        self.assertEqual(model.decode_pair(words[0][1], words[1][1] | (15 << 32))[2], 1)
+        rom = model.rom_results(model.FMT_D5P, trits)
+        other = model.rom_results(model.FMT_D5D2, trits)
+        self.assertEqual((rom["pos"], rom["neg"], rom["dot"]), (other["pos"], other["neg"], other["dot"]))
+        self.assertEqual((rom["words"], rom["lanes"], rom["read_ticks"]), (88, 45, 89))
+        generator = load_generator()
+        text = generator.specialize_rom(model.FMT_D5P, [w for _, w in words], rom["lanes_check"])
+        for line in ("module TrinityBramTritEngineD5PT27;", "const PAIR: u32 = 1;", "const LANES: u32 = 25;",
+                     "const BYTE_LANES: u32 = 20;", "const LANES_OUT: u32 = 45;", "const WORDS: u32 = 88;"):
+            self.assertIn(line, text)
+
     def test_rom_functions_match_the_model(self):
         with tempfile.TemporaryDirectory(prefix="trinity-bram-rom-") as work:
             rom = build_library(ROOT / "t27/rtl/bram_trit_rom.t27", Path(work))
             rom.count_code.argtypes, rom.count_code.restype = (ctypes.c_uint64, ctypes.c_uint64), ctypes.c_uint32
             rom.weighted.argtypes, rom.weighted.restype = (ctypes.c_uint64, ctypes.c_uint32), ctypes.c_int64
+            rom.group5_lanes.argtypes, rom.group5_lanes.restype = (ctypes.c_uint16,), ctypes.c_uint64
+            rom.lanes_step.argtypes, rom.lanes_step.restype = (ctypes.c_uint32, ctypes.c_bool), ctypes.c_uint32
+            for code in range(256):
+                lanes, _ = model.decode_word(model.FMT_D5, code)   # byte 0 is the code; keep its five lanes
+                self.assertEqual(rom.group5_lanes(code), (lanes & 1023) if code < 243 else 0, code)
+            self.assertEqual([rom.lanes_step(1, False), rom.lanes_step(1, True)], [20, 25])
             rng = random.Random(33)
             for _ in range(2000):
                 value = random_lanes(rng, 22)
