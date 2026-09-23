@@ -584,6 +584,44 @@ the AX7203 at 50 MHz with the results of the 25 MHz runs: 46 084 read ticks (0.9
 22 trits per clock at 50 MHz are 1.1 G trits per second from one read port. The 100 MHz
 build (estimate 71.2 MHz) was not flashed.
 
+**Matrix-vector product on the device (2026-09-23).** The stores above count and check
+the trits; [`bram_trit_matvec.t27`](../t27/rtl/bram_trit_matvec.t27) multiplies them. It
+computes y = W x for the same 396 x 2560 slice and a real int8 vector: the input of the
+layer-0 attention projections for token 128000 (`<|begin_of_text|>`), which
+[`tools/extract-bram-activations.py`](../tools/extract-bram-activations.py) builds from the
+pinned checkpoint (embedding row, RMSNorm in float32 with bf16 rounding, absmax int8
+quantization: 2 560 values in [-86, 127], 75 zeros). The matrix is stored column by column
+in groups of 22 rows (word k of group g holds column k of rows 22g to 22g + 21), so the 396
+rows are 18 groups and the words need no padding: 46 080 d5d2 words, 45 RAMB36E1 as in the
+stores. The vector is four signed bytes per 32-bit word in one more block. Each clock reads
+one word and one activation; 22 accumulators (20-bit two's complement, three per register)
+add +x, -x or nothing for their lane's trit, and after a group's last column the 22 sums are
+held and added up one per clock while the next group accumulates. The store reports how
+many outputs are above and below zero, their sum and the rotate-xor checksum of all 396
+outputs in row order, and compares that 64-bit checksum with the host's value, which the
+generator writes into the bitstream (`bad_words` 1 on a mismatch). The host's product is
+computed by the model and checked against numpy. In the whole-bench Icarus run (two groups,
+44 outputs) one flipped trit changed the sum and raised `bad_words`; the reported 40 bits
+of the checksum did not change, which is why the store checks all 64.
+
+```sh
+python3 tools/extract-bram-activations.py --token 128000 --output build/fpga/rom/act.bin
+make -C fpga/ax7203 bram-sim BRAM_ONLY=2 BRAM_ROM=$PWD/build/fpga/rom/trits.bin BRAM_MATVEC=$PWD/build/fpga/rom/act.bin
+make -C fpga/ax7203 bram-bit bram-flash BRAM_ONLY=2 BRAM_ROM=$PWD/build/fpga/rom/trits.bin BRAM_MATVEC=$PWD/build/fpga/rom/act.bin \
+    CLOCK_MODE=2 BAUD_DIV=434 FREQ_MHZ=50
+```
+
+Built from commit 88e8ba4 for 50 MHz: 46 RAMB36E1, 4 055 LUT, 1 882 FF, 0 CARRY4, estimate
+80.2 MHz ([`reports/fpga/build-2026-09-23-88e8ba4-bram-matvec-50mhz`](../reports/fpga/README.md)).
+Four runs on the AX7203 at 50 MHz, all PASS and identical apart from the run number: 46 105
+read ticks (words + 25, 0.92 ms), 0 bad words, 0 invalid groups, 202 outputs above zero and
+194 below, sum 3 441, outputs in [-3 356, 2 225]
+([`reports/fpga/bram-matvec-capture-2026-09-23-88e8ba4-d5d2-50mhz-*`](../reports/fpga/README.md)).
+That is 22 ternary multiply-accumulates per clock, 1.1 G per second from one read port, for
+about 1 300 LUTs more than the pipelined store that only counts (2 750 LUTs). nextpnr's
+worst path for the estimate is the reset net spread across the die (11.7 of its 12.4 ns are
+routing), not the multiply-accumulate datapath.
+
 **What this track does not measure, and why.** DDR and power. DDR3 on the
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open
 flow's support for those primitives is partial (gHashTag/trinity-fpga records an
