@@ -158,5 +158,33 @@ class Run(unittest.TestCase):
             self.assertNotEqual(reversed_check.returncode, 0)
 
 
+    def test_outputs_never_come_from_an_older_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            base = dict(TERNARY_CHECK_PYTHONPATH=str(ROOT), DECODER="python3 -m trinity_memory ternary-check",
+                        PYTHON="python3", REPORT="ternary-check-report.json")
+            first = bash("run.sh", environment(tmp, **base, FORMATS="Q2_0"), cwd=tmp)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertEqual(outputs(tmp)["passed"], "true")
+            for broken in (dict(FORMATS="Q3_K"), dict(FORMATS="Q2_0", DECODER="/nonexistent/decoder")):
+                (tmp / "output").unlink()
+                result = bash("run.sh", environment(tmp, **dict(base, **broken)), cwd=tmp)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                values = outputs(tmp)
+                self.assertEqual(values["passed"], "false", broken)
+                self.assertNotIn("cases", values)
+                self.assertNotIn("report", values)
+                self.assertFalse((tmp / "ternary-check-report.json").exists())
+            # A run that checks nothing is not a pass either.
+            (tmp / "output").unlink()
+            decoder = tmp / "only_tq2.py"
+            decoder.write_text("import sys\nprint('decode TQ2_0') if sys.argv[1] == 'formats' else sys.exit(1)\n",
+                               encoding="utf-8")
+            result = bash("run.sh", environment(tmp, **dict(base, DECODER=f"python3 {decoder}", FORMATS="Q1_0")),
+                          cwd=tmp)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual((outputs(tmp)["passed"], outputs(tmp)["cases"]), ("false", "0"))
+
+
 if __name__ == "__main__":
     unittest.main()

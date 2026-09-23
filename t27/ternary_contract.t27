@@ -13,7 +13,7 @@ module TrinityMemoryTernaryContract {
     const TK_MATCH: i32 = 0;             // decoded; values, scales and flags equal
     const TK_REJECTED: i32 = 1;          // refused a reject vector with its class
     const TK_MATCH_UNFLAGGED: i32 = 2;   // values and scales equal, expected flags not reported
-    const TK_MISMATCH: i32 = 3;          // values, scale words or reported flags differ
+    const TK_MISMATCH: i32 = 3;          // values, scale words, stored bytes or reported flags differ
     const TK_WRONG_CLASS: i32 = 4;       // refused a reject vector with another class
     const TK_UNEXPECTED_REJECT: i32 = 5; // refused a vector it must decode
     const TK_UNCLASSIFIED: i32 = 6;      // nonzero exit without one known class token
@@ -357,6 +357,16 @@ module TrinityMemoryTernaryContract {
         return outcome != TK_MATCH && outcome != TK_MATCH_UNFLAGGED && outcome != TK_REJECTED;
     }
 
+    // Whether a run passes: at least one call ran, every format named in the
+    // run's filter ran at least once (idle_formats counts those that did
+    // not), and no call fails under the policy (failures counts tk_fails).
+    // A run that checked nothing never passes, under every policy.
+    fn tk_run_passed(cases: usize, failures: usize, idle_formats: usize) -> bool {
+        if (cases == 0) { return false; }
+        if (idle_formats != 0) { return false; }
+        return failures == 0;
+    }
+
     // ---- the strict reader and writer --------------------------------------
     // Geometry of a call: `count` weights; for HF_PACKED and MLX2 rows and
     // cols of the weight matrix, for ONNX2 its N and K (count = rows * cols);
@@ -487,11 +497,18 @@ module TrinityMemoryTernaryContract {
 
     // Writes one call: `count` signed bytes of `format` (with the scale words
     // of the block formats and I2_S; the other formats keep their scales in
-    // separate tensors and take none) into `out`. Returns the byte count or
-    // the writer's rejection; `work` holds count i32.
-    fn tk_encode(format: i32, values: []u8, count: usize, rows: usize, cols: usize, group: usize,
-                 scales: []u32, scale_count: usize, zero_points: []u8, zp_size: usize,
+    // separate tensors and take none) into `out`. `values_size` is the byte
+    // count of the VALUES input; it must equal `count` (TF_ERR_LENGTH), and
+    // nothing past it is read. An unknown format is TF_ERR_FORMAT before any
+    // other check. Returns the byte count or the writer's rejection; `work`
+    // holds count i32.
+    fn tk_encode(format: i32, values: []u8, values_size: usize, count: usize, rows: usize, cols: usize,
+                 group: usize, scales: []u32, scale_count: usize, zero_points: []u8, zp_size: usize,
                  work: []i32, work_capacity: usize, out: []u8, capacity: usize) -> i64 {
+        if (tf_block_elements(format) == 0 && format != TF_I2_S && !tk_side_scales(format)) {
+            return TF_ERR_FORMAT as i64;
+        }
+        if (values_size != count) { return TF_ERR_LENGTH as i64; }
         if (count > work_capacity) { return TF_ERR_CAPACITY as i64; }
         tk_load_values(values, count, work);
         if (tf_block_elements(format) != 0) {
@@ -526,6 +543,10 @@ test tk_tokens_verdicts_and_comparison {
     assert(tk_fails(7, 1));
     assert(!tk_fails(3, 1));
     assert(!tk_fails(2, 0));
+    assert(tk_run_passed(3, 0, 0));
+    assert(!tk_run_passed(0, 0, 0));
+    assert(!tk_run_passed(3, 1, 0));
+    assert(!tk_run_passed(3, 0, 1));
     var a: [4]u8 = [1, 255, 0, 1];
     var b: [4]u8 = [1, 255, 1, 1];
     var first: [1]i64 = [0];

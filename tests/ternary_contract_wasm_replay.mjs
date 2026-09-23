@@ -147,8 +147,8 @@ function encode(v, name, expected, values, words, dataHex) {
   const zp = Buffer.from(v.zero_points_hex ?? '', 'hex');
   const capacity = Math.max(1, Number(api.tk_encoded_bytes(format, count, rows, cols, group)));
   const out = alloc(capacity), work = alloc(4 * count);
-  const status = Number(api.tk_encode(format, bytesIn(values), count, rows, cols, group, wordsIn(words), words.length,
-    bytesIn(zp), zp.length, work, count, out, capacity));
+  const status = Number(api.tk_encode(format, bytesIn(values), values.length, count, rows, cols, group,
+    wordsIn(words), words.length, bytesIn(zp), zp.length, work, count, out, capacity));
   judge(v, 'encode', expected, status, () => {
     const first = alloc(8);
     const diff = api.tk_compare_bytes(out, status, hexIn(dataHex), dataHex.length / 2, first);
@@ -175,6 +175,12 @@ for (const family of ['bitnet_cpp', 'hf_bitnet', 'llama_cpp', 'mlx', 'onnx', 'pr
   }
 }
 assert.ok(calls > 0 && outcomes.rejected > 0 && outcomes.match > 0);
+// The run verdict: this run passes; a run with no call, or with an idle
+// filtered format, does not.
+assert.equal(api.tk_run_passed(calls, 0, 0), 1);
+assert.equal(api.tk_run_passed(0, 0, 0), 0);
+assert.equal(api.tk_run_passed(calls, 0, 1), 0);
+assert.equal(api.tk_run_passed(calls, 1, 0), 0);
 const report = {calls, outcomes, container_vectors_outside_contract: containers};
 writeFileSync(new URL('build/t27/ternary-contract-wasm-replay.json', root), JSON.stringify(report, null, 2) + '\n');
 console.log(`PASS ternary contract in formats.wasm: ${calls} calls (${outcomes.match} match, ${outcomes.rejected} rejected); ` +

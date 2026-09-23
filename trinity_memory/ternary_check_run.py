@@ -7,10 +7,11 @@
 
 The runner is I/O glue: it turns every vector of conformance/formats_*.json
 into one call of the CLI contract (ternary-check/CONTRACT.md), runs the
-decoder in a fresh directory, and hands the outputs to the t27 comparison and
-verdict functions (trinity_memory.ternary_contract). The JSON report
-(trinity.ternary-check-run.v1) is deterministic except for its "run" block;
-the Markdown summary renders the same numbers.
+decoder in a fresh, empty working directory (its input files sit in a sibling
+directory), and hands the outputs to the t27 comparison and verdict functions
+(trinity_memory.ternary_contract); t27 also decides whether the run passes.
+The JSON report (trinity.ternary-check-run.v1) is deterministic except for its
+"run" block; the Markdown summary renders the same numbers.
 """
 from __future__ import annotations
 import argparse
@@ -23,6 +24,7 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
+import signal
 import struct
 import subprocess
 import sys
@@ -39,6 +41,7 @@ ENCODE_KINDS = {"block_encode": None, "i2s_encode": "I2_S", "hf_encode": "HF_PAC
                 "onnx_encode": "ONNX2"}
 CONTAINER_KINDS = ("gguf", "safetensors")
 STDERR_LINES = 20
+LISTING_LINES = 20  # unrecognized `formats` lines kept in the report
 
 
 class RunError(Exception):
@@ -167,70 +170,124 @@ def _encode_case(base, v, fmt, values: bytes, words):
 
 # ---- running the decoder -----------------------------------------------------
 def decoder_command(text: str) -> list[str]:
-    """The decoder command; words naming existing relative paths become absolute."""
+    """The decoder command, with relative paths made absolute against the current directory.
+
+    A word that contains a path separator and names an existing path, or a
+    word after the first that names an existing file (`python3 decode.py`),
+    becomes absolute. A bare first word (`python3`, `my-decoder`) is left to
+    the PATH search, as a shell would; options (`-m`) are left alone.
+    """
     words = shlex.split(text)
     if not words:
         raise RunError("--decoder is empty")
     out = []
-    for word in words:
-        if not word.startswith("-") and os.sep in word and not os.path.isabs(word) and os.path.exists(word):
-            word = os.path.abspath(word)
+    for index, word in enumerate(words):
+        if not word.startswith("-") and not os.path.isabs(word):
+            if (os.sep in word and os.path.exists(word)) or (index > 0 and os.path.isfile(word)):
+                word = os.path.abspath(word)
         out.append(word)
     return out
 
 
-def _run(command, directory: Path, timeout: float):
+def child_environment(environ=None) -> dict:
+    """The decoder's environment: this one, with relative PYTHONPATH entries made absolute.
+
+    Every call runs in its own directory, so `PYTHONPATH=.` would otherwise
+    point the decoder at that empty directory."""
+    env = dict(os.environ if environ is None else environ)
+    if env.get("PYTHONPATH"):
+        env["PYTHONPATH"] = os.pathsep.join(os.path.abspath(entry) if entry else entry
+                                            for entry in env["PYTHONPATH"].split(os.pathsep))
+    return env
+
+
+def _kill_group(pid: int) -> None:
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _spawn(command, directory: Path, timeout: float, env, stdout):
+    """(stopped by the time limit, exit code, stdout bytes, stderr bytes).
+
+    The decoder runs in a session of its own; on the time limit, and after it
+    exits, the whole process group is killed, so a wrapper script's children
+    do not outlive the call. OSError when it cannot be started."""
+    process = subprocess.Popen(command, cwd=directory, stdin=subprocess.DEVNULL, stdout=stdout,
+                               stderr=subprocess.PIPE, env=env, start_new_session=True)
+    timed_out = False
+    try:
+        out, err = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        _kill_group(process.pid)
+        out, err = process.communicate()
+    finally:
+        _kill_group(process.pid)
+    return timed_out, process.returncode, out or b"", err or b""
+
+
+def _run(command, directory: Path, timeout: float, env=None):
     """(ended, exit code, stderr text)."""
     try:
-        process = subprocess.run(command, cwd=directory, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.PIPE, timeout=timeout)
-    except subprocess.TimeoutExpired as error:
-        return True, 0, f"stopped after {timeout} s\n" + (error.stderr or b"").decode("utf-8", "replace")
+        timed_out, code, _, err = _spawn(command, directory, timeout, env, subprocess.DEVNULL)
     except OSError as error:
         raise RunError(f"cannot run the decoder {command[0]!r}: {error}") from error
-    stderr = process.stderr.decode("utf-8", "replace")
-    if process.returncode < 0:
-        return True, process.returncode, stderr
-    return False, process.returncode, stderr
+    stderr = err.decode("utf-8", "replace")
+    if timed_out:
+        return True, 0, f"stopped after {timeout} s\n" + stderr
+    if code < 0:
+        return True, code, stderr
+    return False, code, stderr
 
 
-def listing(command, work: Path, timeout: float):
-    """Formats the decoder declares through `formats`; None when it declares none."""
+def listing(command, work: Path, timeout: float, env=None):
+    """(formats the decoder declares through `formats` or None when it declares none, unrecognized lines)."""
     directory = Path(tempfile.mkdtemp(prefix="formats-", dir=work))
     try:
-        process = subprocess.run([*command, "formats"], cwd=directory, stdin=subprocess.DEVNULL,
-                                 capture_output=True, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-    if process.returncode != 0:
-        return None
+        timed_out, code, out, _ = _spawn([*command, "formats"], directory, timeout, env, subprocess.PIPE)
+    except OSError:
+        return None, []
+    if timed_out or code != 0:
+        return None, []
     declared = {"decode": set(), "encode": set()}
-    for line in process.stdout.decode("utf-8", "replace").splitlines():
+    unrecognized = []
+    for line in out.decode("utf-8", "replace").splitlines():
         words = line.split()
         if len(words) == 2 and words[0] in declared and words[1] in tc.FORMATS:
             declared[words[0]].add(words[1])
+        elif line.strip() and len(unrecognized) < LISTING_LINES:
+            unrecognized.append(line.strip())
     if not declared["decode"] and not declared["encode"]:
-        return None
-    return declared
+        return None, unrecognized
+    return declared, unrecognized
 
 
-def execute(case, command, work: Path, timeout: float):
-    """Runs one call and returns the case's record, compared and judged in t27."""
+def execute(case, command, work: Path, timeout: float, env=None):
+    """Runs one call and returns the case's record, compared and judged in t27.
+
+    The call's inputs go to case-*/in, its outputs to case-*/out, and the
+    decoder starts in the empty case-*/cwd, where it may write `error` and
+    `flags`."""
     directory = Path(tempfile.mkdtemp(prefix="case-", dir=work))
+    inputs, outputs, cwd = directory / "in", directory / "out", directory / "cwd"
+    for sub in (inputs, outputs, cwd):
+        sub.mkdir()
     paths = {}
     for name, data in case["files"].items():
-        path = directory / f"{name}.bin"
+        path = inputs / f"{name}.bin"
         path.write_bytes(data)
         paths[name] = str(path)
     options = [option.format(**paths) for option in case["options"]]
     if case["op"] == "decode":
-        paths["values"], paths["scales"] = str(directory / "values.out"), str(directory / "scales.out")
+        paths["values"], paths["scales"] = str(outputs / "values.out"), str(outputs / "scales.out")
         call = ["decode", case["format"], str(case["count"]), paths["input"], paths["values"], paths["scales"]]
     else:
-        paths["output"] = str(directory / "output.out")
+        paths["output"] = str(outputs / "output.out")
         call = ["encode", case["format"], str(case["count"]), paths["values"], paths["scales"], paths["output"]]
-    ended, exit_code, stderr = _run([*command, *call, *options], directory, timeout)
-    error_file = directory / "error"
+    ended, exit_code, stderr = _run([*command, *call, *options], cwd, timeout, env)
+    error_file = cwd / "error"
     error_text = error_file.read_bytes() if error_file.is_file() else None
     error = tc.error_status(error_text) if error_text is not None else 0
     value_diff = scale_diff = 0
@@ -245,7 +302,7 @@ def execute(case, command, work: Path, timeout: float):
             scales = _read(paths["scales"])
             scale_diff, first = tc.compare_words(scales, case["scale_width"], case["scales"])
             record["scales"] = _word_difference(scale_diff, first, scales, case["scale_width"], case["scales"])
-            flags_file = directory / "flags"
+            flags_file = cwd / "flags"
             reported = flags_file.is_file()
             parsed, flags = tc.parse_flags(flags_file.read_bytes()) if reported else (0, [0] * tc.FLAG_COUNT)
             state = tc.flag_state(reported, parsed, flags, case["flags"])
@@ -335,10 +392,11 @@ def run(decoder: str, vectors=None, formats=None, fail_on="mismatch", timeout=60
     if len(set(names)) != len(names):
         raise RunError("two vector files share a name")
     command = decoder_command(decoder)
+    env = child_environment()
     started, clock = datetime.now(timezone.utc), time.monotonic()
     work = Path(tempfile.mkdtemp(prefix="ternary-check-"))
     try:
-        declared = listing(command, work, timeout)
+        declared, unrecognized = listing(command, work, timeout, env)
         supported = declared or {"decode": set(tc.FORMATS), "encode": set()}
         cases, not_run, sources = [], [], []
         for path, digest, document in documents:
@@ -360,7 +418,7 @@ def run(decoder: str, vectors=None, formats=None, fail_on="mismatch", timeout=60
                     cases.append(case)
         workers = max(1, jobs or min(8, os.cpu_count() or 1))
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            results = list(pool.map(lambda case: execute(case, command, work, timeout), cases))
+            results = list(pool.map(lambda case: execute(case, command, work, timeout, env), cases))
     finally:
         shutil.rmtree(work, ignore_errors=True)
     records, stderr_tails = [], {}
@@ -379,6 +437,8 @@ def run(decoder: str, vectors=None, formats=None, fail_on="mismatch", timeout=60
     reasons = {}
     for entry in not_run:
         reasons[entry["reason"]] = reasons.get(entry["reason"], 0) + 1
+    ran = {record["format"] for record in records}
+    idle = sorted({name for name in formats or () if name not in ran}, key=tc.FORMATS.index)
     report = {
         "schema": SCHEMA,
         "contract": CONTRACT,
@@ -386,9 +446,11 @@ def run(decoder: str, vectors=None, formats=None, fail_on="mismatch", timeout=60
         "formats_filter": sorted(formats) if formats else None,
         "decoder_formats": {"source": "listing" if declared else "assumed",
                             "decode": sorted(supported["decode"], key=tc.FORMATS.index),
-                            "encode": sorted(supported["encode"], key=tc.FORMATS.index)},
+                            "encode": sorted(supported["encode"], key=tc.FORMATS.index),
+                            "unrecognized": unrecognized},
         "vectors": sources,
-        "summary": {"cases": len(records), "failures": failures, "passed": failures == 0,
+        "summary": {"cases": len(records), "failures": failures,
+                    "passed": tc.run_passed(len(records), failures, len(idle)), "idle_formats": idle,
                     "outcomes": counts, "by_format": {name: by_format[name] for name in tc.FORMATS if name in by_format},
                     "not_run": dict(sorted(reasons.items()))},
         "cases": records,
@@ -421,6 +483,16 @@ def summary_markdown(report) -> str:
              f"{sum(v['vectors'] for v in report['vectors'])} vectors in {len(report['vectors'])} files; "
              f"{s['failures']} fail under `--fail-on {report['fail_on']}`. "
              f"Decoder formats: {report['decoder_formats']['source']}.", ""]
+    if not s["cases"]:
+        lines += ["No decoder call ran, so nothing was checked: the run fails. Check `--formats`, the "
+                  "decoder's `formats` listing and `--vectors`.", ""]
+    if s["idle_formats"]:
+        lines += [f"Formats named in `--formats` that ran no call: {', '.join(s['idle_formats'])}. "
+                  "The run fails; see `not_run` for the reason.", ""]
+    if report["decoder_formats"]["unrecognized"]:
+        shown_lines = report["decoder_formats"]["unrecognized"][:10]
+        lines += ["Unrecognized lines in the decoder's `formats` listing: "
+                  + ", ".join(f"`{line}`" for line in shown_lines) + ".", ""]
     shown = [name for name in s["outcomes"] if s["outcomes"][name]]
     if shown:
         lines += ["| format | " + " | ".join(shown) + " |", "|---|" + "---|" * len(shown)]

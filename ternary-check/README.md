@@ -48,19 +48,19 @@ the `conformance/formats_*.json` files of the v0.4.0 tag.
 
 The Action appends the contract arguments to the `decoder` command. For
 example, a call might be `decode TQ2_0 512 /tmp/.../input.bin
-/tmp/.../values.out /tmp/.../scales.out`. The command runs in a fresh
-directory for each call.
+/tmp/.../values.out /tmp/.../scales.out`. For each call the command starts in
+a fresh, empty working directory; the input files are in a separate one.
 
 ### Inputs
 
 | input | default | meaning |
 |---|---|---|
-| `decoder` | required | Decoder command. A relative path that names an existing file resolves against the working directory. |
+| `decoder` | required | Decoder command. A word with a `/` that names an existing path, or a later word that names an existing file (`python3 decode.py`), resolves against the working directory; see [Calls](CONTRACT.md#calls). |
 | `vectors` | the Action's `conformance/formats_*.json` | Whitespace-separated files, directories or globs. |
 | `formats` | all | Contract format names to run: `TQ1_0 TQ2_0 Q2_0 Q1_0 PQ2_0 PTQ1_0 I2_S HF_PACKED MLX2 ONNX2`. |
 | `report` | `ternary-check-report.json` | Path of the JSON report, schema `trinity.ternary-check-run.v1`. |
 | `summary` | a temporary file | Path the Markdown summary is appended to. The summary also goes to the job summary. |
-| `fail-on` | `mismatch` | `mismatch`: fail on any outcome except `match`, `match_unflagged` and `rejected`. `silent`: fail only when the decoder accepts an input it must refuse. `never`: report only. |
+| `fail-on` | `mismatch` | `mismatch`: fail on any outcome except `match`, `match_unflagged` and `rejected`. `silent`: fail only when the decoder accepts an input it must refuse. `never`: no call fails the step. A run that checked nothing fails under all three. |
 | `timeout` | `60` | Seconds allowed for one decoder call. |
 | `runtime` | `release` | Where the checker comes from; see below. |
 | `release-url` | this repository's releases | Base URL for `runtime: release`. |
@@ -70,15 +70,19 @@ directory for each call.
 
 | output | meaning |
 |---|---|
-| `report` | Path of the JSON report. |
+| `report` | Path of the JSON report. Not set when the check could not run. |
 | `summary` | Path of the Markdown summary. |
-| `passed` | `true` when no call fails under `fail-on`. |
+| `passed` | `true` when at least one call ran, every format named in `formats` ran, and no call fails under `fail-on`. `false` otherwise, including when the check could not run. |
 | `cases` | Number of decoder calls. |
 | `failures` | Number of calls that fail under `fail-on`. |
 | `mismatches` | Number of calls whose values, scale words, stored bytes or reported flags differ. |
 | `silent` | Number of vectors that had to be refused but were accepted. |
 
-The step fails when a call fails under `fail-on`, or when the check cannot run.
+The step fails when a call fails under `fail-on`, when no call ran or a format
+named in `formats` ran none (under every `fail-on`), or when the check cannot
+run. The outputs come only from the report of the step's own run. The Action
+removes an older file at `report` before it starts, and a run that cannot
+proceed sets `passed=false` and none of the counts.
 
 ### Runtime
 
@@ -92,8 +96,9 @@ The step fails when a call fails under `fail-on`, or when the check cannot run.
   - The directory holds the `trinity_memory` package with its native runtime. That can be a checkout of this repository after `sh tools/build-t27.sh`, which needs the t27 compiler pinned in `native/compiler.lock`, or an unpacked wheel.
   - This repository's CI uses `runtime: .` because the release assets do not exist before the release.
 
-The checker needs only Python and the native t27 library. The comparisons and
-verdicts run in that library, not in Python.
+The checker needs only Python and the native t27 library. The comparisons, the
+verdicts and the decision whether the run passes run in that library, not in
+Python.
 
 ## What the outcomes mean
 
@@ -113,10 +118,15 @@ lists them under `not_run` with reason `container`.
 ## Running it without GitHub
 
 ```sh
-trinity-memory ternary-check run --decoder ./build/my-decoder --report r.json --summary r.md
-# from a checkout (after sh tools/build-t27.sh):
-PYTHONPATH=. python3 -m trinity_memory ternary-check run --decoder ./build/my-decoder
+# installed package: the vectors come from a checkout of this repository
+trinity-memory ternary-check run --decoder ./build/my-decoder \
+    --vectors path/to/trinity-memory/conformance --report r.json --summary r.md
+# from a checkout (after sh tools/build-t27.sh), with its own conformance/:
+PYTHONPATH="$PWD" python3 -m trinity_memory ternary-check run --decoder ./build/my-decoder
 ```
+
+The runner makes relative `PYTHONPATH` entries absolute for the decoder, so
+`PYTHONPATH=.` works as well.
 
 The reference decoder is `python3 -m trinity_memory ternary-check`. It passes
 all 178 calls from the 126 payload vectors of the six files. It uses the t27
@@ -132,6 +142,10 @@ from this checkout on `ubuntu-latest` and `macos-15`, using two decoders:
 - **The reference decoder.** It must pass.
 - **`tests/action/wrong_group_decoder.py`.** This decoder reads PrismML PQ2_0 bytes (group 128) as ggml-org Q2_0 (group 64), the layout confusion behind the conformance vector `group_128_bytes_read_as_group_64`. The Action must fail. `tests/action/check_reports.py` then checks that only PQ2_0 calls fail and that the report names the first differing weight.
 
+`tests/test_ternary_check_run.py` also runs decoders that return the right
+values with wrong scale words, wrong reported flags or wrong encoded bytes, and
+checks that each ends as `mismatch`.
+
 `tests/test_ternary_check_action.py` runs the Action's two scripts
 (`resolve-runtime.sh` and `run.sh`) outside GitHub. It covers the release
 runtime's SHA256SUMS check against a local stand-in release.
@@ -141,16 +155,19 @@ runtime's SHA256SUMS check against a local stand-in release.
 `.github/workflows/ternary-check-weekly.yml` runs every Monday at 04:23 UTC,
 and on demand. It has read-only permissions and runs two checks:
 
-1. `tools/upstream-drift.py` compares, by git blob SHA, every pinned file in `specs/formats/upstream.lock.json` and `tests/upstream/llama.cpp.lock.json` with the same path at the upstream branch head. It also compares the Hugging Face revisions in `fixtures/manifest.json` with each model's current `main`. It writes `build/upstream-drift.json` and posts nothing.
+1. `tools/upstream-drift.py` compares, by git blob SHA, every pinned file in `specs/formats/upstream.lock.json` and `tests/upstream/llama.cpp.lock.json` with the same path at the upstream branch head. It also compares, by LFS SHA-256, every model file pinned in `fixtures/manifest.json` with the same file at the model's current `main` on Hugging Face. It writes `build/upstream-drift.json` and posts nothing.
 2. The workflow rebuilds the t27 decoders and reruns every vector through this Action with the reference decoder.
 
-A new head commit is not drift by itself. Drift is one of:
+A new head commit is not drift by itself, and neither is a new model
+revision: a model-card edit moves `main` too. The report lists moved model
+revisions as information. Drift is one of:
 
-- a pinned file that changed or is missing;
+- a pinned upstream file that changed or is missing;
 - a moved submodule gitlink;
-- a moved model revision.
+- a pinned model file whose LFS SHA-256 at `main` changed, or that is missing there.
 
 Drift fails the run, but only after the vectors have been rerun.
 `tests/test_upstream_drift.py` tests the drift tool against recorded API
 responses from 2026-09-23 (`tests/data/upstream-drift/`), without network
-access.
+access. The tests read frozen copies of that day's lock files and manifest,
+not the live ones, so a re-pin or a new model does not break them.
