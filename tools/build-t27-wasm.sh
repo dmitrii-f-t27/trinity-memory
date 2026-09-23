@@ -28,7 +28,11 @@ wasm_cc -I "$out" -c native/wasm.c -o "$out/codecs.wasm.o"
     --initial-memory=131072 --max-memory=131072 --stack-first -z stack-size=65536 "$out/codecs.wasm.o" -o "$out/codecs.wasm"
 # formats.h includes <assert.h> for its test block; native/wasm-include has a
 # freestanding stand-in. Memory grows to 4 GiB so whole real tensors fit.
-wasm_cc -I native/wasm-include -I "$out" -c native/wasm_formats.c -o "$out/formats.wasm.o"
+# The readers zero-initialise local arrays, which clang lowers to a memset call
+# unless bulk memory lets it emit memory.fill; LLVM enables bulk memory by
+# default only from version 20, so older clang (18 on ubuntu-24.04) would leave
+# memset undefined in this freestanding link.
+wasm_cc -mbulk-memory -I native/wasm-include -I "$out" -c native/wasm_formats.c -o "$out/formats.wasm.o"
 formats_exports=
 for name in tf_block_elements tf_block_bytes tf_scale_offset tf_scale_class tf_scales_check tf_b3_canonical \
     tf_decode_blocks tf_encode_blocks tf_block_flags tf_decode_i2s tf_encode_i2s tf_i2s_flags tf_i2s_trailer_nonzero \
