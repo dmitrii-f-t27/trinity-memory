@@ -20,8 +20,9 @@ prints a JSON summary:
 Usage: python3 tools/bitnet_audit.py [--cache build/fixtures] [--offline] > audit.json
 Every range it reads lies inside a range of fixtures/manifest.json and goes
 through trinity_memory.fixtures: fetched with an HTTP range request when it is
-not cached, sha256-checked against the manifest on every read, and cached
-under --cache (default build/fixtures). Revisions come from the manifest.
+not cached, sha256-checked against the manifest (a range on every read, a
+header prefix chunk on its first read in a process and again whenever
+prefix.bin changes), and cached under --cache (default build/fixtures). Revisions come from the manifest.
 With --offline nothing is fetched (run tools/fetch-fixtures.py first).
 """
 from __future__ import annotations

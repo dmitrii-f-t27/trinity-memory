@@ -115,7 +115,7 @@ python3 -m trinity_memory.ternary_check   # about 216 MB of byte ranges, writes 
 
 The BitNet observations can also be checked without building t27:
 [`tools/bitnet_audit.py`](../tools/bitnet_audit.py) uses only the Python
-standard library, reads about 67 MB of byte ranges and prints the 210-tensor
+standard library, reads about 63 MB of byte ranges and prints the 210-tensor
 scale and trailer table and the layer-0 counts above as JSON
 (`python3 tools/bitnet_audit.py > audit.json`). The t27 build needs a Rust
 toolchain (`cargo +1.94.0`) for the pinned compiler.
@@ -128,14 +128,21 @@ weights used here. For each of the six Hugging Face repositories above it
 pins the full commit sha, the license, and the name and size of every file
 read; for every byte range it gives the file, the kind (`prefix`, `tensor`,
 `scale`, `trailer`), the tensor name, dtype or GGUF type id, shape, begin,
-end (exclusive), sha256 and which tool reads it. It lists 544 ranges,
-205.8 MiB in total: everything `trinity_memory.ternary_check` and
-`tools/bitnet_audit.py` read (including all 210 I2_S trailers, whose first
-4 bytes are the f32 scale words tabulated in
-`reports/ternary-check/bitnet-scales-2026-09-22.json`) and the
-layer-0 tensors a matvec needs (BitNet `q_proj` and `down_proj` in all three
-forms with their scales; Bonsai `ffn_down` in PTQ1_0, PQ2_0, Q2_0 and MLX
-with scales and biases). No whole checkpoint is ever downloaded.
+end (exclusive), sha256 and `used_by`, the consumers that read it. It
+lists 544 ranges, 205.8 MiB in total, exactly what
+`trinity_memory.ternary_check` (36 ranges) and `tools/bitnet_audit.py`
+(521 ranges, 66,692,572 bytes measured, the "about 63 MB" above in MiB)
+read; 13 of them are read by both. They include all 210 I2_S trailers,
+whose first 4 bytes are the f32 scale words tabulated in
+`reports/ternary-check/bitnet-scales-2026-09-22.json`. The consumer
+`layer0_matvec` (#33) is planned, not implemented: it tags the same 36
+ranges `ternary_check` reads (BitNet layer-0 `q_proj` and `down_proj` in all
+three forms with their scales; Bonsai `ffn_down` in PTQ1_0, PQ2_0, Q2_0 and
+MLX with scales and biases) and adds no range of its own. No whole
+checkpoint is ever downloaded. This supersedes the note under Sources that
+the lock holds only the ranges of the t27 run: every range
+`tools/bitnet_audit.py` reads, trailers included, is now pinned by sha256 in
+the manifest and in `fixtures/manifest.lock.json`.
 
 One command fetches them into `build/fixtures/`:
 
@@ -159,7 +166,8 @@ a range the manifest does not list; `tools/fetch-fixtures.py --record REPO
 FILE BEGIN END --kind KIND --tensor NAME --dtype DTYPE --shape N ...
 --used-by CONSUMER` adds one explicitly, and a new prefix chunk must start
 where the pinned prefix ends. With `TRINITY_FIXTURES_OFFLINE=1` (or
-`tools/bitnet_audit.py --offline`) nothing is fetched. The tool never
+`tools/bitnet_audit.py --offline`, or `tools/fetch-fixtures.py --offline`)
+nothing is fetched. The tool never
 deletes or truncates cache files, since several checkouts may share one
 cache; a file the manifest does not list, or a `prefix.bin` longer than the
 pinned prefix, fails the check unless `--no-strict` is given.

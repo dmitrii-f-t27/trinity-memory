@@ -98,9 +98,19 @@ class Server:
                 if outer.mode == "cut-body":
                     body = body[: len(body) // 2]
                     self.close_connection = True
-                self.wfile.write(body)
+                try:
+                    self.wfile.write(body)
+                except ConnectionError:
+                    pass  # the client rejected the response and closed (ignore-range)
 
-        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        class Quiet(http.server.ThreadingHTTPServer):
+            def handle_error(self, request, client_address):
+                # A client that hangs up early is expected in the fault
+                # modes; keep its tracebacks out of the gate output.
+                if not isinstance(sys.exc_info()[1], ConnectionError):
+                    super().handle_error(request, client_address)
+
+        self.httpd = Quiet(("127.0.0.1", 0), Handler)
         self.endpoint = f"http://127.0.0.1:{self.httpd.server_address[1]}"
         self.thread = threading.Thread(target=self.httpd.serve_forever, args=(0.05,), daemon=True)
 
@@ -178,6 +188,14 @@ class FetchToolTest(FixtureTestCase):
         self.assertEqual(status, 0, err)
         self.assertIn("fetched 1", out)
         self.assertEqual(path.read_bytes(), BLOB[2 << 20: (2 << 20) + 1024])
+
+    def test_offline_environment_variable_means_offline(self):
+        with Server() as server, mock.patch.dict(os.environ, {fx.OFFLINE_ENV: "1"}):
+            status, _, err = self.tool(endpoint=server.endpoint)
+            self.assertEqual(status, 1)
+            self.assertIn("missing from the cache", err)
+            self.assertEqual(server.requests, [])
+        self.assertFalse(self.cache.exists())
 
     def test_sha256_mismatch_fails_and_writes_nothing(self):
         data = _manifest_data()
