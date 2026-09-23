@@ -95,6 +95,9 @@ runs:
         RUNTIME: ${{ inputs.runtime }}
         RELEASE_URL: ${{ inputs.release-url }}
         PYTHON: ${{ inputs.python }}
+        # Test hooks of the script; the Action always uses its own version and the runner's macOS.
+        TERNARY_CHECK_RELEASE_VERSION: ''
+        TERNARY_CHECK_MACOS_VERSION: ''
       run: bash "$GITHUB_ACTION_PATH/resolve-runtime.sh"
     - id: run
       name: Run the vectors against the decoder
