@@ -1,0 +1,1049 @@
+{
+  "constants": {
+    "common_byte_run": {
+      "bytes": 306,
+      "pq2_0_blocks": 9,
+      "q2_0_blocks": 17
+    },
+    "errors": {
+      "capacity": -52,
+      "code": -53,
+      "container": -56,
+      "extent": -62,
+      "format": -50,
+      "layout_unsupported": -60,
+      "length": -51,
+      "misaligned": -61,
+      "not_found": -57,
+      "padding": -54,
+      "scale_nonfinite": -58,
+      "truncated": -55,
+      "type_ambiguous": -59
+    },
+    "flags": {
+      "affine_not_ternary": 6,
+      "noncanonical_base3": 1,
+      "outside_ternary": 0,
+      "padding_nonzero": 5,
+      "scale_negative": 2,
+      "scale_zero": 3,
+      "trailer_nonzero": 4
+    },
+    "format_ids": {
+      "HF_PACKED": 8,
+      "I2_S": 7,
+      "LINEAR2": 9,
+      "ONNX2": 10,
+      "PQ2_0": 5,
+      "PTQ1_0": 6,
+      "Q1_0": 4,
+      "Q2_0": 3,
+      "TQ1_0": 1,
+      "TQ2_0": 2
+    },
+    "formats": {
+      "PQ2_0": {
+        "bits_per_weight": "17/8",
+        "block_bytes": 34,
+        "block_weights": 128,
+        "ggml_type": 142,
+        "id": 5,
+        "scale": "F16",
+        "scale_offset": 0
+      },
+      "PTQ1_0": {
+        "bits_per_weight": "7/4",
+        "block_bytes": 28,
+        "block_weights": 128,
+        "ggml_type": 143,
+        "id": 6,
+        "scale": "F16",
+        "scale_offset": 26
+      },
+      "Q2_0": {
+        "bits_per_weight": "9/4",
+        "block_bytes": 18,
+        "block_weights": 64,
+        "ggml_type": 42,
+        "id": 3,
+        "scale": "F16",
+        "scale_offset": 0
+      }
+    },
+    "ptq1_0_stages": [
+      16,
+      8
+    ],
+    "silent": {
+      "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
+      "i2s_layout_1x4": "I2_S bytes in the four-row layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (x86 without ACT_PARALLEL, not compiled at the pin) read as ACT_PARALLEL",
+      "i2s_layout_arm": "I2_S bytes in the ARM layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (not compiled at the pin) read as the x86 ACT_PARALLEL layout",
+      "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per byte) read as ACT_PARALLEL",
+      "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
+      "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
+    }
+  },
+  "created_at": "2026-09-23T00:00:00Z",
+  "description": "PQ2_0 and PTQ1_0 (group 128) and the fork's group-64 Q2_0, with real Bonsai blocks and the synthetic group-128-as-64 case. Expectations come from the upstream loops restated in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "format_family": "Conformance",
+  "generator": "tools/generate-spec-vectors.py",
+  "invariants": [
+    {
+      "condition": "34 * 8 * 8 == 17 * 128, 28 * 8 * 4 == 7 * 128, 18 * 8 * 4 == 9 * 64",
+      "id": "prism_bits_per_weight"
+    },
+    {
+      "condition": "16 + 8 == 24, 5 * 16 + 5 * 8 + 4 * 2 == 128",
+      "id": "prism_ptq1_0_stages_cover_qs"
+    },
+    {
+      "condition": "306 == 9 * 34 == 17 * 18",
+      "id": "prism_common_byte_run"
+    }
+  ],
+  "module": "TrinityFormatsPrismmlSpec",
+  "schema_version": 2,
+  "spec_path": "specs/formats/prismml.t27",
+  "upstream": {
+    "prismml": {
+      "commit": "bdc23b56b4458b9f1655aec5287f3ab56ee8daaa",
+      "files": [
+        "ggml/include/ggml.h",
+        "ggml/src/ggml-common.h",
+        "ggml/src/ggml-quants.c",
+        "ggml/src/gguf.cpp",
+        "src/llama-model-loader.h"
+      ],
+      "repo": "PrismML-Eng/llama.cpp"
+    }
+  },
+  "vector_name": "PrismML fork PQ2_0, PTQ1_0 and Q2_0",
+  "vectors": [
+    {
+      "count": 256,
+      "data_hex": "003ca9a42201456202a2916021859a8656056204481209582025a68968a82869620a662e084aaa944a8619a6a1040251550648946058042861104614968106600002a116",
+      "description": "Two PQ2_0 blocks of deterministic ternary codes; the encoder must reproduce the bytes",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          15360,
+          11878
+        ],
+        "status": 0,
+        "values_hex": "00010101ff00010101ff01ff00ffffff0000ff0001ff010001ffffff01ff010100ff0001ffff010000ff01ff0000ff01010100010100ff01010000000000ffff01ff0100ff00ffffff01ff0001ff00ff0001ffffff010000ffff01ff000001ff010001010001ff01ff010100ff010101ff0101ff0001010001ff01000101ffffff01ffff0101ff0001010101ff0000010101ff000100ff01000100ff0100010100ff0101ff00ffff01ffffff00ff0000000000000100ffffff01ff00ff000001ffff0100ff010000ff00ffffff0101ff00ff0100ffff00ff0100ff00ff0000ff0100000100ffff010100ffffffff0100ffffffff01ffffff00ff0101010000ff"
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_random_two_blocks",
+      "kind": "block"
+    },
+    {
+      "count": 128,
+      "data_hex": "003c57555555555555555555555555555555555555555555555555555555555555d5",
+      "description": "Code 3 decodes to +2 upstream; the reader keeps the value and flags it",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 2,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          15360
+        ],
+        "status": 2,
+        "values_hex": "0200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002"
+      },
+      "flag_class": "outside_ternary",
+      "format": "PQ2_0",
+      "id": "pq2_0_code3_is_plus2",
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:494-512"
+          ],
+          "note": "code 3 is (3 - 1) * d = +2d",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "data_hex": "00b8a9a42201456202a2916021859a8656056204481209582025a68968a82869620a",
+      "description": "A negative scale is accepted upstream (signs flip); flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 1,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          47104
+        ],
+        "status": 0,
+        "values_hex": "00010101ff00010101ff01ff00ffffff0000ff0001ff010001ffffff01ff010100ff0001ffff010000ff01ff0000ff01010100010100ff01010000000000ffff01ff0100ff00ffffff01ff0001ff00ff0001ffffff010000ffff01ff000001ff010001010001ff01ff010100ff010101ff0101ff0001010001ff01000101ffff"
+      },
+      "flag_class": "scale_negative",
+      "format": "PQ2_0",
+      "id": "pq2_0_negative_scale",
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:494-512"
+          ],
+          "note": "every weight is its trit times the negative d",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "data_hex": "0080a9a42201456202a2916021859a8656056204481209582025a68968a82869620a",
+      "description": "A zero scale (here -0) makes every weight 0 upstream; flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 1,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          32768
+        ],
+        "status": 0,
+        "values_hex": "00010101ff00010101ff01ff00ffffff0000ff0001ff010001ffffff01ff010100ff0001ffff010000ff01ff0000ff01010100010100ff01010000000000ffff01ff0100ff00ffffff01ff0001ff00ff0001ffffff010000ffff01ff000001ff010001010001ff01ff010100ff010101ff0101ff0001010001ff01000101ffff"
+      },
+      "flag_class": "scale_zero",
+      "format": "PQ2_0",
+      "id": "pq2_0_zero_scale",
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:494-512"
+          ],
+          "note": "every weight is its trit times 0",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "003ca9a42201456202a2916021859a8656056204481209582025a68968a82869620a007e084aaa944a8619a6a1040251550648946058042861104614968106600002a116",
+      "description": "Block 2 scale 0x7e00: ggml_validate_row_data rejects it with --check-tensors; decoding without the check gives non-finite weights",
+      "encode": false,
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "status": -58
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_scale_nan",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:494-512"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            32256
+          ],
+          "upstream": "prismml",
+          "values_hex": "00010101ff00010101ff01ff00ffffff0000ff0001ff010001ffffff01ff010100ff0001ffff010000ff01ff0000ff01010100010100ff01010000000000ffff01ff0100ff00ffffff01ff0001ff00ff0001ffffff010000ffff01ff000001ff010001010001ff01ff010100ff010101ff0101ff0001010001ff01000101ffffff01ffff0101ff0001010101ff0000010101ff000100ff01000100ff0100010100ff0101ff00ffff01ffffff00ff0000000000000100ffffff01ff00ff000001ffff0100ff010000ff00ffffff0101ff00ff0100ffff00ff0100ff00ff0000ff0100000100ffff010100ffffffff0100ffffffff01ffffff00ff0101010000ff"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5711-5714"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "003ca9a42201456202a2916021859a8656056204481209582025a68968a82869620a007c084aaa944a8619a6a1040251550648946058042861104614968106600002a116",
+      "description": "Block 2 scale 0x7c00: ggml_validate_row_data rejects it with --check-tensors; decoding without the check gives non-finite weights",
+      "encode": false,
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "status": -58
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_scale_inf",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:494-512"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            31744
+          ],
+          "upstream": "prismml",
+          "values_hex": "00010101ff00010101ff01ff00ffffff0000ff0001ff010001ffffff01ff010100ff0001ffff010000ff01ff0000ff01010100010100ff01010000000000ffff01ff0100ff00ffffff01ff0001ff00ff0001ffffff010000ffff01ff000001ff010001010001ff01ff010100ff010101ff0101ff0001010001ff01000101ffffff01ffff0101ff0001010101ff0000010101ff000100ff01000100ff0100010100ff0101ff00ffff01ffffff00ff0000000000000100ffffff01ff00ff000001ffff0100ff010000ff00ffffff0101ff00ff0100ffff00ff0100ff00ff0000ff0100000100ffff010100ffffffff0100ffffffff01ffffff00ff0101010000ff"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5711-5714"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "003ca9a42201456202a2916021859a8656056204481209582025a68968a82869620a00fc084aaa944a8619a6a1040251550648946058042861104614968106600002a116",
+      "description": "Block 2 scale 0xfc00: ggml_validate_row_data rejects it with --check-tensors; decoding without the check gives non-finite weights",
+      "encode": false,
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "status": -58
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_scale_negative_inf",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:494-512"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            64512
+          ],
+          "upstream": "prismml",
+          "values_hex": "00010101ff00010101ff01ff00ffffff0000ff0001ff010001ffffff01ff010100ff0001ffff010000ff01ff0000ff01010100010100ff01010000000000ffff01ff0100ff00ffffff01ff0001ff00ff0001ffffff010000ffff01ff000001ff010001010001ff01ff010100ff010101ff0101ff0001010001ff01000101ffffff01ffff0101ff0001010101ff0000010101ff000100ff01000100ff0100010100ff0101ff00ffff01ffffff00ff0000000000000100ffffff01ff00ff000001ffff0100ff010000ff00ffffff0101ff00ff0100ffff00ff0100ff00ff0000ff0100000100ffff010100ffffffff0100ffffffff01ffffff00ff0101010000ff"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5711-5714"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "003ca9a42201456202a2916021859a8656056204481209582025a68968a82869620a662e084aaa944a8619a6a1040251550648946058042861104614968106600002a1",
+      "description": "One byte short of two blocks",
+      "encode": false,
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_truncated",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "a tensor whose bytes pass the end of the file is refused",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 255,
+      "data_hex": "003ca9a42201456202a2916021859a8656056204481209582025a68968a82869620a662e084aaa944a8619a6a1040251550648946058042861104614968106600002a116",
+      "description": "A weight count that is not whole blocks",
+      "encode": false,
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_partial_block",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:724-730"
+          ],
+          "note": "a row that is not whole blocks is refused",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "description": "PQ2_0 cannot store the value 3; nothing is written",
+      "error_class": "code",
+      "expect": {
+        "status": -53
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_encode_rejects_value_3",
+      "kind": "reject",
+      "reader": "block_encode",
+      "scale_words": [
+        15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "ggml/src/ggml-quants.c:113-145"
+          ],
+          "note": "the quantizer derives codes from float weights and never produces this value",
+          "upstream": "prismml"
+        }
+      ],
+      "values_hex": "00010101ff00010101ff01ff00ffffff0000ff0001ff010001ffffff01ff010100ff0001ffff010000ff01ff0000ff01010100010100ff01010000000000ffff03ff0100ff00ffffff01ff0001ff00ff0001ffffff010000ffff01ff000001ff010001010001ff01ff010100ff010101ff0101ff0001010001ff01000101ffff"
+    },
+    {
+      "count": 256,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a003c9c811c581a290cc651806947d2132fc7a14703b4745e43132d9b662e",
+      "description": "Two PTQ1_0 blocks of deterministic ternary codes; the encoder must reproduce the bytes",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          15360,
+          11878
+        ],
+        "status": 0,
+        "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101000001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff0000000000ff00ffffff01ff0000ff01ffff010100ffffff00ffff0100ff0100ff00ff000001ff010000010100010000010001000001ff01ffff010000ff00ffff010100010101ff0101000000ff0000ff010100ffff010000ffff0101ffff00ff01ff0000ffffffff00010100ff01ff01ffff010001010101ffffff00000100000100"
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_random_two_blocks",
+      "kind": "block"
+    },
+    {
+      "count": 1408,
+      "data_hex": "0002030405060708090a0b0c0d0e0f1011121315161718194c5000381a1b1c1d1e1f2021222324252627292a2b2c2d2e2f303132989b0038333435363738393a3b3d3e3f404142434445464748494a4be4e700384c4d4e505152535455565758595a5b5c5d5e5f606162646530330038666768696a6b6c6d6e6f7071727374757678797a7b7c7d7e7c7f00387f808182838485868788898b8c8d8e8f9091929394959697c8cb003898999a9b9c9d9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb013170038b1b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c6c7c8c9ca5f620038cbcccdcecfd0d1d2d3d4d5d6d7d8dadbdcdddedfe0e1e2e3abae0038e4e5e6e7e8e9eaebeceeeff0f1f2f3f4f5f6f7f8f9fafbfcf7fa0038fdfeff0002030405060708090a0b0c0d0e0f10111213151643460038",
+      "description": "All 243 canonical qs bytes and canonical qh bytes of PTQ1_0; the encoder reproduces them",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          14336,
+          14336,
+          14336,
+          14336,
+          14336,
+          14336,
+          14336,
+          14336,
+          14336,
+          14336,
+          14336
+        ],
+        "status": 0,
+        "values_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000ffffff000000010101ffffff00000001ff0001ff0001ff0001ff0001ff0001ffffffffffffffffffffffffffffffffff00000101010101010101ffffff0000000001ff0001ff0001ffff01010101ff00ffffffffffffffffffffffffffffffffffffff00000000000000000000000000010101ffffffffffffffffff00000000010101ffffff000000010101ffffff00ff0001ff0001ff0001ff0001ff0001ffffffffffffffffff000000000000000000000000000101010000010101ffffff0001ff0001ff0001000001010000ff00ffffffffffffffffffffffffffffffff00000000000001010101010101010101010101010101ffffffffffffffffff00000000010101ffffff000000010101ffff0001ff0001ff0001ff0001ff0001ffffffffffffffffff01010101010101010000000000000000ffff0000000101010001ff0001ff000101010101ffffff00ffffffffffffffffff00000000000000010101010101010101ffffffffffffff010101010101010101ffffffffffffffffffff000000010101ffffff00000001ff0001ff0001ff0001ff0001ff0001ff0000000000000000ffffffffffffffffffff0000000000000101ffffff0000000001ff0001ff0001ffff00000101ff0000000000000000000000000000000000ffffffffffffffffffffffff00000000000000010101010101010101ffffffff010101ffffff000000010101ffffff00ff0001ff0001ff0001ff0001ff0001ff00000000000000000000000000000000ffffffffff0000000000010101ffffff0001ff0001ff0001000000000000ff000000000000000000000000000000000000000000000000000000000000000001000000000000010101010101010101ff000000010101ffffff000000010101ffff0001ff0001ff0001ff0001ff0001ff00000000000000000101010101010101ffffffffffffffffffff0000000101010001ff0001ff000101010000ffffff00000000000000000000000000000000000101010101010101010101010101010100000000000000000001010101010101ffffff000000010101ffffff00000001ff0001ff0001ff0001ff0001ff0001ff00000101010101010101ffffffffffff0101ffffffffffff0101ffffff0000000001ff0001ff0001ffffffff0101ff0001010101010101010101010101010101ffffffffffffffffffffffffffffffffffffff00000000000000000001010101010101ffffff000000010101ffffff00ff0001ff0001ff0001ff0001ff0001ff0101010101010101ffffffffff0000000101010101ffffff0000010101ffffff0001ff0001ff00010000ffff0000ff000101010101010101010101010101010100000000000000000000000000000000ffffffffffff00000000000000000001000000010101ffffff000000010101ffff0001ff0001ff0001ff0001ff0001ff010101010101010100000000000000000101010101010101ffff0000000101010001ff0001ff00010101ffffffffff000101010101010101010101010101010101010101010101010101010101010101ffffffffffffffffff00000000000000ffffff000000010101ffffff00000001ff0001ff0001ff0001ff0001ff0001ff0101010101010101010101010101010100000101010101010101ffffff0000000001ff0001ff0001010101010101ff00010101ffffffffffffffffffffffffff010101ffffffffffffffffffffffffff010101ffffffffffffffffff00000000010101ffffff000000010101ffffff00ff0001ff0001ff0001ff0001ff0001ffffffffffffffffffffffffffffffffff00000000000101010000010101ffffff0001ff0001ff0001ffff01010000ff00"
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_all_base3_groups",
+      "kind": "block"
+    },
+    {
+      "count": 128,
+      "data_hex": "01ed80808080808080808080808080808080808080808080017f003c",
+      "description": "Bytes the ceiling rule never writes (qs 1 and 237, qh 1, whose padding digit is 0) decode silently and are flagged",
+      "encode": false,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 3,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          15360
+        ],
+        "status": 0,
+        "values_hex": "ff010000000000000000000000000000ff010000000000000000000000000000ffff0000000000000000000000000000ff010000000000000000000000000000ff01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff00ff00ff00ff00"
+      },
+      "flag_class": "noncanonical_base3",
+      "format": "PTQ1_0",
+      "id": "ptq1_0_noncanonical_bytes",
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2255-2285"
+          ],
+          "note": "decoded like the canonical byte of the same digits",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3e2a003c",
+      "description": "qh byte 0 carries a nonzero fifth digit, which the quantizer always writes as 0 and the dequantizer never reads",
+      "encode": false,
+      "error_class": "padding",
+      "expect": {
+        "status": -54
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_qh_padding_digit",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2277-2283",
+            "ggml/src/ggml-quants.c:2246-2248"
+          ],
+          "note": "digits 0..3 decode; the padding digit is ignored",
+          "scale_words": [
+            15360
+          ],
+          "upstream": "prismml",
+          "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101000001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff000000"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a00b8",
+      "description": "A negative scale is accepted upstream (signs flip); flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 1,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          47104
+        ],
+        "status": 0,
+        "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101000001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff000000"
+      },
+      "flag_class": "scale_negative",
+      "format": "PTQ1_0",
+      "id": "ptq1_0_negative_scale",
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2255-2285"
+          ],
+          "note": "every weight is its trit times the negative d",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a0080",
+      "description": "A zero scale (here -0) makes every weight 0 upstream; flagged",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 1,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          32768
+        ],
+        "status": 0,
+        "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101000001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff000000"
+      },
+      "flag_class": "scale_zero",
+      "format": "PTQ1_0",
+      "id": "ptq1_0_zero_scale",
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2255-2285"
+          ],
+          "note": "every weight is its trit times 0",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a003c9c811c581a290cc651806947d2132fc7a14703b4745e43132d9b007e",
+      "description": "Block 2 scale 0x7e00: ggml_validate_row_data rejects it with --check-tensors; decoding without the check gives non-finite weights",
+      "encode": false,
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "status": -58
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_scale_nan",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2255-2285"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            32256
+          ],
+          "upstream": "prismml",
+          "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101000001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff0000000000ff00ffffff01ff0000ff01ffff010100ffffff00ffff0100ff0100ff00ff000001ff010000010100010000010001000001ff01ffff010000ff00ffff010100010101ff0101000000ff0000ff010100ffff010000ffff0101ffff00ff01ff0000ffffffff00010100ff01ff01ffff010001010101ffffff00000100000100"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5715-5718"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a003c9c811c581a290cc651806947d2132fc7a14703b4745e43132d9b007c",
+      "description": "Block 2 scale 0x7c00: ggml_validate_row_data rejects it with --check-tensors; decoding without the check gives non-finite weights",
+      "encode": false,
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "status": -58
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_scale_inf",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2255-2285"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            31744
+          ],
+          "upstream": "prismml",
+          "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101000001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff0000000000ff00ffffff01ff0000ff01ffff010100ffffff00ffff0100ff0100ff00ff000001ff010000010100010000010001000001ff01ffff010000ff00ffff010100010101ff0101000000ff0000ff010100ffff010000ffff0101ffff00ff01ff0000ffffffff00010100ff01ff01ffff010001010101ffffff00000100000100"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5715-5718"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a003c9c811c581a290cc651806947d2132fc7a14703b4745e43132d9b00fc",
+      "description": "Block 2 scale 0xfc00: ggml_validate_row_data rejects it with --check-tensors; decoding without the check gives non-finite weights",
+      "encode": false,
+      "error_class": "scale_nonfinite",
+      "expect": {
+        "status": -58
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_scale_negative_inf",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2255-2285"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            64512
+          ],
+          "upstream": "prismml",
+          "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101000001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff0000000000ff00ffffff01ff0000ff01ffff010100ffffff00ffff0100ff0100ff00ff000001ff010000010100010000010001000001ff01ffff010000ff00ffff010100010101ff0101000000ff0000ff010100ffff010000ffff0101ffff00ff01ff0000ffffffff00010100ff01ff01ffff010001010101ffffff00000100000100"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5715-5718"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a003c9c811c581a290cc651806947d2132fc7a14703b4745e43132d9b66",
+      "description": "One byte short of two blocks",
+      "encode": false,
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_truncated",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "a tensor whose bytes pass the end of the file is refused",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 255,
+      "data_hex": "477d65d13457c1a042cbd3d3cb472edae3b58b513781869a3d2a003c9c811c581a290cc651806947d2132fc7a14703b4745e43132d9b662e",
+      "description": "A weight count that is not whole blocks",
+      "encode": false,
+      "error_class": "length",
+      "expect": {
+        "status": -51
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_partial_block",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:724-730"
+          ],
+          "note": "a row that is not whole blocks is refused",
+          "upstream": "prismml"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "description": "PTQ1_0 cannot store the value 2; nothing is written",
+      "error_class": "code",
+      "expect": {
+        "status": -53
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_encode_rejects_value_2",
+      "kind": "reject",
+      "reader": "block_encode",
+      "scale_words": [
+        15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "ggml/src/ggml-quants.c:2205-2253"
+          ],
+          "note": "the quantizer derives codes from float weights and never produces this value",
+          "upstream": "prismml"
+        }
+      ],
+      "values_hex": "ff000001ff000100ff01010101ffff010100ff0000ffff0101000000000100000000000001ff0100ffff0000ff00000000ff00ff00ff00010100ffff00000101020001ff0000ff0001ff0101ff000001010100ffff00000000ff000100000001010001010100010001ff00000100ffff01ff010000010001ffff0100ff000000"
+    },
+    {
+      "count": 128,
+      "data_hex": "00388655555555555555555555555555555555555555555555555555555555555555",
+      "description": "PQ2_0 codes low bits first after the fp16 scale",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          14336
+        ],
+        "status": 0,
+        "values_hex": "0100ff0100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_worked_example",
+      "kind": "block"
+    },
+    {
+      "count": 128,
+      "data_hex": "cf8080808080808080808080808080808080808080808080497f0038",
+      "description": "PTQ1_0 stages of 16 and 8 five-digit bytes, then 2 qh bytes",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          14336
+        ],
+        "status": 0,
+        "values_hex": "0100000000000000000000000000000000000000000000000000000000000000ff000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ff00010000000100"
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_worked_example",
+      "kind": "block"
+    },
+    {
+      "count": 256,
+      "data_hex": "e521525069454a1a06061486260248a010168a092240a25951a48a980545455029027d224508a529642690186182010588aa040560aa11a5258565166829089a20414501",
+      "description": "The first two PQ2_0 blocks of Ternary Bonsai 2 27B blk.0.ffn_down.weight",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          8677,
+          8829
+        ],
+        "status": 0,
+        "values_hex": "01ff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff0000ff00ff01ffff00000101000101ffff000100010001ffffff0001ff0100ff00ff010001ffff0100ffffff0000ffffff01ff0101010101ff00ffff0000ffffffff01000101010100ff00ff00000101000001ff0000ff0100000100010000ffff010100000101ffff01ffff01010001ffff01ff00ffff000000ff0000ffffff"
+      },
+      "format": "PQ2_0",
+      "id": "pq2_0_real_bonsai_blk0_ffn_down",
+      "kind": "block",
+      "source": {
+        "begin": 708874592,
+        "end": 708874660,
+        "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+        "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+        "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+        "sha256": "221320a152a26fda41c267219a5720de695607c2d66a49ecabd7ca0c734327cd",
+        "tensor": "blk.0.ffn_down.weight"
+      }
+    },
+    {
+      "count": 256,
+      "data_hex": "e64b5f784d45796fa4d1c356a8750457df18c8dc59de99a6a2abe5215f794e8355d0421c6059c9e464f2ca03728cf926a08c33b35f727d22",
+      "description": "The first two PTQ1_0 blocks of Ternary Bonsai 2 27B blk.0.ffn_down.weight",
+      "encode": false,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          8677,
+          8829
+        ],
+        "status": 0,
+        "values_hex": "01ff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff0000ff00ff01ffff00000101000101ffff000100010001ffffff0001ff0100ff00ff010001ffff0100ffffff0000ffffff01ff0101010101ff00ffff0000ffffffff01000101010100ff00ff00000101000001ff0000ff0100000100010000ffff010100000101ffff01ffff01010001ffff01ff00ffff000000ff0000ffffff"
+      },
+      "format": "PTQ1_0",
+      "id": "ptq1_0_real_bonsai_blk0_ffn_down",
+      "kind": "block",
+      "source": {
+        "begin": 585748832,
+        "end": 585748888,
+        "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+        "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+        "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+        "sha256": "65d56983672a730c27b5c0c39934399b32dd93032ffc6483d32d5f4c5f7a3ea0",
+        "tensor": "blk.0.ffn_down.weight"
+      }
+    },
+    {
+      "count": 128,
+      "data_hex": "e521525069454a1a06061486260248a01016e5218a092240a25951a48a98054545502902",
+      "description": "The fork's id-42 Q2_0 is group 64; its two blocks hold the same trits as PQ2_0 block 0",
+      "encode": true,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          8677,
+          8677
+        ],
+        "status": 0,
+        "values_hex": "01ff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff"
+      },
+      "format": "Q2_0",
+      "id": "q2_0_fork_group_64",
+      "kind": "block",
+      "source": {
+        "begin": 749916512,
+        "end": 749916548,
+        "file": "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf",
+        "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf-dev",
+        "revision": "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
+        "sha256": "9c00345da7e42d5d62aeef451a583640ebd5afb19be5820e8887c34a67e50b62",
+        "tensor": "blk.0.ffn_down.weight"
+      }
+    },
+    {
+      "count": 1088,
+      "data_hex": "002052692a19a418462546949955a610200051122a2a051aa96521621516a1001685252016a8925048221110a524418902466a996405a1540245aa0105956480200989064a20041960984490a86944825240520920206a24408404802404914848a5960528686f2089a206a51a648169160582820651986989868594a28a55a22922a2581880951194209a95904a56549289418528a086080909a8849a8aa5608a284aa49a05886212a4b9202a21611109a6850812659062a4149521002a56066aa81865284a41855284a865de2046524168a10404201a00951866142aa10288226169450140596684268188026a0321a64820952942415620a22a062524850566a66129a9959986426045599225aa582821468905a0546619849528841a99002a68a1818a4a080881629115689604181a2a",
+      "description": "Synthetic: nine PQ2_0 blocks declared as Q2_0 decode as 17 blocks without error; scales are read from code bytes and PQ2_0 scale bytes become codes",
+      "encode": false,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 6,
+          "padding_nonzero": 0,
+          "scale_negative": 8,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          8192,
+          4689,
+          43030,
+          21665,
+          39008,
+          32772,
+          25626,
+          41557,
+          35218,
+          42058,
+          25874,
+          34113,
+          6293,
+          34945,
+          9253,
+          22698,
+          26666
+        ],
+        "status": 6,
+        "values_hex": "01ff000000010100010101ff000100ffff000101ff0100ff0100ff00000001ff0100ff00ff000001000100010000000001000101ffff00ffffff01ffffffffff010101ff010101ff0000ffff010100ff000101010000010000ff01ff01ff0100000000ff010000ff00ff0101ffffffff010000ff0000ff01000001ffffff01ff01ff0001ffff0000ff01ff0001ff01ff00ff00ffffff00ff00000101ff0001ff00ffff000001ff0101ffffff0100ff000101010000010001ff0001000000ffff01ffffff0000ff000101010100ffffff0000ffff00000001ff000100ffffff01ffff01ff0001ffff0001ff010100ffff0101ff00ffff01ffff00ffff000100ffff00ff00ffff0001ff01010100010100ff00ff0001ffff0101ff0000ffffff0001ff00000001ffffffff01ffffff01ff01010100ff0001ffffffff00ff00ff01ff0001ffff00ffff00ff0001ff01ff00ff01ff0000000101010000010000ffffff0101ffff01010002020100ffff01ff0001ff0101ff01010100ffff0000010100ffff0100010100010000ff0000ffff01ffff0101ffff010100ffff00ff0000ff010001000101000001ff010100ff010000ff01ff00000101ff01010101ff01000101ff01ff01ff01ff0101ff010000ff0100ffffffff010000000100ff00ffff000001ffff01ff0101000100000001ffff00010101ff0001000000ff00000000ffff000000ff01ff0101ffffff01010100ff01ff01ffff0001ffff0001ffffff010101ff00ff01010100010101ff0100000101ffff01000101ff01ff0101ff010100010000ffffff01ff0101ff010001ff00ffff00010100010201ffff01ff010101ff00ff01ff00ff010000ff00ff0001ffff010001010000ff01ff01ffffffff000101ff0100ff000101ff0000ff0000000100ff01ffffffffff010101ff010000000100ffff01010100ff010101ff0100ff00000100ff0101ff0101ff0001ff0000ff00ff01ff0101010000010001020002ffff01ff0100ff0001ff000000ffff00ff01010000ff0101ff00ffffff00ffffffff01ff010100ffffffffff01000100ff0000ff010101ff00ff010101ffffffff01ff0101ff01ff00ff0100000101000000ff0000ffffffffffff000001000001000100ff00ff01010001ff01ffffff0101010002ffffff00ff01ff01000101ff01ff00ffff01ff00000001000101ff01ffff0000ffff0001000000ffff01ff01ff0101010101ff0100ffff0000ff010000ffff010001000100010100ff0100000101ff0001010100000001000100010100ff0101ffff00ffff01000000ff000001000001ff0001000001ffff0101ff00ff01ff0100ff000001ff010000ffffffff0101ff00000001000100000100ffff00ff0100000001ff0101ffff00ff01010100ff00010001ffffffff00ff010100ffff010101ff010101ff00ff01ffffff01ffff00ffff0101ff010000ff0001000000ffff01010001000001ff00ffffff0100ff010100ff010101ff"
+      },
+      "format": "Q2_0",
+      "id": "group_128_bytes_read_as_group_64",
+      "intended": {
+        "count": 1152,
+        "format": "PQ2_0",
+        "scale_words": [
+          8192,
+          8229,
+          8266,
+          8303,
+          8340,
+          8377,
+          8414,
+          8451,
+          8488
+        ],
+        "values_hex": "01ff000000010100010101ff000100ffff000101ff0100ff0100ff00000001ff0100ff00ff000001000100010000000001000101ffff00ffffff01ffffffffff00ff000001ff00ff010101ff010101ff0000ffff010100ff000101010000010000ff01ff01ff0100000000ff010000ff00ff0101ffffffff010000ff0000ff01010000ffff01010101ff0001ffff0000ff01ff0001ff01ff00ff00ffffff00ff00000101ff0001ff00ffff000001ff0101ffffff0100ff000101010000010001ff0001000000ffff00ff0101ff00000001ffffff0000ff000101010100ffffff0000ffff00000001ff000100ffffff01ffff01ff0001ffff0001ff010100ffffff00ffff000100ffffff0100ff010001ff00ff00ffff0001ff01010100010100ff00ff0001ffff0101ff0000ffffff0001ff00000001ffffffff01ffffff01ff01010100ff0001ffffffff00ff00ff01ff00ffffffffff01ff0001ffff00ffff00ff0001ff01ff00ff01ff0000000101010000010000ffffff0101ffff0101000001ff0101ff01010100ffff00000101010100ffff00010000ffff0100010100010000ff0000ffff01ffff0101ffff010100ffff00ff0000ff010001000101000001ff010100ff010000ff01ff00000101ff01010101ff010000000001ff0101000101ff01ff01ff01ff0101ff010000ff0100ffffffff010000000100ff00ff0101000100000001ffff00010101ff0001000000ff00000001ff00010001ff0100ffff000000ff01ff0101ffffff01010100ff01ff01ffff0001ffff0001ffffff010101ff00ff01010100010101ff0100000101ffff01000101ff01ff0101ff0101ff00ff000101010100010000ffffff01ff0101ff010001ff00ffff000101010101ff00ff01ff00ff010000ff00ff0001ffff010001010000ff01ff01ffff01ff00ff00000100ffff000101ff0100ff000101ff0000ff0000000100ff01ffffffffff010101ff010000000100ffff01010100ff010101ff0100ff00000100ff0101ff0101ff0000ffff000000ff0101ff0000ff00ff01ff010101000001000100ff0001ff000000ffff00ff01010000ff0101ff00ffffff00ffffffff01ff010100ffffffffff00000001ff0100ff01000100ff0000ff010101ff00ff010101ffffffff01ff0101ff01ff00ff0100000101000000ff0000ffffffffffff000001000001000100ff00ff01010001ff00ffff01ff01ff0101ffffff0101010001000101ff01ff00ffff01ff00000001000101ff01ffff0000ffff0001000000ffff01ff01ff0101010101ff0100ffff000001ffff0001ff0000ff010000ffff010001000100010100ff0100000101ff0001010100000001000100010100ff0101ffff00ffff01000000ff000001000001ff0001000001ff01010101ff0100000100ff000001ff010000ffffffff0101ff00000001000100000100ffff00ff0100000001ff0101ffff00ff01010100ff00010001ffffffff010101ffff01010000ff010100ffff010101ff010101ff00ff01ffffff01ffff00ffff0101ff010000ff0001000000ffff01010001000001ff00ffffff0100ff010100ff010101ff"
+      },
+      "kind": "block",
+      "silent_class": "group_size_mismatch",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:474-492"
+          ],
+          "note": "a group-64 reader decodes the bytes as 17 blocks; this repository's synthetic case, not a published file (the published Q2_0 file holds valid group-64 blocks)",
+          "upstream": "prismml"
+        }
+      ]
+    }
+  ]
+}

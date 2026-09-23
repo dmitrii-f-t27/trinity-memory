@@ -1,103 +1,381 @@
 """Byte-range fixtures from pinned public checkpoints (I/O glue only).
 
-Reads the header prefix and selected tensors of large model files over HTTP
-range requests, caches every range under build/fixtures/ and records its
-sha256 in fixtures/manifest.lock.json. Whole checkpoints are never downloaded.
-Container parsing is done by the t27 readers in trinity_memory.formats.
+fixtures/manifest.json is the single source of truth: it pins the revision
+and size of every model file and lists every byte range this repository
+reads, with its sha256. Ranges are fetched with HTTP range requests
+(tools/fetch-fixtures.py fetches all of them) and cached under
+build/fixtures/. A cached range is re-hashed on every read; a cached prefix
+chunk is hashed on its first read in a process and again whenever prefix.bin
+changes (size, inode, mtime or ctime). Reading a range that the manifest does
+not list is an error; `tools/fetch-fixtures.py --record` adds one explicitly.
+Whole checkpoints are never downloaded. The manifest is read on first use
+from a source checkout (it is not part of the wheel). Container parsing is
+done by the t27 readers in trinity_memory.formats.
 """
 from __future__ import annotations
+from functools import lru_cache
 import hashlib
+import http.client
 import json
+import os
 from pathlib import Path
+import re
+import threading
+import time
+import urllib.error
 import urllib.request
 
 from . import formats as f
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "build" / "fixtures"
+MANIFEST = ROOT / "fixtures" / "manifest.json"
 LOCK = ROOT / "fixtures" / "manifest.lock.json"
+SCHEMA = "trinity.fixtures-manifest.v1"
+KINDS = ("prefix", "header", "tensor", "scale", "trailer")
+RANGE_KEYS = ("file", "kind", "tensor", "dtype", "ggml_type", "layout", "shape", "tensor_offset",
+              "begin", "end", "sha256", "used_by")
 USER_AGENT = "trinity-memory-ternary-check/0.4 (+https://github.com/dmitrii-f-t27/trinity-memory)"
-FIRST_PREFIX = 1 << 20
+DEFAULT_ENDPOINT = "https://huggingface.co"
+OFFLINE_ENV = "TRINITY_FIXTURES_OFFLINE"
+ATTEMPTS = 4
 
 
 class FixtureError(RuntimeError):
     pass
 
 
-def _lock():
-    return json.loads(LOCK.read_text()) if LOCK.is_file() else {}
+def sha256(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
 
 
-def _save_lock(lock):
-    LOCK.parent.mkdir(parents=True, exist_ok=True)
-    LOCK.write_text(json.dumps(lock, indent=1, sort_keys=True) + "\n")
+def write_atomic(path: Path, data: bytes):
+    """Write through a temporary file and rename, so that concurrent readers of
+    a shared cache never see a partial file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    temporary.write_bytes(data)
+    os.replace(temporary, path)
+
+
+class FileEntry:
+    """One file of one pinned model revision, with its manifest ranges."""
+
+    def __init__(self, model: dict, name: str, size: int):
+        self.repo, self.revision, self.license = model["repo"], model["revision"], model["license"]
+        self.name, self.size = name, size
+        self.key = f"{self.repo}@{self.revision}/{name}"
+        self.ranges: dict[tuple[int, int], dict] = {}
+        self.prefix: list[dict] = []
+
+    def add(self, record: dict):
+        span = record["begin"], record["end"]
+        if span in self.ranges:
+            raise FixtureError(f"{self.key}: range {span[0]}-{span[1]} is listed twice")
+        self.ranges[span] = record
+        if record["kind"] == "prefix":
+            self.prefix = sorted(self.prefix + [record], key=lambda r: r["begin"])
+
+    @property
+    def prefix_end(self) -> int:
+        return self.prefix[-1]["end"] if self.prefix else 0
+
+
+class Manifest:
+    """fixtures/manifest.json, validated on load."""
+
+    def __init__(self, path: Path = MANIFEST):
+        self.path = Path(path)
+        try:
+            self.data = json.loads(self.path.read_text())
+        except (OSError, ValueError) as error:
+            raise FixtureError(f"{self.path}: {error}") from error
+        if self.data.get("schema") != SCHEMA:
+            raise FixtureError(f"{self.path}: schema is {self.data.get('schema')!r}, expected {SCHEMA}")
+        self.entries: dict[tuple[str, str], FileEntry] = {}
+        repos = set()
+        for model in self.data["models"]:
+            for field in ("repo", "revision", "license", "files", "ranges"):
+                if field not in model:
+                    raise FixtureError(f"{self.path}: model {model.get('repo')!r} has no {field!r}")
+            if model["repo"] in repos:
+                raise FixtureError(f"{self.path}: {model['repo']} is listed twice (one revision per repository)")
+            repos.add(model["repo"])
+            if not re.fullmatch(r"[0-9a-f]{40}", model["revision"]):
+                raise FixtureError(f"{model['repo']}: revision must be a full 40-hex commit sha")
+            for item in model["files"]:
+                self.entries[model["repo"], item["name"]] = FileEntry(model, item["name"], int(item["size"]))
+            for record in model["ranges"]:
+                entry = self.entries.get((model["repo"], record.get("file")))
+                if entry is None:
+                    raise FixtureError(f"{model['repo']}: range names unknown file {record.get('file')!r}")
+                self._check_record(entry, record)
+                entry.add(record)
+        for entry in self.entries.values():
+            at = 0
+            for chunk in entry.prefix:
+                if chunk["begin"] != at:
+                    raise FixtureError(f"{entry.key}: prefix chunks must be contiguous from 0 (gap at {at})")
+                at = chunk["end"]
+
+    def _check_record(self, entry: FileEntry, record: dict):
+        where = f"{entry.key}#{record.get('begin')}-{record.get('end')}"
+        unknown = set(record) - set(RANGE_KEYS)
+        if unknown:
+            raise FixtureError(f"{where}: unknown fields {sorted(unknown)}")
+        if record.get("kind") not in KINDS:
+            raise FixtureError(f"{where}: kind must be one of {', '.join(KINDS)}")
+        begin, end = record.get("begin"), record.get("end")
+        if not (isinstance(begin, int) and isinstance(end, int) and 0 <= begin < end <= entry.size):
+            raise FixtureError(f"{where}: range outside the file of {entry.size} bytes")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sha256"))):
+            raise FixtureError(f"{where}: sha256 must be 64 lowercase hex digits")
+        used_by = record.get("used_by")
+        if not (isinstance(used_by, list) and used_by):
+            raise FixtureError(f"{where}: used_by must list the consumers that read the range")
+        unknown = set(used_by) - set(self.data.get("consumers", {}))
+        if unknown:
+            raise FixtureError(f"{where}: used_by names consumers {sorted(unknown)} that 'consumers' does not list")
+        if record["kind"] != "prefix":
+            if "tensor" not in record:
+                raise FixtureError(f"{where}: a {record['kind']} range must name its tensor")
+            if "dtype" not in record and "ggml_type" not in record:
+                raise FixtureError(f"{where}: a {record['kind']} range must give its dtype or ggml_type")
+            if not (isinstance(record.get("shape"), list) and record["shape"]):
+                raise FixtureError(f"{where}: a {record['kind']} range must give the tensor shape")
+
+    def file(self, repo: str, name: str) -> FileEntry:
+        try:
+            return self.entries[repo, name]
+        except KeyError:
+            raise FixtureError(f"{repo}/{name} is not in {self.path}") from None
+
+    @property
+    def lock_path(self) -> Path:
+        """manifest.lock.json next to this manifest."""
+        return self.path.with_name("manifest.lock.json")
+
+    def lock(self) -> dict:
+        """The flat {"repo@revision/file#begin-end": sha256} view (fixtures/manifest.lock.json)."""
+        return {f"{e.key}#{b}-{end}": r["sha256"] for e in self.entries.values()
+                for (b, end), r in e.ranges.items()}
+
+    def lock_text(self) -> str:
+        return json.dumps(self.lock(), indent=1, sort_keys=True) + "\n"
+
+    def dumps(self) -> str:
+        """The manifest text: one line per file and per range, so diffs stay readable."""
+        def dump(value, indent):
+            pad = " " * indent
+            if isinstance(value, dict) and not ({"begin", "end"} <= set(value) or set(value) >= {"name", "size"}):
+                items = [f"{pad} {json.dumps(k)}: {dump(v, indent + 1).lstrip()}" for k, v in value.items()]
+                return pad + "{\n" + ",\n".join(items) + "\n" + pad + "}"
+            if isinstance(value, list) and value and isinstance(value[0], dict):
+                return pad + "[\n" + ",\n".join(dump(v, indent + 1) for v in value) + "\n" + pad + "]"
+            return pad + json.dumps(value)
+        return dump(self.data, 0) + "\n"
+
+    def check_new_range(self, repo: str, record: dict) -> dict:
+        """Validate a range before it is fetched or added: its fields, that it
+        is new, and that a prefix chunk starts where the pinned prefix ends.
+        Returns the record reduced to RANGE_KEYS."""
+        entry = self.file(repo, record["file"])
+        record = {k: record[k] for k in RANGE_KEYS if k in record}
+        self._check_record(entry, record)
+        if (record["begin"], record["end"]) in entry.ranges:
+            raise FixtureError(f"{entry.key}#{record['begin']}-{record['end']} is already in {self.path.name}")
+        if record["kind"] == "prefix" and record["begin"] != entry.prefix_end:
+            raise FixtureError(f"{entry.key}: a new prefix chunk must begin at {entry.prefix_end}, where the "
+                               f"pinned prefix ends (prefix chunks are contiguous from 0)")
+        return record
+
+    def add_range(self, repo: str, record: dict):
+        """Insert one range record in file and offset order (the explicit --record path)."""
+        record = self.check_new_range(repo, record)
+        entry = self.file(repo, record["file"])
+        entry.add(record)
+        model = next(m for m in self.data["models"] if m["repo"] == repo)
+        order = [item["name"] for item in model["files"]]
+        model["ranges"].append(record)
+        model["ranges"].sort(key=lambda r: (order.index(r["file"]), r["begin"], r["end"]))
+
+    def save(self):
+        write_atomic(self.path, self.dumps().encode())
+
+
+@lru_cache(maxsize=None)
+def _manifest(path: str) -> Manifest:
+    return Manifest(Path(path))
+
+
+def manifest(path: Path | None = None) -> Manifest:
+    path = Path(path or MANIFEST)
+    if not path.is_file() and path == MANIFEST:
+        raise FixtureError(f"{path} does not exist: the fixtures manifest ships with a source checkout "
+                           f"of the repository, not with the installed package")
+    return _manifest(str(path))
+
+
+def remote(repo: str, filename: str, **options) -> "Remote":
+    """The pinned file `filename` of `repo`, as the manifest records it."""
+    return Remote(manifest(options.pop("manifest_path", None)).file(repo, filename), **options)
+
+
+def _retry_after(error: urllib.error.HTTPError, attempt: int) -> float:
+    """Seconds to wait before retrying a 429 or 5xx. The Hub sends a
+    RateLimit header (r=<requests left>;t=<seconds to window reset>) on
+    ordinary responses too, so t= is honoured only when the quota is spent:
+    on a 429, or when r=0. Otherwise Retry-After when given, else a short
+    exponential backoff."""
+    header = error.headers.get("RateLimit", "") if error.headers else ""
+    reset = re.search(r"\bt=(\d+)", header)
+    left = re.search(r"\br=(\d+)", header)
+    if reset and (error.code == 429 or (left and int(left.group(1)) == 0)):
+        return min(float(reset.group(1)) + 1, 310.0)
+    retry = error.headers.get("Retry-After") if error.headers else None
+    if retry and retry.isdigit():
+        return min(float(retry), 310.0)
+    return 2.0 * 2 ** attempt
 
 
 class Remote:
-    """One file at one pinned revision of a Hugging Face repository."""
+    """One file at one pinned revision of a Hugging Face repository.
 
-    def __init__(self, repo: str, revision: str, filename: str, size: int):
-        self.repo, self.revision, self.filename, self.size = repo, revision, filename, size
-        self.key = f"{repo}@{revision}/{filename}"
-        self.directory = CACHE / repo.replace("/", "--") / revision / filename
+    Anonymous access only: no token is sent. Set TRINITY_FIXTURES_OFFLINE=1 (or
+    offline=True) to read the cache and never touch the network."""
+
+    _verified: dict = {}
+
+    def __init__(self, entry: FileEntry, cache: Path | None = None, endpoint: str | None = None,
+                 offline: bool | None = None):
+        self.entry = entry
+        self.repo, self.revision, self.filename, self.size = entry.repo, entry.revision, entry.name, entry.size
+        self.key = entry.key
+        self.cache = Path(cache) if cache else CACHE
+        self.directory = self.cache / self.repo.replace("/", "--") / self.revision / self.filename
+        self.endpoint = (endpoint or os.environ.get("HF_ENDPOINT") or DEFAULT_ENDPOINT).rstrip("/")
+        self.offline = os.environ.get(OFFLINE_ENV) == "1" if offline is None else offline
 
     @property
     def url(self):
-        return f"https://huggingface.co/{self.repo}/resolve/{self.revision}/{self.filename}"
+        return f"{self.endpoint}/{self.repo}/resolve/{self.revision}/{self.filename}"
 
-    def _fetch(self, begin: int, end: int) -> bytes:
+    def fetch(self, begin: int, end: int) -> bytes:
+        """Bytes [begin, end) over HTTP: the answer must be 206 with exactly that length."""
+        if self.offline:
+            raise FixtureError(f"{self.key}#{begin}-{end}: not in the cache and fetching is off "
+                               f"(run python3 tools/fetch-fixtures.py)")
         if not 0 <= begin < end <= self.size:
             raise FixtureError(f"{self.key}: range {begin}-{end} outside file of {self.size} bytes")
         request = urllib.request.Request(self.url, headers={"Range": f"bytes={begin}-{end - 1}",
                                                             "User-Agent": USER_AGENT})
-        with urllib.request.urlopen(request, timeout=120) as response:
-            if response.status != 206:
-                raise FixtureError(f"{self.key}: server ignored the range request (HTTP {response.status})")
-            data = response.read()
+        for attempt in range(ATTEMPTS):
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    if response.status != 206:
+                        raise FixtureError(f"{self.key}: server ignored the range request (HTTP {response.status})")
+                    data = response.read()
+                break
+            except urllib.error.HTTPError as error:
+                if (error.code == 429 or error.code >= 500) and attempt + 1 < ATTEMPTS:
+                    time.sleep(_retry_after(error, attempt))
+                    continue
+                raise FixtureError(f"{self.key}#{begin}-{end}: HTTP {error.code} {error.reason}") from error
+            except (OSError, http.client.HTTPException) as error:
+                # URLError, timeouts, resets, and IncompleteRead (a body cut
+                # short of its Content-Length) are all retried.
+                if attempt + 1 < ATTEMPTS:
+                    time.sleep(2.0 * 2 ** attempt)
+                    continue
+                raise FixtureError(f"{self.key}#{begin}-{end}: {error}") from error
         if len(data) != end - begin:
             raise FixtureError(f"{self.key}: expected {end - begin} bytes, received {len(data)}")
         return data
 
-    def _checked(self, begin: int, end: int, data: bytes) -> bytes:
-        record = f"{self.key}#{begin}-{end}"
-        digest = hashlib.sha256(data).hexdigest()
-        lock = _lock()
-        if record in lock and lock[record] != digest:
-            raise FixtureError(f"{record}: sha256 {digest} differs from the lock {lock[record]}")
-        if record not in lock:
-            lock[record] = digest
-            _save_lock(lock)
+    def record(self, begin: int, end: int) -> dict:
+        record = self.entry.ranges.get((begin, end))
+        if record is None:
+            raise FixtureError(f"{self.key}#{begin}-{end} is not in fixtures/manifest.json; add it with "
+                               f"python3 tools/fetch-fixtures.py --record {self.repo} {self.filename} {begin} {end} "
+                               f"--kind KIND --tensor NAME --dtype DTYPE (or --ggml-type ID) --shape N ... "
+                               f"--used-by CONSUMER")
+        return record
+
+    def _check(self, record: dict, data: bytes, origin: str) -> bytes:
+        digest = sha256(data)
+        if digest != record["sha256"]:
+            raise FixtureError(f"{self.key}#{record['begin']}-{record['end']} ({origin}): sha256 {digest} "
+                               f"differs from the manifest {record['sha256']}")
         return data
+
+    def cached_path(self, begin: int, end: int) -> Path:
+        return self.directory / f"{begin}-{end}.bin"
 
     def read(self, begin: int, end: int) -> bytes:
-        """Bytes [begin, end), from the cache or the network, sha256-checked."""
-        path = self.directory / f"{begin}-{end}.bin"
+        """Bytes [begin, end) of a manifest range, from the cache or the network,
+        sha256-checked on every read."""
+        record = self.record(begin, end)
+        if record["kind"] == "prefix":
+            return self.prefix(end)[begin:end]
+        path = self.cached_path(begin, end)
         if path.is_file():
-            return self._checked(begin, end, path.read_bytes())
-        data = self._checked(begin, end, self._fetch(begin, end))
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+            return self._check(record, path.read_bytes(), str(path))
+        data = self._check(record, self.fetch(begin, end), self.url)
+        write_atomic(path, data)
         return data
 
+    def read_within(self, begin: int, end: int) -> bytes:
+        """Bytes [begin, end) cut from the smallest manifest range that holds them."""
+        if end <= self.entry.prefix_end:
+            return self.prefix(end)[begin:end]
+        holders = [span for span, r in self.entry.ranges.items()
+                   if r["kind"] != "prefix" and span[0] <= begin and end <= span[1]]
+        if not holders:
+            self.record(begin, end)
+        low, high = min(holders, key=lambda span: span[1] - span[0])
+        return self.read(low, high)[begin - low: end - low]
+
     def prefix(self, needed: int) -> bytes:
-        """A prefix of at least `needed` bytes. The cached prefix grows in powers
-        of two, fetching only the bytes it lacks; each chunk is sha256-checked."""
-        length = FIRST_PREFIX
-        while length < needed:
-            length *= 2
-        length = min(length, self.size)
+        """The manifest prefix chunks up to the first that ends at or after
+        `needed`, concatenated. A cached chunk is hashed on its first read in
+        this process and again whenever prefix.bin changes (the memo key holds
+        its size, inode, mtime and ctime); missing chunks are fetched and
+        appended to prefix.bin, which is never truncated."""
+        chunks = []
+        for chunk in self.entry.prefix:
+            chunks.append(chunk)
+            if chunk["end"] >= needed:
+                break
+        else:
+            raise FixtureError(f"{self.key}: {needed} header bytes needed, the manifest pins a prefix of "
+                               f"{self.entry.prefix_end}; add a prefix chunk with --record")
         path = self.directory / "prefix.bin"
-        have = path.read_bytes() if path.is_file() else b""
-        if len(have) < length:
-            chunk = self._checked(len(have), length, self._fetch(len(have), length))
-            have += chunk
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(have)
-        return have[:length]
+        have, stat = b"", None
+        if path.is_file():
+            with open(path, "rb") as handle:
+                stat = os.fstat(handle.fileno())
+                have = handle.read()
+        grown = False
+        for chunk in chunks:
+            begin, end = chunk["begin"], chunk["end"]
+            if len(have) >= end:
+                key = (str(path), begin, end, chunk["sha256"], len(have), stat.st_ino, stat.st_mtime_ns,
+                       stat.st_ctime_ns)
+                if key not in self._verified:
+                    self._check(chunk, have[begin:end], str(path))
+                    self._verified[key] = True
+                continue
+            if len(have) != begin:
+                raise FixtureError(f"{path}: {len(have)} bytes do not end at a manifest chunk boundary; delete it")
+            have += self._check(chunk, self.fetch(begin, end), self.url)
+            grown = True
+        if grown:
+            write_atomic(path, have)
+        return have[: chunks[-1]["end"]]
 
     def header_walk(self, find):
         """Grows the prefix until the t27 reader `find(prefix)` stops asking."""
-        needed = FIRST_PREFIX
+        needed = 1
         while True:
             prefix = self.prefix(needed)
             status, info = find(prefix)[:2]
@@ -113,6 +391,7 @@ def gguf_tensor(remote: Remote, name: str):
     status, info, _ = remote.header_walk(lambda p: f.gguf_find(p, name))
     if status != 0:
         raise f.FormatError(status)
+    f.gguf_check(info, remote.size)
     size = f.gguf_tensor_bytes(info)
     if size == 0:
         raise FixtureError(f"{remote.key}: {name} has ggml type {info.tensor_type}, not a ternary layout")
@@ -133,6 +412,7 @@ def safetensors_tensor(remote: Remote, name: str):
     if status != 0:
         raise f.FormatError(status)
     _, info, dtype = f.safetensors_find(prefix, name)
+    f.safetensors_check(info, remote.size)
     return info, dtype, remote.read(info.begin, info.end)
 
 

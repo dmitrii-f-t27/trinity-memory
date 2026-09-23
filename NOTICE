@@ -6,5 +6,13 @@ Dmitrii Vasilev. Licensed under the Apache License, Version 2.0 (see LICENSE).
 
 The reference decoders in t27/formats.t27 restate public storage layouts from
 ggml-org/llama.cpp, PrismML-Eng/llama.cpp, microsoft/BitNet,
-huggingface/transformers, ml-explore/mlx and microsoft/onnxruntime; they are
-independent implementations, not copies of that code.
+huggingface/transformers, ml-explore/mlx and microsoft/onnxruntime, and the
+tensor-layout rules of huggingface/safetensors (Metadata::validate,
+read_metadata, Dtype::bitsize); they are independent implementations, not
+copies of that code. The contracts in specs/formats/*.t27 and the test oracle
+in tools/generate-spec-vectors.py restate the same layouts and rules, citing
+the pinned upstream commit and lines of each (specs/formats/upstream.lock.json).
+Those upstream projects are licensed by their authors: llama.cpp and its
+PrismML and bitnet.cpp forks, microsoft/BitNet, ml-explore/mlx and
+microsoft/onnxruntime under the MIT License; huggingface/transformers and
+huggingface/safetensors under the Apache License, Version 2.0.
