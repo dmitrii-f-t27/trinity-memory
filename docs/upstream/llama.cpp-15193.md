@@ -195,7 +195,7 @@ Synthetic rows have K = 2560 (10 blocks, the Qwen3-4B hidden size).
 | Check | Content | Pass condition |
 | --- | --- | --- |
 | T1 | every byte value and digit position of the TQ1_0 base-3 extraction: generic `(q*3)>>8`, the NEON `vhadd` form and the AVX2 `avg` form | identical, never above 2; exactly 13 qs byte values are never produced by the quantizer |
-| T2 | 5000 rows of random bytes (including TQ1_0 bytes the quantizer never emits and TQ2_0 code 3), unit scales so every result is an exact integer | upstream dequantize = t27 `tf_decode_blocks` value for value; generic `vec_dot` = arch `vec_dot` = both integer products; t27 reports exactly the number of TQ2_0 code-3 digits (decoded as +2, like upstream) |
+| T2 | 5000 rows of random bytes (including TQ1_0 qs bytes the quantizer never emits and TQ2_0 code 3), unit scales so every result is an exact integer; TQ1_0 qh bytes have a zero padding digit in 7 of 8 rows and are arbitrary in every 8th | upstream dequantize = t27 `tf_decode_blocks` value for value; generic `vec_dot` = arch `vec_dot` = both integer products; t27 reports exactly the number of TQ2_0 code-3 digits (decoded as +2, like upstream); a TQ1_0 row whose qh bytes carry a nonzero padding digit is decoded silently upstream and rejected by t27 (`TF_ERR_PADDING`, the reject class of `specs/formats/OWNERS.md`), and the upstream functions still agree with each other on it |
 | T3 | 2000 Gaussian rows with real scales and q8_K activations | generic and arch results within 1e-5 of the sum of absolute block terms |
 | T4 | 3000 ternary rows `t*s`, scales fp16-exact, bf16-exact or arbitrary f32 | t27 encode = upstream `quantize_row_tq*_ref` byte for byte; t27 decode of upstream bytes returns the trits and scales; values are unchanged for fp16- and bf16-exact scales |
 | T6 | 2000 ternary rows, s = 1.21875 | arch `vec_dot` = exact integer result times scales, within 1e-5 of the sum of absolute block terms |
@@ -219,7 +219,8 @@ DOTPROD)`, `x86_64 AVX2`, `x86_64 without AVX2 (generic fallback)`).
   158, 178, 197, 217, 237) are never emitted by `quantize_row_tq1_0_ref`.
   They decode like their neighbours, so they are aliases, not errors.
 - T2: 0 mismatches in 5000 rows on every variant; every TQ2_0 row held code-3
-  digits, which upstream and t27 both decode as +2.
+  digits, which upstream and t27 both decode as +2; 625 TQ1_0 rows had a
+  nonzero qh padding digit, which upstream decodes silently and t27 rejects.
 - T3: NEON (both paths) and the generic x86 build are bit-exact to the generic
   kernel in 4000 of 4000 results; AVX2 in 420 of 4000, with the largest
   difference 8.07e-7 of the sum of absolute block terms (eight lane sums).
