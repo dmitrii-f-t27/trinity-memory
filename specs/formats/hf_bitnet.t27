@@ -19,7 +19,8 @@
 // section ends exactly at the end of the file), :627-663 (Metadata::validate:
 // :632-638 each tensor begins where the previous one ended, :648-661 end -
 // begin == numel * bitsize / 8, whole bytes), :867-891 (Dtype::bitsize).
-// This spec states the extent rule for one tensor and the widths of the
+// This spec states the extent rule for one tensor (it must tile with its two
+// neighbours; the whole-file tiling is not checked) and the widths of the
 // dtypes that the checkpoints read here use (U8, U32, F16, BF16, F32). A
 // numel * bitsize that does not fit in 64 bits (tensor.rs:642-650,
 // ValidationOverflow) is LENGTH, the class of a GGUF weight count that
@@ -136,11 +137,14 @@ module TrinityFormatsHfBitnetSpec {
     // Extent of one safetensors tensor with absolute [begin, end) in a file of
     // file_size bytes: CONTAINER for an unknown dtype (bits 0), LENGTH when
     // numel * bits does not fit in 64 bits or is not whole bytes, EXTENT when
-    // end - begin differs from it, when the bytes reach next_begin (the least
-    // begin of another nonzero-size tensor at or above begin; has_next false:
-    // none), when begin lies before prev_end (the greatest end of another
-    // nonzero-size tensor that begins below begin; has_prev false: none) or
-    // when the bytes run past the end of the file.
+    // end - begin differs from it, when the bytes run past the end of the
+    // file, or when the tensor does not tile with its neighbours
+    // (tensor.rs:627-661 and :419-421 require the tensors to tile the data
+    // section from 0 to the end of the file): it must begin at prev_end (the
+    // greatest end of another nonzero-size tensor that begins below begin, or
+    // the start of the data section when has_prev is false) and end at
+    // next_begin (the least begin of another nonzero-size tensor at or above
+    // begin), or at file_size when has_next is false.
     pub fn tfs_hf_safetensors_status(bits: u64, numel: u64, begin: u64, end: u64, has_next: bool,
                                      next_begin: u64, has_prev: bool, prev_end: u64, file_size: u64) -> i32 {
         if (bits == 0) { return TFS_HF_ERR_CONTAINER; }
@@ -148,9 +152,12 @@ module TrinityFormatsHfBitnetSpec {
         if (numel != 0 && bits > top / numel) { return TFS_HF_ERR_LENGTH; }
         if ((bits * numel) % 8 != 0) { return TFS_HF_ERR_LENGTH; }
         if (end - begin != (bits * numel) / 8) { return TFS_HF_ERR_EXTENT; }
-        if (has_next && end > next_begin) { return TFS_HF_ERR_EXTENT; }
-        if (has_prev && prev_end > begin) { return TFS_HF_ERR_EXTENT; }
         if (end > file_size) { return TFS_HF_ERR_EXTENT; }
+        // Overlap with the tensor before, then a gap before this one.
+        if (has_prev && prev_end > begin) { return TFS_HF_ERR_EXTENT; }
+        if (prev_end != begin) { return TFS_HF_ERR_EXTENT; }
+        if (has_next && end != next_begin) { return TFS_HF_ERR_EXTENT; }
+        if (!has_next && end != file_size) { return TFS_HF_ERR_EXTENT; }
         return 0;
     }
 
@@ -188,20 +195,29 @@ module TrinityFormatsHfBitnetSpec {
         var other: [3]u8 = [73, 54, 52];
         assert tfs_hf_dtype_bits(u8name, 2) == 8 && tfs_hf_dtype_bits(bf16name, 4) == 16 && tfs_hf_dtype_bits(other, 3) == 0;
         // BitNet b1.58 2B4T model.layers.0.self_attn.q_proj.weight: U8 [640, 2560]
-        // at file bytes 672931828..674570228 of the 1178623988-byte model.safetensors at 04c3b9ad.
-        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, false, 0, false, 0, 1178623988) == 0;
-        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570227, false, 0, false, 0, 1178623988) == TFS_HF_ERR_EXTENT;
-        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570000, false, 0, 1178623988) == TFS_HF_ERR_EXTENT;
-        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570228, false, 0, 1178623988) == 0;
-        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, false, 0, false, 0, 674570227) == TFS_HF_ERR_EXTENT;
-        assert tfs_hf_safetensors_status(4, 3, 100, 102, false, 0, false, 0, 200) == TFS_HF_ERR_LENGTH;
-        assert tfs_hf_safetensors_status(0, 3, 100, 103, false, 0, false, 0, 200) == TFS_HF_ERR_CONTAINER;
+        // at file bytes 672931828..674570228 of the 1178623988-byte model.safetensors at 04c3b9ad;
+        // in a valid file the tensors before and after it touch it.
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570228, true, 672931828, 1178623988) == 0;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570227, true, 674570228, true, 672931828, 1178623988) == TFS_HF_ERR_EXTENT;
+        // The next tensor begins inside it, or a gap follows it.
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570000, true, 672931828, 1178623988) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570300, true, 672931828, 1178623988) == TFS_HF_ERR_EXTENT;
+        // A gap before it; as the last tensor, the file must end with it.
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570228, true, 672931800, 1178623988) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, false, 0, true, 672931828, 1178623988) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, false, 0, true, 672931828, 674570228) == 0;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, false, 0, true, 672931828, 674570227) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(4, 3, 100, 102, false, 0, false, 100, 200) == TFS_HF_ERR_LENGTH;
+        assert tfs_hf_safetensors_status(0, 3, 100, 103, false, 0, false, 100, 200) == TFS_HF_ERR_CONTAINER;
         // s at [4, 6) of the data section begins inside w at [0, 6).
-        assert tfs_hf_safetensors_status(16, 1, 104, 106, false, 0, true, 106, 200) == TFS_HF_ERR_EXTENT;
-        assert tfs_hf_safetensors_status(16, 1, 106, 108, false, 0, true, 106, 200) == 0;
+        assert tfs_hf_safetensors_status(16, 1, 104, 106, false, 0, true, 106, 106) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(16, 1, 106, 108, false, 0, true, 106, 108) == 0;
+        // The first tensor (no tensor below it) must begin at the data section's start.
+        assert tfs_hf_safetensors_status(16, 1, 100, 102, false, 0, false, 100, 102) == 0;
+        assert tfs_hf_safetensors_status(16, 1, 104, 106, false, 0, false, 100, 106) == TFS_HF_ERR_EXTENT;
         // 2^61 elements of 8 bits are 2^64 bits, which do not fit in 64 bits.
-        assert tfs_hf_safetensors_status(8, 8, 100, 108, false, 0, false, 0, 200) == 0;
-        assert tfs_hf_safetensors_status(8, 2305843009213693952, 100, 108, false, 0, false, 0, 200) == TFS_HF_ERR_LENGTH;
+        assert tfs_hf_safetensors_status(8, 8, 100, 108, false, 0, false, 100, 108) == 0;
+        assert tfs_hf_safetensors_status(8, 2305843009213693952, 100, 108, false, 0, false, 100, 108) == TFS_HF_ERR_LENGTH;
         assert tfs_hf_safetensors_offset_status(83, 6) == 0;
         assert tfs_hf_safetensors_offset_status(83, 9223372036854775807) == 0;
     }

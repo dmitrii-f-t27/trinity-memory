@@ -53,27 +53,33 @@ these classes has `"kind": "reject"`, and `reader` names the reader it exercises
 | `format` | -50 | unknown format id | — |
 | `length` | -51 | weight count not whole blocks, byte size not the count's size (a truncated tensor), a shape the format cannot store (HF rows % 4, MLX group, ONNX block size), GGUF row not whole blocks or a weight count that `gguf.cpp` refuses (an `ne` above INT64_MAX, or a nonzero product not below INT64_MAX), safetensors elements whose bits do not fit in 64 bits or are not whole bytes | llama.cpp (`gguf.cpp`, `ggml_validate_row_data`), MLX (`affine_quantize`, `affine_dequantize`), ONNX Runtime (`MatMulNBits` shape checks) and safetensors (`ValidationOverflow`, `MisalignedSlice`) reject |
 | `capacity` | -52 | caller's output buffer too small | — |
-| `code` | -53 | an encoder is given a value outside the format's code table | the upstream quantizers derive codes from float weights and cannot be given such a value |
+| `code` | -53 | an encoder is given a value outside the format's code table | the quantizers of llama.cpp, PrismML, bitnet.cpp, MLX and ONNX Runtime derive codes from float weights and cannot be given such a value; transformers' `pack_weights` (`bitnet.py:17-53`) takes codes directly and checks none, so -2 becomes 255 in uint8 and corrupts its byte |
 | `padding` | -54 | a TQ1_0 or PTQ1_0 `qh` byte whose fifth base-3 digit is not 0 (170 of the 256 byte values) | the quantizers always write 0 there; the dequantizers read digits 0..3 and ignore it |
 | `truncated` | -55 | container prefix too short (`needed` says how much to read) | — |
 | `container` | -56 | malformed GGUF or safetensors header, or a safetensors dtype the pinned safetensors does not define | `gguf.cpp` and safetensors reject |
 | `not_found` | -57 | tensor name not in the container | — |
-| `scale_nonfinite` | -58 | NaN or infinity in a block scale, the I2_S scale, `weight_scale`, an MLX scale or bias, an ONNX scale | llama.cpp rejects NaN/Inf `d` only with `--check-tensors`; the other readers cited here do not check scales |
+| `scale_nonfinite` | -58 | NaN or infinity in a block scale, the I2_S scale, `weight_scale`, an MLX scale or bias, an ONNX scale | llama.cpp's loader rejects NaN/Inf `d` only with `--check-tensors`; the other readers cited here do not check scales |
 | `type_ambiguous` | -59 | a GGUF type id whose meaning differs between two namespaces marked in the same file | — |
 | `layout_unsupported` | -60 | a GGUF type id that names TL1 or TL2 | bitnet.cpp decodes with its generated kernels |
 | `misaligned` | -61 | a GGUF tensor offset not a multiple of `general.alignment` | `gguf.cpp` rejects (offsets must equal the padded end of the previous tensor) |
-| `extent` | -62 | GGUF: a tensor's bytes reach the offset of another record at or above its own, the tensor begins inside a record of known size below it (a shifted or overlapping record), or its bytes run past the end of the file (a truncated file); only records that hold at least one weight count, so a record may share the offset of a zero-weight record before it. safetensors: `end - begin` is not numel × dtype width, the bytes reach the begin of another nonzero-size tensor at or above this one, the tensor begins inside another nonzero-size tensor, the bytes run past the end of the file, or `8 + header + data_offsets` does not fit in 64 bits for any entry (then `tf_safetensors_find` returns it) | `gguf.cpp` rejects offsets that are not the padded end of the previous tensor, the model loader data past the end of the file; safetensors rejects all of these (`InvalidOffset`, `TensorInvalidInfo`, `MetadataIncompleteBuffer`) |
+| `extent` | -62 | GGUF: a tensor's bytes reach the offset of another record at or above its own, the tensor begins inside a record of known size below it (a shifted or overlapping record), or its bytes run past the end of the file (a truncated file); only records that hold at least one weight count, so a record may share the offset of a zero-weight record before it. safetensors: `end - begin` is not numel × dtype width, the bytes run past the end of the file, the tensor does not tile with its neighbours (it must begin where the nonzero-size tensor below it ends, or at the start of the data section when none is below, and end where the next one begins, or at the end of the file when none follows: this rejects overlap, gaps next to it and bytes after the last tensor), or `8 + header + data_offsets` does not fit in 64 bits for any entry (then `tf_safetensors_find` returns it) | `gguf.cpp` rejects offsets that are not the padded end of the previous tensor, the model loader data past the end of the file; safetensors rejects all of these (`InvalidOffset`, `TensorInvalidInfo`, `MetadataIncompleteBuffer`) |
 
 The strict readers are the functions that return these statuses: `tf_decode_blocks`,
 `tf_decode_i2s`, `tf_decode_hf_packed`, `tf_decode_mlx2`, `tf_decode_onnx2` and the
 encoders, with `tf_scales_check` or `tf_affine_check` for scales kept outside the codes,
 `tf_gguf_check(info, file_size)` after `tf_gguf_find`, and
-`tf_safetensors_check(info, file_size)` after `tf_safetensors_find`. The GGUF and
-safetensors rules are weaker than upstream in two ways. A gap between tensors is accepted,
-since the readers do not know the byte size of every ggml type or dtype in a file. And a
-GGUF tensor that begins inside a record whose byte size the reader does not know is
-accepted: `tf_gguf_record_bytes` knows the ternary layouts under the file's namespace
-markers, F32, F16 and BF16, and nothing else. A GGUF record with zero weights holds no
+`tf_safetensors_check(info, file_size)` after `tf_safetensors_find`. Both checks look at
+the tensor being read and its neighbours, not at the whole file, and the GGUF rules are
+weaker than upstream in two more ways. A gap between GGUF tensors is accepted: `gguf.cpp`
+requires each offset to be the padded end of the tensor before it, and that size depends
+on ggml types the reader does not decode. And a GGUF tensor that begins inside a record
+whose byte size the reader does not know is accepted: `tf_gguf_record_bytes` knows the
+ternary layouts under the file's namespace markers, F32, F16 and BF16, and nothing else.
+safetensors states every tensor's `[begin, end)` in its header, so there the check needs
+no widths: it rejects a gap before or after the tensor, a first tensor that does not
+begin at 0 and bytes after the last tensor, as `tensor.rs:627-661` and `:419-421` do. A
+gap or overlap between two other tensors of the same file is seen only when one of them
+is read, and zero-size entries are not checked. A GGUF record with zero weights holds no
 bytes (`ggml_nbytes` is 0, `ggml.c:1298-1302`) and bounds nothing, as in `gguf.cpp`.
 The same condition gets the same token in both containers: a shape whose size cannot be
 represented is `length`, a byte range that does not fit the file or its neighbours is
@@ -96,16 +102,23 @@ Silent cases (neither class can see them; the vectors record the silent output):
 | Token | Case | Why the reader cannot tell |
 |---|---|---|
 | `group_size_mismatch` | group-128 bytes (PQ2_0) read as group-64 Q2_0 | 306 bytes are 9 PQ2_0 blocks and 17 Q2_0 blocks; every byte is a valid code. This is a synthetic case: the published Q2_0 file holds valid group-64 blocks. In a GGUF file the `extent` check catches it when the Q2_0 reading's extra n/64 bytes pass the alignment padding after the tensor, which holds for every tensor of 2048 weights or more at alignment 32: the reading then runs into the next tensor or past the end of the file. |
-| `i2s_layout_arm` | bytes written by bitnet.cpp's ARM build read as ACT_PARALLEL | the same n/4 + 32 bytes, other weight positions |
-| `i2s_layout_1x4` | bytes written by bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL | as above |
+| `i2s_layout_arm` | bytes in the ARM layout of bitnet.cpp's `src/ggml-bitnet-mad.cpp` (`:151-194`; the pinned build does not compile that file, see below) read as ACT_PARALLEL | the same n/4 + 32 bytes, other weight positions |
+| `i2s_layout_1x4` | bytes in that file's x86 layout without ACT_PARALLEL (`:97-149`, four rows per byte) read as ACT_PARALLEL | as above |
 | `i2s_layout_consecutive` | bytes written by the `quantize_i2_s` of bitnet.cpp's llama.cpp submodule (`ggml/src/ggml-cpu/quants.c:1358-1387`: four consecutive weights per byte) read as ACT_PARALLEL | as above |
 | `q1_0_payload` | a corrupted Q1_0 byte | Q1_0 has no invalid bit pattern: every byte is eight valid ±1 values |
 | `payload_corrupted` | a corrupted code byte that still holds valid codes (real Bonsai Q2_0 bytes, one code changed) | the changed byte is a valid code pattern in every format |
 | `scale_corrupted` | a corrupted scale that stays finite and positive (real Bonsai Q2_0 bytes, one scale bit flipped) | any finite positive fp16 is a valid scale |
 
-Why each class is a reject or a flag: a condition is rejected when every pinned upstream
-writer avoids it, so no published file carries it (non-finite scales, nonzero `qh` padding
-digits, bad shapes and extents); it is flagged when an upstream writer or reader accepts it
+Why each class is a reject or a flag: a condition is rejected when the pinned upstream
+writers do not produce it from valid input, and the output it gives is refused upstream
+or has no useful meaning (nonzero `qh` padding digits, bad shapes and extents, which
+`gguf.cpp`, the model loaders and safetensors refuse). Non-finite scales get their own
+reason: they decode to NaN or infinite weights, which no model can use. The pinned
+writers do not produce them from finite weights within fp16 range: `llama-quantize`
+refuses to write a non-finite fp16 scale (`ggml_validate_row_data`), but gguf-py's TQ1_0
+and TQ2_0 quantizer casts `amax` to fp16 unchecked, so a block with a weight beyond 65504
+gets `d = inf`. That published files carry none is not checked beyond the real tensors in
+the vectors. A condition is flagged when an upstream writer or reader accepts it
 and real files may carry it (code 3 in 2-bit layouts that define +2, base-3 bytes that
 decode like canonical ones, negative and zero scales, the I2_S trailer that llama-quantize
 fills from a reused buffer, ONNX padding that the ONNX quantizer leaves nonzero, MLX
@@ -123,8 +136,8 @@ Every negative vector (reject, flag or silent) carries `silent_output`: one entr
 upstream reader of the same bytes, with `upstream` (a key of `upstream.lock.json`),
 `behaviour` (`decodes`, `rejects`, `not_applicable` when the input cannot reach that code,
 for example codes an encoder never receives, or `unknown`), `cite` (`path:line` or
-`path:first-last` in a file pinned for that upstream; `UNKNOWN` marks what was not found at
-the pin) and `note`. Where the upstream decodes and the output can be stated exactly,
+`path:first-last` in a file pinned for that upstream; `UNKNOWN` would mark what was not
+found at the pin, and no current vector needs it) and `note`. Where the upstream decodes and the output can be stated exactly,
 `values_hex` (and `scale_words` or `scale_word`) give it before scaling; the harnesses
 reproduce it from the implementation and the spec. For flag vectors, a view's `values_hex`
 is the implementation's output with code 3 read as `code3_value`; the harnesses check it.
@@ -205,10 +218,12 @@ shapes (BitNet b1.58 2B4T `blk.0.ffn_down`, Ternary Bonsai 2 27B `blk.0.ffn_down
   It has no type id on the upstream default branch and its layout can change before a
   merge, so there is no commit to pin a contract to.
 - **TL1 and TL2** (bitnet.cpp): lookup-table layouts whose byte order depends on tile sizes
-  that `utils/convert-hf-to-gguf-bitnet.py:469-522` reads from the build's
-  `include/kernel_config.ini` for each weight shape; the GGUF file does not record them.
-  Without a self-describing storage contract the reader rejects both ids as
-  `layout_unsupported`.
+  that `utils/convert-hf-to-gguf-bitnet.py` reads from the build's
+  `include/kernel_config.ini` for each weight shape (TL1: `preprocess_weights_tl1`,
+  `:483-522`, reading the file at `:497`; TL2: `preprocess_weights_tl2`, `:601-629`,
+  reading it at `:615`); the GGUF file does not record them. Without a self-describing
+  storage contract the reader rejects TL1 ids, and TL2 ids in files marked as bitnet.cpp,
+  as `layout_unsupported`; an unmarked TL2 file is read as Q2_0 (see GGUF type ids).
 - ONNX Runtime floating-point (unpacked) zero points, `bits` other than 2, and MLX `bits`
   other than 2.
 

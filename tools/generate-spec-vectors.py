@@ -7,7 +7,7 @@ specs/memory/types.t27 with plain Python arithmetic and zlib.crc32. They do not
 call the native implementation; tests/test_spec_types.py compares the committed
 vectors with the executable stack, so the spec, this generator and the
 implementation must all agree before CI passes. The specs/formats section
-transcribes the upstream loops those specs restate, as a test oracle.
+restates, in Python, the upstream loops that those specs cite, as a test oracle.
 """
 import argparse
 import hashlib
@@ -1792,7 +1792,7 @@ def build_edge_demo():
 # ---------------------------------------------------------------------------
 # specs/formats/*.t27 -- external ternary weight-packing formats
 #
-# Test oracle only: the byte layouts below are transcribed from the upstream
+# Test oracle only: the byte layouts below are restated from the upstream
 # loops each spec restates (the same commits and lines), independently of
 # t27/formats.t27 and of the specs' reference functions. The product readers
 # and writers are the generated t27; tests/native_spec_formats.c,
@@ -1811,8 +1811,10 @@ FORMAT_FLAGS = {"outside_ternary": 0, "noncanonical_base3": 1, "scale_negative":
                 "trailer_nonzero": 4, "padding_nonzero": 5, "affine_not_ternary": 6}
 FORMAT_SILENT = {
     "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
-    "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
-    "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
+    "i2s_layout_arm": "I2_S bytes in the ARM layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (not compiled at the "
+                      "pin) read as the x86 ACT_PARALLEL layout",
+    "i2s_layout_1x4": "I2_S bytes in the four-row layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (x86 without "
+                      "ACT_PARALLEL, not compiled at the pin) read as ACT_PARALLEL",
     "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per "
                               "byte) read as ACT_PARALLEL",
     "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
@@ -2510,7 +2512,7 @@ def formats_document(family, module, name, description, constants, invariants, v
         "schema_version": 2,
         "format_family": "Conformance",
         "vector_name": name,
-        "description": description + " Expectations come from the upstream loops transcribed in "
+        "description": description + " Expectations come from the upstream loops restated in "
                                      "tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
         "created_at": FORMATS_CREATED,
         "generator": "tools/generate-spec-vectors.py",
@@ -2715,9 +2717,12 @@ def build_formats_bitnet_cpp():
                                      "Assembled from real bytes of BitNet b1.58 2B4T blk.0.ffn_down.weight: its first 32 "
                                      "bytes, then the tensor's f32 scale and the 28 trailer bytes that llama-quantize "
                                      "left there", source=source, flag_class="trailer_nonzero"),
-                          view("bitnet.cpp", "decodes", "src/ggml-bitnet-mad.cpp:51-96",
-                               "quantize_i2_s writes the n/4 code bytes and the scale; the 28 bytes after the scale "
-                               "keep what the output buffer held, and no pinned code reads them")))
+                          view("bitnet.cpp-llama.cpp", "decodes",
+                               ["ggml/src/ggml-cpu/quants.c:1335-1356", "ggml/src/ggml-cpu/ops.cpp:4783-4829",
+                                "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252"],
+                               "the readers take the n/4 code bytes and the f32 scale at byte n/4; no pinned code "
+                               "reads the 28 bytes after the scale, which keep what llama-quantize's reused output "
+                               "buffer held")))
     threes = bytearray(i2s_encode(values[:128], 1, 128, 0x3D4CCCCD))
     threes[0] |= 0xC0
     threes[31] = 0xFF
@@ -2785,17 +2790,22 @@ def build_formats_bitnet_cpp():
                                                "dequantize_row_i2_s reads them as other weights")))
             continue
         writer = "src/ggml-bitnet-mad.cpp:151-194" if layout == "arm" else "src/ggml-bitnet-mad.cpp:97-149"
-        vectors.append(viewed(vector, view("bitnet.cpp", "decodes", ["src/ggml-bitnet-mad.cpp:51-96", writer],
-                                           f"a build with the default ACT_PARALLEL layout (:51-96) reads bytes that "
-                                           f"the {layout} writer produced as other weights")))
+        vectors.append(viewed(vector,
+                              view("bitnet.cpp-llama.cpp", "decodes", [dequant[0], mul_mat[2]],
+                                   "the pinned build's readers use the ACT_PARALLEL positions and read these bytes "
+                                   "as other weights"),
+                              view("bitnet.cpp", "not_applicable", [writer, "src/CMakeLists.txt:2-3"],
+                                   f"the {layout} layout is written by src/ggml-bitnet-mad.cpp, which the pinned build "
+                                   "does not compile (src/CMakeLists.txt only names it in a variable it overwrites)")))
     bad = list(values[:128])
     bad[5] = 2
     vectors.append(rejected({"id": "i2s_encode_rejects_value_2", "kind": "i2s_encode", "count": 128,
                              "values_hex": i8_hex(bad), "scale_word": 0x3F800000, "error_class": "code",
                              "expect": {"status": FORMAT_ERRORS["code"]},
                              "description": "I2_S stores -1, 0, +1 only; nothing is written"},
-                            view("bitnet.cpp", "not_applicable", "src/ggml-bitnet-mad.cpp:65-72",
-                                 "quantize_i2_s writes code 0, 1 or 2 from the sign of each weight only")))
+                            view("bitnet.cpp-llama.cpp", "not_applicable", "ggml/src/ggml-cpu/quants.c:1358-1387",
+                                 "the compiled quantize_i2_s takes float weights and writes code 0, 1 or 2 from the "
+                                 "sign of each one only")))
     constants = {"i2s": {"id": 7, "ggml_type": 36, "block_weights": 128, "group_bytes": 32, "tail_bytes": 32,
                          "scale": "F32", "scale_offset": "n/4", "trailer_bytes": 28, "bits_per_weight": "2 + 256/n",
                          "layout": "x86 ACT_PARALLEL"},
@@ -2888,12 +2898,23 @@ def build_formats_hf_bitnet():
                                  "a byte range that is not numel * dtype width is refused")))
     bad = list(values)
     bad[7] = -2
+    # pack_weights (bitnet.py:17-53) takes codes, not floats, and checks none:
+    # (value + 1) cast to uint8 (-1 becomes 255), shifted in uint8 and ORed in.
+    packed = bytearray(3 * 5)
+    for i in range(4):
+        for r in range(3):
+            for k in range(5):
+                packed[r * 5 + k] |= (((bad[(i * 3 + r) * 5 + k] + 1) & 0xFF) << (2 * i)) & 0xFF
+    clobbered = [row for row in range(12) if row % 3 == 1 and (packed[7] >> (2 * (row // 3))) & 3 == 3]
     vectors.append(rejected({"id": "hf_encode_rejects_minus_2", "kind": "hf_encode", "rows": 12, "cols": 5,
                              "values_hex": i8_hex(bad), "error_class": "code",
                              "expect": {"status": FORMAT_ERRORS["code"]},
-                             "description": "pack_weights stores -1, 0, +1 only; nothing is written"},
-                            view("transformers", "not_applicable", "src/transformers/integrations/bitnet.py:17-53",
-                                 "pack_weights expects values in {-1, 0, 1} and does not check them")))
+                             "description": "The packed format stores -1, 0, +1 only; nothing is written"},
+                            view("transformers", "decodes", "src/transformers/integrations/bitnet.py:17-53",
+                                 "pack_weights takes the codes directly and does not check them: -2 + 1 cast to uint8 "
+                                 f"is 255, so packed byte 7 becomes 0x{packed[7]:02x} (packed tensor "
+                                 f"{bytes(packed).hex()}) and rows {', '.join(map(str, clobbered))} of column 2 "
+                                 "unpack as +2")))
     vectors += safetensors_vectors()
     constants = {"hf_packed": {"id": 8, "values_per_byte": 4, "code": "T + 1 at bits 2*(i / (rows/4))",
                                "packed_shape": "[rows/4, cols] uint8", "weight_scale": "[1] in the model dtype (BF16)",
@@ -2938,14 +2959,18 @@ def safetensors_vector(identifier, entries, target, description, data_bytes=None
         check, error_class = FORMAT_ERRORS["container"], "container"
     elif bits * numel >= 1 << 64 or bits * numel % 8:
         check, error_class = FORMAT_ERRORS["length"], "length"
-    elif (end - begin != bits * numel // 8 or (later and end > min(later)) or (earlier and max(earlier) > begin)
-          or base + end > file_size):
+    elif (end - begin != bits * numel // 8 or base + end > file_size
+          # tensor.rs:627-661, :419-421: the tensors tile the data section, so
+          # this one begins where the one below it ends (at 0 when none does)
+          # and ends where the next begins, or at the end of the file.
+          or begin != (max(earlier) if earlier else 0)
+          or (later and end != min(later)) or (not later and base + end != file_size)):
         check, error_class = FORMAT_ERRORS["extent"], "extent"
     else:
         check, error_class = 0, None
     expect = {"find": 0, "dtype": dtype, "shape": shape, "begin": base + begin, "end": base + end,
               "dtype_bits": bits, "has_next": bool(later), "next_begin": base + min(later) if later else 0,
-              "has_prev": bool(earlier), "prev_end": base + max(earlier) if earlier else 0, "check": check}
+              "has_prev": bool(earlier), "prev_end": base + max(earlier) if earlier else base, "check": check}
     if wraps:
         # tf_safetensors_find refuses the header; the range fields stay 0.
         expect.update({"find": check, "begin": 0, "end": 0, "has_next": False, "next_begin": 0,
@@ -2987,6 +3012,15 @@ def safetensors_vectors():
                            [("a", "U8", [4], 0, 4), ("b", "U8", [2], (1 << 64) - 16, (1 << 64) - 14)], "a",
                            "Another entry's data_offsets wrap around; the header is refused whichever tensor is read",
                            data_bytes=8, views=(tiling,)),
+        safetensors_vector("st_gap_after_tensor", [("w", "U8", [2, 3], 0, 6), ("s", "BF16", [1], 8, 10)], "w",
+                           "A 2-byte gap between w at [0, 6) and s at [8, 10)", views=(tiling,)),
+        safetensors_vector("st_gap_before_tensor", [("w", "U8", [2, 3], 0, 6), ("s", "BF16", [1], 8, 10)], "s",
+                           "The tensor after the gap: s at [8, 10) does not begin where w ends", views=(tiling,)),
+        safetensors_vector("st_first_tensor_not_at_zero", [("w", "U8", [2, 3], 2, 8)], "w",
+                           "The only tensor begins 2 bytes into the data section", views=(tiling,)),
+        safetensors_vector("st_bytes_after_last_tensor", [packed, scale], scale[0],
+                           "Two bytes follow the last tensor, weight_scale at [6, 8)", data_bytes=10,
+                           views=(covered,)),
         safetensors_vector("st_past_end_of_file", [packed, scale], scale[0],
                            "A truncated file: weight_scale needs bytes 6..8 of the data section, 7 remain",
                            data_bytes=7, views=(covered,)),

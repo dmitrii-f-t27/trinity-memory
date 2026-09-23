@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // specs/formats/bitnet_cpp.t27 -- bitnet.cpp I2_S tensor layout
 // Restates upstream microsoft/BitNet@0b341e582afbf9e1011f24744b554c96a3477eb5:
-// include/gemm-config.h:1 (#define ACT_PARALLEL, the default build);
-// src/ggml-bitnet-mad.cpp:11-15 (QK_I2_S 128 on x86, 64 on ARM NEON), :51-96
-// (quantize_i2_s, x86 ACT_PARALLEL: 32-byte groups, f32 scale at byte n/4,
-// n/4 + 32 bytes), :97-149 (x86 without ACT_PARALLEL: four rows per byte),
-// :151-194 (ARM: 16-byte groups), :198-295 (ggml_vec_dot_i2_i8_s_1x1 multiplies
-// the raw 2-bit codes); utils/convert-hf-to-gguf-bitnet.py:666-727
+// include/gemm-config.h:1 (#define ACT_PARALLEL; the compiled
+// ggml-cpu-i2s.c of the submodule includes it, so the pinned build reads this
+// layout); src/ggml-bitnet-mad.cpp, which the pinned build does not compile
+// (see below) but which documents the layouts: :11-15 (QK_I2_S 128 on x86, 64
+// on ARM NEON), :51-96 (a quantize_i2_s for x86 ACT_PARALLEL: 32-byte groups,
+// f32 scale at byte n/4, n/4 + 32 bytes), :97-149 (x86 without ACT_PARALLEL:
+// four rows per byte), :151-194 (ARM: 16-byte groups), :198-295
+// (ggml_vec_dot_i2_i8_s_1x1 multiplies the raw 2-bit codes); utils/convert-hf-to-gguf-bitnet.py:666-727
 // (quantize_to_i2_s writes the same x86 bytes and a zero tail). Type ids come
 // from its llama.cpp submodule isHuangXin/llama.cpp@390c307752ab78fd8189f359d6954c9ba1be74af:
 // ggml/include/ggml.h:426 (I2_S 36), :428 (TL1 38), :433 (TL2 42), :434

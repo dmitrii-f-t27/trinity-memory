@@ -76,8 +76,8 @@
     ],
     "silent": {
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
-      "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
-      "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "i2s_layout_1x4": "I2_S bytes in the four-row layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (x86 without ACT_PARALLEL, not compiled at the pin) read as ACT_PARALLEL",
+      "i2s_layout_arm": "I2_S bytes in the ARM layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (not compiled at the pin) read as the x86 ACT_PARALLEL layout",
       "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per byte) read as ACT_PARALLEL",
       "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
       "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
@@ -85,7 +85,7 @@
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
-  "description": "PQ2_0 and PTQ1_0 (group 128) and the fork's group-64 Q2_0, with real Bonsai blocks and the synthetic group-128-as-64 case. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "description": "PQ2_0 and PTQ1_0 (group 128) and the fork's group-64 Q2_0, with real Bonsai blocks and the synthetic group-128-as-64 case. Expectations come from the upstream loops restated in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
   "format_family": "Conformance",
   "generator": "tools/generate-spec-vectors.py",
   "invariants": [
