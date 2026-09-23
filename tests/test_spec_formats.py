@@ -112,10 +112,10 @@ class SpecFormatsConformance(unittest.TestCase):
             status, info = f.gguf_find(bytes.fromhex(v["gguf_hex"]), v["tensor"])
             self.assertEqual(status, v["expect"]["find"], v["id"])
             self.assertEqual((info.tensor_type, info.prism, info.bitnet, info.offset, info.next_offset, info.has_next,
-                              info.data_start),
+                              info.prev_end, info.has_prev, info.data_start),
                              (v["expect"]["ggml_type"], v["expect"]["prism"], v["expect"]["bitnet"],
                               v["expect"]["offset"], v["expect"]["next_offset"], v["expect"]["has_next"],
-                              v["expect"]["data_start"]), v["id"])
+                              v["expect"]["prev_end"], v["expect"]["has_prev"], v["expect"]["data_start"]), v["id"])
             result, status = status_of(lambda: f.gguf_check(info, v["file_size"]))
             self.assertEqual(result if status == 0 else status, v["expect"]["check"], v["id"])
 
@@ -127,10 +127,13 @@ class SpecFormatsConformance(unittest.TestCase):
             seen += 1
             status, info, dtype = f.safetensors_find(bytes.fromhex(v["safetensors_hex"]), v["tensor"])
             e = v["expect"]
-            self.assertEqual((status, dtype, info.shape, info.begin, info.end, info.dtype_bits, info.has_next,
-                              info.next_begin),
-                             (e["find"], e["dtype"], e["shape"], e["begin"], e["end"], e["dtype_bits"], e["has_next"],
-                              e["next_begin"]), v["id"])
+            self.assertEqual((status, info.begin, info.end, info.has_next, info.next_begin, info.has_prev, info.prev_end),
+                             (e["find"], e["begin"], e["end"], e["has_next"], e["next_begin"], e["has_prev"],
+                              e["prev_end"]), v["id"])
+            if status != 0:
+                self.assertEqual(e["check"], status, v["id"])
+                continue
+            self.assertEqual((dtype, info.shape, info.dtype_bits), (e["dtype"], e["shape"], e["dtype_bits"]), v["id"])
             result, status = status_of(lambda: f.safetensors_check(info, v["file_size"]))
             self.assertEqual(result if status == 0 else status, e["check"], v["id"])
         self.assertGreater(seen, 0)

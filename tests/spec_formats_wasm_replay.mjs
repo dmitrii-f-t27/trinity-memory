@@ -108,6 +108,8 @@ function gguf(v) {
   assert.equal(field(11), v.expect.bitnet ? 1 : 0, v.id);
   assert.equal(field(12), v.expect.next_offset, v.id);
   assert.equal(field(14), v.expect.has_next ? 1 : 0, v.id);
+  assert.equal(field(15), v.expect.prev_end, v.id);
+  assert.equal(field(16), v.expect.has_prev ? 1 : 0, v.id);
   assert.equal(field(6), v.expect.data_start, v.id);
   assert.equal(api.tf_gguf_check(info, BigInt(v.file_size)), v.expect.check, v.id);
 }
@@ -121,13 +123,20 @@ function safetensors(v) {
   assert.equal(api.tf_safetensors_find(data, size, nameAt, name.length, tokens, tokenCount, arena, 8192, info),
     v.expect.find, v.id);
   const field = (index) => Number(api.tf_wasm_safe_info_field(info, index));
-  assert.equal(Buffer.from(u8(field(0), field(1))).toString(), v.expect.dtype, v.id);
-  assert.deepEqual([field(3), field(4), field(5), field(6)].slice(0, field(2)), v.expect.shape, v.id);
   assert.equal(field(7), v.expect.begin, v.id);
   assert.equal(field(8), v.expect.end, v.id);
-  assert.equal(field(10), v.expect.dtype_bits, v.id);
   assert.equal(field(11), v.expect.next_begin, v.id);
   assert.equal(field(12), v.expect.has_next ? 1 : 0, v.id);
+  assert.equal(field(13), v.expect.prev_end, v.id);
+  assert.equal(field(14), v.expect.has_prev ? 1 : 0, v.id);
+  if (v.expect.find !== 0) {
+    // A refused header: the check is the find status.
+    assert.equal(v.expect.check, v.expect.find, v.id);
+    return;
+  }
+  assert.equal(Buffer.from(u8(field(0), field(1))).toString(), v.expect.dtype, v.id);
+  assert.deepEqual([field(3), field(4), field(5), field(6)].slice(0, field(2)), v.expect.shape, v.id);
+  assert.equal(field(10), v.expect.dtype_bits, v.id);
   assert.equal(api.tf_safetensors_check(info, BigInt(v.file_size)), v.expect.check, v.id);
 }
 
@@ -152,6 +161,15 @@ function i2s(v) {
   assert.equal(valuesHex(values, v.count), v.expect.values_hex, v.id);
   assert.equal(u32(scale, 1)[0], v.expect.scale_word, v.id);
   assert.deepEqual(flagsOf(flags), v.expect.flags, v.id);
+  // A flagged vector's upstream view: the same trits with code 3 (+2 here) read as code3_value.
+  for (const entry of (v.silent_output || []).filter((e) => e.values_hex !== undefined)) {
+    const mapped = alloc(4 * v.count);
+    for (let e = 0; e < v.count; e++) {
+      const t = i32(values, v.count)[e];
+      i32(mapped, v.count)[e] = t === 2 ? entry.code3_value : t;
+    }
+    assert.equal(valuesHex(mapped, v.count), entry.values_hex, v.id);
+  }
   if (v.encode) {
     const out = alloc(size);
     assert.equal(Number(api.tf_encode_i2s(values, v.count, v.expect.scale_word, out, size)), size, v.id);

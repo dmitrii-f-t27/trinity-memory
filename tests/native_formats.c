@@ -154,8 +154,18 @@ static void differential_random_blocks(void) {
     for (size_t f = 0; f < sizeof block_formats / sizeof block_formats[0]; ++f) {
         int format = block_formats[f];
         size_t per = tf_block_elements(format), bytes = tf_block_bytes(format);
+        int decoded = 0;
         for (int round = 0; round < 400; ++round) {
             for (size_t i = 0; i < BLOCKS * bytes; ++i) data[i] = (uint8_t)next_random();
+            /* 170 of 256 qh bytes carry a nonzero padding digit, so uniform
+             * bytes almost never decode as TQ1_0 or PTQ1_0: in 7 of 8 rounds
+             * redraw the qh bytes until their padding digit is 0. */
+            if ((format == TF_TQ1_0 || format == TF_PTQ1_0) && round % 8 != 0) {
+                size_t qs = format == TF_TQ1_0 ? 48 : 24, qh = format == TF_TQ1_0 ? 4 : 2;
+                for (size_t b = 0; b < BLOCKS; ++b)
+                    for (size_t j = 0; j < qh; ++j)
+                        while (ref_qh_padded(data[b * bytes + qs + j])) data[b * bytes + qs + j] = (uint8_t)next_random();
+            }
             int64_t outside = tf_decode_blocks(format, data, BLOCKS * bytes, BLOCKS * per,
                                                got, BLOCKS * per, scales, BLOCKS);
             bool nonfinite = false;
@@ -164,6 +174,7 @@ static void differential_random_blocks(void) {
             if (nonfinite) { assert(outside == TF_ERR_SCALE_NONFINITE); continue; }
             if (ref_blocks_padded(format, data, BLOCKS)) { assert(outside == TF_ERR_PADDING); continue; }
             assert(outside >= 0);
+            ++decoded;
             int64_t expected_outside = 0;
             for (size_t b = 0; b < BLOCKS; ++b) {
                 assert(ref_block(format, data + b * bytes, want + b * per) == scales[b]);
@@ -180,6 +191,8 @@ static void differential_random_blocks(void) {
                    == (int64_t)(BLOCKS * bytes));
             assert(memcmp(data, again, BLOCKS * bytes) == 0);
         }
+        /* The value comparison ran on most rounds of every format. */
+        assert(decoded >= 200);
     }
 }
 
@@ -507,19 +520,30 @@ static void gguf_checks(void) {
     assert(gguf_check_of("llama", false, 42, 256, 0, 128, "a.weight") == TF_ERR_EXTENT);
     assert(gguf_check_of("llama", false, 42, 256, 0, 144, "a.weight") == TF_Q2_0); /* exact fit */
     assert(gguf_check_of("llama", false, 42, 100, 0, 160, "a.weight") == TF_ERR_LENGTH);
-    assert(gguf_check_of("llama", false, 0, 256, 42, 160, "b.weight") == TF_Q2_0);
+    assert(gguf_check_of("llama", false, 42, 256, 42, 160, "b.weight") == TF_Q2_0);
+    /* A record may not begin inside a record of known size below it: a.weight
+     * (Q2_0, 144 bytes, or F32, 2048 bytes) at 0 and b.weight at 96 or 160.
+     * A predecessor of a type whose size the reader does not know (12, Q4_K)
+     * bounds nothing. */
+    assert(gguf_check_of("llama", false, 42, 256, 42, 96, "b.weight") == TF_ERR_EXTENT);
+    assert(gguf_check_of("llama", false, 0, 256, 42, 160, "b.weight") == TF_ERR_EXTENT);
+    assert(gguf_check_of("llama", false, 12, 256, 42, 160, "b.weight") == TF_Q2_0);
     /* Two records at offset 0 overlap, whichever is checked. */
     assert(gguf_check_of("llama", false, 42, 256, 0, 0, "a.weight") == TF_ERR_EXTENT);
     assert(gguf_check_of("llama", false, 0, 256, 42, 0, "b.weight") == TF_ERR_EXTENT);
     /* The last tensor against the end of the file: b.weight (Q2_0, 72 bytes) at 160. */
-    assert(gguf_check_sized("llama", false, 0, 256, 42, 160, "b.weight", 232) == TF_Q2_0);
-    assert(gguf_check_sized("llama", false, 0, 256, 42, 160, "b.weight", 231) == TF_ERR_EXTENT);
-    assert(gguf_check_sized("llama", false, 0, 256, 42, 160, "b.weight", 100) == TF_ERR_EXTENT);
+    assert(gguf_check_sized("llama", false, 42, 256, 42, 160, "b.weight", 232) == TF_Q2_0);
+    assert(gguf_check_sized("llama", false, 42, 256, 42, 160, "b.weight", 231) == TF_ERR_EXTENT);
+    assert(gguf_check_sized("llama", false, 42, 256, 42, 160, "b.weight", 100) == TF_ERR_EXTENT);
     TFTensorInfo info;
     memset(&info, 0, sizeof info);
     info.tensor_type = 42; info.dims = 4; info.d0 = 64; info.d1 = 1u << 30; info.d2 = 1u << 30; info.d3 = 1u << 30;
     info.alignment = 32;
     assert(tf_gguf_check(&info, UINT64_MAX) == TF_ERR_LENGTH); /* 2^96 weights */
+    info.d1 = 1ull << 57; info.d2 = 1; info.d3 = 1;
+    assert(tf_gguf_check(&info, UINT64_MAX) == TF_ERR_LENGTH); /* 2^63 weights: not below INT64_MAX */
+    info.d1 = 1ull << 56;
+    assert(tf_gguf_check(&info, UINT64_MAX) == TF_Q2_0);
 }
 
 static void scale_classes_and_flags(void) {
@@ -728,7 +752,13 @@ static void safetensors(void) {
         {"{\"w\":{\"dtype\":\"F4\",\"shape\":[3],\"data_offsets\":[0,2]}}", TF_ERR_LENGTH},
         {"{\"w\":{\"dtype\":\"F4\",\"shape\":[4],\"data_offsets\":[0,2]}}", 0},
         {"{\"w\":{\"dtype\":\"Q2\",\"shape\":[4],\"data_offsets\":[0,1]}}", TF_ERR_CONTAINER},
-        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4294967296,4294967296],\"data_offsets\":[0,0]}}", TF_ERR_EXTENT},
+        /* 2^64 elements: the size cannot be represented (as a GGUF count gguf.cpp refuses). */
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4294967296,4294967296],\"data_offsets\":[0,0]}}", TF_ERR_LENGTH},
+        /* w begins inside s, which begins below it. */
+        {"{\"s\":{\"dtype\":\"U8\",\"shape\":[8],\"data_offsets\":[0,8]},"
+         "\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[4,36]}}", TF_ERR_EXTENT},
+        {"{\"s\":{\"dtype\":\"U8\",\"shape\":[4],\"data_offsets\":[0,4]},"
+         "\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[4,36]}}", 0},
     };
     uint8_t w[] = "w";
     for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
@@ -737,6 +767,20 @@ static void safetensors(void) {
         memcpy(file + 8, cases[i].json, n);
         assert(tf_safetensors_find(file, 8 + n, w, 1, tokens, 256, arena, sizeof arena, &info) == 0);
         assert(tf_safetensors_check(&info, 8 + n + 64) == cases[i].check);
+    }
+    /* Offsets whose absolute value 8 + N + offset does not fit in 64 bits,
+     * in the tensor read or in another entry, are refused by find. */
+    static const char *const wraps[] = {
+        "{\"w\":{\"dtype\":\"U8\",\"shape\":[2],\"data_offsets\":[18446744073709551600,18446744073709551602]}}",
+        "{\"w\":{\"dtype\":\"U8\",\"shape\":[2],\"data_offsets\":[0,2]},"
+        "\"x\":{\"dtype\":\"U8\",\"shape\":[2],\"data_offsets\":[18446744073709551600,18446744073709551602]}}",
+    };
+    for (size_t i = 0; i < sizeof wraps / sizeof wraps[0]; ++i) {
+        n = strlen(wraps[i]);
+        put_u64(file, 0, n);
+        memcpy(file + 8, wraps[i], n);
+        assert(tf_safetensors_find(file, 8 + n, w, 1, tokens, 256, arena, sizeof arena, &info) == TF_ERR_EXTENT);
+        assert(info.begin == 0 && info.end == 0);
     }
     /* Another entry without data_offsets makes the header malformed. */
     const char *broken = "{\"w\":{\"dtype\":\"U8\",\"shape\":[1],\"data_offsets\":[0,1]},\"x\":{\"dtype\":\"U8\"}}";

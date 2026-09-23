@@ -496,10 +496,14 @@ module TrinityMemoryFormats {
     // p of block b holds weights 128b+p, +32, +64, +96 at bit 6, 4, 2, 0. Then
     // one little-endian f32 scale at byte n/4 and a 28-byte trailer (see
     // tf_i2s_trailer_nonzero). Codes 0, 1, 2 mean -1, 0, +1. The quantizers
-    // never write code 3 and no dequantizer defines it; it is reported as
-    // code - 1 = +2, like the other 2-bit layouts, and counted as outside.
-    // The ARM (QK 64) and 1x4 row-interleaved layouts store the same codes in
-    // other bytes; their bytes are valid here and decode to other weights.
+    // never write code 3, and bitnet.cpp's readers disagree on it at the pin:
+    // dequantize_row_i2_s (to_float and get_rows) maps it to 0, while the
+    // mul_mat kernels multiply the raw code and subtract the activation sum,
+    // so there it acts as +2. It is reported as code - 1 = +2, like the other
+    // 2-bit layouts, and counted as outside. The ARM (QK 64) and 1x4
+    // row-interleaved layouts, and the four consecutive weights per byte that
+    // the submodule's own quantize_i2_s writes, store the same codes in other
+    // bytes; their bytes are valid here and decode to other weights.
     fn tf_i2s_bytes(count: usize) -> usize { return count / 4 + 32; }
 
     // LENGTH (count 0 or not whole blocks, size not n/4 + 32), CAPACITY, then
@@ -876,6 +880,8 @@ module TrinityMemoryFormats {
         bitnet: bool,
         next_offset: u64,
         has_next: bool,
+        prev_end: u64,
+        has_prev: bool,
     }
 
     fn tf_same(data: []u8, at: usize, size: usize, text: []u8, text_size: usize) -> bool {
@@ -950,9 +956,14 @@ module TrinityMemoryFormats {
     // data_start + offset. Returns 0, TF_ERR_NOT_FOUND, TF_ERR_TRUNCATED (read
     // at least info.needed bytes and retry) or TF_ERR_CONTAINER. It also sets
     // the namespace markers info.prism and info.bitnet (tf_format_of_gguf) and
-    // the extent bound: info.has_next when another tensor record's offset is
-    // at or above this one's, and info.next_offset, the least such offset (an
-    // offset equal to this one's means the two tensors overlap).
+    // the extent bounds, taken over the other tensor records that hold at
+    // least one weight: info.has_next when such a record's offset is at or
+    // above this one's, and info.next_offset, the least such offset (an offset
+    // equal to this one's means the two tensors overlap); info.has_prev when a
+    // record of known byte size (tf_gguf_record_bytes) begins below this
+    // one's offset, and info.prev_end, the greatest end offset among them.
+    // A zero-weight record holds no bytes (ggml_nbytes is 0), so the next
+    // record may share its offset.
     fn tf_gguf_find(data: []u8, size: usize, name: []u8, name_size: usize, info: *TFTensorInfo) -> i32 {
         return tf_gguf_select(data, size, name, name_size, 0, false, info);
     }
@@ -968,6 +979,7 @@ module TrinityMemoryFormats {
         info.needed = 24; info.alignment = 32; info.prism = false; info.dims = 0;
         info.name_at = 0; info.name_size = 0; info.tensors = 0;
         info.bitnet = false; info.next_offset = 0; info.has_next = false; info.offset = 0; info.tensor_type = 0;
+        info.prev_end = 0; info.has_prev = false;
         info.d0 = 1; info.d1 = 1; info.d2 = 1; info.d3 = 1;
         if (size < 24) { return TF_ERR_TRUNCATED; }
         if (tf_read_u32(data, 0) != 0x46554747 || tf_read_u32(data, 4) != 3) { return TF_ERR_CONTAINER; }
@@ -1044,19 +1056,42 @@ module TrinityMemoryFormats {
         info.data_start = start;
         info.needed = start;
         if (!found) { return TF_ERR_NOT_FOUND; }
-        // Second walk over the complete records: the least offset of another
-        // tensor at or above this tensor's bounds its extent.
+        // Second walk over the complete records: among the other records
+        // that hold at least one weight, the least offset at or above this
+        // tensor's bounds its extent from above, and the greatest end of a
+        // record of known size that begins below it bounds it from below.
+        var top: u64 = 0xffffffffffffffff;
         var walk: u64 = records;
         var u: u64 = 0;
         while (u < tensors) {
             var u_length: u64 = tf_read_u64(data, walk as usize);
             var u_dims: u64 = tf_read_u32(data, (walk + 8 + u_length) as usize) as u64;
-            var u_offset: u64 = tf_read_u64(data, (walk + 12 + u_length + 8 * u_dims + 4) as usize);
-            if (u != found_at && u_offset >= info.offset && (!info.has_next || u_offset < info.next_offset)) {
+            var u_dim_at: u64 = walk + 12 + u_length;
+            var u_type: u32 = tf_read_u32(data, (u_dim_at + 8 * u_dims) as usize);
+            var u_offset: u64 = tf_read_u64(data, (u_dim_at + 8 * u_dims + 4) as usize);
+            var e0: u64 = tf_read_u64(data, u_dim_at as usize);
+            var e1: u64 = 1;
+            var e2: u64 = 1;
+            var e3: u64 = 1;
+            if (u_dims > 1) { e1 = tf_read_u64(data, (u_dim_at + 8) as usize); }
+            if (u_dims > 2) { e2 = tf_read_u64(data, (u_dim_at + 16) as usize); }
+            if (u_dims > 3) { e3 = tf_read_u64(data, (u_dim_at + 24) as usize); }
+            var weights: u64 = tf_gguf_elements(e0, e1, e2, e3);
+            if (u != found_at && weights != 0 && u_offset >= info.offset
+                && (!info.has_next || u_offset < info.next_offset)) {
                 info.has_next = true;
                 info.next_offset = u_offset;
             }
-            walk = walk + 12 + u_length + 8 * u_dims + 12;
+            if (u != found_at && weights != 0 && u_offset < info.offset) {
+                var u_bytes: u64 = tf_gguf_record_bytes(u_type, info.prism, info.bitnet, e0, e1, e2, e3);
+                var u_end: u64 = top;
+                if (u_offset <= top - u_bytes) { u_end = u_offset + u_bytes; }
+                if (u_bytes != 0 && (!info.has_prev || u_end > info.prev_end)) {
+                    info.has_prev = true;
+                    info.prev_end = u_end;
+                }
+            }
+            walk = u_dim_at + 8 * u_dims + 12;
             u = u + 1;
         }
         return 0;
@@ -1069,9 +1104,33 @@ module TrinityMemoryFormats {
         return a * b;
     }
 
-    // Weights in a GGUF tensor record; 2^64 - 1 when the count overflows.
+    // Weights of a GGUF tensor record with dims ne0..ne3 (1 beyond its
+    // n_dims), or 2^64 - 1 when gguf.cpp refuses the count: every ne must be a
+    // non-negative int64, and a nonzero product must stay below INT64_MAX,
+    // tested as gguf.cpp tests it (INT64_MAX / ne1 <= ne0, and so on).
+    fn tf_gguf_elements(ne0: u64, ne1: u64, ne2: u64, ne3: u64) -> u64 {
+        var top: u64 = 0xffffffffffffffff;
+        var most: u64 = 0x7fffffffffffffff;
+        if (ne0 > most || ne1 > most || ne2 > most || ne3 > most) { return top; }
+        if (ne0 == 0 || ne1 == 0 || ne2 == 0 || ne3 == 0) { return 0; }
+        if (most / ne1 <= ne0) { return top; }
+        if (most / ne2 <= ne0 * ne1) { return top; }
+        if (most / ne3 <= ne0 * ne1 * ne2) { return top; }
+        return ne0 * ne1 * ne2 * ne3;
+    }
+
+    // Weights in a GGUF tensor record; 2^64 - 1 when gguf.cpp refuses the count.
     fn tf_tensor_elements(info: *TFTensorInfo) -> u64 {
-        return tf_times(tf_times(tf_times(info.d0, info.d1), info.d2), info.d3);
+        return tf_gguf_elements(info.d0, info.d1, info.d2, info.d3);
+    }
+
+    // Stored bytes of `count` weights with rows of ne0 in one of our ternary
+    // layouts; 0 when ne0 is not whole blocks or the format has no blocks.
+    fn tf_gguf_format_bytes(format: i32, ne0: u64, count: u64) -> u64 {
+        if (format == TF_I2_S) { return count / 4 + 32; }
+        var per: u64 = tf_block_elements(format) as u64;
+        if (per == 0 || ne0 % per != 0) { return 0; }
+        return (count / per) * (tf_block_bytes(format) as u64);
     }
 
     // Stored bytes of a GGUF tensor in one of our ternary layouts, 0 otherwise
@@ -1079,23 +1138,35 @@ module TrinityMemoryFormats {
     fn tf_gguf_tensor_bytes(info: *TFTensorInfo) -> u64 {
         var format: i32 = tf_format_of_gguf(info.tensor_type, info.prism, info.bitnet);
         if (format <= 0) { return 0; }
-        var count: u64 = tf_tensor_elements(info);
-        if (format == TF_I2_S) { return count / 4 + 32; }
-        var per: u64 = tf_block_elements(format) as u64;
-        if (per == 0 || info.d0 % per != 0) { return 0; }
-        return (count / per) * (tf_block_bytes(format) as u64);
+        return tf_gguf_format_bytes(format, info.d0, tf_tensor_elements(info));
+    }
+
+    // Byte size of any tensor record whose size the reader knows: our ternary
+    // layouts under the file's namespace markers, and F32 (type 0), F16 (1)
+    // and BF16 (30). 0 for other types, zero weights or a refused count.
+    fn tf_gguf_record_bytes(tensor_type: u32, prism: bool, bitnet: bool,
+                            ne0: u64, ne1: u64, ne2: u64, ne3: u64) -> u64 {
+        var count: u64 = tf_gguf_elements(ne0, ne1, ne2, ne3);
+        var top: u64 = 0xffffffffffffffff;
+        if (count == 0 || count == top) { return 0; }
+        if (tensor_type == 0) { return tf_times(count, 4); }
+        if (tensor_type == 1 || tensor_type == 30) { return tf_times(count, 2); }
+        var format: i32 = tf_format_of_gguf(tensor_type, prism, bitnet);
+        if (format <= 0) { return 0; }
+        return tf_gguf_format_bytes(format, ne0, count);
     }
 
     // Checks one tensor record found by tf_gguf_find or tf_gguf_nth in a file
     // of `file_size` bytes, in this order: the type id under the file's
     // namespace markers (TYPE_AMBIGUOUS, LAYOUT_UNSUPPORTED), the offset
     // against general.alignment (MISALIGNED), for a ternary layout the row
-    // length (LENGTH when ne[0] is not whole blocks or the weight count
-    // overflows) and the extent: EXTENT when its bytes reach another tensor's
-    // offset at or above its own (a shifted or overlapping record) or run past
-    // the end of the file (a truncated file). gguf.cpp is stricter: every
-    // offset must equal the padded end of the previous record. Returns our
-    // format id, or 0 for a type that is not a ternary layout.
+    // length (LENGTH when ne[0] is not whole blocks or gguf.cpp refuses the
+    // weight count) and the extent: EXTENT when its bytes reach the offset of
+    // another record at or above its own, when it begins inside a record of
+    // known size below it (a shifted or overlapping record), or when its bytes
+    // run past the end of the file (a truncated file). gguf.cpp is stricter:
+    // every offset must equal the padded end of the previous record. Returns
+    // our format id, or 0 for a type that is not a ternary layout.
     fn tf_gguf_check(info: *TFTensorInfo, file_size: u64) -> i32 {
         var format: i32 = tf_format_of_gguf(info.tensor_type, info.prism, info.bitnet);
         if (format < 0) { return format; }
@@ -1106,6 +1177,7 @@ module TrinityMemoryFormats {
         var bytes: u64 = tf_gguf_tensor_bytes(info);
         if (bytes == 0) { return TF_ERR_LENGTH; }
         if (info.has_next && info.next_offset - info.offset < bytes) { return TF_ERR_EXTENT; }
+        if (info.has_prev && info.prev_end > info.offset) { return TF_ERR_EXTENT; }
         if (info.data_start > file_size || file_size - info.data_start < info.offset) { return TF_ERR_EXTENT; }
         if (file_size - info.data_start - info.offset < bytes) { return TF_ERR_EXTENT; }
         return format;
@@ -1242,8 +1314,10 @@ module TrinityMemoryFormats {
     // u64 little-endian header length N, N bytes of JSON, then data. Fills the
     // dtype text and its width in bits (0 for a dtype the pinned safetensors
     // does not define), up to four dims, the absolute [begin, end) byte range
-    // and the extent bound: has_next when another tensor of nonzero size
-    // begins at or above `begin`, next_begin the least such absolute begin.
+    // and the extent bounds over the other tensors of nonzero size: has_next
+    // when one begins at or above `begin`, next_begin the least such absolute
+    // begin; has_prev when one begins below `begin`, prev_end the greatest
+    // absolute end among those.
     struct TFSafeInfo {
         dtype: []u8,
         dtype_size: usize,
@@ -1258,6 +1332,8 @@ module TrinityMemoryFormats {
         dtype_bits: u64,
         next_begin: u64,
         has_next: bool,
+        prev_end: u64,
+        has_prev: bool,
     }
 
     // Bits per element of a safetensors dtype (safetensors/src/tensor.rs
@@ -1331,7 +1407,8 @@ module TrinityMemoryFormats {
                            arena: []u8, arena_capacity: usize, info: *TFSafeInfo) -> i32 {
         info.needed = 8; info.dims = 0; info.dtype_size = 0; info.dtype_bits = 0;
         info.d0 = 1; info.d1 = 1; info.d2 = 1; info.d3 = 1;
-        info.next_begin = 0; info.has_next = false;
+        info.next_begin = 0; info.has_next = false; info.prev_end = 0; info.has_prev = false;
+        info.begin = 0; info.end = 0;
         if (size < 8) { return TF_ERR_TRUNCATED; }
         var header: u64 = tf_read_u64(data, 0);
         if (header > 100000000) { return TF_ERR_CONTAINER; }
@@ -1372,8 +1449,15 @@ module TrinityMemoryFormats {
         if (ranged < 0) { return ranged; }
         var begin: u64 = pair[0];
         var end: u64 = pair[1];
-        // Every other tensor entry (not __metadata__): the least begin at or
-        // above this one's among tensors of nonzero size bounds the extent.
+        // Absolute offsets are 8 + header + data_offsets. EXTENT when that
+        // sum does not fit in 64 bits, for this entry or any other: such an
+        // entry lies past the end of every file (safetensors rejects it too,
+        // since the tensors must tile the data section from 0).
+        var room: u64 = 0xffffffffffffffff - 8 - header;
+        if (end > room) { return TF_ERR_EXTENT; }
+        // Every other tensor entry (not __metadata__) of nonzero size: the
+        // least begin at or above this one's bounds the extent from above,
+        // the greatest end of those beginning below it bounds it from below.
         var member: i64 = tokens[result.root as usize].first;
         var visited: usize = 0;
         while (member >= 0) {
@@ -1387,10 +1471,16 @@ module TrinityMemoryFormats {
                 var other_pair: [2]u64 = [0, 0];
                 var other_ranged: i32 = tf_safetensors_range(tokens, result.token_count, other, other_pair);
                 if (other_ranged < 0) { return other_ranged; }
+                if (other_pair[1] > room) { return TF_ERR_EXTENT; }
                 if (other_pair[1] > other_pair[0] && other_pair[0] >= begin
                     && (!info.has_next || 8 + header + other_pair[0] < info.next_begin)) {
                     info.has_next = true;
                     info.next_begin = 8 + header + other_pair[0];
+                }
+                if (other_pair[1] > other_pair[0] && other_pair[0] < begin
+                    && (!info.has_prev || 8 + header + other_pair[1] > info.prev_end)) {
+                    info.has_prev = true;
+                    info.prev_end = 8 + header + other_pair[1];
                 }
             }
             member = tokens[key].next;
@@ -1405,19 +1495,23 @@ module TrinityMemoryFormats {
     // Checks a tensor found by tf_safetensors_find in a file of `file_size`
     // bytes, as safetensors' Metadata::validate and read_metadata do:
     // CONTAINER for a dtype the pinned safetensors does not define, LENGTH when
-    // the element bits are not whole bytes, EXTENT when end - begin is not
-    // numel * dtype width, when the bytes reach another tensor's begin at or
-    // above this one's (overlap), or when they run past the end of the file.
-    // safetensors is stricter: the tensors must tile the data section exactly.
+    // numel * dtype width in bits does not fit in 64 bits (as a GGUF weight
+    // count that gguf.cpp refuses) or is not whole bytes, EXTENT when
+    // end - begin is not numel * dtype width, when the bytes reach another
+    // tensor's begin at or above this one's, when this tensor begins inside
+    // another one that begins below it (overlap), or when the bytes run past
+    // the end of the file. safetensors is stricter: the tensors must tile the
+    // data section exactly.
     fn tf_safetensors_check(info: *TFSafeInfo, file_size: u64) -> i32 {
         if (info.dtype_bits == 0) { return TF_ERR_CONTAINER; }
         // Dimensions beyond info.dims are 1.
         var bits: u64 = tf_times(tf_times(tf_times(tf_times(info.dtype_bits, info.d0), info.d1), info.d2), info.d3);
         var top: u64 = 0xffffffffffffffff;
-        if (bits == top) { return TF_ERR_EXTENT; }
+        if (bits == top) { return TF_ERR_LENGTH; }
         if (bits % 8 != 0) { return TF_ERR_LENGTH; }
         if (info.end - info.begin != bits / 8) { return TF_ERR_EXTENT; }
         if (info.has_next && info.end > info.next_begin) { return TF_ERR_EXTENT; }
+        if (info.has_prev && info.prev_end > info.begin) { return TF_ERR_EXTENT; }
         if (info.end > file_size) { return TF_ERR_EXTENT; }
         return 0;
     }

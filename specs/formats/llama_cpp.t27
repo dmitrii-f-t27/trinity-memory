@@ -13,8 +13,11 @@
 // of the block, finite d; run only with --check-tensors,
 // src/llama-model-loader.cpp:1486); ggml/include/gguf.h:46
 // (GGUF_DEFAULT_ALIGNMENT 32); ggml/src/gguf.cpp:215 and :621-633 (alignment),
-// :721-738 (type range, row length in whole blocks), :772-792 (aligned data
-// section, each offset equal to the padded end of the previous tensor);
+// :684-711 (every ne a non-negative int64, a nonzero weight count below
+// INT64_MAX), :721-738 (type range, row length in whole blocks), :772-794
+// (aligned data section, each offset equal to the padded end of the previous
+// tensor); ggml/src/ggml.c:1298-1302 (ggml_nbytes is 0 for a zero-weight
+// tensor, so the next tensor may share its offset);
 // src/llama-model-loader.h:46-48 (tensor data within the file bounds).
 // It also states the GGUF type-id rule this repository applies across the
 // ggml-org, PrismML and bitnet.cpp id namespaces (specs/formats/OWNERS.md).
@@ -406,14 +409,34 @@ module TrinityFormatsLlamaCppSpec {
         return 0;
     }
 
+    // Weights of a tensor record with dims ne0..ne3 (1 beyond n_dims), as
+    // gguf.cpp:684-711 accepts them: every ne a non-negative int64 and a
+    // nonzero product below INT64_MAX, tested with its divisions. Returns
+    // 2^64 - 1 for a refused count; a ternary record with it is LENGTH.
+    pub fn tfs_llama_gguf_elements(ne0: u64, ne1: u64, ne2: u64, ne3: u64) -> u64 {
+        var refused: u64 = 0xffffffffffffffff;
+        var limit: u64 = 0x7fffffffffffffff;
+        if (ne0 > limit || ne1 > limit || ne2 > limit || ne3 > limit) { return refused; }
+        if (ne0 == 0 || ne1 == 0 || ne2 == 0 || ne3 == 0) { return 0; }
+        if (limit / ne1 <= ne0) { return refused; }
+        if (limit / ne2 <= ne0 * ne1) { return refused; }
+        if (limit / ne3 <= ne0 * ne1 * ne2) { return refused; }
+        return ne0 * ne1 * ne2 * ne3;
+    }
+
     // Offset of a tensor record: MISALIGNED unless a multiple of the alignment;
     // EXTENT when its bytes reach next_offset, the least offset of another
-    // record at or above this one (has_next false: none). Equal offsets
-    // overlap.
+    // record at or above this one, or when it begins before prev_end, the
+    // greatest end (offset + bytes) of a record of known size that begins
+    // below it (has_next, has_prev false: none). Only records that hold at
+    // least one weight count: a zero-weight record has no bytes, so the next
+    // record legally shares its offset; between two records that hold
+    // weights, equal offsets overlap.
     pub fn tfs_llama_gguf_offset_status(offset: u64, alignment: u64, bytes: u64, has_next: bool,
-                                        next_offset: u64) -> i32 {
+                                        next_offset: u64, has_prev: bool, prev_end: u64) -> i32 {
         if (offset % alignment != 0) { return TFS_LLAMA_ERR_MISALIGNED; }
         if (has_next && next_offset < offset + bytes) { return TFS_LLAMA_ERR_EXTENT; }
+        if (has_prev && prev_end > offset) { return TFS_LLAMA_ERR_EXTENT; }
         return 0;
     }
 
@@ -590,11 +613,18 @@ module TrinityFormatsLlamaCppSpec {
         assert tfs_llama_gguf_format(35, true, true) == TFS_LLAMA_TQ2_0 && tfs_llama_gguf_format(0, true, true) == 0;
     }
     test "llama gguf offsets extents and metadata share" {
-        assert tfs_llama_gguf_offset_status(64, 32, 144, true, 224) == 0;
-        assert tfs_llama_gguf_offset_status(65, 32, 144, true, 224) == TFS_LLAMA_ERR_MISALIGNED;
-        assert tfs_llama_gguf_offset_status(96, 32, 144, true, 224) == TFS_LLAMA_ERR_EXTENT;
-        assert tfs_llama_gguf_offset_status(96, 32, 144, false, 0) == 0;
-        assert tfs_llama_gguf_offset_status(0, 32, 144, true, 0) == TFS_LLAMA_ERR_EXTENT;
+        assert tfs_llama_gguf_offset_status(64, 32, 144, true, 224, false, 0) == 0;
+        assert tfs_llama_gguf_offset_status(65, 32, 144, true, 224, false, 0) == TFS_LLAMA_ERR_MISALIGNED;
+        assert tfs_llama_gguf_offset_status(96, 32, 144, true, 224, false, 0) == TFS_LLAMA_ERR_EXTENT;
+        assert tfs_llama_gguf_offset_status(96, 32, 144, false, 0, false, 0) == 0;
+        assert tfs_llama_gguf_offset_status(0, 32, 144, true, 0, false, 0) == TFS_LLAMA_ERR_EXTENT;
+        // A record shifted back into its predecessor (Q2_0 at 0, 144 bytes).
+        assert tfs_llama_gguf_offset_status(96, 32, 72, false, 0, true, 144) == TFS_LLAMA_ERR_EXTENT;
+        assert tfs_llama_gguf_offset_status(160, 32, 72, false, 0, true, 144) == 0;
+        // Weight counts: zero weights are representable; 64 * (2^58 + 1) * 64 is not.
+        assert tfs_llama_gguf_elements(0, 5, 1, 1) == 0 && tfs_llama_gguf_elements(256, 2, 1, 1) == 512;
+        assert tfs_llama_gguf_elements(64, 288230376151711745, 64, 1) > 9223372036854775807;
+        assert tfs_llama_gguf_elements(64, 1073741824, 1073741824, 1073741824) > 9223372036854775807;
         assert tfs_llama_gguf_file_status(256, 96, 144, 496) == 0;
         assert tfs_llama_gguf_file_status(256, 96, 144, 495) == TFS_LLAMA_ERR_EXTENT;
         assert tfs_llama_gguf_file_status(256, 300, 1, 495) == TFS_LLAMA_ERR_EXTENT;
