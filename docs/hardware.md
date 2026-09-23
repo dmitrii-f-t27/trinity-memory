@@ -424,8 +424,10 @@ make -C fpga/ax7203 bram-ooc                     # cells of each layout and of t
 
 The tools run in the `regymm/openxc7` image by default; `YOSYS='cd $(ROOT) && yosys'`
 and `NEXTPNR='cd $(ROOT) && <nextpnr-xilinx built for the host>'` run them natively
-(the builds below used a native build of the image's nextpnr-xilinx revision 45a986b,
-which routes in minutes where the emulated amd64 image took hours).
+(the builds below used a native build of the image's nextpnr-xilinx revision 45a986b:
+router2 finished each single-layout design in 24-148 s, while under emulation the
+image's router1 had still 12.5k of 64.8k arcs left on the all-three design after
+56 minutes, `routing-attempts.txt` in the 375cf00 directory).
 
 **Mapping.** Each engine is written against 36-bit words, so the synthesis maps
 every layout the same way: `fpga/ax7203/brams_x36.txt` restricts yosys'
@@ -448,7 +450,8 @@ engine with its encoder and decoder at a time; the stats are in each
 | `d5d2` | 45 | 2 530 | 648 | 146 | 136 |
 
 The encoder and decoder columns are the codec synthesized alone
-(`codec_<layout>_<op>.stat`); the `b2` decoder's LUTs count and clear invalid
+(`codec_encoder.stat` and `codec_decoder.stat` in each directory; `make bram-ooc`
+writes them as `codec_<f>_<op>.stat`, f 0/1/2, op 0 encoder, 1 decoder); the `b2` decoder's LUTs count and clear invalid
 `11` lanes, the `b2` encoder is wiring. 72 of the `d5d2` flip-flops hold its
 unused fourth bank (one word). LUT counts move by 1-2 % between syntheses of
 identical Verilog (yosys and ABC ordering); block counts do not. The whole bench with all three engines
