@@ -207,3 +207,7 @@ python3 -m trinity_memory export-rtl examples/trits.json build/dense.mem --codec
 Материал для будущей публикации: [`docs/showcase.md`](docs/showcase.md).
 Этот кодек не совместим побайтово с GGUF/TQ1_0 и не заявляется новым изобретением
 base-3 упаковки; ценность текущей работы — воспроизводимая связка формата, кода и RTL.
+
+## Лицензия
+
+Apache License 2.0: см. [LICENSE](LICENSE) и [NOTICE](NOTICE).

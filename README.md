@@ -215,3 +215,7 @@ the sources and corrects unsupported claims from the initial research note.
 Trinity is the shared project of Dmitrii Fedorov and Dmitrii Vasilev. Hosting
 this memory implementation under `dmitrii-f-t27` gives it a direct development
 home without representing the wider Trinity stack as a solo project.
+
+## License
+
+Apache License 2.0: see [LICENSE](LICENSE) and [NOTICE](NOTICE).
