@@ -119,3 +119,39 @@ standard library, reads about 63 MB of byte ranges and prints the 210-tensor
 scale and trailer table and the layer-0 counts above as JSON
 (`python3 tools/bitnet_audit.py > audit.json`). The t27 build needs a Rust
 toolchain (`cargo +1.94.0`) for the pinned compiler.
+
+## Fixtures
+
+[`fixtures/manifest.json`](../fixtures/manifest.json) (schema
+`trinity.fixtures-manifest.v1`) is the single source of truth for the real
+weights used here. For each of the six Hugging Face repositories above it
+pins the full commit sha, the license, and the name and size of every file
+read; for every byte range it gives the file, the kind (`prefix`, `tensor`,
+`scale`, `trailer`), the tensor name, dtype or GGUF type id, shape, begin,
+end (exclusive), sha256 and which tool reads it. It lists 754 ranges,
+205.8 MiB in total: everything `trinity_memory.ternary_check` and
+`tools/bitnet_audit.py` read (including all 210 I2_S trailers) and the
+layer-0 tensors a matvec needs (BitNet `q_proj` and `down_proj` in all three
+forms with their scales; Bonsai `ffn_down` in PTQ1_0, PQ2_0, Q2_0 and MLX
+with scales and biases). No whole checkpoint is ever downloaded.
+
+One command fetches them into `build/fixtures/`:
+
+```sh
+python3 tools/fetch-fixtures.py            # fetch missing ranges, verify all
+python3 tools/fetch-fixtures.py --offline  # verify the cache, no network
+```
+
+Each range is an anonymous HTTP range request (no token is sent) that must
+answer 206 with exactly the requested length and match its sha256 before it
+is written. A first run sends 754 range requests. Hugging Face allows
+anonymous clients 3,000 resolver requests per IP address per 5-minute window
+(its rate-limit page, September 2025); the tool retries a 429 after the time
+the `RateLimit` header gives, and uses 4 concurrent requests by default
+(`--jobs`). `trinity_memory.fixtures` re-hashes a cached range, including
+each chunk of a cached prefix, on every read, and refuses a range the
+manifest does not list; `tools/fetch-fixtures.py --record REPO FILE BEGIN END
+--kind KIND --tensor NAME ...` adds one explicitly. With
+`TRINITY_FIXTURES_OFFLINE=1` (or `tools/bitnet_audit.py --offline`) nothing
+is fetched. `fixtures/manifest.lock.json` is generated from the manifest
+(`--write-lock`) and keeps the flat `range: sha256` view referenced above.
