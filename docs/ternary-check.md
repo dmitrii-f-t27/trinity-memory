@@ -105,6 +105,60 @@ linear 2-bit rows (MLX affine 2-bit, ONNX Runtime `MatMulNBits` with
 (open llama.cpp PR #22836) and the bitnet.cpp lookup-table layouts TL1 and
 TL2.
 
+## Contracts and negative cases
+
+Each decoded layout above has a sealed contract in [`specs/formats/`](../specs/formats/)
+that restates pinned upstream commits
+([`upstream.lock.json`](../specs/formats/upstream.lock.json)), and a vector file
+`conformance/formats_<family>.json` that the specs, `t27/formats.t27` (C and
+WASM) and the Python bindings must all reproduce. The readers reject lengths
+that are not whole blocks (truncated tensors), NaN or infinite scales, nonzero
+padding digits in TQ1_0/PTQ1_0 `qh` bytes, GGUF type ids that are ambiguous
+between the ggml-org, PrismML and bitnet.cpp namespaces, TL1 ids and TL2 ids
+in files marked as bitnet.cpp (an unmarked TL2 file reads as Q2_0 and is caught,
+if at all, by the extent check), misaligned offsets, GGUF and safetensors
+tensors that overlap the tensor before or after them or run past the end of the
+file (a GGUF tensor that begins inside a record of a type whose size the reader
+does not know is not caught), safetensors tensors with a gap before or after
+them or bytes after the last one, GGUF weight counts
+and safetensors sizes that do not fit, safetensors offsets that wrap around
+64 bits, and safetensors byte ranges that do not match
+the shape and dtype. They decode, and flag, what upstream accepts silently and
+real files may carry: 2-bit code 3 (+2), base-3 bytes that decode like
+canonical ones, negative or zero scales, nonzero I2_S trailer bytes, nonzero
+ONNX padding and MLX groups whose bias is not -scale. Group-128 bytes read as
+group-64 Q2_0 (a synthetic case), I2_S bytes in the ARM or four-row layouts
+of bitnet.cpp's `ggml-bitnet-mad.cpp` (which its pinned build does not compile)
+or from the `quantize_i2_s` of its llama.cpp submodule (four consecutive weights
+per byte), a Q1_0 byte (Q1_0 has no invalid bit pattern), and any
+corrupted code byte or scale that stays valid decode without any signal. Every
+negative vector records what each upstream reader does with the same bytes,
+with the pinned `file:line`. For I2_S code 3 bitnet.cpp disagrees with itself:
+`dequantize_row_i2_s` reads it as 0, `mul_mat` as +2. The full
+table of status classes is in [`specs/formats/OWNERS.md`](../specs/formats/OWNERS.md).
+STQ1_0 has no contract yet (the llama.cpp pull request is open), and TL1/TL2
+byte order depends on build-time tile sizes that the file does not record.
+
+## llama.cpp issue 15193 (TQ1_0/TQ2_0 on CPU)
+
+At llama.cpp `e6ab7c1a` we found no TQ1_0/TQ2_0 storage or CPU kernel
+defect that would explain the garbage output reported in llama.cpp issue
+15193. On random blocks and on the BitNet layer-0 tensors above, the upstream
+quantizers produce the same bytes as the t27 encoders, the upstream
+dequantizers and the t27 decoders return the same trits and scales, and the
+integer accumulators of the generic, NEON and AVX2 `vec_dot` kernels equal
+the exact integer products. The kernels' float results are not bit-identical
+(the AVX2 kernels sum in eight lanes); they agree within 1e-5 of the sum of
+absolute block terms. The AVX2 kernels ran under Rosetta 2 on Apple silicon
+and natively on the Ubuntu x86_64 CI runner, with the same results.
+
+The upstream maintainer closed the issue on 2025-08-09, attributing the output
+to quantizing a float-trained model (Qwen3-4B-Instruct-2507) to TQ1_0. The
+synthetic float rows in the note agree with that explanation, but we did not
+run a model, so it was not reproduced here. Note, commands and numbers:
+[`docs/upstream/llama.cpp-15193.md`](upstream/llama.cpp-15193.md). Nothing
+was reported upstream.
+
 ## Reproduce
 
 ```sh
@@ -119,3 +173,58 @@ standard library, reads about 63 MB of byte ranges and prints the 210-tensor
 scale and trailer table and the layer-0 counts above as JSON
 (`python3 tools/bitnet_audit.py > audit.json`). The t27 build needs a Rust
 toolchain (`cargo +1.94.0`) for the pinned compiler.
+
+## Fixtures
+
+[`fixtures/manifest.json`](../fixtures/manifest.json) (schema
+`trinity.fixtures-manifest.v1`) is the single source of truth for the real
+weights used here. For each of the six Hugging Face repositories above it
+pins the full commit sha, the license, and the name and size of every file
+read; for every byte range it gives the file, the kind (`prefix`, `tensor`,
+`scale`, `trailer`), the tensor name, dtype or GGUF type id, shape, begin,
+end (exclusive), sha256 and `used_by`, the consumers that read it. It
+lists 544 ranges, 205.8 MiB in total, exactly what
+`trinity_memory.ternary_check` (36 ranges) and `tools/bitnet_audit.py`
+(521 ranges, 66,692,572 bytes measured, the "about 63 MB" above in MiB)
+read; 13 of them are read by both. They include all 210 I2_S trailers,
+whose first 4 bytes are the f32 scale words tabulated in
+`reports/ternary-check/bitnet-scales-2026-09-22.json`. The consumer
+`layer0_matvec` (#33) is planned, not implemented: it tags the same 36
+ranges `ternary_check` reads (BitNet layer-0 `q_proj` and `down_proj` in all
+three forms with their scales; Bonsai `ffn_down` in PTQ1_0, PQ2_0, Q2_0 and
+MLX with scales and biases) and adds no range of its own. No whole
+checkpoint is ever downloaded. This supersedes the note under Sources that
+the lock holds only the ranges of the t27 run: every range
+`tools/bitnet_audit.py` reads, trailers included, is now pinned by sha256 in
+the manifest and in `fixtures/manifest.lock.json`.
+
+One command fetches them into `build/fixtures/`:
+
+```sh
+python3 tools/fetch-fixtures.py            # fetch missing ranges, verify all
+python3 tools/fetch-fixtures.py --offline  # verify the cache; no network, nothing written
+```
+
+Each range is an anonymous HTTP range request (no token is sent) that must
+answer 206 with exactly the requested length and match its sha256 before it
+is written. A first run sends 544 range requests. Hugging Face allows
+anonymous clients 3,000 resolver requests per IP address per 5-minute window
+(its rate-limit page, September 2025); the tool retries a 429 after the time
+the `RateLimit` header gives, retries a 5xx, a network error or a body cut
+short after 2, 4 and 8 seconds (the header's time only when it reports no
+requests left), and uses 4 concurrent requests by default (`--jobs`).
+`trinity_memory.fixtures` re-hashes a cached range on every read; a cached
+prefix chunk is hashed on its first read in a process and again whenever
+`prefix.bin` changes (size, inode, modification or change time). It refuses
+a range the manifest does not list; `tools/fetch-fixtures.py --record REPO
+FILE BEGIN END --kind KIND --tensor NAME --dtype DTYPE --shape N ...
+--used-by CONSUMER` adds one explicitly, and a new prefix chunk must start
+where the pinned prefix ends. With `TRINITY_FIXTURES_OFFLINE=1` (or
+`tools/bitnet_audit.py --offline`, or `tools/fetch-fixtures.py --offline`)
+nothing is fetched. The tool never
+deletes or truncates cache files, since several checkouts may share one
+cache; a file the manifest does not list, or a `prefix.bin` longer than the
+pinned prefix, fails the check unless `--no-strict` is given.
+`fixtures/manifest.lock.json` is generated from the manifest (`--write-lock`
+writes `manifest.lock.json` next to `--manifest`) and keeps the flat
+`range: sha256` view referenced above.
