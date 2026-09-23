@@ -308,16 +308,30 @@ for (const family of ['llama_cpp', 'prismml', 'bitnet_cpp', 'hf_bitnet', 'mlx', 
 }
 
 // One call on a tensor far larger than the initial 4 MiB of memory: 4096 x 4096
-// TQ2_0 weights (64 MiB of values). Memory may grow to 4 GiB.
+// TQ2_0 weights (64 MiB of values). Memory may grow to 4 GiB. Every code byte
+// is 0x24 (codes 0, 1, 2, 0 at bits 0, 2, 4, 6), so weight i of a block is
+// {-1, 0, +1, -1}[(i % 128) / 32] (dequantize_row_tq2_0: j, l, m order); block
+// b's scale word is 0x3c00 + (b & 0xff). The outputs start as sentinels, so a
+// call that writes nothing, or stops early, fails.
 reset();
+const tq2 = JSON.parse(readFileSync(new URL('conformance/formats_llama_cpp.json', root), 'utf8')).constants.format_ids.TQ2_0;
 const weights = 4096 * 4096, blocks = weights / 256;
 const data = alloc(blocks * 66);
 const tensor = u8(data, blocks * 66);
-tensor.fill(0x55);
-for (let b = 0; b < blocks; b++) { tensor[b * 66 + 64] = 0x00; tensor[b * 66 + 65] = 0x3c; }
+tensor.fill(0x24);
+for (let b = 0; b < blocks; b++) { tensor[b * 66 + 64] = b & 0xff; tensor[b * 66 + 65] = 0x3c; }
 const values = alloc(4 * weights), scales = alloc(4 * blocks);
-assert.equal(Number(api.tf_decode_blocks(2, data, blocks * 66, weights, values, weights, scales, blocks)), 0);
-assert.ok(i32(values, weights).every((v) => v === 0));
+i32(values, weights).fill(0x7f7f7f7f);
+u32(scales, blocks).fill(0xdeadbeef);
+assert.equal(Number(api.tf_decode_blocks(tq2, data, blocks * 66, weights, values, weights, scales, blocks)), 0);
+const decoded = i32(values, weights), pattern = [-1, 0, 1, -1];
+for (let i = 0; i < weights; i++) {
+  if (decoded[i] !== pattern[(i % 128) >> 5]) assert.fail(`large tensor: weight ${i} is ${decoded[i]}`);
+}
+const words = u32(scales, blocks);
+for (let b = 0; b < blocks; b++) {
+  if (words[b] !== 0x3c00 + (b & 0xff)) assert.fail(`large tensor: scale ${b} is ${words[b]}`);
+}
 
 const report = {evidence: 'actual-wasm-generated-from-t27', vectors: checks, reject_vectors: rejects, per_family: counts,
   large_tensor_weights: weights, memory_bytes: api.memory.buffer.byteLength,

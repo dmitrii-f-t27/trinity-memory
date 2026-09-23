@@ -5,6 +5,10 @@
 # Conformance files must validate and stay in sync with their generator, and
 # the differential harness ties the spec constants to the executable modules.
 set -eu
+# Sanitizer findings fail the gate: the C objects are built with
+# -fno-sanitize-recover=all, and UBSan halts on its first report.
+UBSAN_OPTIONS=${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1}
+export UBSAN_OPTIONS
 cd "$(dirname "$0")/.."
 : "${T27_ROOT:?Set T27_ROOT to a checkout of gHashTag/t27 at native/compiler.lock}"
 T27_ROOT=$(cd "$T27_ROOT" && pwd)
@@ -26,7 +30,7 @@ mkdir -p "$out"
 cc=${CC:-cc}
 warning_flags=
 if "$cc" --version | grep -qi clang; then warning_flags=-Wno-parentheses-equality; fi
-cflags="-std=c11 -Wall -Wextra -Werror $warning_flags -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer"
+cflags="-std=c11 -Wall -Wextra -Werror $warning_flags -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
 
 # lex-dropped exits zero even when characters were discarded: inspect its total.
 "$compiler" lex-dropped --specs-dir specs > "$out/lexer.log" 2>&1
@@ -138,14 +142,14 @@ for spec in $specs; do
 done
 cxx=${CXX:-c++}
 case $(uname -s) in Darwin) crypto_flags= ;; *) crypto_flags="-lcrypto -ldl" ;; esac
-"$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/float.cpp -o "$out/float-spec.o"
-"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/platform.c -o "$out/platform-spec.o"
+"$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/float.cpp -o "$out/float-spec.o"
+"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/platform.c -o "$out/platform-spec.o"
 for harness in tests/native_spec_*.c; do
     name=$(basename "$harness" .c)
     # shellcheck disable=SC2086
     "$cc" $cflags -I "$impl" -c "$harness" -o "$out/$name.o"
     # shellcheck disable=SC2086
-    "$cxx" -fsanitize=address,undefined "$out/$name.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/$name"
+    "$cxx" -fsanitize=address,undefined -fno-sanitize-recover=all "$out/$name.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/$name"
     "$out/$name" > "$out/$name.log" 2>&1 || { cat "$out/$name.log" >&2; exit 1; }
     cat "$out/$name.log"
 done

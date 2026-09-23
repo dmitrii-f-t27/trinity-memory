@@ -1,35 +1,39 @@
 #!/bin/sh
 set -eu
+# Sanitizer findings fail the gate: the C objects are built with
+# -fno-sanitize-recover=all, and UBSan halts on its first report.
+UBSAN_OPTIONS=${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1}
+export UBSAN_OPTIONS
 cd "$(dirname "$0")/.."
 sh tools/build-t27.sh
 cc=${CC:-cc}
 cxx=${CXX:-c++}
 warning_flags=
 if "$cc" --version | grep -qi clang; then warning_flags=-Wno-parentheses-equality; fi
-"$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/float.cpp -o build/t27/float-test.o
-"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/platform.c -o build/t27/platform-test.o
-"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/process.c -o build/t27/process-test.o
+"$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/float.cpp -o build/t27/float-test.o
+"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/platform.c -o build/t27/platform-test.o
+"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/process.c -o build/t27/process-test.o
 case $(uname -s) in Darwin) crypto_flags=; shared_flags=-dynamiclib; extension=dylib;; *) crypto_flags="-lcrypto -ldl"; shared_flags=-shared; extension=so;; esac
 for module in codecs compute tensorpack json formats tensorpack_json tensorpack_cli http bridge client random rtl_driver; do
     # Test executables always keep assertions, ASan and UBSan enabled.
     # shellcheck disable=SC2086
     "$cc" -std=c11 -Wall -Wextra -Werror $warning_flags -O1 -g \
-        -fsanitize=address,undefined -fno-omit-frame-pointer -I build/t27 -I native \
+        -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -I build/t27 -I native \
         -c "tests/native_$module.c" -o "build/t27/test-$module.o"
     platform_object=
     if [ "$module" = bridge ]; then platform_object=build/t27/platform-test.o; fi
     if [ "$module" = rtl_driver ]; then platform_object=build/t27/process-test.o; fi
-    "$cxx" -fsanitize=address,undefined "build/t27/test-$module.o" build/t27/float-test.o $platform_object $crypto_flags -lm -o "build/t27/test-$module"
+    "$cxx" -fsanitize=address,undefined -fno-sanitize-recover=all "build/t27/test-$module.o" build/t27/float-test.o $platform_object $crypto_flags -lm -o "build/t27/test-$module"
     "build/t27/test-$module" > "build/t27/test-$module.log" 2>&1 || {
         cat "build/t27/test-$module.log" >&2; exit 1;
     }
     cat "build/t27/test-$module.log"
 done
 # Run the integrated OS/network/experiment path with instrumented algorithms.
-"$cc" -std=c11 -O1 -g -fPIC -fsanitize=address,undefined -I build/t27 -I native -c native/core.c -o build/t27/core-test.o
-"$cc" -std=c11 -O1 -g -fPIC -pthread -fsanitize=address,undefined -I build/t27 -I native -c native/runtime.c -o build/t27/runtime-test.o
-"$cc" -std=c11 -O1 -g -fsanitize=address,undefined -I build/t27 -I native -c tests/native_experiments.c -o build/t27/experiments-test.o
-"$cxx" -fsanitize=address,undefined build/t27/experiments-test.o build/t27/core-test.o build/t27/runtime-test.o build/t27/platform-test.o build/t27/process-test.o build/t27/float-test.o build/t27/wasm_asset.o $crypto_flags -lm -pthread -o build/t27/test-experiments
+"$cc" -std=c11 -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -I build/t27 -I native -c native/core.c -o build/t27/core-test.o
+"$cc" -std=c11 -O1 -g -fPIC -pthread -fsanitize=address,undefined -fno-sanitize-recover=all -I build/t27 -I native -c native/runtime.c -o build/t27/runtime-test.o
+"$cc" -std=c11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -I build/t27 -I native -c tests/native_experiments.c -o build/t27/experiments-test.o
+"$cxx" -fsanitize=address,undefined -fno-sanitize-recover=all build/t27/experiments-test.o build/t27/core-test.o build/t27/runtime-test.o build/t27/platform-test.o build/t27/process-test.o build/t27/float-test.o build/t27/wasm_asset.o $crypto_flags -lm -pthread -o build/t27/test-experiments
 build/t27/test-experiments
 # A second generation must match byte-for-byte, without editing emitted C.
 mkdir -p build/t27/regenerated
