@@ -1,0 +1,302 @@
+{
+ "bitstream": {
+  "bytes": 9730800,
+  "file": "tms_trace_player_ax7203.bit",
+  "sha256": "5f4787793d007652dad520c2eec15be0577a4b99447451389385384304cc8c71"
+ },
+ "commit": "941c16c",
+ "fasm": {
+  "lines": 179269,
+  "sha256": "09c92f53955d76473eb77e2cfbf13caa404f56e0b7c111e782fefe693c90c3ec"
+ },
+ "files": {
+  "nextpnr.log": "c91687f6e1eb83604fda1026e10aededd5d055e7cb2b5b22d45a75473c6bf004",
+  "yosys.log": "4a4c3d594bad484db162563ff1ba21bebd2f174356a304517d5836bb2fadad5f",
+  "yosys_stat.txt": "d150c326ef367ba3331d9d17bcc49a4427df2a4ca4931c391b4f9300a0f0b7ab"
+ },
+ "flow": "make -C fpga/ax7203 bit with YOSYS and NEXTPNR native: yosys 0.69 synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -family xc7; nextpnr-xilinx 45a986b (openXC7, native arm64 build) --placer heap --seed 1 --router router1 --timing-allow-fail --freq 200; prjxray fasm2frames + xc7frames2bit (regymm/openxc7 image). nextpnr.log keeps the summary",
+ "nextpnr": {
+  "clocks": [
+   {
+    "clock": "clk",
+    "fmax_mhz": 57.36,
+    "target_mhz": 200.0,
+    "verdict": "FAIL"
+   },
+   {
+    "clock": "clk200",
+    "fmax_mhz": 950.57,
+    "target_mhz": 200.0,
+    "verdict": "PASS"
+   },
+   {
+    "clock": "clk",
+    "fmax_mhz": 57.75,
+    "target_mhz": 200.0,
+    "verdict": "FAIL"
+   },
+   {
+    "clock": "clk200",
+    "fmax_mhz": 1221.0,
+    "target_mhz": 200.0,
+    "verdict": "PASS"
+   }
+  ],
+  "routed": true,
+  "seed": null,
+  "utilisation": {
+   "BSCAN": {
+    "available": 4,
+    "used": 0
+   },
+   "BUFFER": {
+    "available": 82,
+    "used": 0
+   },
+   "BUFG": {
+    "available": 32,
+    "used": 0
+   },
+   "BUFGCTRL": {
+    "available": 32,
+    "used": 2
+   },
+   "BUFHCE": {
+    "available": 120,
+    "used": 0
+   },
+   "BUFIO": {
+    "available": 40,
+    "used": 0
+   },
+   "BUFR": {
+    "available": 40,
+    "used": 0
+   },
+   "CARRY4": {
+    "available": 33650,
+    "used": 0
+   },
+   "DCIRESET": {
+    "available": 1,
+    "used": 0
+   },
+   "DNA_PORT": {
+    "available": 1,
+    "used": 0
+   },
+   "DSP48E1": {
+    "available": 740,
+    "used": 0
+   },
+   "EFUSE_USR": {
+    "available": 1,
+    "used": 0
+   },
+   "FIFO18E1": {
+    "available": 365,
+    "used": 0
+   },
+   "FRAME_ECC": {
+    "available": 1,
+    "used": 0
+   },
+   "GTPE2_CHANNEL": {
+    "available": 16,
+    "used": 0
+   },
+   "GTPE2_COMMON": {
+    "available": 4,
+    "used": 0
+   },
+   "HARD0": {
+    "available": 3960,
+    "used": 0
+   },
+   "IBUFDS_GTE2": {
+    "available": 8,
+    "used": 0
+   },
+   "ICAP": {
+    "available": 2,
+    "used": 0
+   },
+   "IDELAYCTRL": {
+    "available": 10,
+    "used": 0
+   },
+   "IDELAYE2": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE2_IFF": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE3_IFF": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE3_ZHOLD_DELAY": {
+    "available": 500,
+    "used": 0
+   },
+   "INVERTER": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33M_INBUF_EN": {
+    "available": 240,
+    "used": 1
+   },
+   "IOB33M_OUTBUF": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33M_TERM_OVERRIDE": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_INBUF_EN": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_OUTBUF": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_TERM_OVERRIDE": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33_INBUF_EN": {
+    "available": 500,
+    "used": 2
+   },
+   "IOB33_OUTBUF": {
+    "available": 500,
+    "used": 5
+   },
+   "IOB33_TERM_OVERRIDE": {
+    "available": 500,
+    "used": 0
+   },
+   "ISERDESE2": {
+    "available": 500,
+    "used": 0
+   },
+   "MMCME2_ADV": {
+    "available": 10,
+    "used": 0
+   },
+   "OLOGICE2_MISR": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE2_OUTFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE2_TFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_MISR": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_OUTFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_TFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OSERDESE2": {
+    "available": 500,
+    "used": 0
+   },
+   "PAD": {
+    "available": 1062,
+    "used": 9
+   },
+   "PCIE_2_1": {
+    "available": 1,
+    "used": 0
+   },
+   "PLLE2_ADV": {
+    "available": 10,
+    "used": 0
+   },
+   "PSEUDO_GND": {
+    "available": 69165,
+    "used": 1
+   },
+   "PSEUDO_VCC": {
+    "available": 69165,
+    "used": 1
+   },
+   "PULL_OR_KEEP1": {
+    "available": 980,
+    "used": 0
+   },
+   "RAMB18E1": {
+    "available": 730,
+    "used": 0
+   },
+   "RAMB36E1": {
+    "available": 365,
+    "used": 0
+   },
+   "RAMBFIFO36E1": {
+    "available": 365,
+    "used": 0
+   },
+   "SELMUX2_1": {
+    "available": 102950,
+    "used": 0
+   },
+   "SLICE_FFX": {
+    "available": 269200,
+    "used": 3611
+   },
+   "SLICE_LUTX": {
+    "available": 269200,
+    "used": 7842
+   },
+   "STARTUP": {
+    "available": 1,
+    "used": 0
+   },
+   "USR_ACCESS": {
+    "available": 1,
+    "used": 0
+   }
+  },
+  "version": null
+ },
+ "part": "xc7a200tfbg484-2",
+ "schema": "trinity.fpga-build.v1",
+ "source": "local (Mac, 2026-09-22): the t27 trace player with the idle-only trigger",
+ "top": "tms_trace_player_ax7203",
+ "written_at": "2026-09-23T00:51:08+00:00",
+ "yosys": {
+  "by_type": {
+   "BUFG": 2,
+   "FDCE": 2327,
+   "FDPE": 15,
+   "FDRE": 1269,
+   "IBUF": 2,
+   "IBUFDS": 1,
+   "INV": 3,
+   "LUT2": 1962,
+   "LUT3": 1015,
+   "LUT4": 1462,
+   "LUT5": 2314,
+   "LUT6": 1086,
+   "OBUF": 5
+  },
+  "total": null
+ }
+}

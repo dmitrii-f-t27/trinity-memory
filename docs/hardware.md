@@ -275,7 +275,8 @@ Each run makes two passes over every trace vector (34 vectors: 18 dot, 9 storage
 A start is accepted only while the player is idle (since 2026-09-22): a trigger
 byte has up to five falling edges, and the player used to queue one of them
 behind the run it had just started, so one byte gave two runs
-(`reports/fpga/trigger-ab-2026-09-22.json`). The report is a stream of fixed 20-byte lines (`tag`, 8 hex digits, 10 hex
+(`reports/fpga/trigger-ab-2026-09-22.json`: the f07a667 player sends two runs
+after "r" or 0x55, the 941c16c player one). The report is a stream of fixed 20-byte lines (`tag`, 8 hex digits, 10 hex
 digits, LF): `H` format and totals, `V` vector start, `C` observed word per
 cycle, `E` device mismatches, six `K` counters (dot: beats accepted, results
 delivered, input stalls, output holds, error results delivered, reset cycles;
@@ -414,11 +415,17 @@ the three layouts), [`bram_trit_engine.t27`](../t27/rtl/bram_trit_engine.t27)
 the arrays become block RAM with yosys `read_verilog -nomem2reg`.
 
 ```sh
-make -C fpga/ax7203 bram-gen bram-sim     # t27 engines, Icarus run of the bench, host comparison
-make -C fpga/ax7203 bram-bit bram-flash   # open flow, SRAM configuration
-make -C fpga/ax7203 bram-capture PORT=/dev/cu.usbserial-110
-make -C fpga/ax7203 bram-ooc              # cells of each layout out of context
+make -C fpga/ax7203 bram-sim                     # all three layouts in Icarus, host comparison
+make -C fpga/ax7203 bram-sim BRAM_ONLY=2         # one layout (0 b2, 1 d5, 2 d5d2), as built for the device
+make -C fpga/ax7203 bram-bit bram-flash BRAM_ONLY=2        # open flow into build/fpga/bram-2, SRAM configuration
+make -C fpga/ax7203 bram-capture BRAM_ONLY=2 PORT=/dev/cu.usbserial-110
+make -C fpga/ax7203 bram-ooc                     # cells of each layout and of the codec, out of context
 ```
+
+The tools run in the `regymm/openxc7` image by default; `YOSYS='cd $(ROOT) && yosys'`
+and `NEXTPNR='cd $(ROOT) && <nextpnr-xilinx built for the host>'` run them natively
+(the builds below used a native build of the image's nextpnr-xilinx revision 45a986b,
+which routes in minutes where the emulated amd64 image took hours).
 
 **Mapping.** Each engine is written against 36-bit words, so the synthesis maps
 every layout the same way: `fpga/ax7203/brams_x36.txt` restricts yosys'
@@ -430,44 +437,53 @@ array deeper than 16 blocks sometimes got one block more than ceil(words/1024)
 (23 552 words -> 24, 46 080 -> 46, 56 320 -> 56), while every bank of up to 16
 blocks maps exactly.
 
-**Synthesis (2026-09-22, yosys 0.69, `make bram-ooc`: one engine with its
-encoder and decoder at a time).**
+**Synthesis (2026-09-22, commit 941c16c, yosys 0.69, `make bram-ooc`: one
+engine with its encoder and decoder at a time; the stats are in each
+`reports/fpga/build-2026-09-22-941c16c-bram-*` directory).**
 
 | Layout | RAMB36E1 | LUT | FF | Encoder LUT | Decoder LUT |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `b2` | 55 | 2 502 | 576 | 0 | 96 |
-| `d5` | 50 | 2 673 | 573 | 133 | 125 |
-| `d5d2` | 45 | 2 554 | 648 | 146 | 136 |
+| `b2` | 55 | 2 524 | 576 | 0 | 96 |
+| `d5` | 50 | 2 715 | 573 | 133 | 125 |
+| `d5d2` | 45 | 2 530 | 648 | 146 | 136 |
 
-The encoder and decoder columns are the codec synthesized alone; the `b2`
-decoder's LUTs count and clear invalid `11` lanes, the `b2` encoder is wiring.
-72 of the `d5d2` flip-flops hold its unused fourth bank (one word). The whole
-bench (three engines, sequencer, UART) synthesizes to 150 RAMB36E1, 8 959 LUTs
-and 2 188 flip-flops.
+The encoder and decoder columns are the codec synthesized alone
+(`codec_<layout>_<op>.stat`); the `b2` decoder's LUTs count and clear invalid
+`11` lanes, the `b2` encoder is wiring. 72 of the `d5d2` flip-flops hold its
+unused fourth bank (one word). LUT counts move by 1-2 % between syntheses of
+identical Verilog (yosys and ABC ordering); block counts do not. The whole bench with all three engines
+(`BRAM_ONLY=-1`, commit 375cf00) synthesizes to 150 RAMB36E1, 8 959 LUTs and
+2 188 flip-flops
+([`reports/fpga/build-2026-09-22-375cf00-bram-all`](../reports/fpga/README.md)).
 
 **Place and route, and the device (2026-09-22).** With all three engines in one
 bitstream (150 RAMB36E1, ~9k LUTs) nextpnr-xilinx did not finish routing
-(router1 still had ~12.5k of 64k arcs left after half an hour, router2 reported
-~27k overused wires in its first iteration), so each layout is built on its own
-(`BRAM_ONLY=0/1/2`, the same harness in every bitstream). Builds of commit
-e8fecf2 ([`reports/fpga/build-2026-09-22-e8fecf2-bram-*`](../reports/fpga/README.md):
+(router1 still had 12.6k of 64.4k arcs left after 35 minutes, router2 reported
+27.6k overused wires in its first iteration; `routing-attempts.txt` in the
+375cf00 directory), so each layout is built on its own (`BRAM_ONLY=0/1/2`, the
+same harness in every bitstream). Builds of commit 941c16c
+([`reports/fpga/build-2026-09-22-941c16c-bram-*`](../reports/fpga/README.md):
 yosys 0.69; nextpnr-xilinx 45a986b built natively, `heap` placer seed 1,
-`router2`; prjxray) and three captures per layout on the AX7203, identical
-except for the run number in the header
-([`reports/fpga/bram-capture-2026-09-22-e8fecf2-*`](../reports/fpga/README.md)):
+`router2`; prjxray) and four runs per layout on the AX7203
+([`reports/fpga/bram-capture-2026-09-22-941c16c-*`](../reports/fpga/README.md)):
+the run that starts at configuration, captured while flashing, writes into
+block RAM that configuration has just cleared, and three triggered runs; the
+four reports are identical except for the run number in the header.
 
 | Layout | RAMB36E1 placed | LUT | FF | Fmax estimate | Words written | Read ticks | Trits per read | Bad words | Invalid groups |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `b2` | 55 | 3 336 | 1 039 | 37.7 MHz | 56 320 | 56 321 | 18 | 0 | 0 |
-| `d5` | 50 | 3 563 | 1 036 | 31.9 MHz | 50 688 | 50 689 | 20 | 0 | 0 |
-| `d5d2` | 45 | 3 460 | 1 111 | 31.4 MHz | 46 080 | 46 081 | 22 | 0 | 0 |
+| `b2` | 55 | 3 319 | 1 038 | 38.8 MHz | 56 320 | 56 321 | 18 | 0 | 0 |
+| `d5` | 50 | 3 537 | 1 035 | 35.6 MHz | 50 688 | 50 689 | 20 | 0 | 0 |
+| `d5d2` | 45 | 3 448 | 1 110 | 29.8 MHz | 46 080 | 46 081 | 22 | 0 | 0 |
 
 LUTs and flip-flops include the harness every bitstream shares (UART, line
 emitter, sequencer, tick and reset). All three report +1 = 253 229,
 -1 = 253 385 and the dot product -674, the host model's values, after every
 stored word was read back and matched the regenerated stream lane by lane: the
 three bitstreams hold the same tensor, and every layout decodes on the device
-at one word per enabled clock.
+at one word per enabled clock. (Every run writes the same tensor to the same
+addresses, so a later run's write path is shown by the run at configuration,
+whose reads could only match if every write landed.)
 
 For this 1 013 760-trit tensor, dense5 bytes need 5 blocks fewer than two bits
 per trit (50 instead of 55, -9.1%) and dense5 with a dense2 nibble in the
