@@ -2,10 +2,14 @@
 
 Stage 1 of the roadmap (#27): decode the same real tensors from every public
 ternary weight-packing format and compare them trit for trit and scale for
-scale. All decoding, container parsing, ternarization and comparison run in
-executable t27 (`t27/formats.t27`); Python only fetches byte ranges and writes
-the report. Full data: [`reports/ternary-check/2026-09-22.json`](../reports/ternary-check/2026-09-22.json)
-and [`reports/ternary-check/bitnet-scales-2026-09-22.json`](../reports/ternary-check/bitnet-scales-2026-09-22.json).
+scale. The trits and scales in the Results table come from executable t27
+(`t27/formats.t27`); Python only fetches byte ranges and writes the report.
+The 210-tensor scale and trailer checks and the tie counts in items 2 and 3
+come from [`tools/bitnet_audit.py`](../tools/bitnet_audit.py), an independent
+standard-library cross-check that reproduces the t27 numbers. Full data:
+[`reports/ternary-check/2026-09-22.json`](../reports/ternary-check/2026-09-22.json),
+[`reports/ternary-check/bitnet-scales-2026-09-22.json`](../reports/ternary-check/bitnet-scales-2026-09-22.json)
+and [`reports/ternary-check/bitnet-audit-2026-09-23.json`](../reports/ternary-check/bitnet-audit-2026-09-23.json).
 
 ## Sources (pinned revisions)
 
@@ -19,7 +23,9 @@ and [`reports/ternary-check/bitnet-scales-2026-09-22.json`](../reports/ternary-c
 | prism-ml/Ternary-Bonsai-2-27B-mlx-2bit | `fcba37d2` | model.safetensors |
 
 Only headers and the tensors below were read, by HTTP range requests; the
-sha256 of every range is in `fixtures/manifest.lock.json`.
+sha256 of every range read by the t27 run is in `fixtures/manifest.lock.json`,
+and `tools/bitnet_audit.py` reads the remaining trailer ranges from the same
+pinned revisions.
 
 ## Results
 
@@ -50,8 +56,8 @@ Details:
    (0.609375 and 1.078125), and the packed file does not treat that value
    one way: in `q_proj` 79,719 of the 163,223 weights with it are ±1 and
    83,504 are 0 (48.8% ±1), in `down_proj` 101,673 of 1,009,468 (10.1%).
-   There `|w·s|` is 0.49996 and 0.49841, far from anything float32
-   reduction order could move across 0.5.
+   There `|w·s|` is 0.49996 and 0.49841, well beyond the rounding error of
+   a float32 mean.
    Weights with the same bf16 value get different trits, so no rule applied
    to the published bf16 values reproduces the packed trits. That fits
    ternarization from higher-precision weights before the bf16 export, which
@@ -59,23 +65,26 @@ Details:
    training and fine-tuning; its config sets `quantization_mode: online`, so
    loading it for inference in `transformers` uses these slightly different
    trits.
-3. **I2_S trailers are not zero.** Each I2_S tensor ends with a 32-byte
-   trailer: the f32 scale, then 28 bytes. In the published file those 28
-   bytes are nonzero in all 210 I2_S tensors (26 to 28 nonzero bytes each).
-   `quantize_to_i2_s` in `utils/convert-hf-to-gguf-bitnet.py` (at `0b341e58`)
-   writes zeros there; `quantize_i2_s` in `src/ggml-bitnet-mad.cpp`, which
-   `llama-quantize` uses, clears only the packed bytes and writes the scale,
-   leaving the other 28 bytes as they were, which may be how the published
-   bytes arose. The dequantizer never reads them, so inference is unaffected,
-   but the file cannot be reproduced byte for byte.
+3. **I2_S trailers carry leftover bytes.** Each I2_S tensor ends with a
+   32-byte trailer: the f32 scale, then 28 bytes. In the published file those
+   28 bytes are nonzero in all 210 I2_S tensors, and in all 210 they equal
+   the bytes an earlier, at least as large tensor in the file holds at the
+   same offset (`token_embd` or a tensor of the same layer). This is what a
+   reused output buffer leaves behind: bitnet.cpp's C `quantize_i2_s`, which
+   `llama-quantize` used when the GGUF was uploaded in April 2025, writes only
+   the packed bytes and the scale. `quantize_to_i2_s` in the Python converter
+   (`utils/convert-hf-to-gguf-bitnet.py` at `0b341e58`) writes zeros there, so
+   the two conversion paths give different bytes. The dequantizer does not
+   read them, so inference is unaffected.
 4. **Ternary Bonsai 2 is consistent across its four distributions.** For
    layer 0 `ffn_down`, PTQ1_0 (1.75 bits per weight), PQ2_0 (2.125), the
    group-64 Q2_0 file (2.25) and MLX 2-bit (2.25) hold the same trits and the
    same fp16 scales; the Q2_0 file repeats each 128-weight scale twice, and in
    all 696,320 MLX groups the bias equals minus the scale. All three GGUF
    files declare `prism.*` metadata: the runtime must apply the Hadamard
-   rotation, which stock llama.cpp does not, so a stock build reads valid
-   Q2_0 bytes into a model that produces wrong output.
+   rotation. A stock llama.cpp build would load the valid Q2_0 bytes and run
+   the model without the rotation; PrismML names that file
+   `prism-fork-required` and documents gibberish output. We did not run it.
 
 ## Limits
 
@@ -83,6 +92,7 @@ Details:
   or speed.
 - Two BitNet tensors and one Bonsai tensor were compared trit for trit;
   the BitNet scale and trailer checks cover all 210 ternary tensors.
+- No model was run; nothing here measures an effect on model output.
 - The pipeline that produced the published files was not available to us;
   item 2 reports what the data rule out, not how the files were made.
 
