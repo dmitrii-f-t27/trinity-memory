@@ -130,6 +130,13 @@ weight of the group the group's bias; MLX's reference quantizer (the fallback of
 `affine_quantize`) floors the scale magnitude at `eps = 1e-7` (`:5029`, `:5039-5040`) and
 does not write a zero scale.
 
+The real-layer product of issue #33 (`t27/matvec.t27`, prefix `tmv_`) reads decoded values
+and reuses these tokens: `code` when a weight lies outside {-1, 0, +1} (the +2 of 2-bit code 3
+that the decoders flag as `outside_ternary`; the product refuses it rather than computing with
+it), `length` for a shape, group or scale count that does not tile and for values beyond the
+exactness bound of its float step, `capacity`, `format` for an unknown scale kind and
+`scale_nonfinite`. Like the strict readers it validates everything before it writes.
+
 ### Silent output view
 
 Every negative vector (reject, flag or silent) carries `silent_output`: one entry per
