@@ -61,16 +61,30 @@ each flag class to its slot, `constants.silent` lists the cases no reader can de
 (see `specs/formats/OWNERS.md`), and `upstream` names the pinned commits. Byte strings
 are hex; `values_hex` holds one signed byte per weight. Every decode vector has
 `expect.status` (the reader's return: the count of weights outside {-1, 0, +1}, or a
-negative status); a vector with `error_class` is rejected with that status, one with
-`flag_class` decodes and reports that flag, one with `silent_class` decodes to the
-wrong weights without any signal and carries the `intended` input.
+negative status). A vector with `error_class` has `"kind": "reject"` and names the
+reader it exercises in `reader` (one of the kinds below, with that kind's fields); the
+strict reader must return exactly the class's status from `constants.errors` (in
+`expect.status`, `expect.check`, `expect.scale_status` or `expect.affine_status`) and
+write nothing. A vector with `flag_class` decodes and reports that flag; one with
+`silent_class` decodes to the wrong weights without any signal and carries the
+`intended` input: for a layout confusion the intended values that produce the same
+bytes, for a corruption the original `data_hex` and its values and scales (with the
+`source` of real bytes). Every
+reject, flag and silent vector carries `silent_output`, a list of upstream readers'
+views of the same bytes: `upstream` (a key of `specs/formats/upstream.lock.json`),
+`behaviour` (`decodes`, `rejects`, `not_applicable` or `unknown`), `cite` (pinned
+`path:line` ranges, or `UNKNOWN` where the code was not found at the pin), `note`, and,
+where an upstream decodes to values that can be stated exactly, `values_hex` with the
+raw `scale_words` or `scale_word`.
 
 | kind | fields | meaning |
 |---|---|---|
-| `block` | `format`, `count`, `data_hex`, `encode`, `expect` {`status`, `values_hex`, `scale_words`, `flags`}, optional `silent`, `intended`, `source` | block formats (TQ1_0, TQ2_0, Q2_0, Q1_0, PQ2_0, PTQ1_0); with `encode` the encoder must reproduce `data_hex` from the values and scale words; `silent` is what a reader that skips the scale check would output |
+| `block` | `format`, `count`, `data_hex`, `encode`, `expect` {`status`, `values_hex`, `scale_words`, `flags`}, optional `intended`, `source` | block formats (TQ1_0, TQ2_0, Q2_0, Q1_0, PQ2_0, PTQ1_0); with `encode` the encoder must reproduce `data_hex` from the values and scale words |
 | `block_encode` | `format`, `count`, `values_hex`, `scale_words`, `error_class`, `expect` | an encoder must refuse the codes and write nothing |
-| `gguf` | `gguf_hex`, `tensor`, `expect` {`find`, `ggml_type`, `prism`, `bitnet`, `offset`, `alignment`, `next_offset`, `check`} | a GGUF header: lookup, namespace markers and the type-id, alignment, row-length and extent rules |
+| `gguf` | `gguf_hex`, `tensor`, `file_size`, `expect` {`find`, `ggml_type`, `prism`, `bitnet`, `offset`, `alignment`, `data_start`, `has_next`, `next_offset`, `check`} | a GGUF header in a file of `file_size` bytes: lookup, namespace markers and the type-id, alignment, row-length and extent rules (overlap with another record, end of file) |
+| `safetensors` | `safetensors_hex`, `tensor`, `file_size`, `expect` {`find`, `dtype`, `shape`, `begin`, `end`, `dtype_bits`, `has_next`, `next_begin`, `check`} | a safetensors header in a file of `file_size` bytes: lookup, dtype width and the extent rules (numel × width, overlap, end of file) |
 | `i2s` / `i2s_encode` | `count`, `data_hex` (codes, f32 scale, 28-byte trailer) or `values_hex`, `scale_word` | bitnet.cpp I2_S in the x86 ACT_PARALLEL layout |
+| `reject` | `reader` plus that reader's fields, `error_class`, `silent_output` | the strict reader refuses the input with the class's status |
 | `hf_packed` / `hf_encode` | `rows`, `cols`, `data_hex` or `values_hex`, `scale_word`, `scale_kind` | transformers packed uint8 weights and `weight_scale`; `expect.scale_status` is the scale check |
 | `mlx` / `mlx_encode` | `rows`, `cols`, `group`, `data_hex` or `values_hex`, `scale_words`, `bias_words`, `scale_kind` | MLX 2-bit words; `expect.affine_status` is the scale and bias check |
 | `onnx` / `onnx_encode` | `n`, `k`, `block_size`, `data_hex` or `values_hex`, `zero_points_hex`, `scale_words`, `scale_kind` | ONNX Runtime MatMulNBits `bits=2`; `expect.scale_status` is the scale check |
