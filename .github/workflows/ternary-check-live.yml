@@ -5,6 +5,10 @@ name: Ternary Check Live
 # the t27 library built here (t27/formats.t27, t27/live.t27). The report is an
 # artifact; publishing it is issue #53 and #54. Nothing is posted anywhere.
 on:
+  push:
+    # Temporary: run the first full scan from the pull request's branch. Removed before merge.
+    branches: [feat/ternary-check-live]
+    paths: ['.github/workflows/ternary-check-live.yml']
   schedule:
     - cron: '41 5 * * 1'
   workflow_dispatch:
