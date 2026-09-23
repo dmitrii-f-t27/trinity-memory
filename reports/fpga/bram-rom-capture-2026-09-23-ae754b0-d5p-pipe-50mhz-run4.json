@@ -1,0 +1,119 @@
+{
+ "captured_at": "2026-09-23T17:16:15+00:00",
+ "clock_hz": 50000000.0,
+ "device_totals": {
+  "bad_words": 0,
+  "invalid_groups": 0
+ },
+ "engines": [
+  {
+   "device": {
+    "bad_words": 0,
+    "chk40": 1020612713596,
+    "dot": 4040,
+    "engine": 0,
+    "format": 3,
+    "invalid_groups": 0,
+    "lanes": 45,
+    "neg": 348525,
+    "pos": 349720,
+    "read_ticks": 45060,
+    "words": 45056,
+    "write_ticks": 0
+   },
+   "differences": {},
+   "engine": 0,
+   "expected": {
+    "bad_words": 0,
+    "chk40": 1020612713596,
+    "dot": 4040,
+    "format": 3,
+    "invalid_groups": 0,
+    "lanes": 45,
+    "neg": 348525,
+    "pos": 349720,
+    "read_ticks": 45060,
+    "words": 45056,
+    "write_ticks": 0
+   },
+   "format": 3,
+   "match": true,
+   "name": "d5p",
+   "physical_bits_per_trit": 1.6,
+   "ramb36_at_1k_x_36": 44,
+   "read_microseconds": 901.2,
+   "trits": 1013760,
+   "trits_per_read_tick": 22.498002663115845
+  }
+ ],
+ "engines_agree_on_trits": null,
+ "evidence": "fpga",
+ "expected_formats": [
+  3
+ ],
+ "label": "E2 BitNet q_proj rows 0-395, d5p read-only store (pairs), PIPE 1, 50 MHz: triggered run",
+ "manifest": {
+  "mode": "rom",
+  "rom": {
+   "source": {
+    "counts": {
+     "+1": 349720,
+     "-1": 348525,
+     "0": 315515
+    },
+    "gguf_tensor": "blk.0.attn_q.weight",
+    "i2s_mismatches": 0,
+    "model": "BitNet b1.58 2B4T",
+    "order": "row-major rows of the unpacked [rows, cols] matrix (Hugging Face unpack order)",
+    "rows": [
+     0,
+     396
+    ],
+    "schema": "trinity.bram-trits.v1",
+    "sha256": "1da0a68106eb716c7234ab2c6df82fbf739c02990e052dcfd0d97e1dccc6f09c",
+    "shape": [
+     2560,
+     2560
+    ],
+    "sources": {
+     "I2_S": {
+      "file": "ggml-model-i2_s.gguf",
+      "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+      "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+      "size": 1187801280
+     },
+     "hf_packed": {
+      "file": "model.safetensors",
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "size": 1178623988
+     }
+    },
+    "tensor": "model.layers.0.self_attn.q_proj.weight",
+    "trits": 1013760
+   },
+   "trits_file": "trits.bin",
+   "trits_sha256": "1da0a68106eb716c7234ab2c6df82fbf739c02990e052dcfd0d97e1dccc6f09c",
+   "trits_used": 1013760
+  },
+  "seed": null,
+  "sources": {
+   "t27/rtl/bram_trit_codec.t27": "5fe37d7f5bcd236545b8f5a68cc537056eee6b5d9365fa054f71f0bed2b7b683",
+   "t27/rtl/bram_trit_engine.t27": "29feb8baf5dcc0b8fc0a67109f6584eb37e5dd9eb0c14829e7e245f9023ccbb2",
+   "t27/rtl/bram_trit_rom.t27": "ff421ab5f338cf4509ba1df3cad8ab76c3ab45c0e95659c9667c1ee2d9477948",
+   "t27/rtl/fpga_bram_bench.t27": "c8243ef7a034a89cbe4371973aa2fa5bb47d4e7b8c398c7860acb2f1d69bd125",
+   "tools/bram_trit_model.py": "51a2bd58f2f67a0a62b7f554c947dbe8e5c336c26c4289d8e4e6709ae65fb27a",
+   "tools/generate-bram-bench.py": "229555f6754c0364c763dbc214c1239a7717e51bb104bccfd1eb15c33c97de20"
+  },
+  "trits": 1013760
+ },
+ "result": "PASS",
+ "run": 4,
+ "runs_in_capture": 1,
+ "schema": "trinity.fpga-bram-capture.v1",
+ "source": {
+  "baud": 115200,
+  "port": "/dev/cu.usbserial-110"
+ },
+ "unparsed_lines": 0
+}

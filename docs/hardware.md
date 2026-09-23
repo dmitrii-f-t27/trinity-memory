@@ -543,6 +543,19 @@ ranges (15 blocks per 16K-word bank; every block of bank 0 drives its four parit
 outputs and 14 have nonzero INITP). A writable memory cannot be packed that way, and
 d5d2 is still two blocks smaller.
 
+**Pairs of words: 45 trits in 72 bits (d5p, 2026-09-23).** Four parity bits hold two
+trits; eight hold five as one more dense5 byte. The store's `PAIR` mode (`BRAM_ONLY=3`, read-only
+store only) keeps 45 trits in a pair of 36-bit words: four dense5 bytes per word, decoded by
+the adapter's d5 decoder, and the two parity nibbles as one more dense5 byte (low nibble in the
+first word, high nibble in the second), which the store decodes into lanes 20-24 of the second
+word after keeping the first nibble in a register. That is the density of the 512 x 72 mode
+(1.600 bits per trit) in the 1K x 36 mode: the tensor needs 45 056 words, 44 RAMB36E1 (16 +
+16 + 12), the floor ceil(1 013 760 * log2(3) / 36 864) = 44. Builds of commit ae754b0: 3 529
+LUT, 881 FF, estimate 28.3 MHz at 25 MHz; with `PIPE 1` at 50 MHz 3 036 LUT, 1 356 FF,
+estimate 60.1 MHz. Four runs each on the AX7203 (25 and 50 MHz), all PASS and identical:
+45 057 and 45 060 read ticks, 0 bad words, 0 invalid groups, +1 349 720, -1 348 525, dot 4040
+([`reports/fpga/bram-rom-capture-2026-09-23-ae754b0-d5p*`](../reports/fpga/README.md)).
+
 **Clock.** The benches decode, check and accumulate a word in the tick after its read;
 the longest path runs through the per-word check built from LUT-only adders (`-nocarry`).
 Carry chains do not help in this flow: the d5d2 write-read bench without `-nocarry`
