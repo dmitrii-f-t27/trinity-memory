@@ -17,25 +17,20 @@ from . import formats as f
 SCHEMA = "trinity.ternary-check.v1"
 ROOT = Path(__file__).resolve().parent.parent
 
+# Revisions and file sizes come from fixtures/manifest.json.
 BITNET = {
-    "packed": fx.Remote("microsoft/bitnet-b1.58-2B-4T", "04c3b9ad9361b824064a1f25ea60a8be9599b127",
-                        "model.safetensors", 1178623988),
-    "bf16": fx.Remote("microsoft/bitnet-b1.58-2B-4T-bf16", "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
-                      "model.safetensors", 4825679400),
-    "gguf": fx.Remote("microsoft/bitnet-b1.58-2B-4T-gguf", "a1f2f1c765812aa8af3f6eda4a313707064bba15",
-                      "ggml-model-i2_s.gguf", 1187801280),
+    "packed": fx.remote("microsoft/bitnet-b1.58-2B-4T", "model.safetensors"),
+    "bf16": fx.remote("microsoft/bitnet-b1.58-2B-4T-bf16", "model.safetensors"),
+    "gguf": fx.remote("microsoft/bitnet-b1.58-2B-4T-gguf", "ggml-model-i2_s.gguf"),
 }
 BITNET_TENSORS = [("model.layers.0.self_attn.q_proj.weight", "blk.0.attn_q.weight"),
                   ("model.layers.0.mlp.down_proj.weight", "blk.0.ffn_down.weight")]
 
-BONSAI_GGUF = "prism-ml/Ternary-Bonsai-2-27B-gguf", "6ed5e12bf84b7a63069882c91dd9e9218647d17b"
 BONSAI = {
-    "PTQ1_0": fx.Remote(*BONSAI_GGUF, "Ternary-Bonsai-2-27B-PTQ1_0.gguf", 5946648928),
-    "PQ2_0": fx.Remote(*BONSAI_GGUF, "Ternary-Bonsai-2-27B-PQ2_0.gguf", 7206168928),
-    "Q2_0": fx.Remote("prism-ml/Ternary-Bonsai-2-27B-gguf-dev", "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
-                      "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf", 7626008928),
-    "mlx": fx.Remote("prism-ml/Ternary-Bonsai-2-27B-mlx-2bit", "fcba37d2117a7077eac6b613b2668d14d9779edd",
-                     "model.safetensors", 8595477990),
+    "PTQ1_0": fx.remote("prism-ml/Ternary-Bonsai-2-27B-gguf", "Ternary-Bonsai-2-27B-PTQ1_0.gguf"),
+    "PQ2_0": fx.remote("prism-ml/Ternary-Bonsai-2-27B-gguf", "Ternary-Bonsai-2-27B-PQ2_0.gguf"),
+    "Q2_0": fx.remote("prism-ml/Ternary-Bonsai-2-27B-gguf-dev", "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf"),
+    "mlx": fx.remote("prism-ml/Ternary-Bonsai-2-27B-mlx-2bit", "model.safetensors"),
 }
 BONSAI_TENSORS = [("blk.0.ffn_down.weight", "language_model.model.layers.0.mlp.down_proj")]
 

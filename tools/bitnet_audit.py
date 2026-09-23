@@ -4,8 +4,8 @@
 Python standard library only; no t27 build needed. It is an independent
 check for third parties, not the product decoder (that is t27/formats.t27).
 It reads file headers and small byte ranges of the three pinned Hugging Face
-files over HTTP range requests (about 60 MB, mostly the two layer-0 bf16
-tensors) and prints a JSON summary:
+files (about 71 MB of manifest ranges, mostly the two layer-0 bf16 tensors) and
+prints a JSON summary:
 
   scales    all ternary tensors: packed bf16 weight_scale vs the f32 scale after
             each I2_S tensor, and whether the bf16 value is the f32 value
@@ -17,9 +17,12 @@ tensors) and prints a JSON summary:
             for layer 0 q_proj and down_proj, and how the packed file treats
             the weights whose |w| is exactly 0.5 * weight_scale.
 
-Usage: python3 tools/bitnet_audit.py [--cache build/fixtures] > audit.json
-With --cache, byte ranges already fetched by trinity_memory.fixtures are
-read from disk instead of the network.
+Usage: python3 tools/bitnet_audit.py [--cache build/fixtures] [--offline] > audit.json
+Every range it reads lies inside a range of fixtures/manifest.json and goes
+through trinity_memory.fixtures: fetched with an HTTP range request when it is
+not cached, sha256-checked against the manifest on every read, and cached
+under --cache (default build/fixtures). Revisions come from the manifest.
+With --offline nothing is fetched (run tools/fetch-fixtures.py first).
 """
 from __future__ import annotations
 import argparse
@@ -28,12 +31,15 @@ import json
 from pathlib import Path
 import statistics
 import struct
-import urllib.request
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from trinity_memory import fixtures  # noqa: E402  (I/O only; loads no t27 library)
 
 FILES = {
-    "packed": ("microsoft/bitnet-b1.58-2B-4T", "04c3b9ad9361b824064a1f25ea60a8be9599b127", "model.safetensors"),
-    "bf16": ("microsoft/bitnet-b1.58-2B-4T-bf16", "276681394656abdadb8e80e5b2c3db5e5d7fcaff", "model.safetensors"),
-    "gguf": ("microsoft/bitnet-b1.58-2B-4T-gguf", "a1f2f1c765812aa8af3f6eda4a313707064bba15", "ggml-model-i2_s.gguf"),
+    "packed": ("microsoft/bitnet-b1.58-2B-4T", "model.safetensors"),
+    "bf16": ("microsoft/bitnet-b1.58-2B-4T-bf16", "model.safetensors"),
+    "gguf": ("microsoft/bitnet-b1.58-2B-4T-gguf", "ggml-model-i2_s.gguf"),
 }
 GGUF_TO_HF = {"attn_q": "self_attn.q_proj", "attn_k": "self_attn.k_proj", "attn_v": "self_attn.v_proj",
               "attn_output": "self_attn.o_proj", "ffn_gate": "mlp.gate_proj", "ffn_up": "mlp.up_proj",
@@ -41,29 +47,14 @@ GGUF_TO_HF = {"attn_q": "self_attn.q_proj", "attn_k": "self_attn.k_proj", "attn_
 
 
 class Source:
-    def __init__(self, key, cache):
-        self.repo, self.revision, self.filename = FILES[key]
-        self.url = f"https://huggingface.co/{self.repo}/resolve/{self.revision}/{self.filename}"
-        self.cache = cache and Path(cache) / self.repo.replace("/", "--") / self.revision / self.filename
+    """One pinned file; reads go through the sha256-checked fixtures cache."""
+
+    def __init__(self, key, cache=None, offline=None):
+        self.remote = fixtures.remote(*FILES[key], cache=cache, offline=offline)
+        self.repo, self.revision, self.filename = self.remote.repo, self.remote.revision, self.remote.filename
 
     def read(self, begin, end):
-        if self.cache and self.cache.is_dir():
-            prefix = self.cache / "prefix.bin"
-            if prefix.is_file() and prefix.stat().st_size >= end:
-                with open(prefix, "rb") as handle:
-                    handle.seek(begin)
-                    return handle.read(end - begin)
-            for path in self.cache.glob("*-*.bin"):
-                low, high = (int(x) for x in path.stem.split("-"))
-                if low <= begin and end <= high:
-                    with open(path, "rb") as handle:
-                        handle.seek(begin - low)
-                        return handle.read(end - begin)
-        request = urllib.request.Request(self.url, headers={"Range": f"bytes={begin}-{end - 1}"})
-        with urllib.request.urlopen(request, timeout=120) as response:
-            data = response.read()
-        assert len(data) == end - begin, (self.url, begin, end, len(data))
-        return data
+        return self.remote.read_within(begin, end)
 
 
 def safetensors_header(src):
@@ -211,12 +202,14 @@ def layer0(packed_header, bf16_header, packed, master, name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--cache", help="directory of ranges cached by trinity_memory.fixtures")
+    parser.add_argument("--cache", help="fixtures cache directory (default build/fixtures)")
+    parser.add_argument("--offline", action="store_true", default=None, help="read the cache only, never fetch")
     args = parser.parse_args()
-    packed, master, gguf = (Source(k, args.cache) for k in ("packed", "bf16", "gguf"))
+    packed, master, gguf = (Source(k, args.cache, args.offline) for k in ("packed", "bf16", "gguf"))
     packed_header, bf16_header = safetensors_header(packed), safetensors_header(master)
     gguf_records = gguf_tensors(gguf)
-    report = {"sources": {k: dict(zip(("repo", "revision", "file"), v)) for k, v in FILES.items()},
+    report = {"sources": {k: {"repo": s.repo, "revision": s.revision, "file": s.filename}
+                          for k, s in zip(("packed", "bf16", "gguf"), (packed, master, gguf))},
               "scales": scales_and_trailers(packed_header, gguf_records, gguf, packed),
               "layer0": [layer0(packed_header, bf16_header, packed, master, n)
                          for n in ("model.layers.0.self_attn.q_proj.weight", "model.layers.0.mlp.down_proj.weight")]}
