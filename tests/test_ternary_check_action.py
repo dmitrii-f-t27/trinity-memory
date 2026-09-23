@@ -24,8 +24,12 @@ ROOT = Path(__file__).resolve().parents[1]
 ACTION = ROOT / "ternary-check"
 LIBRARY = ROOT / "build" / "t27" / ("libtrinity_memory_t27.dylib" if sys.platform == "darwin"
                                     else "libtrinity_memory_t27.so")
-HOST = {("Darwin", "arm64"): ("macOS", "ARM64", "macosx_13_0_arm64"),
+HOST = {("Darwin", "arm64"): ("macOS", "ARM64", "macosx_14_0_arm64"),
         ("Linux", "x86_64"): ("Linux", "X64", "linux_x86_64")}.get((platform.system(), platform.machine()))
+
+
+def version_of_checkout() -> str:
+    return re.search(r'^version = "([^"]+)"$', (ROOT / "pyproject.toml").read_text(encoding="utf-8"), re.M).group(1)
 
 
 def environment(tmp: Path, **extra):
@@ -96,7 +100,8 @@ class Runtime(unittest.TestCase):
             digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()  # noqa: E731
             (release / "SHA256SUMS").write_text(f"{digest(wheel)}  {wheel.name}\n{digest(other)}  {other.name}\n",
                                                 encoding="utf-8")
-            env = environment(tmp, RUNTIME="release", VERSION="9.9.9", RELEASE_URL=(tmp / "releases").as_uri(),
+            env = environment(tmp, RUNTIME="release", TERNARY_CHECK_RELEASE_VERSION="9.9.9",
+                              RELEASE_URL=(tmp / "releases").as_uri(),
                               RUNNER_OS=runner_os, RUNNER_ARCH=runner_arch)
             result = bash("resolve-runtime.sh", env)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -122,9 +127,19 @@ class Runtime(unittest.TestCase):
             result = bash("resolve-runtime.sh", dict(env, RUNNER_OS="Windows", RUNNER_ARCH="X64"))
             self.assertEqual(result.returncode, 1)
             self.assertIn("Linux x86_64 and macOS arm64 only", result.stderr)
-            result = bash("resolve-runtime.sh", dict(env, VERSION="9.9.8"))
+            result = bash("resolve-runtime.sh", dict(env, TERNARY_CHECK_RELEASE_VERSION="9.9.8"))
             self.assertEqual(result.returncode, 1)
             self.assertIn("cannot download", result.stderr)
+            # A plain VERSION in the caller's environment does not redirect the release.
+            ambient = {key: value for key, value in env.items() if key != "TERNARY_CHECK_RELEASE_VERSION"}
+            result = bash("resolve-runtime.sh", dict(ambient, VERSION="9.9.8"))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(f"releases/v{version_of_checkout()}/SHA256SUMS", result.stderr)
+            if runner_os == "macOS":
+                # The tag's major macOS version is the oldest the wheel loads on.
+                result = bash("resolve-runtime.sh", dict(env, TERNARY_CHECK_MACOS_VERSION="13.6"))
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("needs macOS 14 or later; this runner has macOS 13.6", result.stderr)
 
 
 @unittest.skipUnless(LIBRARY.is_file(), "build the native library first: tools/build-t27.sh")

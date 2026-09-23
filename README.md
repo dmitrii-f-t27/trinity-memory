@@ -5,7 +5,7 @@
 
 **Ternary memory stack: Bridge, TensorPack, Stream Compute, Conformance Lab and Edge Demo.**
 
-**Version 0.4 adds [t27 Ternary Check](#t27-ternary-check-v04)**, a bit-exact
+**Version 0.4 adds [t27 Ternary Check](#t27-ternary-check-v04)**, an exact
 compatibility check of the public ternary weight formats ([changelog](CHANGELOG.md)).
 **Since version 0.3 the stack is implemented in executable t27:** codecs, containers,
 JSON/HTTP Bridge, compute, experiments, reports and CLI live in [`t27/`](t27/).
@@ -44,9 +44,16 @@ unmeasured.
 
 Ternary Check answers one question for the public ternary weight-packing
 formats: **do two files, or a file and a decoder, hold the same trits and the
-same scales, bit for bit?** Every decision is made by executable t27
+same scale values, exactly?** Between files, scales are compared as values (an
+f16 and a bf16 word of the same number are equal); against a decoder, the
+Action compares the scale words as stored, bit for bit. Every verdict of the
+matrix and of the Action is made by executable t27
 ([`t27/formats.t27`](t27/formats.t27), [`t27/matrix.t27`](t27/matrix.t27),
 [`t27/ternary_contract.t27`](t27/ternary_contract.t27)); Python only moves bytes.
+The scale and trailer checks over all 210 BitNet ternary tensors (findings 1
+and 3) come from [`tools/bitnet_audit.py`](tools/bitnet_audit.py), a
+standard-library Python cross-check whose committed report the CI job
+`fixtures` replays.
 It covers llama.cpp TQ1_0, TQ2_0, Q2_0 and Q1_0, the PrismML fork's PQ2_0 and
 PTQ1_0, bitnet.cpp I2_S, transformers BitNet packed `uint8`, MLX 2-bit and
 ONNX Runtime `MatMulNBits` with `bits=2`, against byte-level contracts in
@@ -98,9 +105,9 @@ dequantizes to the same value. Every mismatch has a reproduction in
    for 79,719 weights of layer-0 `q_proj` (1.22%) and 101,673 of `down_proj`
    (0.57%), all at the bf16 value `0.5 × weight_scale`, where the packed file
    stores both ±1 and 0 ([details](docs/ternary-check.md#results)).
-3. I2_S trailers carry leftover bytes: after the f32 scale, 28 nonzero bytes in
-   all 210 I2_S tensors, equal to the bytes an earlier tensor holds at the same
-   offset (a reused buffer); the dequantizer does not read them, so inference
+3. I2_S trailers carry leftover bytes: after the f32 scale, 28 bytes that are
+   not all zero in all 210 I2_S tensors, equal to the bytes an earlier tensor
+   holds at the same offset (a reused buffer); the dequantizer does not read them, so inference
    is unaffected ([details](docs/ternary-check.md#results)).
 4. Ternary Bonsai 2 is consistent across its four distributions: PTQ1_0, PQ2_0,
    Q2_0 (group 64) and MLX 2-bit hold the same trits and fp16 scales for layer
@@ -108,7 +115,9 @@ dequantizes to the same value. Every mismatch has a reproduction in
    the runtime must apply
    ([details](docs/ternary-check.md#results)).
 
-Storage and integer arithmetic only: three tensors, no model was run.
+Storage and integer arithmetic only: three tensors compared trit for trit (the
+BitNet scale and trailer checks cover all 210 ternary tensors), no model was
+run.
 
 **One command** from a clean clone reproduces the reports byte for byte (it
 fetches the pinned fixture ranges, 205.8 MiB, and builds the pinned t27
@@ -132,6 +141,11 @@ any mismatch, wrong refusal or silent acceptance fails the step:
     decoder: ./build/my-decoder   # the contract arguments are appended
     formats: TQ1_0,TQ2_0          # optional: only the formats you implement
 ```
+
+By default (`runtime: release`) the Action runs from the release wheel, so the
+runner must be Linux x86_64, or macOS arm64 with macOS 14 or later; elsewhere,
+build from source and set `runtime` to the checkout
+([runtime](ternary-check/README.md#runtime)).
 
 The weekly workflow (badge above) checks that the pinned upstream files and
 model files have not changed and reruns every vector.

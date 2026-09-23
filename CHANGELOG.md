@@ -1,9 +1,12 @@
 # Changelog
 
-All notable changes to this project are recorded here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html) (pre-1.0: a minor
-version may change interfaces). Entries name the pull requests that made them.
+All notable changes to this project are recorded here. The format is loosely
+based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) (dated
+versions, compare links; the sections are grouped by topic), and versions
+follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html) (pre-1.0: a
+minor version may change interfaces). Most entries name the pull requests
+that made them; 0.2.0 was made by direct commits, and the README and Release
+entries of 0.4.0 come from the release pull request itself.
 
 ## [0.4.0] - 2026-09-23
 
@@ -31,8 +34,10 @@ device work merged after v0.3.0.
   layer 0. Reports [`reports/ternary-check.json`](reports/ternary-check.json)
   (schema `trinity.ternary-check.v1`) and
   [`reports/ternary-check.html`](reports/ternary-check.html); one command,
-  `make ternary-check`, and `make ternary-check-verify`, which the CI job
-  `ternary-check` runs on a clean checkout
+  `make ternary-check` (the CI job `ternary-check` runs it on a clean checkout
+  and fails unless the committed reports come out unchanged), and
+  `make ternary-check-verify`, which recomputes the reports and compares them
+  with the committed ones
   ([#45](https://github.com/dmitrii-f-t27/trinity-memory/pull/45), closes #32 and #33).
 - CLI contract v1 ([`ternary-check/CONTRACT.md`](ternary-check/CONTRACT.md)),
   verdicts in `t27/ternary_contract.t27`, the runner
@@ -43,7 +48,8 @@ device work merged after v0.3.0.
   with the reference decoder (must pass) and a deliberately wrong decoder
   (must fail). Weekly workflow `ternary-check-weekly.yml`:
   `tools/upstream-drift.py` compares the pinned upstream files and model files
-  with their upstream heads and reruns every vector
+  with their upstream heads, and the workflow rebuilds the t27 decoders and
+  reruns every vector through the Action with the reference decoder
   ([#46](https://github.com/dmitrii-f-t27/trinity-memory/pull/46)).
 
 ### Format specifications and vectors
@@ -134,11 +140,23 @@ device work merged after v0.3.0.
 
 - Version 0.4.0. The wheel manifest takes its version from `pyproject.toml`.
   The source distribution now also carries this changelog, the license files,
-  the JSON schemas, the Ternary Check reports and the Action.
+  the JSON schemas, the Ternary Check reports, the Action, and the files the
+  test suite reads (the workflows under `.github/workflows/` and
+  `reports/t27/edge.json`).
 - `tools/build-release-assets.py` builds and checks the release assets
-  (macOS arm64 wheel with a deployment target of 13.3, source distribution,
-  reports, `validation.json`, `SHA256SUMS`) from a clean tree at a given
-  commit and the Linux wheel built by CI.
+  (macOS arm64 wheel, source distribution, reports, `validation.json`,
+  `SHA256SUMS`) from a clean tree at a given commit and the Linux wheel built
+  by CI. The macOS wheel is built for macOS 14.0 (tag `macosx_14_0_arm64`):
+  the native code needs macOS 13.3, which a wheel tag cannot state, and the
+  tool refuses a tag below any binary's minimum. The CI evidence must be a
+  push run of `ci.yml` on the commit with every job successful; with the
+  run's artifact list and artifact zip, the Linux wheel is tied to that run
+  by the artifact's digest. The unittest gate runs last, with
+  `TRINITY_REQUIRE_CACHED=1`, and the gate logs are kept.
+- The Action's `runtime: release` takes its version only from its own ref (a
+  `VERSION` variable in the calling workflow no longer redirects it) and on
+  macOS stops with a clear error when the runner is older than the wheel's
+  tag.
 - Workflow `ternary-check-release-smoke.yml`: after a release is published,
   the Action with `runtime: release` on ubuntu-latest, macos-14 and macos-15.
 

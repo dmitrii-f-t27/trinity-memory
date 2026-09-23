@@ -2,8 +2,9 @@
 """Build and check the release assets of one commit (issue #36). I/O only.
 
   python3 tools/build-release-assets.py --commit SHA --linux-wheel PATH \\
-      (--ci-run-json FILE | --no-ci) [--out DIR] [--deployment-target 13.3] \\
-      [--gates] [--skip-sdist-rebuild] [--python PY]
+      (--ci-run-json FILE [--ci-artifacts-json FILE --linux-artifact-zip ZIP] | --no-ci) \\
+      [--out DIR] [--logs DIR] [--deployment-target 14.0] [--gates] \\
+      [--skip-sdist-rebuild] [--python PY]
 
 Run it on macOS arm64 from a checkout of this repository at SHA, with T27_ROOT
 set to a checkout of gHashTag/t27 at native/compiler.lock, and a Python that
@@ -17,19 +18,35 @@ build isolation and without an index, so nothing is downloaded).
    native-python-3.12 of .github/workflows/ci.yml). Checked: the name matches
    what ternary-check/resolve-runtime.sh looks for, the dist-info version, the
    native manifest (schema, version, compiler pin, every file's sha256), ELF
-   x86-64 binaries, and every trinity_memory/*.py equal to this commit's.
+   x86-64 binaries, every trinity_memory/*.py equal to this commit's, and no
+   other file under trinity_memory/ than those modules and the manifest's.
    --ci-run-json (from `gh run view RUN --json ...`, see below) must describe
-   a completed, successful run of that same commit, every job successful.
-3. With --gates: runs the four gates (sh tools/test-t27.sh; python -m unittest
-   discover -s tests; sh tools/check-specs.sh; sh tools/fetch-upstream.sh then
-   OFFLINE=1 make ternary-check-verify) and records their exit status.
-4. macOS wheel: MACOSX_DEPLOYMENT_TARGET (default 13.3: native/float.cpp
-   needs std::to_chars, available from macOS 13.3, and GitHub's macos-14 and
-   macos-15 runners are newer) for sh tools/build-t27.sh and pip wheel. Every
-   Mach-O file in the wheel must be arm64 with minos (otool -l:
-   LC_BUILD_VERSION or LC_VERSION_MIN_MACOSX) at or below the target, the
-   wheel's platform tag too; the same package checks as the Linux wheel; then
-   tests/native/test_installed_wheel.py --rtl installs it outside the checkout.
+   a completed, successful push run of ci.yml ("Executable t27 stack") on that
+   same commit with exactly the jobs in CI_JOBS, every one successful.
+   With --ci-artifacts-json (`gh api repos/REPO/actions/runs/RUN/artifacts`)
+   and --linux-artifact-zip (`gh api repos/REPO/actions/artifacts/ID/zip`),
+   the zip's sha256 must be the digest GitHub lists for native-python-3.12 of
+   that run, and PATH must be the wheel inside it, byte for byte; only then
+   does validation.json record the wheel as that run's artifact.
+3. With --gates: runs the four gates (sh tools/test-t27.sh; sh
+   tools/check-specs.sh; sh tools/fetch-upstream.sh then OFFLINE=1 make
+   ternary-check-verify, which also writes build/upstream/matrix; last python
+   -m unittest discover -s tests -v with TRINITY_REQUIRE_CACHED=1, so a missing
+   cache fails instead of skipping) and records their exit status; for the
+   unittest gate also the tests run and every skipped test with its reason.
+   The gate logs are kept in --logs (default: next to the output directory,
+   "<out>-logs"), outside the assets.
+4. macOS wheel: MACOSX_DEPLOYMENT_TARGET (default 14.0: native/float.cpp
+   needs std::to_chars, available from macOS 13.3, and a wheel tag carries only
+   the major macOS version from 11 on, so 13.3 would be tagged macosx_13_0 and
+   pip on 13.0-13.2 would install a wheel that cannot load; GitHub's macos-14
+   runner is the oldest the release smoke test uses) for sh tools/build-t27.sh
+   and pip wheel. Every Mach-O file in the wheel must be arm64 with minos
+   (otool -l: LC_BUILD_VERSION or LC_VERSION_MIN_MACOSX) at or below the
+   target; the wheel's platform tag must be at or below the target and at or
+   above every minos, so the tag states the real minimum; the same package
+   checks as the Linux wheel; then tests/native/test_installed_wheel.py --rtl
+   installs it outside the checkout.
 5. sdist through the setuptools PEP 517 backend. Every tracked file under the
    release paths (CHANGELOG.md, LICENSE, NOTICE, fixtures/, schemas/, specs/,
    conformance/, ternary-check/, the Ternary Check reports, t27/, native/,
@@ -73,12 +90,19 @@ MACOS_TAG = re.compile(r"-py3-none-macosx_(\d+)_(\d+)_arm64\.whl$")
 NATIVE = {"linux": ("libtrinity_memory_t27.so", "trinity-memory-t27"),
           "macos": ("libtrinity_memory_t27.dylib", "trinity-memory-t27")}
 RUNTIME_FILES = ("codecs.wasm", "formats.wasm", "compiler.revision", "compiler.sha256")
+DEFAULT_TARGET = "14.0"
+# The CI run that vouches for the commit: ci.yml on push, with exactly these jobs.
+CI_WORKFLOW = "Executable t27 stack"
+CI_JOBS = frozenset({"spec", "native", "fixtures", "ternary-check", "upstream-15193 (ubuntu-latest)",
+                     "upstream-15193 (macos-15)", "python (3.10)", "python (3.12)", "python (3.14)", "sdk",
+                     "ternary-check-action (ubuntu-latest)", "ternary-check-action (macos-15)"})
+LINUX_ARTIFACT = "native-python-3.12"
 # Tracked paths the source distribution must carry byte for byte.
 SDIST_PATHS = ("CHANGELOG.md", "LICENSE", "NOTICE", "README.md", "README.ru.md", "MANIFEST.in", "Makefile",
                "pyproject.toml", "setup.py", "fixtures/", "schemas/", "specs/", "conformance/", "ternary-check/",
-               "reports/ternary-check.json", "reports/ternary-check.html", "reports/ternary-check/", "t27/",
-               "native/", "tools/", "tests/", "trinity_memory/", "rtl/", "scripts/", "docs/", "examples/",
-               ".trinity/")
+               "reports/ternary-check.json", "reports/ternary-check.html", "reports/ternary-check/",
+               "reports/t27/edge.json", "t27/", "native/", "tools/", "tests/", "trinity_memory/", "rtl/",
+               "scripts/", "docs/", "examples/", ".trinity/", ".github/workflows/")
 REPORTS = ("reports/ternary-check.json", "reports/ternary-check.html")
 MACHO_MAGIC = {b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}
 
@@ -205,6 +229,14 @@ def check_wheel(wheel: Path, root: Path, version: str, pin: str, kind: str) -> d
         if packaged != sources:
             raise ReleaseError(f"{wheel.name}: Python modules differ from this commit: "
                                f"missing {sorted(sources - packaged)}, extra {sorted(packaged - sources)}")
+        # Nothing else may ride along (a stale build/lib* directory, say): every member is a module
+        # of this commit, a file of the native manifest, the manifest itself or dist-info.
+        allowed = sources | {runtime + "manifest.json"} | {runtime + name for name in files}
+        stray = sorted(name for name in names if not name.endswith("/") and name not in allowed
+                       and not name.startswith(dist_info))
+        if stray:
+            raise ReleaseError(f"{wheel.name}: files that are neither this commit's modules nor in the native "
+                               f"manifest: {stray[:20]}")
         for name in sorted(sources):
             if archive.read(name) != (root / name).read_bytes():
                 raise ReleaseError(f"{wheel.name}: {name} differs from this commit")
@@ -263,8 +295,14 @@ def check_macho(tree: Path, target: str) -> list[dict]:
     return facts
 
 
+def stale_build_dirs(root: Path) -> list[Path]:
+    """What an earlier build left for setuptools to reuse: build/lib* (this platform distribution
+    builds in build/lib.<platform>-<impl>, not build/lib) and build/bdist.*."""
+    return sorted([*root.glob("build/lib*"), *root.glob("build/bdist.*")])
+
+
 def build_macos_wheel(root: Path, work: Path, python: str, env: dict, target: str) -> Path:
-    for stale in [root / "build/lib", *root.glob("build/bdist.*")]:
+    for stale in stale_build_dirs(root):
         shutil.rmtree(stale, ignore_errors=True)
     run(["sh", "tools/build-t27.sh"], cwd=root, env=env, log_path=work / "build-t27-macos.log")
     wheels = work / "macos-wheel"
@@ -280,6 +318,24 @@ def build_macos_wheel(root: Path, work: Path, python: str, env: dict, target: st
     if (int(match.group(1)), int(match.group(2))) > version_tuple(target)[:2]:
         raise ReleaseError(f"{built[0].name}: platform tag above the deployment target {target}")
     return built[0]
+
+
+def check_tag_covers_minos(wheel_name: str, facts: list[dict]) -> str:
+    """The platform tag must not promise an older macOS than the binaries need.
+
+    pip installs a macosx_M_N wheel on macOS M.N and later; from macOS 11 on a
+    tag carries only the major version, so a minos of 13.3 is tagged 13_0 and
+    the wheel would install, then fail to load, on 13.0-13.2."""
+    match = MACOS_TAG.search(wheel_name)
+    if not match:
+        raise ReleaseError(f"{wheel_name} is not a macOS arm64 wheel")
+    tag = (int(match.group(1)), int(match.group(2)))
+    highest = max((version_tuple(v) for fact in facts for v in fact["minos"]), default=(0,))
+    if tag < highest:
+        raise ReleaseError(f"{wheel_name}: the tag says macOS {tag[0]}.{tag[1]}, but a binary needs "
+                           f"{'.'.join(map(str, highest))}; use a deployment target whose minor version is 0, "
+                           f"such as {highest[0] + 1}.0")
+    return f"{tag[0]}.{tag[1]}"
 
 
 def installed_wheel_test(root: Path, wheel: Path, python: str, env: dict, output: Path) -> dict:
@@ -352,18 +408,42 @@ def rebuild_from_sdist(root: Path, sdist: Path, python: str, env: dict, work: Pa
 
 # 3. Gates, CI -----------------------------------------------------------------
 
-def run_gates(root: Path, python: str, env: dict, work: Path) -> list[dict]:
+UNITTEST_GATE = "TRINITY_REQUIRE_CACHED=1 python -m unittest discover -s tests -v"
+
+
+def unittest_counts(text: str) -> dict:
+    """Tests run and skipped (with reasons) from the output of `python -m unittest -v`."""
+    ran = re.findall(r"^Ran (\d+) tests? in ", text, re.M)
+    verdict = re.findall(r"^(OK|FAILED)(?: \((.*)\))?$", text, re.M)
+    if not ran or not verdict:
+        raise ReleaseError("the unittest log has no 'Ran N tests' and OK/FAILED lines")
+    extra = dict(item.split("=", 1) for item in (verdict[-1][1] or "").split(", ") if "=" in item)
+    skipped = [{"test": test, "reason": reason} for test, reason in
+               re.findall(r"^(\S+ \(\S+\))(?:\n.*?)? \.\.\. skipped '(.*)'$", text, re.M)]
+    # "skipped" is the summary's count; "skipped_tests" the ones the log names (a test that prints
+    # before it skips can hide its name, never its count).
+    return {"tests_run": int(ran[-1]), "skipped": int(extra.get("skipped", 0)), "skipped_tests": skipped}
+
+
+def run_gates(root: Path, python: str, env: dict, logs: Path) -> list[dict]:
+    # unittest runs last: tests/test_ternary_check.py reads build/upstream/matrix, which
+    # make ternary-check-verify writes, and with TRINITY_REQUIRE_CACHED=1 a missing file fails.
     gates = [("sh tools/test-t27.sh", ["sh", "tools/test-t27.sh"], {}),
-             ("python -m unittest discover -s tests", [python, "-m", "unittest", "discover", "-s", "tests"], {}),
              ("sh tools/check-specs.sh", ["sh", "tools/check-specs.sh"], {}),
              ("sh tools/fetch-upstream.sh", ["sh", "tools/fetch-upstream.sh"], {}),
              ("OFFLINE=1 make ternary-check-verify", ["make", "ternary-check-verify", "OFFLINE=1",
-                                                        f"PYTHON={python}"], {"OFFLINE": "1"})]
+                                                        f"PYTHON={python}"], {"OFFLINE": "1"}),
+             (UNITTEST_GATE, [python, "-m", "unittest", "discover", "-s", "tests", "-v"],
+              {"TRINITY_REQUIRE_CACHED": "1"})]
     results = []
     for index, (label, command, extra) in enumerate(gates):
-        seconds = run(command, cwd=root, env={**env, "PYTHON": python, **extra},
-                      log_path=work / f"gate-{index}.log")
-        results.append({"command": label, "exit": 0, "seconds": seconds})
+        log_path = logs / f"gate-{index}.log"
+        seconds = run(command, cwd=root, env={**env, "PYTHON": python, **extra}, log_path=log_path)
+        result = {"command": label, "exit": 0, "seconds": seconds, "log": log_path.name}
+        if label == UNITTEST_GATE:
+            result.update(unittest_counts(log_path.read_text(errors="replace")))
+            log(f"unittest: {result['tests_run']} tests, {result['skipped']} skipped")
+        results.append(result)
     return results
 
 
@@ -371,14 +451,49 @@ def check_ci_run(path: Path, commit: str) -> dict:
     run_info = json.loads(path.read_text())
     if run_info.get("headSha") != commit:
         raise ReleaseError(f"CI run {run_info.get('url')} is for {run_info.get('headSha')}, not {commit}")
+    if run_info.get("workflowName") != CI_WORKFLOW or run_info.get("event") != "push":
+        raise ReleaseError(f"CI run {run_info.get('url')} is {run_info.get('workflowName')!r} on "
+                           f"{run_info.get('event')!r}; expected {CI_WORKFLOW!r} (ci.yml) on push")
     if run_info.get("status") != "completed" or run_info.get("conclusion") != "success":
         raise ReleaseError(f"CI run {run_info.get('url')}: {run_info.get('status')} / {run_info.get('conclusion')}")
     jobs = [{"name": job.get("name"), "conclusion": job.get("conclusion")} for job in run_info.get("jobs") or []]
     failed = [job for job in jobs if job["conclusion"] != "success"]
     if not jobs or failed:
         raise ReleaseError(f"CI run {run_info.get('url')}: jobs not all successful: {failed or 'no jobs listed'}")
+    names = [job["name"] for job in jobs]
+    if len(names) != len(set(names)) or set(names) != CI_JOBS:
+        raise ReleaseError(f"CI run {run_info.get('url')}: jobs {sorted(names)} are not the jobs of ci.yml: "
+                           f"missing {sorted(CI_JOBS - set(names))}, unexpected {sorted(set(names) - CI_JOBS)}")
     return {"url": run_info.get("url"), "run_id": run_info.get("databaseId"), "workflow": run_info.get("workflowName"),
             "event": run_info.get("event"), "head_sha": commit, "conclusion": "success", "jobs": jobs}
+
+
+def check_linux_artifact(artifacts_path: Path, archive_path: Path, wheel: Path, ci_run: dict) -> dict:
+    """Ties the Linux wheel to the CI run: the artifact zip has the digest GitHub lists for
+    native-python-3.12 of that run, and the wheel is the one inside the zip, byte for byte."""
+    listed = [item for item in json.loads(artifacts_path.read_text()).get("artifacts") or []
+              if item.get("name") == LINUX_ARTIFACT]
+    if len(listed) != 1:
+        raise ReleaseError(f"{artifacts_path.name}: {len(listed)} artifacts named {LINUX_ARTIFACT}, expected one")
+    artifact = listed[0]
+    origin = artifact.get("workflow_run") or {}
+    if origin.get("id") != ci_run["run_id"] or origin.get("head_sha") != ci_run["head_sha"]:
+        raise ReleaseError(f"artifact {artifact.get('id')} comes from run {origin.get('id')} at "
+                           f"{origin.get('head_sha')}, not run {ci_run['run_id']} at {ci_run['head_sha']}")
+    if artifact.get("expired"):
+        raise ReleaseError(f"artifact {artifact.get('id')} has expired")
+    digest = f"sha256:{sha256_file(archive_path)}"
+    if artifact.get("digest") != digest:
+        raise ReleaseError(f"{archive_path.name} is {digest}; GitHub lists {artifact.get('digest')} for "
+                           f"artifact {artifact.get('id')}")
+    with zipfile.ZipFile(archive_path) as archive:
+        inside = [name for name in archive.namelist() if Path(name).name == wheel.name]
+        if len(inside) != 1:
+            raise ReleaseError(f"{archive_path.name} holds {len(inside)} files named {wheel.name}")
+        if archive.read(inside[0]) != wheel.read_bytes():
+            raise ReleaseError(f"{wheel.name} differs from {inside[0]} in the artifact zip")
+    return {"name": LINUX_ARTIFACT, "id": artifact.get("id"), "digest": digest, "member": inside[0],
+            "run_id": ci_run["run_id"]}
 
 
 # 6. Checksums -------------------------------------------------------------------
@@ -422,13 +537,24 @@ def main(argv=None) -> int:
     ci = parser.add_mutually_exclusive_group(required=True)
     ci.add_argument("--ci-run-json", type=Path, help="`gh run view --json ...` of the CI run of this commit")
     ci.add_argument("--no-ci", action="store_true", help="dry run without CI evidence (not for publishing)")
+    parser.add_argument("--ci-artifacts-json", type=Path,
+                        help="`gh api repos/REPO/actions/runs/RUN/artifacts` of the CI run (with --linux-artifact-zip)")
+    parser.add_argument("--linux-artifact-zip", type=Path,
+                        help=f"the {LINUX_ARTIFACT} artifact zip of the CI run (`gh api .../artifacts/ID/zip`)")
     parser.add_argument("--out", type=Path, help="output directory (default build/release-VERSION); must be empty")
-    parser.add_argument("--deployment-target", default="13.3", help="MACOSX_DEPLOYMENT_TARGET (default 13.3)")
+    parser.add_argument("--logs", type=Path, help="directory for the build and gate logs (default <out>-logs); "
+                                                  "must be empty and outside --out")
+    parser.add_argument("--deployment-target", default=DEFAULT_TARGET,
+                        help=f"MACOSX_DEPLOYMENT_TARGET (default {DEFAULT_TARGET})")
     parser.add_argument("--gates", action="store_true", help="run the four gates first and record them")
     parser.add_argument("--skip-sdist-rebuild", action="store_true", help="do not rebuild a wheel from the sdist")
     parser.add_argument("--python", default=sys.executable, help="Python with setuptools and wheel")
     parser.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if (args.ci_artifacts_json is None) != (args.linux_artifact_zip is None):
+        parser.error("--ci-artifacts-json and --linux-artifact-zip go together")
+    if args.ci_artifacts_json is not None and args.ci_run_json is None:
+        parser.error("--ci-artifacts-json needs --ci-run-json")
     try:
         return build(args)
     except ReleaseError as error:
@@ -444,10 +570,17 @@ def build(args) -> int:
     out = (args.out or root / "build" / f"release-{version}").resolve()
     if out.exists() and any(out.iterdir()):
         raise ReleaseError(f"{out} is not empty")
+    logs = (args.logs or out.parent / f"{out.name}-logs").resolve()
+    if logs == out or out in logs.parents:
+        raise ReleaseError(f"the log directory {logs} must be outside the output directory {out}")
+    if logs.exists() and any(logs.iterdir()):
+        raise ReleaseError(f"{logs} is not empty")
     linux_source = args.linux_wheel.resolve()
     if not linux_source.is_file():
         raise ReleaseError(f"no Linux wheel at {linux_source}")
     ci_run = check_ci_run(args.ci_run_json, args.commit) if args.ci_run_json else None
+    artifact = check_linux_artifact(args.ci_artifacts_json, args.linux_artifact_zip, linux_source, ci_run) \
+        if args.ci_artifacts_json else None
     if (platform.system(), platform.machine()) != ("Darwin", "arm64"):
         raise ReleaseError("the macOS arm64 wheel is built here: run this on macOS arm64")
     if not os.environ.get("T27_ROOT"):
@@ -460,62 +593,17 @@ def build(args) -> int:
     env = {**os.environ, "MACOSX_DEPLOYMENT_TARGET": target}
     env.pop("PYTHONPATH", None)
     out.mkdir(parents=True, exist_ok=True)
+    logs.mkdir(parents=True, exist_ok=True)
+    log(f"logs in {logs}")
     with tempfile.TemporaryDirectory(prefix="trinity-release-") as scratch:
         work = Path(scratch)
-        gates = run_gates(root, args.python, env, work) if args.gates else None
-        macos_built = build_macos_wheel(root, work, args.python, env, target)
-        macos = check_wheel(macos_built, root, version, pin, "macos")
-        unpacked = work / "macos-unpacked"
-        with zipfile.ZipFile(macos_built) as archive:
-            archive.extractall(unpacked)
-        macos["macho"] = check_macho(unpacked, target)
-        macos["installed_test"] = installed_wheel_test(root, macos_built, args.python, env,
-                                                       work / "installed-macos-wheel.json")
-        log(f"macOS wheel {macos['name']}: {len(macos['macho'])} Mach-O files at or below {target}, installed test passed")
-
-        sdist = build_sdist(root, work / "sdist", args.python, env, work)
-        sdist_facts = check_sdist(sdist, version, sdist_required(root))
-        sdist_facts["sha256"] = sha256_file(sdist)
-        sdist_facts["rebuild"] = None if args.skip_sdist_rebuild else rebuild_from_sdist(
-            root, sdist, args.python, env, work)
-        log(f"sdist {sdist.name}: {sdist_facts['tracked_files_checked']} tracked files present with this commit's bytes")
-
-        shutil.copy2(linux_source, out / linux_source.name)
-        shutil.copy2(macos_built, out / macos_built.name)
-        shutil.copy2(sdist, out / sdist.name)
-        reports = {}
-        for name in REPORTS:
-            data = (root / name).read_bytes()
-            if sha256_bytes(data) != sha256_bytes(subprocess.run(
-                    ["git", "-C", str(root), "show", f"{args.commit}:{name}"], capture_output=True, check=True).stdout):
-                raise ReleaseError(f"{name} differs from the commit")
-            (out / Path(name).name).write_bytes(data)
-            reports[Path(name).name] = {"source": name, "sha256": sha256_bytes(data), "bytes": len(data)}
-        summary = json.loads((root / REPORTS[0]).read_text())["summary"]
-        reports["ternary-check.json"]["summary"] = {"cells": summary["cells"], "status": summary["status"],
-                                                    "provenance": summary["provenance"]}
-
-        compiler_sha = (root / "build/t27/compiler.sha256").read_text().split()[0]
-        validation = {
-            "schema": SCHEMA,
-            "version": version,
-            "tag": f"v{version}",
-            "source_commit": args.commit,
-            "source_tree": tree,
-            "compiler": {"repo": "gHashTag/t27", "revision": pin, "t27c_sha256": compiler_sha},
-            "built_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "host": {"platform": platform.platform(), "macos": platform.mac_ver()[0], "machine": platform.machine(),
-                     "python": platform.python_version()},
-            "macos_deployment_target": target,
-            "linux_wheel": {**linux, "source": "CI artifact native-python-3.12 of the run in ci"},
-            "macos_wheel": macos,
-            "sdist": sdist_facts,
-            "reports": reports,
-            "gates": gates,
-            "ci": ci_run,
-            "ci_verified": ci_run is not None,
-        }
-        (out / "validation.json").write_text(json.dumps(validation, indent=2, sort_keys=False) + "\n")
+        try:
+            validation = build_in(args, root, tree, version, pin, target, linux, linux_source, artifact, ci_run,
+                                  env, out, work, logs)
+        finally:
+            for path in sorted(work.glob("*.log")):  # the build and test logs outlive the scratch directory
+                shutil.copy2(path, logs / path.name)
+    (out / "validation.json").write_text(json.dumps(validation, indent=2, sort_keys=False) + "\n")
     write_checksums(out)
     count = verify_checksums(out)
     if git(root, "rev-parse", "HEAD").strip() != args.commit or \
@@ -525,6 +613,70 @@ def build(args) -> int:
     for name in sorted(p.name for p in out.iterdir()):
         print(out / name)
     return 0
+
+
+def build_in(args, root, tree, version, pin, target, linux, linux_source, artifact, ci_run, env, out, work,
+             logs) -> dict:
+    """Gates, macOS wheel, sdist and reports in the scratch directory `work`; returns validation.json."""
+    gates = run_gates(root, args.python, env, logs) if args.gates else None
+    macos_built = build_macos_wheel(root, work, args.python, env, target)
+    macos = check_wheel(macos_built, root, version, pin, "macos")
+    unpacked = work / "macos-unpacked"
+    with zipfile.ZipFile(macos_built) as archive:
+        archive.extractall(unpacked)
+    macos["macho"] = check_macho(unpacked, target)
+    macos["minimum_macos"] = check_tag_covers_minos(macos_built.name, macos["macho"])
+    macos["installed_test"] = installed_wheel_test(root, macos_built, args.python, env,
+                                                   work / "installed-macos-wheel.json")
+    log(f"macOS wheel {macos['name']}: {len(macos['macho'])} Mach-O files at or below {target}, installed test passed")
+
+    sdist = build_sdist(root, work / "sdist", args.python, env, work)
+    sdist_facts = check_sdist(sdist, version, sdist_required(root))
+    sdist_facts["sha256"] = sha256_file(sdist)
+    sdist_facts["rebuild"] = None if args.skip_sdist_rebuild else rebuild_from_sdist(
+        root, sdist, args.python, env, work)
+    log(f"sdist {sdist.name}: {sdist_facts['tracked_files_checked']} tracked files present with this commit's bytes")
+
+    shutil.copy2(linux_source, out / linux_source.name)
+    shutil.copy2(macos_built, out / macos_built.name)
+    shutil.copy2(sdist, out / sdist.name)
+    reports = {}
+    for name in REPORTS:
+        data = (root / name).read_bytes()
+        if sha256_bytes(data) != sha256_bytes(subprocess.run(
+                ["git", "-C", str(root), "show", f"{args.commit}:{name}"], capture_output=True, check=True).stdout):
+            raise ReleaseError(f"{name} differs from the commit")
+        (out / Path(name).name).write_bytes(data)
+        reports[Path(name).name] = {"source": name, "sha256": sha256_bytes(data), "bytes": len(data)}
+    summary = json.loads((root / REPORTS[0]).read_text())["summary"]
+    reports["ternary-check.json"]["summary"] = {"cells": summary["cells"], "status": summary["status"],
+                                                "provenance": summary["provenance"]}
+
+    compiler_sha = (root / "build/t27/compiler.sha256").read_text().split()[0]
+    validation = {
+        "schema": SCHEMA,
+        "version": version,
+        "tag": f"v{version}",
+        "source_commit": args.commit,
+        "source_tree": tree,
+        "compiler": {"repo": "gHashTag/t27", "revision": pin, "t27c_sha256": compiler_sha},
+        "built_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "host": {"platform": platform.platform(), "macos": platform.mac_ver()[0], "machine": platform.machine(),
+                 "python": platform.python_version()},
+        "macos_deployment_target": target,
+        # The wheel is checked against this commit either way; it is recorded as the CI run's
+        # artifact only when the artifact digest tied it to that run.
+        "linux_wheel": {**linux, "ci_artifact": artifact,
+                        "source": f"CI artifact {LINUX_ARTIFACT} of the run in ci, digest verified" if artifact
+                        else "supplied by the operator; not tied to a CI run by this tool"},
+        "macos_wheel": macos,
+        "sdist": sdist_facts,
+        "reports": reports,
+        "gates": gates,
+        "ci": ci_run,
+        "ci_verified": ci_run is not None,
+    }
+    return validation
 
 
 if __name__ == "__main__":
