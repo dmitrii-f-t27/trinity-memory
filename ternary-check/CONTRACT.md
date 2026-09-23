@@ -21,26 +21,35 @@ vector: `tests/test_ternary_check_run.py` checks this natively, and
 
 The runner compares outputs and chooses each verdict with the same t27 module:
 `tk_compare_bytes`, `tk_compare_words`, `tk_parse_flags`, `tk_flag_state`,
-`tk_verdict` and `tk_fails`. Python only moves files around.
+`tk_verdict`, `tk_fails`, and `tk_run_passed` for the run as a whole. The
+reference decoder's refusals, including an unknown format and a VALUES size
+that is not COUNT, come from `tk_decode` and `tk_encode`. Python moves files,
+starts the decoder, reads its `formats` listing and picks the calls that run
+(`--formats` and the listing); it makes no comparison and no verdict.
 
 ## Calls
 
 The runner takes the decoder command, such as `./my-decoder` or
 `python3 decode.py`, and appends the call's arguments to it. Each call runs:
 
-- in a fresh, empty working directory;
+- in a fresh, empty working directory. The call's input files are in a separate directory, and its output paths point to a third one;
 - with stdin empty;
 - with stdout ignored;
 - with stderr kept only for calls that fail, in the report's `run` block;
-- under a time limit, 60 s by default (`--timeout`).
+- in a process group of its own, under a time limit, 60 s by default (`--timeout`). At the limit the runner kills the whole group, so a wrapper script's children stop too. Any process of the group still running when the call ends is killed as well.
 
-A relative path in the decoder command that names an existing file is made
-absolute against the directory the runner starts in. All file arguments are
-absolute paths.
+Relative paths in the decoder command are made absolute against the directory
+the runner starts in: a word that contains a `/` and names an existing path,
+and any word after the first that names an existing file (`decode.py` in
+`python3 decode.py`). A first word without a `/`, such as `python3` or
+`my-decoder`, is looked up in `PATH`, as a shell would; words that start with
+`-` are left alone. Relative entries of `PYTHONPATH` are made absolute for the
+decoder, so `PYTHONPATH=.` keeps pointing at the directory the runner starts
+in. All file arguments are absolute paths.
 
 | command | required | purpose |
 |---|---|---|
-| `PROG formats` | no | Print one line `decode NAME` or `encode NAME` per supported operation and format, then exit 0. If this command exits nonzero or prints no such line, the runner assumes `decode` for every format and `encode` for none. Formats and operations the decoder does not list are reported as `not_run: unsupported`. |
+| `PROG formats` | no | Print one line `decode NAME` or `encode NAME` per supported operation and format, then exit 0. If this command exits nonzero or prints no such line, the runner assumes `decode` for every format and `encode` for none. Formats and operations the decoder does not list are reported as `not_run: unsupported`. Other lines, such as a misspelled format name, are ignored and listed in the report under `decoder_formats.unrecognized`. |
 | `PROG decode FORMAT COUNT INPUT VALUES SCALES [key=value...]` | yes | Read the stored bytes in INPUT. Write COUNT values to VALUES and the scale words to SCALES. |
 | `PROG encode FORMAT COUNT VALUES SCALES OUTPUT [key=value...]` | no | Read COUNT values and, for the block formats and I2_S, the scale words. Write the stored bytes to OUTPUT. |
 
@@ -108,7 +117,7 @@ They match the `TF_ERR_*` statuses of `t27/formats.t27`.
 | token | status | meaning |
 |---|---|---|
 | `format` | -50 | unknown format |
-| `length` | -51 | the byte count does not fit COUNT or the shape, COUNT is not whole blocks, or a separate tensor has the wrong number of words |
+| `length` | -51 | the byte count of INPUT does not fit COUNT or the shape, the byte count of VALUES is not COUNT, COUNT is not whole blocks, or a separate tensor has the wrong number of words |
 | `capacity` | -52 | an output buffer is too small |
 | `code` | -53 | (encode) a value the format cannot store |
 | `padding` | -54 | a nonzero padding digit in a TQ1_0 or PTQ1_0 qh byte |
@@ -164,10 +173,19 @@ Each call ends in one of the outcomes below. `tk_verdict` computes it. The
 | `silent` | exit 0 on a vector that must be refused | yes | yes |
 | `crashed` | stopped by a signal or by the time limit | yes | no |
 
-With `--fail-on never`, nothing fails the run. The runner exits 0 when no call
-fails, 1 when one does, and 2 when the run itself cannot proceed: unreadable
-vectors, an unknown format in `--formats`, or a decoder that cannot be
-started.
+With `--fail-on never`, no call fails the run.
+
+`tk_run_passed` decides whether the run passes. A run passes when at least one
+call ran, every format named in `--formats` ran at least one call, and no call
+fails under the policy. A run that checked nothing therefore fails under every
+policy, `never` included. That covers a `--formats` list that shares no format
+with the decoder's listing, a misspelled name in the listing, and vector files
+that hold only container vectors. The summary says why.
+
+The runner exits 0 when the run passes and 1 when it does not. It exits 2
+when the run itself cannot proceed: unreadable vectors, an unknown format in
+`--formats`, or a decoder command that cannot be started. With exit 2 it
+writes no report.
 
 "Silent" vectors (`silent_class`) are inputs that no reader can tell apart from
 valid data, such as a corrupted payload or a layout confusion. For a decoder
@@ -176,18 +194,18 @@ that every correct reader produces.
 
 ## Scope of version 1
 
-- **Covered:** every payload vector of the six `formats_*.json` files, both decode and encode. Positive, reject, flag and silent vectors are all included. The encode round trip runs for each positive vector marked `"encode": true`.
+- **Covered:** every payload vector of the six `formats_*.json` files, both decode and encode. Positive, reject, flag and silent vectors are all included. The encode round trip runs for each vector that must decode and is marked `"encode": true`. In the committed files those are positive and flag vectors.
 - **Not covered:** the GGUF and safetensors header vectors, which test lookups in a container. They are listed in the report under `not_run` with reason `container`.
 
 ## Report
 
 `--report` writes JSON with schema `trinity.ternary-check-run.v1`:
 
-- `summary`: the counts per outcome and per format, `failures` and `passed`;
+- `summary`: the counts per outcome and per format, `failures`, `passed`, and `idle_formats` (the `--formats` names that ran no call);
 - `cases`: one record per call, in vector order. Each record holds the file, vector id, class, operation, format and outcome. For a difference, it also gives the count, the first differing index, and the expected and actual value at that index;
 - `not_run`: the calls that did not run, each with its reason;
 - `vectors`: the files used, with their SHA-256;
-- `decoder_formats`: the formats and operations the decoder declared.
+- `decoder_formats`: the formats and operations the decoder declared, and the `unrecognized` lines of its listing.
 
 Everything outside the `run` block is reproducible. Two runs with the same
 decoder and vectors give byte-identical JSON once `run` is removed. The `run`
@@ -210,8 +228,13 @@ Then run:
 
 ```sh
 trinity-memory ternary-check run --decoder ./tq2-wrapper --formats TQ2_0 \
-    --report tq2.json --summary tq2.md
+    --vectors path/to/trinity-memory/conformance --report tq2.json --summary tq2.md
 ```
+
+An installed package does not ship the vectors, so `--vectors` names the
+`conformance/` directory of a checkout of this repository. Run from a checkout
+with `PYTHONPATH="$PWD"`, the runner finds that checkout's `conformance/`
+itself.
 
 `tests/action/wrong_group_decoder.py` is a deliberately wrong decoder that
 fails this check.

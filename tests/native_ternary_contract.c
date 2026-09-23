@@ -190,6 +190,11 @@ static void verdicts(void) {
         assert(tk_fails(o, TK_FAIL_SILENT) == (o == TK_SILENT));
         assert(!tk_fails(o, TK_FAIL_NEVER));
     }
+    /* A run passes only when a call ran, every filtered format ran, and none failed. */
+    for (size_t cases_run = 0; cases_run < 3; ++cases_run)
+        for (size_t failures = 0; failures < 3; ++failures)
+            for (size_t idle = 0; idle < 3; ++idle)
+                assert(tk_run_passed(cases_run, failures, idle) == (cases_run > 0 && failures == 0 && idle == 0));
     printf("verdict table: %zu cases\n", cases);
 }
 
@@ -210,7 +215,7 @@ static void reader_blocks(void) {
                 values[i] = (uint8_t)v;
             }
             for (size_t b = 0; b < blocks; ++b) scales[b] = next_random() & 0x7bff;
-            int64_t size = tk_encode(format, values, COUNT, 0, 0, 0, scales, blocks, NULL, 0, work, COUNT, data,
+            int64_t size = tk_encode(format, values, COUNT, COUNT, 0, 0, 0, scales, blocks, NULL, 0, work, COUNT, data,
                                      sizeof data);
             assert(size == (int64_t)(blocks * tf_block_bytes(format)));
             assert((size_t)size == tk_encoded_bytes(format, COUNT, 0, 0, 0));
@@ -239,10 +244,10 @@ static void reader_blocks(void) {
                          words, 16, flags) == TF_ERR_CAPACITY);
         values[3] = 2;
         if (format == TF_TQ1_0 || format == TF_PTQ1_0 || format == TF_Q1_0)
-            assert(tk_encode(format, values, COUNT, 0, 0, 0, scales, blocks, NULL, 0, work, COUNT, data,
+            assert(tk_encode(format, values, COUNT, COUNT, 0, 0, 0, scales, blocks, NULL, 0, work, COUNT, data,
                              sizeof data) == TF_ERR_CODE);
         values[3] = 0xfe;  /* -2 */
-        assert(tk_encode(format, values, COUNT, 0, 0, 0, scales, blocks, NULL, 0, work, COUNT, data,
+        assert(tk_encode(format, values, COUNT, COUNT, 0, 0, 0, scales, blocks, NULL, 0, work, COUNT, data,
                          sizeof data) == TF_ERR_CODE);
     }
 }
@@ -257,7 +262,7 @@ static void reader_tensors(void) {
 
     /* I2_S: codes, f32 scale, 28 trailer bytes. */
     uint32_t f32[1] = {0x3fc00000};
-    int64_t size = tk_encode(TF_I2_S, values, COUNT, 0, 0, 0, f32, 1, NULL, 0, work, COUNT, data, sizeof data);
+    int64_t size = tk_encode(TF_I2_S, values, COUNT, COUNT, 0, 0, 0, f32, 1, NULL, 0, work, COUNT, data, sizeof data);
     assert(size == (int64_t)(COUNT / 4 + 32) && (size_t)size == tk_encoded_bytes(TF_I2_S, COUNT, 0, 0, 0));
     data[COUNT / 4 + 10] = 7;
     assert(tk_decode(TF_I2_S, data, (size_t)size, COUNT, 0, 0, 0, 0, NULL, 0, NULL, 0, NULL, 0, work, back, COUNT,
@@ -266,11 +271,16 @@ static void reader_tensors(void) {
     assert(tk_scale_width(TF_I2_S, TF_KIND_F16) == 4);
     assert(tk_decode(TF_I2_S, data, (size_t)size, COUNT, 0, 0, 0, 0, NULL, 0, NULL, 0, NULL, 0, work, back, COUNT,
                      words, 0, flags) == TF_ERR_CAPACITY);
-    assert(tk_encode(TF_I2_S, values, COUNT, 0, 0, 0, f32, 2, NULL, 0, work, COUNT, data, sizeof data) ==
+    /* The VALUES byte count must equal COUNT; the writer refuses, it never reads past it. */
+    assert(tk_encode(TF_I2_S, values, COUNT - 1, COUNT, 0, 0, 0, f32, 1, NULL, 0, work, COUNT, data, sizeof data) ==
+           TF_ERR_LENGTH);
+    assert(tk_encode(TF_I2_S, values, COUNT + 1, COUNT, 0, 0, 0, f32, 1, NULL, 0, work, COUNT, data, sizeof data) ==
+           TF_ERR_LENGTH);
+    assert(tk_encode(TF_I2_S, values, COUNT, COUNT, 0, 0, 0, f32, 2, NULL, 0, work, COUNT, data, sizeof data) ==
            TF_ERR_LENGTH);
 
     /* HF packed with a separate bf16 scale: echoed, checked after the payload. */
-    size = tk_encode(TF_HF_PACKED, values, COUNT, ROWS, COLS, 0, NULL, 0, NULL, 0, work, COUNT, data, sizeof data);
+    size = tk_encode(TF_HF_PACKED, values, COUNT, COUNT, ROWS, COLS, 0, NULL, 0, NULL, 0, work, COUNT, data, sizeof data);
     assert(size == ROWS / 4 * COLS && (size_t)size == tk_encoded_bytes(TF_HF_PACKED, COUNT, ROWS, COLS, 0));
     uint32_t bf16[1] = {0x3f80};
     assert(tk_decode(TF_HF_PACKED, data, (size_t)size, COUNT, ROWS, COLS, 0, TF_KIND_BF16, bf16, 1, NULL, 0, NULL, 0,
@@ -294,7 +304,7 @@ static void reader_tensors(void) {
                      COUNT, words, 64, flags) == TF_ERR_FORMAT);
 
     /* MLX2, group 32: one scale and bias per group; bias == -scale is ternary. */
-    size = tk_encode(TF_LINEAR2, values, COUNT, ROWS, COLS, 32, NULL, 0, NULL, 0, work, COUNT, data, sizeof data);
+    size = tk_encode(TF_LINEAR2, values, COUNT, COUNT, ROWS, COLS, 32, NULL, 0, NULL, 0, work, COUNT, data, sizeof data);
     assert(size == ROWS * COLS / 4);
     uint32_t mscales[16], mbiases[16];
     for (size_t g = 0; g < 16; ++g) { mscales[g] = 0x3c00; mbiases[g] = 0xbc00; }
@@ -316,7 +326,7 @@ static void reader_tensors(void) {
     uint8_t zp[3] = {0x2a, 0x15, 0x2a};  /* zero points 2, 1, 2 per row */
     static uint8_t ov[N * K];
     for (size_t i = 0; i < N * K; ++i) ov[i] = values[i];
-    size = tk_encode(TF_ONNX2, ov, N * K, N, K, BS, NULL, 0, zp, 3, work, COUNT, data, sizeof data);
+    size = tk_encode(TF_ONNX2, ov, N * K, N * K, N, K, BS, NULL, 0, zp, 3, work, COUNT, data, sizeof data);
     assert(size == N * 3 * BS / 4 && (size_t)size == tk_encoded_bytes(TF_ONNX2, N * K, N, K, BS));
     data[K / 4 + 2] |= 0xc0;  /* a padding code of row 0 */
     uint32_t oscales[9];
@@ -329,7 +339,8 @@ static void reader_tensors(void) {
                      back, COUNT, words, 64, flags) == TF_ERR_LENGTH);
     assert(tk_decode(99, data, (size_t)size, N * K, N, K, BS, TF_KIND_F16, oscales, 9, NULL, 0, zp, 3, work, back,
                      COUNT, words, 64, flags) == TF_ERR_FORMAT);
-    assert(tk_encode(99, ov, N * K, N, K, BS, NULL, 0, zp, 3, work, COUNT, data, sizeof data) == TF_ERR_FORMAT);
+    assert(tk_encode(99, ov, N * K, N * K, N, K, BS, NULL, 0, zp, 3, work, COUNT, data, sizeof data) == TF_ERR_FORMAT);
+    assert(tk_encode(99, ov, 1, N * K, N, K, BS, NULL, 0, zp, 3, work, COUNT, data, sizeof data) == TF_ERR_FORMAT);
     assert(tk_encoded_bytes(TF_ONNX2, N * K, N, K, 0) == 0 && tk_encoded_bytes(99, 4, 2, 2, 0) == 0);
 }
 

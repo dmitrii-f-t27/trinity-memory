@@ -287,7 +287,9 @@ jobs:
     # runtime set to the checkout (the release runtime needs published assets):
     # the reference decoder must pass every vector, and
     # tests/action/wrong_group_decoder.py (PQ2_0 bytes read as group-64 Q2_0)
-    # must fail with value mismatches. Both runners of the Action's support.
+    # must fail with value mismatches. It runs on Linux and macOS, the two
+    # platforms of the release runtime, although this job builds the runtime
+    # from the checkout.
     strategy:
       fail-fast: false
       matrix:

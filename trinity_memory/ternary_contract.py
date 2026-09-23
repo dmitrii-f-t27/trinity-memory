@@ -7,8 +7,11 @@ implements the contract with the t27 readers and writers:
     trinity-memory ternary-check decode FORMAT COUNT INPUT VALUES SCALES [key=value...]
     trinity-memory ternary-check encode FORMAT COUNT VALUES SCALES OUTPUT [key=value...]
 
-Reading, rejecting, flagging, the class tokens, comparison and the verdict all
-run in generated t27 code; this module moves bytes between files and buffers.
+Reading, rejecting (including an unknown format and a VALUES size that is not
+COUNT), flagging, the class tokens, comparison, the verdict of a call and of a
+run all run in generated t27 code. This module parses the command line and
+moves bytes between files and buffers; a malformed command line is a usage
+error (exit 2), not a refusal.
 """
 from __future__ import annotations
 import ctypes as C
@@ -28,7 +31,6 @@ FLAGS_EQUAL, FLAGS_UNREPORTED, FLAGS_DIFFER = 0, 1, 2
 KINDS = {"F16": f.F16, "BF16": f.BF16, "F32": f.F32}
 U32 = C.POINTER(C.c_uint32)
 EXIT_REJECTED, EXIT_USAGE = 1, 2
-ERR_FORMAT, ERR_LENGTH = -50, -51  # TF_ERR_FORMAT, TF_ERR_LENGTH of t27/formats.t27
 
 
 def _token(name: str, value: int, lane=C.c_int32) -> str:
@@ -119,6 +121,11 @@ def fails(outcome: int, policy: int) -> bool:
     return n.call("tk_fails", C.c_bool, [C.c_int32, C.c_int32], outcome, policy)
 
 
+def run_passed(cases: int, failures: int, idle_formats: int) -> bool:
+    """Whether a run passes: a call ran, no filtered format stayed idle, and no call fails."""
+    return n.call("tk_run_passed", C.c_bool, [n.SZ, n.SZ, n.SZ], cases, failures, idle_formats)
+
+
 def scale_count(format: int, count: int, rows: int, cols: int, group: int) -> int:
     return n.call("tk_scale_count", n.SZ, [C.c_int32, n.SZ, n.SZ, n.SZ, n.SZ], format, count, rows, cols, group)
 
@@ -153,15 +160,15 @@ def decode(format: int, data: bytes, count: int, rows=0, cols=0, group=0, kind=0
 
 
 def encode(format: int, values: bytes, count: int, rows=0, cols=0, group=0, scales=(), zero_points=b""):
-    """(status, stored bytes): status is the byte count or a TF_ERR_* status."""
-    if len(values) != count:
-        return ERR_LENGTH, b""
+    """(status, stored bytes): status is the byte count or a TF_ERR_* status.
+
+    tk_encode refuses a VALUES size other than `count` (TF_ERR_LENGTH) itself."""
     capacity = max(1, encoded_bytes(format, count, rows, cols, group))
     work, out = (C.c_int32 * max(1, count))(), n.buffer(capacity)
     status = n.call("tk_encode", C.c_int64,
-                    [C.c_int32, n.U8, n.SZ, n.SZ, n.SZ, n.SZ, U32, n.SZ, n.U8, n.SZ, n.I32, n.SZ, n.U8, n.SZ],
-                    format, n.octets(values), count, rows, cols, group, _word_array(scales), len(scales),
-                    n.octets(zero_points), len(zero_points), work, count, out, capacity)
+                    [C.c_int32, n.U8, n.SZ, n.SZ, n.SZ, n.SZ, n.SZ, U32, n.SZ, n.U8, n.SZ, n.I32, n.SZ, n.U8, n.SZ],
+                    format, n.octets(values), len(values), count, rows, cols, group, _word_array(scales),
+                    len(scales), n.octets(zero_points), len(zero_points), work, count, out, capacity)
     return status, (bytes(out[:status]) if status >= 0 else b"")
 
 
@@ -234,8 +241,8 @@ def _command_decode(arguments) -> int:
     name, count_text, source, values_path, scales_path = arguments[:5]
     options, count = _options(arguments[5:]), _integer(count_text, "COUNT")
     format = format_id(name)
-    if format == 0:
-        return _reject(ERR_FORMAT, f"unknown format {name!r}")
+    if format == 0:  # tk_decode refuses the unknown format
+        return _reject(decode(0, b"", 0)[0], f"unknown format {name!r}")
     geometry = _geometry(options)
     kind = 0
     side = biases = ()
@@ -266,8 +273,8 @@ def _command_encode(arguments) -> int:
     name, count_text, values_path, scales_path, output = arguments[:5]
     options, count = _options(arguments[5:]), _integer(count_text, "COUNT")
     format = format_id(name)
-    if format == 0:
-        return _reject(ERR_FORMAT, f"unknown format {name!r}")
+    if format == 0:  # tk_encode refuses the unknown format
+        return _reject(encode(0, b"", 0)[0], f"unknown format {name!r}")
     geometry = _geometry(options)
     values = Path(values_path).read_bytes()
     scales = ()

@@ -6,9 +6,9 @@ It forwards every call of the CLI contract to the reference decoder
 (PrismML, group 128: 34-byte blocks) as ggml-org Q2_0 (group 64: 18-byte
 blocks) and, like a lenient loader, drops the bytes that do not fill a last
 18-byte block. That is the layout confusion of conformance vector
-group_128_bytes_read_as_group_64 and of PrismML's warning that its Q2_0 files
-load silently on a stock llama.cpp build. The Action must report mismatches
-for it and fail. This script decodes nothing itself: it only rewrites the
+group_128_bytes_read_as_group_64, a synthetic case of this repository (the
+published Q2_0 file holds valid group-64 blocks). The Action must report
+mismatches for it and fail. This script decodes nothing itself: it only rewrites the
 call and cuts the input file.
 """
 import os

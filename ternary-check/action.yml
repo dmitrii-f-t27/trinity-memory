@@ -12,9 +12,10 @@ inputs:
   decoder:
     description: >-
       Decoder command; the contract arguments are appended (for example
-      "./build/my-decoder" or "python3 tools/my_decoder.py"). Relative paths that
-      name existing files resolve against the working directory. The reference
-      decoder is "python3 -m trinity_memory ternary-check".
+      "./build/my-decoder" or "python3 tools/my_decoder.py"). A word with a "/"
+      that names an existing path, or a later word that names an existing file
+      ("python3 decode.py"), resolves against the working directory. The
+      reference decoder is "python3 -m trinity_memory ternary-check".
     required: true
   vectors:
     description: >-
@@ -35,7 +36,9 @@ inputs:
     required: false
     default: ''
   fail-on:
-    description: 'mismatch (any outcome but match, match_unflagged or rejected), silent (only a silent acceptance), or never.'
+    description: >-
+      mismatch (any outcome but match, match_unflagged or rejected), silent (only a
+      silent acceptance), or never. A run that checked nothing fails under all three.
     required: false
     default: mismatch
   timeout:
@@ -60,13 +63,15 @@ inputs:
     default: python3
 outputs:
   report:
-    description: Path of the JSON report.
+    description: Path of the JSON report; not set when the check could not run.
     value: ${{ steps.run.outputs.report }}
   summary:
     description: Path of the Markdown summary.
     value: ${{ steps.run.outputs.summary }}
   passed:
-    description: '"true" when no call fails under fail-on.'
+    description: >-
+      "true" when at least one call ran, every format named in formats ran, and no
+      call fails under fail-on; "false" otherwise, including when the check could not run.
     value: ${{ steps.run.outputs.passed }}
   cases:
     description: Number of decoder calls.
@@ -75,7 +80,7 @@ outputs:
     description: Number of calls that fail under fail-on.
     value: ${{ steps.run.outputs.failures }}
   mismatches:
-    description: Number of calls whose values, scale words or reported flags differ.
+    description: Number of calls whose values, scale words, stored bytes or reported flags differ.
     value: ${{ steps.run.outputs.mismatches }}
   silent:
     description: Number of vectors the decoder had to refuse but accepted.
