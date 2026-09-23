@@ -93,12 +93,32 @@ language-independent vectors in [`conformance/`](conformance/), generated from
 the spec by [`tools/generate-spec-vectors.py`](tools/generate-spec-vectors.py)
 without calling the native code.
 
+[`specs/formats/`](specs/formats/) holds the byte-level contracts of the external
+ternary weight-packing formats that t27 Ternary Check reads
+([epic #27](https://github.com/dmitrii-f-t27/trinity-memory/issues/27)):
+[`llama_cpp.t27`](specs/formats/llama_cpp.t27) (TQ1_0, TQ2_0, Q2_0, Q1_0 and the GGUF
+type-id, alignment and extent rules), [`prismml.t27`](specs/formats/prismml.t27)
+(PQ2_0, PTQ1_0), [`bitnet_cpp.t27`](specs/formats/bitnet_cpp.t27) (I2_S),
+[`hf_bitnet.t27`](specs/formats/hf_bitnet.t27) (transformers packed weights and
+`weight_scale`), [`mlx.t27`](specs/formats/mlx.t27) (2-bit affine) and
+[`onnx.t27`](specs/formats/onnx.t27) (MatMulNBits `bits=2`). Each restates pinned
+upstream commits ([`upstream.lock.json`](specs/formats/upstream.lock.json)) with block
+geometry, code tables, bits per weight, rejection rules and flags;
+[`specs/formats/OWNERS.md`](specs/formats/OWNERS.md) lists the status classes. Their
+vectors `conformance/formats_*.json` include rejected, flagged and silent cases and
+bytes cut from BitNet b1.58 2B4T and Ternary Bonsai 2;
+[`tests/native_spec_formats.c`](tests/native_spec_formats.c) replays them through the
+specs and `t27/formats.t27`, and
+[`tests/spec_formats_wasm_replay.mjs`](tests/spec_formats_wasm_replay.mjs) through
+`build/t27/formats.wasm`.
+
 [`tools/check-specs.sh`](tools/check-specs.sh) is the gate (also run by
 `make t27-test` and the `spec` CI job): lexer and parser completeness,
 typecheck, C and Verilog generation, executed tests, seal verification,
 conformance validation, and the differential harness
 [`tests/native_spec_types.c`](tests/native_spec_types.c) that ties the spec
-constants to `t27/codecs.t27` and `t27/container.t27`.
+constants to `t27/codecs.t27` and `t27/container.t27`. For `specs/formats/` the gate
+also fails when a spec has no vectors file or no harness that replays it.
 [`tests/test_spec_types.py`](tests/test_spec_types.py) replays the vectors through
 the Python adapters. Conventions and the pinned-compiler pitfalls are recorded in
 [`specs/memory/OWNERS.md`](specs/memory/OWNERS.md); the roadmap for the remaining
