@@ -10,7 +10,9 @@ tensors) and prints a JSON summary:
   scales    all ternary tensors: packed bf16 weight_scale vs the f32 scale after
             each I2_S tensor, and whether the bf16 value is the f32 value
             rounded to nearest-even bf16;
-  trailers  nonzero bytes among the 28 that follow each I2_S scale;
+  trailers  nonzero bytes among the 28 that follow each I2_S scale, and the
+            nearest earlier tensor in the file whose bytes at the same offset
+            are identical (the quantizer reuses one output buffer);
   layer0    packed trits vs transformers WeightQuant on the bf16 master weights
             for layer 0 q_proj and down_proj, and how the packed file treats
             the weights whose |w| is exactly 0.5 * weight_scale.
@@ -146,11 +148,34 @@ def scales_and_trailers(packed_header, gguf_records, gguf, packed):
     records = [r for r in gguf_records if r[2] == 36]
     with ThreadPoolExecutor(max_workers=8) as pool:
         rows = list(pool.map(one, records))
+    ordered = sorted(gguf_records, key=lambda r: r[3])
+    sizes = {0: 4, 1: 2}
+
+    def stored(record):
+        count = record[1][0] * (record[1][1] if len(record[1]) > 1 else 1)
+        return count // 4 + 32 if record[2] == 36 else count * sizes.get(record[2], 0)
+
+    def source(index):
+        name, shape, _, offset = ordered[index]
+        at = shape[0] * shape[1] // 4 + 4
+        tail = gguf.read(offset + at, offset + at + 28)
+        for earlier in reversed(ordered[:index]):
+            if stored(earlier) >= at + 28:
+                same = gguf.read(earlier[3] + at, earlier[3] + at + 28) == tail
+                return name, earlier[0] if same else None
+        return name, None
+
+    indices = [i for i, r in enumerate(ordered) if r[2] == 36]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        sources = dict(pool.map(source, indices))
+    for row in rows:
+        row["trailer_equals_bytes_of"] = sources[row["tensor"]]
     rel = [abs(r["i2s_f32"] - r["packed_bf16"]) / r["packed_bf16"] for r in rows]
     return {"tensors": len(rows), "equal": sum(1 for r in rows if r["i2s_f32"] == r["packed_bf16"]),
             "bf16_is_rounded_f32": sum(1 for r in rows if r["bf16_is_rounded_f32"]),
             "relative_difference_median": statistics.median(rel), "relative_difference_max": max(rel),
             "trailers_with_nonzero_bytes": sum(1 for r in rows if r["trailer_nonzero"]),
+            "trailers_equal_to_an_earlier_tensor": sum(1 for r in rows if r["trailer_equals_bytes_of"]),
             "rows": rows}
 
 
