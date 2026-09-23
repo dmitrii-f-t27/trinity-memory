@@ -51,7 +51,8 @@ for name in tf_block_elements tf_block_bytes tf_scale_offset tf_scale_class tf_s
     tmv_exact_groups_f16 tmv_exact_mismatches \
     tmx_float_bits tmx_bf16_round tmx_scale_count tmx_scale_kind tmx_scale_group tmx_representable \
     tmx_convert_scales tmx_encode tmx_decode tmx_compare tmx_explain_ties tmx_round_trip tmx_bytes_differ \
-    tmx_reencode tmx_locate tmx_mismatch_indices tmx_word_indices tf_absmean_bf16; do
+    tmx_reencode tmx_locate tmx_mismatch_indices tmx_word_indices tmx_bits_per_weight tmx_gguf_metadata_bytes \
+    tf_absmean_bf16; do
     formats_exports="$formats_exports --export=$name"
 done
 # shellcheck disable=SC2086

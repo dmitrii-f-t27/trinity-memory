@@ -5,7 +5,9 @@
 // stored form of the real layers in the module and checks that its
 // accumulators, partials and float steps hash to the committed report
 // reports/ternary-check/matvec-2026-09-23.json. This script only reads files,
-// moves bytes and compares digests.
+// moves bytes and compares digests. A form whose ranges are not cached is
+// counted as skipped; with TRINITY_REQUIRE_CACHED=1 (the CI job
+// ternary-check) any skip fails.
 import {createHash} from 'node:crypto';
 import {existsSync, readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
@@ -101,7 +103,7 @@ for (const tensor of bitnet) {
   const packed = range('microsoft/bitnet-b1.58-2B-4T', tensor.tensor.hf, 'tensor');
   const scale = range('microsoft/bitnet-b1.58-2B-4T', `${tensor.tensor.hf}_scale`, 'scale');
   const i2s = range('microsoft/bitnet-b1.58-2B-4T-gguf', tensor.tensor.gguf, 'tensor');
-  if (!packed || !scale || !i2s) { skipped++; continue; }
+  if (!packed || !scale || !i2s) { skipped += 2; continue; }  // hf_packed and I2_S
   const forms = [
     ['hf_packed', (values) => {
       assert.equal(api.tf_decode_hf_packed(bytesIn(packed.data), packed.data.length, rows, cols, values, count), 0n);
@@ -173,6 +175,12 @@ const bonsai = report.tensors.find((t) => t.model === 'Ternary Bonsai 2 27B');
     replayed++;
   }
 }
+const total = 2 * bitnet.length + Object.keys(bonsai.formats).length;
+assert.equal(replayed + skipped, total, 'every stored form is either replayed or skipped');
 console.log(`formats.wasm matvec: CPython activation stream and a small product checked; ` +
-  `${replayed} stored forms of the real layers reproduce reports/ternary-check/matvec-2026-09-23.json` +
+  `${replayed} of ${total} stored forms of the real layers reproduce reports/ternary-check/matvec-2026-09-23.json` +
   (skipped ? `, ${skipped} skipped (fixture ranges not cached: python3 tools/fetch-fixtures.py)` : ''));
+if (process.env.TRINITY_REQUIRE_CACHED === '1' && skipped) {
+  console.error(`TRINITY_REQUIRE_CACHED=1: ${skipped} stored forms were not recomputed`);
+  process.exit(1);
+}

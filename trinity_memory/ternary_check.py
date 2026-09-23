@@ -6,7 +6,8 @@ and writers of t27/formats.t27): published bytes are decoded and compared with
 the tensor's reference, other formats are written and read back by t27 (a t27
 round trip, not third-party evidence) or by the pinned llama.cpp reference
 quantizers (tests/upstream/run-llamacpp-matrix.sh), and a format that cannot
-hold the tensor is `not-representable` with its reasons. This module chooses
+hold the tensor is `not-representable` with its reasons (provenance
+`not_written`: t27 decides before anything is written). This module chooses
 tensors, moves bytes between the fixture cache and those functions, and writes
 reports/ternary-check.json (schema trinity.ternary-check.v1,
 schemas/ternary-check.v1.schema.json), reports/ternary-check.html and one
@@ -15,6 +16,8 @@ reports are deterministic; the run's timings go to build/ternary-check/run.json.
 
     make ternary-check                              # fetch, build, run, write reports/ (one command)
     python3 -m trinity_memory.ternary_check         # from the caches into build/ternary-check.json, .html, repro/
+                                                    # (needs build/fixtures, build/t27 and build/upstream/matrix:
+                                                    # make ternary-check makes them; else exit 2, no traceback)
     python3 -m trinity_memory.ternary_check --write # the same into reports/ (the committed files)
     python3 -m trinity_memory.ternary_check --check # recompute, compare with the committed files
 """
@@ -111,6 +114,9 @@ PROVENANCE = {
                        "format can hold the tensor; not third-party evidence"),
     "upstream_encoder": ("written by the pinned llama.cpp reference quantizer from the dequantized "
                          "tensor, read by the t27 decoder: third-party evidence"),
+    "not_written": ("nothing is written: t27 (tmx_representable) decides from the reference trits and scales "
+                    "that the format cannot hold the tensor, so neither the t27 encoder nor an upstream "
+                    "writer runs; not third-party evidence"),
     "derived": ("trits computed by t27 from published bf16 master weights with the transformers WeightQuant "
                 "rule; not a storage format"),
 }
@@ -120,6 +126,14 @@ REASON_UNITS = {
     "code_outside": "weights outside the format's codes",
     "group_scales_differ": "stored scale groups that span reference scales of different values",
     "scale_precision": "reference scale words without an exact word of the format's scale type",
+}
+METADATA_NOTE = {
+    "gguf": ("the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding "
+             "after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the "
+             "whole file (file overhead, not counted per tensor)"),
+    "safetensors": ("a safetensors tensor has no record or padding of its own; the JSON header belongs to the "
+                    "whole file (file overhead, not counted per tensor)"),
+    "none": "bare tensor bytes as the writer returns them, in no container: no metadata share",
 }
 EXPLANATIONS = {
     "scale_bf16_rounding": ("every differing scale pair is a bf16 word and an f32 word, and the bf16 word is "
@@ -171,6 +185,11 @@ def _i32_le(values, count: int) -> bytes:
 
 # ---- loading the real tensors ------------------------------------------------------
 
+def _gguf_record(info) -> dict:
+    """What the metadata share of a GGUF tensor depends on (read by the t27 GGUF reader)."""
+    return {"name_size": int(info.name_size), "dims": int(info.dims), "alignment": int(info.alignment)}
+
+
 class Stored:
     """One published form of a tensor: decoded values and scale words, plus
     what the report says about its bytes."""
@@ -220,14 +239,15 @@ def bitnet_tensor(hf_name: str, gguf_name: str) -> Tensor:
                       [_source(packed_remote, packed_begin, packed_begin + len(packed)),
                        _source(packed_remote, sinfo.begin, sinfo.end)],
                       _flags({"outside_ternary": outside}, f.scales_check([hf_word], f.BF16)), outside,
-                      {"scale_bytes": scale_bytes.hex(), "begin": packed_begin})
+                      {"scale_bytes": scale_bytes.hex(), "begin": packed_begin, "container": "safetensors"})
 
     def i2s():
         values, word, outside = f.decode_i2s(i2s_bytes, count)
         return Stored("i2_s", values, [word], f.F32, 0, i2s_bytes, len(i2s_bytes),
                       [_source(gguf_remote, i2s_begin, i2s_begin + len(i2s_bytes))],
                       f.i2s_flags(i2s_bytes, count), outside,
-                      {"begin": i2s_begin, "scale_bytes": i2s_bytes[count // 4: count // 4 + 4].hex()})
+                      {"begin": i2s_begin, "scale_bytes": i2s_bytes[count // 4: count // 4 + 4].hex(),
+                       "container": "gguf", "gguf": _gguf_record(ginfo)})
 
     tensor.stored = {"hf_packed": hf, "i2_s": i2s}
     tensor.reference = "hf_packed"
@@ -244,7 +264,7 @@ def bonsai_tensor(gguf_name: str, mlx_prefix: str) -> Tensor:
         if f.format_of_ggml(info.tensor_type, info.prism) != fmt:
             raise fx.FixtureError(f"{remote.key}: {gguf_name} has ggml type {info.tensor_type}")
         rows, cols = info.d1, info.d0
-        loaded[label] = (fmt, remote, stored, info.data_start + info.offset)
+        loaded[label] = (fmt, remote, stored, info.data_start + info.offset, _gguf_record(info))
         prism[label] = bool(info.prism)
     count = rows * cols
     mlx = BONSAI["mlx"]
@@ -258,14 +278,14 @@ def bonsai_tensor(gguf_name: str, mlx_prefix: str) -> Tensor:
                     rows, cols)
 
     def gguf_form(label, column):
-        fmt, remote, stored, begin = loaded[label]
+        fmt, remote, stored, begin, record = loaded[label]
 
         def load():
             values, words, outside = f.decode_blocks(fmt, stored, count)
             per, _ = f.block_geometry(fmt)
             return Stored(column, values, words, f.F16, per, stored, len(stored),
                           [_source(remote, begin, begin + len(stored))], f.block_flags(fmt, stored, count), outside,
-                          {"begin": begin})
+                          {"begin": begin, "container": "gguf", "gguf": record})
         return load
 
     def mlx_form():
@@ -277,7 +297,7 @@ def bonsai_tensor(gguf_name: str, mlx_prefix: str) -> Tensor:
                       [_source(mlx, winfo.begin, winfo.end), _source(mlx, sinfo.begin, sinfo.end),
                        _source(mlx, binfo.begin, binfo.end)],
                       _flags({"outside_ternary": outside}, f.affine_check(scales, biases, f.F16)), outside,
-                      {"begin": winfo.begin})
+                      {"begin": winfo.begin, "container": "safetensors"})
 
     tensor.stored = {"ptq1_0": gguf_form("PTQ1_0", "ptq1_0"), "pq2_0": gguf_form("PQ2_0", "pq2_0"),
                      "q2_0": gguf_form("Q2_0", "q2_0"), "mlx_2bit": mlx_form}
@@ -303,6 +323,19 @@ def _trits_entry(count, result, explain) -> dict:
             "explanation": explain.get(result["trits_explain"])}
 
 
+def _bits(stored_bytes: int, count: int, container: str, record: dict | None = None) -> dict:
+    """Bits per weight of the stored bytes, and with the tensor's metadata share (t27 arithmetic)."""
+    mx = _mx()
+    extra = 0 if record is None else mx.gguf_metadata_bytes(record["name_size"], record["dims"], stored_bytes,
+                                                            record["alignment"])
+    metadata = {"container": container, "bytes": extra,
+                "bits_per_weight": mx.bits_per_weight(stored_bytes + extra, count), "note": METADATA_NOTE[container]}
+    if record is not None:
+        metadata["record"] = record
+    return {"stored_bytes": stored_bytes, "bits_per_weight": mx.bits_per_weight(stored_bytes, count),
+            "metadata": metadata}
+
+
 def _cell_id(tensor, column) -> str:
     return f"{tensor.id}--{column}"
 
@@ -322,7 +355,7 @@ def _upstream_stored(tensor, column, fmt, ext, upstream_dir: Path) -> Stored:
     """The tensor as the pinned llama.cpp quantizer stored it (tests/upstream/run-llamacpp-matrix.sh)."""
     path = upstream_dir / f"{tensor.id}.{ext}"
     if not path.is_file():
-        raise fx.FixtureError(f"{path} is missing: run sh tests/upstream/run-llamacpp-matrix.sh (it fetches the "
+        raise fx.CacheMiss(f"{path} is missing: run sh tests/upstream/run-llamacpp-matrix.sh (it fetches the "
                               f"pinned llama.cpp sources and stores the BitNet tensors with its quantizers)")
     data = path.read_bytes()
     values, words, outside = f.decode_blocks(fmt, data, tensor.count)
@@ -356,16 +389,17 @@ def tensor_cells(tensor: Tensor, upstream_dir: Path, repro: dict) -> tuple[list,
                 stored = _upstream_stored(tensor, column, fmt, upstream, upstream_dir)
                 cell["provenance"] = "upstream_encoder"
             else:
-                cell.update({"provenance": "upstream_encoder", "evidence": "t27", "status": "not-representable",
+                cell.update({"provenance": "not_written", "evidence": "t27", "status": "not-representable",
                              "reasons": _reasons(reasons, tensor, fmt, group, ref),
-                             "note": "decided by t27 before writing; the upstream quantizer is not run"})
+                             "note": "decided by t27 before writing; the llama.cpp quantizer is not run"})
         else:
             result, reasons, written, words = mx.round_trip(fmt, rows, cols, group, ref.values, ref.words,
                                                             ref.kind, ref.group)
             t27_bytes[column] = written
             cell.update({"provenance": "t27_round_trip", "evidence": "t27", "status": mx.STATUS[result["status"]]})
             if result["status"] == mx.NOT_REPRESENTABLE:
-                cell["reasons"] = _reasons(reasons, tensor, fmt, group, ref)
+                cell.update({"provenance": "not_written", "reasons": _reasons(reasons, tensor, fmt, group, ref),
+                             "note": "decided by t27 before writing; the t27 encoder is not run"})
             else:
                 if result["status"] == mx.MISMATCH:
                     raise RuntimeError(f"{cell['id']}: a t27 round trip differs from its reference; "
@@ -373,8 +407,7 @@ def tensor_cells(tensor: Tensor, upstream_dir: Path, repro: dict) -> tuple[list,
                 cell.update({"trits": _trits_entry(count, result, mx.EXPLAIN),
                              "scales": _scales_entry(words, mx.scale_kind(fmt), mx.scale_group(fmt, group),
                                                      result, mx.EXPLAIN),
-                             "outside_ternary": result["outside"], "stored_bytes": result["stored_bytes"],
-                             "bits_per_weight": result["stored_bytes"] * 8 / count,
+                             "outside_ternary": result["outside"], **_bits(result["stored_bytes"], count, "none"),
                              "bytes_sha256": _sha(written)})
         if stored is not None:
             # Bytes written by a third party: published, or by the llama.cpp quantizer.
@@ -386,7 +419,8 @@ def tensor_cells(tensor: Tensor, upstream_dir: Path, repro: dict) -> tuple[list,
                          "trits": _trits_entry(count, result, mx.EXPLAIN),
                          "scales": _scales_entry(stored.words, stored.kind, stored.group, result, mx.EXPLAIN),
                          "flags": stored.flags,
-                         "stored_bytes": stored.stored_bytes, "bits_per_weight": stored.stored_bytes * 8 / count,
+                         **_bits(stored.stored_bytes, count, stored.extra.get("container", "none"),
+                                 stored.extra.get("gguf")),
                          "t27_reencode": {"differ_bytes": differ, "first": first,
                                           "note": "the t27 writer given the decoded trits and scale words, "
                                                   "against the stored code bytes"}})
@@ -606,15 +640,19 @@ def _summary(cells, derived) -> dict:
     for cell in cells:
         by_status[cell["status"]] = by_status.get(cell["status"], 0) + 1
         by_provenance[cell["provenance"]] = by_provenance.get(cell["provenance"], 0) + 1
+    t27_format = {column: fmt for column, fmt, _, _, _ in COLUMNS}
     for cell in cells:
         family = cell["tensor"].split("-")[0]
-        entry = by_family.setdefault(family, {"formats": 0, "third_party_formats": set()})
+        entry = by_family.setdefault(family, {"columns": 0, "storage_formats": 0, "third_party_formats": set()})
         if cell["evidence"] == "third-party":
             entry["third_party_formats"].add(cell["format"])
     for family, entry in by_family.items():
-        entry["formats"] = len({c["format"] for c in cells if c["tensor"].startswith(family)})
+        columns = {c["format"] for c in cells if c["tensor"].startswith(family)}
+        entry["columns"] = len(columns)
+        entry["storage_formats"] = len({t27_format[column] for column in columns})
         entry["third_party_formats"] = sorted(entry["third_party_formats"])
-    return {"tensors": len({c["tensor"] for c in cells}), "columns": len(COLUMNS), "cells": len(cells),
+    return {"tensors": len({c["tensor"] for c in cells}), "columns": len(COLUMNS),
+            "storage_formats": len(set(t27_format.values())), "cells": len(cells),
             "status": dict(sorted(by_status.items())), "provenance": dict(sorted(by_provenance.items())),
             "families": by_family, "derived_cells": len(derived),
             "mismatches_with_repro": sum(1 for c in cells + derived if c["status"] == "mismatch" and "repro" in c)}
@@ -704,7 +742,14 @@ def main(argv=None) -> int:
     parser.add_argument("--upstream", type=Path, default=UPSTREAM, help="the llama.cpp-encoded tensors")
     args = parser.parse_args(argv)
     started = time.time()
-    report, repro = run(args.upstream)
+    try:
+        report, repro = run(args.upstream)
+    except (fx.FixtureError, f.FormatError) as error:
+        print(f"ternary check: {error}", file=sys.stderr)
+        if isinstance(error, fx.CacheMiss):
+            print("ternary check: make ternary-check fetches the fixtures, builds t27 and runs the llama.cpp "
+                  "writers before this step (OFFLINE=1 for the caches only)", file=sys.stderr)
+        return 2
     files = outputs(report, repro)
     seconds = round(time.time() - started, 2)
     RUN.parent.mkdir(parents=True, exist_ok=True)

@@ -304,6 +304,30 @@ static void test_compare_and_ties(void) {
     assert(detail[TMX_T_DIFFER_ELSEWHERE] == 1 && detail[TMX_T_FIRST_ELSEWHERE] == (int64_t)off);
     assert(result[TMX_R_TRITS_EXPLAIN] == TMX_EXPLAIN_UNEXPLAINED);
     assert(tmx_explain_ties(master, sizeof master - 1, M, scale, ref, der, detail, result) == TF_ERR_LENGTH);
+    /* One consistent rule at the tie value is no split: every tie weight +-1 in one tensor and 0 in the
+     * other puts every difference at a tie, yet no bf16 value carries both trits in the reference, so a
+     * function of the bf16 values gives it and the difference stays unexplained. */
+    static int32_t rule[M], rounded[M];
+    for (int mode = 0; mode < 2; mode++) {
+        long at_ties = 0;
+        for (size_t i = 0; i < M; i++) {
+            uint16_t w = (uint16_t)(master[2 * i] | master[2 * i + 1] << 8);
+            double v = bf16_value(w);
+            int32_t sign = v > 0 ? 1 : -1, base = fabs(v) > 0.609375 ? sign : 0;
+            bool is_tie = (w & 0x7FFF) == tie;
+            rule[i] = is_tie ? (mode == 0 ? sign : 0) : base;
+            rounded[i] = is_tie ? (mode == 0 ? 0 : sign) : base;
+            if (rule[i] != rounded[i]) at_ties++;
+        }
+        assert(at_ties > 0);
+        assert(tmx_compare(rule, rounded, R, C, one, 1, TF_KIND_BF16, 0, one, 1, TF_KIND_BF16, 0, false, result) == 0);
+        assert(result[TMX_R_TRITS_DIFFER] == at_ties);
+        assert(tmx_explain_ties(master, sizeof master, M, scale, rule, rounded, detail, result) == 0);
+        assert(detail[TMX_T_DIFFER_AT_TIES] == at_ties && detail[TMX_T_DIFFER_ELSEWHERE] == 0);
+        if (mode == 0) assert(detail[TMX_T_POS_ZERO] == 0 && detail[TMX_T_NEG_ZERO] == 0);
+        else assert(detail[TMX_T_POS_NONZERO] == 0 && detail[TMX_T_NEG_NONZERO] == 0);
+        assert(result[TMX_R_TRITS_EXPLAIN] == TMX_EXPLAIN_UNEXPLAINED);
+    }
     /* Indices for a reproduction. */
     int64_t idx[4];
     int64_t got = tmx_word_indices(master, sizeof master, M, tie, ref, 1, idx, 4);
@@ -346,6 +370,20 @@ static void test_compare_and_ties(void) {
     zeroed[2 * C + 40] = 1;
     assert(tmx_compare(zeroed, zeroed, R, C, one, 1, TF_KIND_BF16, 0, per_group, R * (C / 32), TF_KIND_F16, 32, true, result) == 0);
     assert(result[TMX_R_SCALES_EXPLAIN] == TMX_EXPLAIN_UNEXPLAINED);
+    /* The trit must be 0 in both tensors: a zero-scale group whose weight is +1 on one side only is
+     * unexplained, whichever side it is on. */
+    static int32_t one_side[M];
+    memcpy(one_side, zeroed, sizeof one_side);
+    zeroed[2 * C + 40] = 0;
+    uint32_t whole[R * (C / 32)];
+    for (size_t g = 0; g < R * (C / 32); g++) whole[g] = 0x3CE0;
+    assert(tmx_compare(zeroed, zeroed, R, C, whole, R * (C / 32), TF_KIND_F16, 32, per_group, R * (C / 32), TF_KIND_F16, 32, true, result) == 0);
+    assert(result[TMX_R_SCALES_DIFFER] == 32 && result[TMX_R_SCALES_EXPLAIN] == TMX_EXPLAIN_SCALE_ZERO_WEIGHTS);
+    assert(tmx_compare(zeroed, one_side, R, C, whole, R * (C / 32), TF_KIND_F16, 32, per_group, R * (C / 32), TF_KIND_F16, 32, true, result) == 0);
+    assert(result[TMX_R_TRITS_DIFFER] == 1 && result[TMX_R_SCALES_DIFFER] == 32);
+    assert(result[TMX_R_SCALES_EXPLAIN] == TMX_EXPLAIN_UNEXPLAINED);
+    assert(tmx_compare(one_side, zeroed, R, C, per_group, R * (C / 32), TF_KIND_F16, 32, whole, R * (C / 32), TF_KIND_F16, 32, true, result) == 0);
+    assert(result[TMX_R_SCALES_EXPLAIN] == TMX_EXPLAIN_UNEXPLAINED);
     per_group[5] = 0x7C00;
     assert(tmx_compare(ref, ref, R, C, one, 1, TF_KIND_BF16, 0, per_group, R * (C / 32), TF_KIND_F16, 32, true, result) == TF_ERR_SCALE_NONFINITE);
 }
@@ -369,9 +407,28 @@ static void test_reencode_trailer(void) {
     assert(tmx_reencode(TF_I2_S, R, C, 0, back, scale, 1, bytes, sizeof bytes - 1, again, sizeof again, first) == TF_ERR_LENGTH);
 }
 
+/* Bits per weight and the GGUF metadata share against direct arithmetic: the padding as the
+ * distance to the next multiple of the alignment, the quotient of two exact doubles. */
+static void test_bits_and_metadata(void) {
+    for (int k = 0; k < 20000; k++) {
+        uint64_t name = next_u32() % 200, dims = 1 + next_u32() % 4, data = next_u32() % 100000000u;
+        uint64_t alignment = (uint64_t)1 << (next_u32() % 12);
+        uint64_t padded = (data + alignment - 1) / alignment * alignment;
+        assert(tmx_gguf_metadata_bytes(name, dims, data, alignment) == (int64_t)(24 + name + 8 * dims + padded - data));
+        uint64_t weights = 1 + next_u32() % 100000000u;
+        assert(tmx_bits_per_weight(data, weights) == (double)(8 * data) / (double)weights);
+    }
+    /* The case of the spec's own test (tfs_llama_gguf_tensor_bits(21, 2, 25067520, 32) == 200540648 in
+     * specs/formats/llama_cpp.t27): Bonsai blk.0.ffn_down.weight in Q2_0. */
+    assert(8 * (tmx_gguf_metadata_bytes(21, 2, 25067520, 32) + 25067520) == 200540648);
+    assert(tmx_gguf_metadata_bytes(21, 2, 1, 48) == TF_ERR_FORMAT && tmx_bits_per_weight(1, 0) == 0.0);
+}
+
 int main(void) {
     test_tmx_exact_words(); /* the test blocks of t27/matrix.t27 itself */
     test_tmx_small_cells();
+    test_tmx_metadata_share();
+    test_bits_and_metadata();
     test_exact_words();
     test_bf16_round();
     test_layouts();
@@ -379,6 +436,6 @@ int main(void) {
     test_compare_and_ties();
     test_reencode_trailer();
     printf("PASS matrix: exact scale words, bf16 rounding, layouts, representability and round trips of 10 formats, "
-           "comparisons, tie explanations, code positions, re-encoding\n");
+           "comparisons, tie explanations, code positions, re-encoding, bits per weight and GGUF metadata share\n");
     return 0;
 }

@@ -228,7 +228,9 @@ recomputes it from the fixture cache, `tests/test_matvec.py` does the same in
 the unit tests, `tests/native_matvec.c` checks the module against oracles
 written in C (including the CPython stream for four seeds), and
 `tests/matvec_wasm.mjs` recomputes all eight stored forms in `formats.wasm`
-and checks them against the report. The consumer `layer0_matvec` of
+and checks them against the report when the fixture cache holds them (the CI
+job `ternary-check` runs it with `TRINITY_REQUIRE_CACHED=1`, so a skipped form
+fails there). The consumer `layer0_matvec` of
 `fixtures/manifest.json` is now implemented; this supersedes the note under
 Fixtures that it is planned. It reads the same 36 ranges as
 `trinity_memory.ternary_check`.
@@ -236,12 +238,16 @@ Fixtures that it is planned. It reads the same 36 ranges as
 ## Matrix: every real tensor in every format (#32)
 
 The three tensors above (BitNet 2B4T layer 0 `q_proj` and `down_proj`, Ternary
-Bonsai 2 27B layer 0 `ffn_down`) against twelve storage formats give 36 cells.
+Bonsai 2 27B layer 0 `ffn_down`) against ten storage formats in twelve columns
+(TQ1_0 and TQ2_0 each written by t27 and by llama.cpp) give 36 cells.
 Every cell is decided by executable t27, `t27/matrix.t27` over the readers and
 writers of `t27/formats.t27` (generated C, and `formats.wasm`, where
-`tests/matrix_wasm.mjs` recomputes all 36 cells and the two derived ones below);
-Python only moves bytes and renders. Each tensor has a reference, its first
-published form (HF packed for BitNet, PTQ1_0 for Bonsai), and a cell is:
+`tests/matrix_wasm.mjs` recomputes all 36 cells and the two derived ones below
+when the caches hold their bytes; the CI job `ternary-check` runs it with
+`TRINITY_REQUIRE_CACHED=1`, so a skipped cell fails there); Python only moves
+bytes and renders. Each tensor has a reference, a published form chosen as the
+baseline (HF packed for BitNet, PTQ1_0 for Bonsai; the choice says nothing
+about which form was published first), and a cell is:
 
 - `match`: trits identical, and every weight's scale has the same value (scales
   are compared weight by weight as exact values, so an f16 and a bf16 word of the
@@ -253,16 +259,18 @@ published form (HF packed for BitNet, PTQ1_0 for Bonsai), and a cell is:
   applies (`shape`, `binary_only`, `code_outside`, `group_scales_differ`,
   `scale_precision`), the number of affected units and the first weight index.
 
-A cell's bytes come from one of three places. Published bytes of the pinned
-checkpoints (3 references and 5 other cells) and bytes written by the pinned
-llama.cpp reference quantizers `quantize_row_tq1_0_ref` and
-`quantize_row_tq2_0_ref` (4 cells, BitNet only) are third-party evidence: for
-BitNet HF packed, I2_S, TQ1_0 and TQ2_0, for Bonsai PTQ1_0, PQ2_0, Q2_0 (group
-64) and MLX 2-bit. The other 22 cells are t27 round trips (the t27 encoder writes
-the reference, the t27 decoder reads it back): they show that a format can hold
-the tensor, and they are not third-party evidence. For TQ1_0 and TQ2_0 of the
-Bonsai tensor t27 decides before anything is written that the format cannot hold
-it, so the llama.cpp quantizers are not run there. The llama.cpp input is
+A cell's bytes come from one of three places, or from none (the `provenance` of
+the cell). Published bytes of the pinned checkpoints (3 references and 5 other
+cells) and bytes written by the pinned llama.cpp reference quantizers
+`quantize_row_tq1_0_ref` and `quantize_row_tq2_0_ref` (4 cells, BitNet only) are
+third-party evidence: for BitNet HF packed, I2_S, TQ1_0 and TQ2_0, for Bonsai
+PTQ1_0, PQ2_0, Q2_0 (group 64) and MLX 2-bit. The other 24 cells are t27's alone:
+15 t27 round trips (the t27 encoder writes the reference, the t27 decoder reads
+it back), which show that a format can hold the tensor, and 9 not-representable
+cells (provenance `not_written`), which t27 decides from the reference before
+anything is written, so neither the t27 encoder nor a llama.cpp quantizer runs
+for them (among them TQ1_0 and TQ2_0 of the Bonsai tensor in both columns).
+None of these 24 is third-party evidence. The llama.cpp input is
 `w = t × weight_scale` in float, one quantize call per row
 (`tests/upstream/encode_llamacpp_tq.c`); the sources are the pinned ones of the
 issue 15193 harness, fetched and sha256-checked by
@@ -314,6 +322,17 @@ Totals: 23 match, 4 mismatch, 9 not representable. What the matrix adds:
   reason for any cell; the report records it per tensor.
 - **ONNX Runtime `MatMulNBits` with `bits=2`** (block 128, fp16 scales, default
   zero point 2) holds all three tensors in t27 round trips.
+- **Bits per weight.** Every cell with bytes carries `stored_bytes` and
+  `bits_per_weight` (codes, scales, zero points or biases, and the format's own
+  padding, as the table under "Bits per weight" in `specs/formats/OWNERS.md`
+  counts them) and `metadata`, the tensor's metadata share as OWNERS.md defines
+  it, both computed by t27 (`tmx_bits_per_weight`, `tmx_gguf_metadata_bytes`).
+  For a published GGUF tensor the share is its info record and the alignment
+  padding after its data: 61 bytes for Bonsai `ffn_down` in Q2_0, so 2.25 bits
+  per weight become 2.2500055 (the case `specs/formats/llama_cpp.t27` tests).
+  A safetensors tensor has no share of its own (the JSON header is file
+  overhead), and neither have bytes in no container: the t27 round trips and
+  the llama.cpp writers' output.
 
 Reports, all deterministic (the time and host of a run go to
 `build/ternary-check/run.json`, outside them):
@@ -327,9 +346,13 @@ self-contained page), and one reproduction per mismatch in
 [`schemas/ternary-check.repro.v1.schema.json`](../schemas/ternary-check.repro.v1.schema.json)):
 file offsets, bytes, bit positions, decoded trits and scale words of the first
 differing weights, and for the derived cells weights with the same bf16 master
-word and different packed trits. The statuses of the report reuse the tokens of
-`specs/formats/OWNERS.md` (`constants.errors`, `constants.flags`), and each
-published cell carries its reader flags.
+word and different packed trits. The error and flag tokens of the report
+(`taxonomy.errors`, `taxonomy.flags`) are those of `specs/formats/OWNERS.md`
+(`constants.errors`, `constants.flags` of the conformance files), and each
+published cell carries its reader flags. The cell statuses, reasons and
+explanations are the `TMX_*` tokens of `t27/matrix.t27`: verdicts on valid
+input, not rejects (OWNERS.md relates them to the reject classes in its
+paragraph on `t27/matrix.t27`).
 
 One command, from a clean clone:
 
@@ -340,14 +363,36 @@ make ternary-check-verify     # recompute and compare with the committed reports
 ```
 
 Without `T27_ROOT` the script fetches gHashTag/t27 at `native/compiler.lock` into
-`build/compiler`. The CI job `ternary-check` runs `make ternary-check` on a clean
-checkout with the fixture cache and fails unless the committed reports come out
-exactly. `tests/test_ternary_check.py` validates the report and every
-reproduction against the schemas, checks the numbers of this section, and
-recomputes all committed files from the caches; `tests/native_matrix.c` checks
-the t27 module against oracles written in C. Limits: three tensors; the t27
-round trips are not third-party evidence; llama.cpp is the only upstream writer
-run here; no model was run.
+`build/compiler`. For the matrix this replaces the two commands under Reproduce
+below: `python3 -m trinity_memory.ternary_check` alone now also needs the
+llama.cpp-encoded tensors in `build/upstream/matrix/` (written by
+`sh tests/upstream/run-llamacpp-matrix.sh`, which `make ternary-check` runs), it
+writes `build/ternary-check.json`, `build/ternary-check.html` and
+`build/ternary-check/repro/`, and when a cache file is missing it stops with
+exit status 2 and a message naming the step, not a traceback.
+
+The CI job `ternary-check` runs `make ternary-check` on a clean checkout with the
+fixture cache and fails unless the committed reports come out exactly; then, with
+`TRINITY_REQUIRE_CACHED=1`, `tests/matrix_wasm.mjs` and `tests/matvec_wasm.mjs`
+recompute every cell and stored form in `formats.wasm` and the unit tests of both
+reports recompute them in the generated C, and a skip fails.
+`tests/test_ternary_check.py` validates the report and every reproduction against
+the schemas, checks that every number this section quotes is the report's and is
+written here, and recomputes all committed files from the caches (skipped only
+when a cache file is missing); `tests/native_matrix.c` checks the t27 module
+against oracles written in C, including a consistent tie rule that must stay
+unexplained and a zero-scale block with a nonzero trit on one side.
+
+`reports/ternary-check/2026-09-22.json`, the "Full data" of the Results table, is
+the first run's snapshot, kept as history. It carries the schema string
+`trinity.ternary-check.v1` but predates the JSON Schema: its shape is
+`{schema, generated, checks}`, with a timestamp and run times, it does not
+validate against `schemas/ternary-check.v1.schema.json` (whose `$comment` says
+so), and nothing regenerates it. `reports/ternary-check.json` holds each of its
+numbers, and `tests/test_ternary_check.py` checks that they are equal.
+
+Limits: three tensors; the t27 round trips are not third-party evidence;
+llama.cpp is the only upstream writer run here; no model was run.
 
 ## Reproduce
 

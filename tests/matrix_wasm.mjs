@@ -7,6 +7,9 @@
 // llama.cpp-encoded cells when build/upstream/matrix holds them
 // (tests/upstream/run-llamacpp-matrix.sh), and the BitNet absmean cells with
 // their tie counts. This script only reads files, moves bytes and compares.
+// A cell whose bytes are not cached is counted as skipped; with
+// TRINITY_REQUIRE_CACHED=1 (the CI job ternary-check) any skip fails, so all
+// 36 cells and the derived ones must be recomputed.
 import {createHash} from 'node:crypto';
 import {existsSync, readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
@@ -39,6 +42,8 @@ const STATUS = Object.fromEntries(Object.entries(report.taxonomy.cell_status).ma
 const EXPLAIN = {0: null, ...Object.fromEntries(Object.entries(report.taxonomy.explanations).map(([k, v]) => [v.code, k]))};
 const REASONS = Object.entries(report.taxonomy.reasons).sort((a, b) => a[1].code - b[1].code).map(([k]) => k);
 const slot = (at, i) => Number(view(BigInt64Array, at, R.stored_bytes + 1)[i]);
+const EXPLAIN_CODE = Object.fromEntries(Object.entries(report.taxonomy.explanations).map(([k, v]) => [k, v.code]));
+const requireCached = process.env.TRINITY_REQUIRE_CACHED === '1';
 
 // ---- oracles ---------------------------------------------------------------
 {
@@ -70,6 +75,50 @@ const slot = (at, i) => Number(view(BigInt64Array, at, R.stored_bytes + 1)[i]);
     backWords, reasons, result), 0);
   assert.equal(slot(result, R.status), 2);
   assert.equal(slot(result, R.reason), REASONS.indexOf('binary_only'));
+  release(heapBase);
+}
+{
+  // Ties: bf16 master words at +-t = 0.5 x weight_scale (0x3f1c for 0x3f9c) every other weight, 1.0 elsewhere.
+  // The derived trits are 0 at +-t. A reference that stores both 0 and +-1 at one tie value is a split;
+  // one consistent rule (every tie +-1, or every tie 0 against derived +-1) is not, and stays unexplained.
+  const rows = 4, cols = 16, n = rows * cols, scale = 0x3f9c, tie = 0x3f1c;
+  const master = alloc(2 * n), ref = alloc(4 * n), der = alloc(4 * n), detail = alloc(8 * 9), result = alloc(8 * 11);
+  const words = view(Uint16Array, master, n), r = view(Int32Array, ref, n), d = view(Int32Array, der, n);
+  for (let i = 0; i < n; i++) words[i] = i % 4 === 0 ? tie : i % 4 === 1 ? tie | 0x8000 : 0x3f80;
+  const sign = (i) => (words[i] & 0x8000 ? -1 : 1);
+  const atTie = (i) => (words[i] & 0x7fff) === tie;
+  const explain = (refAt, derAt) => {
+    for (let i = 0; i < n; i++) { r[i] = atTie(i) ? refAt(i) : 1; d[i] = atTie(i) ? derAt(i) : 1; }
+    assert.equal(api.tmx_compare(ref, der, rows, cols, 0, 0, 0, 0, 0, 0, 0, 0, 0, result), 0);
+    assert.equal(api.tmx_explain_ties(master, 2 * n, n, scale, ref, der, detail, result), 0);
+    assert.equal(Number(view(BigInt64Array, detail, 9)[6]), 0, 'no difference away from the tie value');
+    return EXPLAIN[slot(result, R.trits_explain)];
+  };
+  assert.equal(explain((i) => (i % 8 < 4 ? sign(i) : 0), () => 0), 'tie_split');
+  assert.equal(explain((i) => sign(i), () => 0), 'unexplained');
+  assert.equal(explain(() => 0, (i) => sign(i)), 'unexplained');
+  // Scales differing only where the trit is 0 in both tensors are explained; a +1 on one side is not.
+  const zr = 2, zc = 64, zn = zr * zc, groups = zn / 32;
+  const a = alloc(4 * zn), b = alloc(4 * zn), full = alloc(4 * groups), zeroed = alloc(4 * groups);
+  view(Int32Array, a, zn).forEach((_, i, t) => { t[i] = i >= 32 && i < 64 ? 0 : ((i * 7919) % 3) - 1; });
+  view(Uint32Array, full, groups).fill(0x3ce0);
+  view(Uint32Array, zeroed, groups).fill(0x3ce0);
+  view(Uint32Array, zeroed, groups)[1] = 0;
+  const compareScales = (x, y) => {
+    assert.equal(api.tmx_compare(x, y, zr, zc, full, groups, KIND.F16, 32, zeroed, groups, KIND.F16, 32, 1, result), 0);
+    return [slot(result, R.scales_differ), EXPLAIN[slot(result, R.scales_explain)]];
+  };
+  view(Int32Array, b, zn).set(view(Int32Array, a, zn));
+  assert.deepEqual(compareScales(a, b), [32, 'scale_zero_weights']);
+  view(Int32Array, b, zn)[40] = 1;
+  assert.deepEqual(compareScales(a, b), [32, 'unexplained']);
+  assert.deepEqual(compareScales(b, a), [32, 'unexplained']);
+  // Bits per weight and the GGUF metadata share (the spec's case: 21-byte name, 2 dims, alignment 32).
+  assert.equal(api.tmx_bits_per_weight(1638432n, 6553600n), 2.0000390625);
+  assert.equal(api.tmx_gguf_metadata_bytes(21n, 2n, 25067520n, 32n), 61n);
+  assert.equal(api.tmx_gguf_metadata_bytes(21n, 2n, 25067521n, 32n), 92n);
+  assert.equal(api.tmx_gguf_metadata_bytes(21n, 2n, 1n, 24n), -50n);
+  assert.ok(EXPLAIN_CODE.tie_split && EXPLAIN_CODE.scale_zero_weights);
   release(heapBase);
 }
 
@@ -137,6 +186,15 @@ function checkCompared(cell, result) {
   assert.equal(slot(result, R.scales_first), cell.scales.first, `${cell.id} first scale`);
   assert.equal(EXPLAIN[slot(result, R.scales_explain)], cell.scales.explanation, `${cell.id} scale explanation`);
 }
+function checkBits(cell, count) {
+  assert.equal(api.tmx_bits_per_weight(BigInt(cell.stored_bytes), BigInt(count)), cell.bits_per_weight, `${cell.id} bits`);
+  const m = cell.metadata;
+  const extra = m.record ? Number(api.tmx_gguf_metadata_bytes(BigInt(m.record.name_size), BigInt(m.record.dims),
+    BigInt(cell.stored_bytes), BigInt(m.record.alignment))) : 0;
+  assert.equal(extra, m.bytes, `${cell.id} metadata bytes`);
+  assert.equal(api.tmx_bits_per_weight(BigInt(cell.stored_bytes + extra), BigInt(count)), m.bits_per_weight,
+    `${cell.id} bits with metadata`);
+}
 function checkReasons(cell, reasons) {
   const got = [];
   const all = view(BigInt64Array, reasons, 2 * REASONS.length);
@@ -150,8 +208,9 @@ for (const tensor of report.tensors) {
   const [rows, cols] = tensor.shape, count = rows * cols;
   const cells = report.cells.filter((c) => c.tensor === tensor.id);
   const refCell = cells.find((c) => c.provenance === 'reference');
+  const derivedCells = report.derived.filter((c) => c.tensor === tensor.id);
   const ref = decode(tensor, refCell);
-  if (!ref) { skipped += cells.length + 1; continue; }
+  if (!ref) { skipped += cells.length + derivedCells.length; continue; }
   assert.equal(sha(ref.values, 4 * count), tensor.reference.trits_sha256_le, `${tensor.id} reference trits`);
   const base = mark();
   const result = alloc(8 * 11), reasons = alloc(16 * REASONS.length), first = alloc(8);
@@ -159,7 +218,9 @@ for (const tensor of report.tensors) {
   for (const cell of cells) {
     release(afterRef);
     const format = formatOf[cell.format], fmt = format.t27_format, group = format.group_argument;
-    if (cell.provenance === 't27_round_trip') {
+    if (cell.status !== 'not-representable') checkBits(cell, count);
+    // The columns the t27 writer fills: a round trip, or not representable and never written.
+    if (format.writer === 't27' && !['reference', 'published'].includes(cell.provenance)) {
       const n = api.tmx_scale_count(rows, cols, api.tmx_scale_group(fmt, group));
       const words = alloc(4 * n), cap = Math.floor(count / 2) + rows * Math.max(group, 64) + 64, out = alloc(cap);
       const back = alloc(4 * count), backWords = alloc(4 * n);
@@ -194,7 +255,7 @@ for (const tensor of report.tensors) {
     assert.equal(Number(differ), cell.t27_reencode.differ_bytes, `${cell.id} re-encode`);
     replayed++;
   }
-  for (const cell of report.derived.filter((c) => c.tensor === tensor.id)) {
+  for (const cell of derivedCells) {
     release(afterRef);
     const master = cached(cell.source);
     if (!master) { skipped++; continue; }
@@ -215,7 +276,13 @@ for (const tensor of report.tensors) {
   }
   release(base);
 }
-console.log(`formats.wasm matrix: exact scale words and round trips of 10 formats checked; ${replayed} cells of ` +
-  `reports/ternary-check.json reproduce` +
+const total = report.cells.length + report.derived.length;
+assert.equal(replayed + skipped, total, 'every cell is either replayed or skipped');
+console.log(`formats.wasm matrix: exact scale words, round trips of 10 formats, tie and zero-weight explanations ` +
+  `checked; ${replayed} of ${total} cells of reports/ternary-check.json reproduce` +
   (skipped ? `, ${skipped} skipped (fixture ranges or llama.cpp-encoded tensors not cached: python3 ` +
     `tools/fetch-fixtures.py, sh tests/upstream/run-llamacpp-matrix.sh)` : ''));
+if (requireCached && skipped) {
+  console.error(`TRINITY_REQUIRE_CACHED=1: ${skipped} cells were not recomputed`);
+  process.exit(1);
+}
