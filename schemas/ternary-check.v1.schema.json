@@ -2,6 +2,7 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/dmitrii-f-t27/trinity-memory/blob/master/schemas/ternary-check.v1.schema.json",
  "title": "trinity.ternary-check.v1",
+ "$comment": "reports/ternary-check/2026-09-22.json carries the same schema string but predates this schema: it is the first-run snapshot kept as history, with the shape {schema, generated, checks}, and does not validate here. tests/test_ternary_check.py (FirstSnapshotTest) checks that shape and that every number in it equals the report this schema describes.",
  "description": "Compatibility matrix of t27 Ternary Check (issue #32): every real tensor x every storage format, decided by t27/matrix.t27. Written by python3 -m trinity_memory.ternary_check as reports/ternary-check.json; the minimal reproductions of its mismatches follow schemas/ternary-check.repro.v1.schema.json.",
  "type": "object",
  "required": ["schema", "issue", "reproduce", "compiler", "fixtures", "run_metadata", "comparison", "taxonomy",
@@ -50,10 +51,10 @@
     },
     "provenance": {
      "type": "object", "additionalProperties": false,
-     "required": ["reference", "published", "t27_round_trip", "upstream_encoder", "derived"],
+     "required": ["reference", "published", "t27_round_trip", "upstream_encoder", "not_written", "derived"],
      "properties": {
       "reference": {"type": "string"}, "published": {"type": "string"}, "t27_round_trip": {"type": "string"},
-      "upstream_encoder": {"type": "string"}, "derived": {"type": "string"}
+      "upstream_encoder": {"type": "string"}, "not_written": {"type": "string"}, "derived": {"type": "string"}
      }
     },
     "errors": {"type": "object", "additionalProperties": {"type": "integer", "maximum": -50}},
@@ -125,9 +126,11 @@
   "derived": {"type": "array", "items": {"$ref": "#/$defs/derived_cell"}},
   "summary": {
    "type": "object", "additionalProperties": false,
-   "required": ["tensors", "columns", "cells", "status", "provenance", "families", "derived_cells", "mismatches_with_repro"],
+   "required": ["tensors", "columns", "storage_formats", "cells", "status", "provenance", "families", "derived_cells",
+                "mismatches_with_repro"],
    "properties": {
     "tensors": {"type": "integer", "minimum": 1}, "columns": {"type": "integer", "minimum": 5},
+    "storage_formats": {"type": "integer", "minimum": 5},
     "cells": {"type": "integer", "minimum": 10},
     "status": {"type": "object", "additionalProperties": false,
                "properties": {"match": {"type": "integer"}, "mismatch": {"type": "integer"},
@@ -136,8 +139,9 @@
     "families": {
      "type": "object", "minProperties": 2,
      "additionalProperties": {
-      "type": "object", "additionalProperties": false, "required": ["formats", "third_party_formats"],
-      "properties": {"formats": {"type": "integer", "minimum": 5},
+      "type": "object", "additionalProperties": false,
+      "required": ["columns", "storage_formats", "third_party_formats"],
+      "properties": {"columns": {"type": "integer", "minimum": 5}, "storage_formats": {"type": "integer", "minimum": 5},
                      "third_party_formats": {"type": "array", "items": {"$ref": "#/$defs/column"}}}
      }
     },
@@ -212,6 +216,22 @@
                   "first": {"$ref": "#/$defs/index"},
                   "unit": {"type": "string"}}
   },
+  "metadata": {
+   "type": "object", "additionalProperties": false, "required": ["container", "bytes", "bits_per_weight", "note"],
+   "properties": {
+    "container": {"enum": ["gguf", "safetensors", "none"]},
+    "bytes": {"type": "integer", "minimum": 0},
+    "bits_per_weight": {"type": "number", "exclusiveMinimum": 0},
+    "note": {"type": "string"},
+    "record": {
+     "type": "object", "additionalProperties": false, "required": ["name_size", "dims", "alignment"],
+     "properties": {"name_size": {"type": "integer", "minimum": 0}, "dims": {"type": "integer", "minimum": 1},
+                    "alignment": {"type": "integer", "minimum": 1}}
+    }
+   },
+   "allOf": [{"if": {"properties": {"container": {"const": "gguf"}}}, "then": {"required": ["record"]},
+              "else": {"properties": {"bytes": {"const": 0}}, "not": {"required": ["record"]}}}]
+  },
   "repro_path": {"type": "string", "pattern": "^reports/ternary-check/repro/[a-z0-9_-]+--[a-z0-9_]+\\.json$"},
   "cell": {
    "type": "object",
@@ -219,13 +239,14 @@
    "properties": {
     "id": {"type": "string", "pattern": "^[a-z0-9_-]+--[a-z0-9_]+$"},
     "tensor": {"$ref": "#/$defs/tensor_id"}, "format": {"$ref": "#/$defs/column"},
-    "provenance": {"enum": ["reference", "published", "t27_round_trip", "upstream_encoder"]},
+    "provenance": {"enum": ["reference", "published", "t27_round_trip", "upstream_encoder", "not_written"]},
     "evidence": {"enum": ["third-party", "t27"]},
     "status": {"$ref": "#/$defs/status"},
     "source": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
     "trits": {"$ref": "#/$defs/trits"}, "scales": {"$ref": "#/$defs/scales"}, "flags": {"$ref": "#/$defs/flags"},
     "reasons": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/reason"}},
     "stored_bytes": {"type": "integer", "minimum": 1}, "bits_per_weight": {"type": "number", "exclusiveMinimum": 0},
+    "metadata": {"$ref": "#/$defs/metadata"},
     "outside_ternary": {"type": "integer", "minimum": 0},
     "bytes_sha256": {"$ref": "#/$defs/sha256"},
     "t27_reencode": {"$ref": "#/$defs/byte_check"}, "t27_round_trip_bytes": {"$ref": "#/$defs/byte_check"},
@@ -235,7 +256,11 @@
    "allOf": [
     {"if": {"properties": {"status": {"const": "not-representable"}}},
      "then": {"required": ["reasons"], "not": {"anyOf": [{"required": ["trits"]}, {"required": ["scales"]}]}},
-     "else": {"required": ["trits", "scales", "stored_bytes", "bits_per_weight"], "not": {"required": ["reasons"]}}},
+     "else": {"required": ["trits", "scales", "stored_bytes", "bits_per_weight", "metadata"],
+              "not": {"required": ["reasons"]}}},
+    {"if": {"properties": {"status": {"const": "not-representable"}}},
+     "then": {"properties": {"provenance": {"const": "not_written"}}},
+     "else": {"not": {"properties": {"provenance": {"const": "not_written"}}}}},
     {"if": {"properties": {"status": {"const": "match"}}},
      "then": {"properties": {"trits": {"properties": {"differ": {"const": 0}}},
                              "scales": {"properties": {"differ": {"const": 0}}}}}},
@@ -243,9 +268,9 @@
     {"if": {"properties": {"provenance": {"enum": ["reference", "published", "upstream_encoder"]},
                            "status": {"enum": ["match", "mismatch"]}}},
      "then": {"required": ["source", "flags", "t27_reencode"]}},
-    {"if": {"properties": {"provenance": {"const": "t27_round_trip"}}},
+    {"if": {"properties": {"provenance": {"enum": ["t27_round_trip", "not_written"]}}},
      "then": {"properties": {"evidence": {"const": "t27"}}}},
-    {"if": {"properties": {"provenance": {"enum": ["reference", "published"]}}},
+    {"if": {"properties": {"provenance": {"enum": ["reference", "published", "upstream_encoder"]}}},
      "then": {"properties": {"evidence": {"const": "third-party"}}}}
    ]
   },

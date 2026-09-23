@@ -60,6 +60,7 @@
    "published": "bytes of a pinned public checkpoint, decoded by t27: third-party evidence",
    "t27_round_trip": "written by the t27 encoder and read back by the t27 decoder: shows that the format can hold the tensor; not third-party evidence",
    "upstream_encoder": "written by the pinned llama.cpp reference quantizer from the dequantized tensor, read by the t27 decoder: third-party evidence",
+   "not_written": "nothing is written: t27 (tmx_representable) decides from the reference trits and scales that the format cannot hold the tensor, so neither the t27 encoder nor an upstream writer runs; not third-party evidence",
    "derived": "trits computed by t27 from published bf16 master weights with the transformers WeightQuant rule; not a storage format"
   },
   "errors": {
@@ -405,6 +406,12 @@
    },
    "stored_bytes": 1638402,
    "bits_per_weight": 2.00000244140625,
+   "metadata": {
+    "container": "safetensors",
+    "bytes": 0,
+    "bits_per_weight": 2.00000244140625,
+    "note": "a safetensors tensor has no record or padding of its own; the JSON header belongs to the whole file (file overhead, not counted per tensor)"
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -456,6 +463,17 @@
    },
    "stored_bytes": 1638432,
    "bits_per_weight": 2.0000390625,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 59,
+    "bits_per_weight": 2.000111083984375,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 19,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
    "t27_reencode": {
     "differ_bytes": 28,
     "first": 1638404,
@@ -489,6 +507,12 @@
    "outside_ternary": 0,
    "stored_bytes": 1433600,
    "bits_per_weight": 1.75,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.75,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "5558183e6de4de508e7b2bdb18d080ce5579687fe43af2c6e54e029ca1f315cd"
   },
   {
@@ -517,6 +541,12 @@
    "outside_ternary": 0,
    "stored_bytes": 1740800,
    "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "fcb3a90e8e44f46fb9cf7f95d0cf740bd4185a45d369c1360eabb3368af8bfa0"
   },
   {
@@ -545,6 +575,12 @@
    "outside_ternary": 0,
    "stored_bytes": 1843200,
    "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "bc0fb710036bb824c503c636ca238df381dd8415bcbd8bcda16cee2ec4aaede0"
   },
   {
@@ -573,6 +609,12 @@
    "outside_ternary": 0,
    "stored_bytes": 1843200,
    "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "4961f64d80fe2dac9300caffbb1d49932711380771564e084efa8ee68c086d60"
   },
   {
@@ -601,6 +643,12 @@
    "outside_ternary": 0,
    "stored_bytes": 1382400,
    "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "99787af55cad9480df3458c7893b239528737eaeafc6d6de01c39fb7a208db41"
   },
   {
@@ -629,13 +677,19 @@
    "outside_ternary": 0,
    "stored_bytes": 1689600,
    "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "e97ed4eb1c21ef77a7614b85b690b12bbf28048d6b7afb454126433e3c9592d0"
   },
   {
    "id": "bitnet-q_proj--q1_0",
    "tensor": "bitnet-q_proj",
    "format": "q1_0",
-   "provenance": "t27_round_trip",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -646,7 +700,8 @@
      "first": 0,
      "unit": "weights equal to 0"
     }
-   ]
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
   },
   {
    "id": "bitnet-q_proj--onnx_2bit",
@@ -674,6 +729,12 @@
    "outside_ternary": 0,
    "stored_bytes": 1740800,
    "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "ab273abc1a994cf47e59526c3cd01597ed6e0dfba57d75f25dbf5a3aa299424f"
   },
   {
@@ -721,6 +782,12 @@
    },
    "stored_bytes": 1382400,
    "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -779,6 +846,12 @@
    },
    "stored_bytes": 1689600,
    "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -846,6 +919,12 @@
    },
    "stored_bytes": 4423682,
    "bits_per_weight": 2.000000904224537,
+   "metadata": {
+    "container": "safetensors",
+    "bytes": 0,
+    "bits_per_weight": 2.000000904224537,
+    "note": "a safetensors tensor has no record or padding of its own; the JSON header belongs to the whole file (file overhead, not counted per tensor)"
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -897,6 +976,17 @@
    },
    "stored_bytes": 4423712,
    "bits_per_weight": 2.0000144675925924,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 2.000042046440972,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
    "t27_reencode": {
     "differ_bytes": 28,
     "first": 4423684,
@@ -930,6 +1020,12 @@
    "outside_ternary": 0,
    "stored_bytes": 3870720,
    "bits_per_weight": 1.75,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.75,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "8e5511aa5ea7f01141a52b9382f253f3a243661b00dd3e7136c28b6cfbd8ae19"
   },
   {
@@ -958,6 +1054,12 @@
    "outside_ternary": 0,
    "stored_bytes": 4700160,
    "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "3997a743e3291883771ca4f8a818d186ae5956e749172f6be1afbde64a24a1a7"
   },
   {
@@ -986,6 +1088,12 @@
    "outside_ternary": 0,
    "stored_bytes": 4976640,
    "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "d12b36fa9568ec1f7f381604c23cde269cf3a0b902268178796e92af61f5825e"
   },
   {
@@ -1014,6 +1122,12 @@
    "outside_ternary": 0,
    "stored_bytes": 4976640,
    "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "217d7390420e6b898ae4302d71df1f24839b035ea331ddcdfbebfd69afee2fab"
   },
   {
@@ -1042,6 +1156,12 @@
    "outside_ternary": 0,
    "stored_bytes": 3732480,
    "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "7d658bbe612c951dc53c7ee6b42c56a820b1ffee5c8a4bccbcb258a2c34415cb"
   },
   {
@@ -1070,13 +1190,19 @@
    "outside_ternary": 0,
    "stored_bytes": 4561920,
    "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "c032780f9245f4ecfe37fe117f0b6f16b5a76cfb72734c60b1f7e4beabe99888"
   },
   {
    "id": "bitnet-down_proj--q1_0",
    "tensor": "bitnet-down_proj",
    "format": "q1_0",
-   "provenance": "t27_round_trip",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1087,7 +1213,8 @@
      "first": 1,
      "unit": "weights equal to 0"
     }
-   ]
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
   },
   {
    "id": "bitnet-down_proj--onnx_2bit",
@@ -1115,6 +1242,12 @@
    "outside_ternary": 0,
    "stored_bytes": 4700160,
    "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "be147d056a961a95aecdb1ec7f22ff74d1552e1eb7ec0331d6ecba0f2e06dd9c"
   },
   {
@@ -1162,6 +1295,12 @@
    },
    "stored_bytes": 3732480,
    "bits_per_weight": 1.6875,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 1.6875,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -1219,6 +1358,12 @@
    },
    "stored_bytes": 4561920,
    "bits_per_weight": 2.0625,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.0625,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -1235,7 +1380,7 @@
    "id": "bonsai-ffn_down--hf_packed",
    "tensor": "bonsai-ffn_down",
    "format": "hf_packed",
-   "provenance": "t27_round_trip",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1253,13 +1398,14 @@
      "first": 0,
      "unit": "reference scale words without an exact word of the format's scale type"
     }
-   ]
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
   },
   {
    "id": "bonsai-ffn_down--i2_s",
    "tensor": "bonsai-ffn_down",
    "format": "i2_s",
-   "provenance": "t27_round_trip",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1270,7 +1416,8 @@
      "first": 128,
      "unit": "stored scale groups that span reference scales of different values"
     }
-   ]
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
   },
   {
    "id": "bonsai-ffn_down--ptq1_0",
@@ -1317,6 +1464,17 @@
    },
    "stored_bytes": 19496960,
    "bits_per_weight": 1.75,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 1.750005475212546,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -1368,6 +1526,17 @@
    },
    "stored_bytes": 23674880,
    "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 2.125005475212546,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -1419,6 +1588,17 @@
    },
    "stored_bytes": 25067520,
    "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "gguf",
+    "bytes": 61,
+    "bits_per_weight": 2.250005475212546,
+    "note": "the tensor's GGUF info record (24 bytes + name + 8 bytes per dimension) and the alignment padding after its data (t27 tmx_gguf_metadata_bytes); the GGUF header and key-value section belong to the whole file (file overhead, not counted per tensor)",
+    "record": {
+     "name_size": 21,
+     "dims": 2,
+     "alignment": 32
+    }
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -1488,6 +1668,12 @@
    },
    "stored_bytes": 25067520,
    "bits_per_weight": 2.25,
+   "metadata": {
+    "container": "safetensors",
+    "bytes": 0,
+    "bits_per_weight": 2.25,
+    "note": "a safetensors tensor has no record or padding of its own; the JSON header belongs to the whole file (file overhead, not counted per tensor)"
+   },
    "t27_reencode": {
     "differ_bytes": 0,
     "first": -1,
@@ -1498,7 +1684,7 @@
    "id": "bonsai-ffn_down--tq1_0",
    "tensor": "bonsai-ffn_down",
    "format": "tq1_0",
-   "provenance": "t27_round_trip",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1509,13 +1695,14 @@
      "first": 128,
      "unit": "stored scale groups that span reference scales of different values"
     }
-   ]
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
   },
   {
    "id": "bonsai-ffn_down--tq2_0",
    "tensor": "bonsai-ffn_down",
    "format": "tq2_0",
-   "provenance": "t27_round_trip",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1526,13 +1713,14 @@
      "first": 128,
      "unit": "stored scale groups that span reference scales of different values"
     }
-   ]
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
   },
   {
    "id": "bonsai-ffn_down--q1_0",
    "tensor": "bonsai-ffn_down",
    "format": "q1_0",
-   "provenance": "t27_round_trip",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1543,7 +1731,8 @@
      "first": 2,
      "unit": "weights equal to 0"
     }
-   ]
+   ],
+   "note": "decided by t27 before writing; the t27 encoder is not run"
   },
   {
    "id": "bonsai-ffn_down--onnx_2bit",
@@ -1571,13 +1760,19 @@
    "outside_ternary": 0,
    "stored_bytes": 23674880,
    "bits_per_weight": 2.125,
+   "metadata": {
+    "container": "none",
+    "bytes": 0,
+    "bits_per_weight": 2.125,
+    "note": "bare tensor bytes as the writer returns them, in no container: no metadata share"
+   },
    "bytes_sha256": "c83d3030c26f34b0ccf3e96f0326ad7c28964919f1096b56c1dc77ff939e146d"
   },
   {
    "id": "bonsai-ffn_down--tq1_0_llamacpp",
    "tensor": "bonsai-ffn_down",
    "format": "tq1_0_llamacpp",
-   "provenance": "upstream_encoder",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1589,13 +1784,13 @@
      "unit": "stored scale groups that span reference scales of different values"
     }
    ],
-   "note": "decided by t27 before writing; the upstream quantizer is not run"
+   "note": "decided by t27 before writing; the llama.cpp quantizer is not run"
   },
   {
    "id": "bonsai-ffn_down--tq2_0_llamacpp",
    "tensor": "bonsai-ffn_down",
    "format": "tq2_0_llamacpp",
-   "provenance": "upstream_encoder",
+   "provenance": "not_written",
    "evidence": "t27",
    "status": "not-representable",
    "reasons": [
@@ -1607,7 +1802,7 @@
      "unit": "stored scale groups that span reference scales of different values"
     }
    ],
-   "note": "decided by t27 before writing; the upstream quantizer is not run"
+   "note": "decided by t27 before writing; the llama.cpp quantizer is not run"
   }
  ],
  "derived": [
@@ -1763,6 +1958,7 @@
  "summary": {
   "tensors": 3,
   "columns": 12,
+  "storage_formats": 10,
   "cells": 36,
   "status": {
    "match": 23,
@@ -1770,14 +1966,16 @@
    "not-representable": 9
   },
   "provenance": {
+   "not_written": 9,
    "published": 5,
    "reference": 3,
-   "t27_round_trip": 22,
-   "upstream_encoder": 6
+   "t27_round_trip": 15,
+   "upstream_encoder": 4
   },
   "families": {
    "bitnet": {
-    "formats": 12,
+    "columns": 12,
+    "storage_formats": 10,
     "third_party_formats": [
      "hf_packed",
      "i2_s",
@@ -1786,7 +1984,8 @@
     ]
    },
    "bonsai": {
-    "formats": 12,
+    "columns": 12,
+    "storage_formats": 10,
     "third_party_formats": [
      "mlx_2bit",
      "pq2_0",

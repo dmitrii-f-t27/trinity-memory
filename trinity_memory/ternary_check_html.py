@@ -42,7 +42,7 @@ dt{font-weight:600}dd{margin:0}
 
 PROVENANCE_LABEL = {"reference": "reference, published", "published": "published",
                     "t27_round_trip": "t27 round trip", "upstream_encoder": "llama.cpp writer",
-                    "derived": "derived"}
+                    "not_written": "not written, decided by t27", "derived": "derived"}
 REASON_LABEL = {"shape": "shape", "binary_only": "binary only (no code for 0)",
                 "code_outside": "codes outside the format", "group_scales_differ": "group scales differ",
                 "scale_precision": "scale precision"}
@@ -64,6 +64,8 @@ def _cell_html(cell: dict) -> str:
         reasons = "; ".join(f"{REASON_LABEL[r['reason']]}: {_n(r['count'])} of {_n(r['of'])} {r['unit']}"
                             if r["reason"] != "shape" else REASON_LABEL[r["reason"]] for r in cell["reasons"])
         parts.append(f'<div class="detail">{_e(reasons)}</div>')
+        if cell.get("note"):
+            parts.append(f'<div class="detail">{_e(cell["note"])}</div>')
     else:
         trits, scales = cell["trits"], cell["scales"]
         lines = []
@@ -75,7 +77,12 @@ def _cell_html(cell: dict) -> str:
                          f"{_n(scales['first'])} ({scales['explanation']})")
         if not lines:
             lines.append(f"trits and {scales['dtype']} scales identical")
-        lines.append(f"{cell['bits_per_weight']:.4f} bits/weight")
+        bits = f"{cell['bits_per_weight']:.4f} bits/weight"
+        metadata = cell["metadata"]
+        if metadata["container"] != "none":
+            bits += (f"; {metadata['bits_per_weight']:.6f} with the {metadata['container']} metadata share "
+                     f"({_n(metadata['bytes'])} bytes)")
+        lines.append(bits)
         if cell.get("repro"):
             lines.append(f"repro: {cell['repro']}")
         parts.append("".join(f'<div class="detail">{_e(line)}</div>' for line in lines))
@@ -130,7 +137,7 @@ def _matvec(report: dict) -> str:
             rows.append(f"<tr><td>{_e(tensor['model'])} <code>{_e(names)}</code></td>"
                         f"<td>{_e(comparison['a'])} vs {_e(comparison['b'])}</td>"
                         f"<td>{_n(acc)} of {_n(tensor['tensor']['shape'][0])}</td><td>{_n(partials)}</td></tr>")
-    return ('<div class="wrap"><table><thead><tr><th>Tensor</th><th>Stored forms</th>'
+    return ('<div class="wrap"><table><thead><tr><th>Tensor</th><th>Forms compared</th>'
             '<th>Rows whose integer accumulators differ</th><th>Differing partial sums</th></tr></thead>'
             f'<tbody>{"".join(rows)}</tbody></table></div>')
 
@@ -139,7 +146,8 @@ def render(report: dict) -> str:
     summary = report["summary"]
     status = summary["status"]
     cards = "".join(f'<div class="card"><b>{_n(value)}</b>{_e(label)}</div>' for label, value in (
-        ("real tensors", summary["tensors"]), ("formats", summary["columns"]), ("cells", summary["cells"]),
+        ("real tensors", summary["tensors"]), ("storage formats", summary["storage_formats"]),
+        ("columns (TQ1_0, TQ2_0 by two writers)", summary["columns"]), ("cells", summary["cells"]),
         ("match", status.get("match", 0)), ("mismatch", status.get("mismatch", 0)),
         ("not representable", status.get("not-representable", 0))))
     taxonomy = report["taxonomy"]
@@ -186,9 +194,10 @@ Report <code>reports/ternary-check.json</code> (schema <code>{_e(report['schema'
 <div class="cards">{cards}</div>
 <h2>Compatibility matrix</h2>
 <p class="muted">A cell is <b>match</b> when trits and every weight's scale are identical to the tensor's reference
-(the first published form: HF packed for BitNet, PTQ1_0 for Bonsai), <b>mismatch</b> with the first differing index,
+(the chosen reference: HF packed for BitNet, PTQ1_0 for Bonsai), <b>mismatch</b> with the first differing index,
 the count and an explanation, or <b>not representable</b> with the reasons. Third-party evidence: {_e(evidence)}.
-t27 round trips show that a format can hold a tensor; they are not third-party evidence.</p>
+t27 round trips show that a format can hold a tensor; they are not third-party evidence. A not-representable cell
+is decided by t27 before anything is written, so no writer runs for it.</p>
 {_matrix(report)}
 <h2>BitNet triple check: bf16 master → absmean, packed, I2_S</h2>
 <p class="muted">The packed checkpoint and the I2_S file hold the same trits. Ternarizing the published bf16 master
@@ -197,7 +206,8 @@ weights with transformers <code>WeightQuant</code> does not give them: every dif
 published bf16 weights.</p>
 {_triple(report)}
 <h2>Real layer: int8 matvec on decoded weights</h2>
-<p class="muted">Integer accumulators <code>y = W·x</code> of the stored forms with one int8 activation vector
+<p class="muted">Integer accumulators <code>y = W·x</code> of the stored forms, and of the BitNet trits derived
+from the bf16 master weights (<code>bf16_absmean</code>, not a stored form), with one int8 activation vector
 (<code>t27/matvec.t27</code>, issue #33); the float step and its arithmetic are in the report's <code>matvec</code>
 section.</p>
 {_matvec(report)}

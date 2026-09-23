@@ -20,9 +20,15 @@
 //
 // Scale layout: `group` weights of a row share one scale, ceil(cols / group)
 // scales per row in row order; group 0 means one scale for the whole tensor.
-// Statuses reuse the reject classes of t27/formats.t27 (specs/formats/OWNERS.md):
-// TF_ERR_FORMAT, TF_ERR_LENGTH, TF_ERR_CAPACITY, TF_ERR_CODE and
-// TF_ERR_SCALE_NONFINITE, and the readers' own statuses pass through.
+// Reject statuses (negative returns, invalid input) reuse the classes of
+// t27/formats.t27 (specs/formats/OWNERS.md, "Status classes"): TF_ERR_FORMAT
+// (unknown format id or scale kind, a GGUF alignment that is not a power of
+// two), TF_ERR_LENGTH, TF_ERR_CAPACITY, TF_ERR_CODE (besides a trit outside
+// an encoder's codes: a reference scale value without an exact word of the
+// target scale type in tmx_convert_scales, a weight_scale whose half is not
+// a normal bf16 in tmx_explain_ties) and TF_ERR_SCALE_NONFINITE; the readers'
+// own statuses pass through. Cell statuses, reasons and explanations (TMX_*)
+// are verdicts on valid input, not rejects.
 // Every input is validated before the first output is written, except the
 // scratch buffers of tmx_round_trip and tmx_reencode.
 // This module needs formats.h earlier in the same translation unit.
@@ -56,6 +62,11 @@ module TrinityMemoryMatrix {
     const TMX_REASON_SCALE_PRECISION: usize = 4;
     const TMX_REASON_COUNT: usize = 5;
     const TMX_REPRESENTABLE: i64 = -1;
+
+    // A GGUF tensor info record: name length (u64), name, dimension count
+    // (u32), one u64 per dimension, type id (u32) and data offset (u64).
+    const TMX_GGUF_INFO_FIXED_BYTES: u64 = 24;
+    const TMX_GGUF_INFO_DIM_BYTES: u64 = 8;
 
     // Result slots of a caller-owned []i64 of TMX_R_COUNT entries.
     const TMX_R_STATUS: usize = 0;
@@ -416,6 +427,26 @@ module TrinityMemoryMatrix {
         return 0;
     }
 
+    // Bits per weight of `bytes` stored bytes over `weights` weights (0 when
+    // there are no weights). Both operands are exact in f64 below 2^53, so
+    // the quotient is the correctly rounded value.
+    fn tmx_bits_per_weight(bytes: u64, weights: u64) -> f64 {
+        if (weights == 0) { return 0.0; }
+        return ((8 * bytes) as f64) / (weights as f64);
+    }
+
+    // Metadata share of one tensor in a GGUF file (specs/formats/OWNERS.md,
+    // "Bits per weight"; tfs_llama_gguf_tensor_bits of
+    // specs/formats/llama_cpp.t27 counts the same bytes in bits): its info
+    // record, TMX_GGUF_INFO_FIXED_BYTES + the name + TMX_GGUF_INFO_DIM_BYTES
+    // per dimension, plus the alignment padding after its `data_bytes`.
+    // TF_ERR_FORMAT when the alignment is not a power of two.
+    fn tmx_gguf_metadata_bytes(name_size: u64, dims: u64, data_bytes: u64, alignment: u64) -> i64 {
+        if (alignment == 0 || (alignment & (alignment - 1)) != 0) { return TF_ERR_FORMAT as i64; }
+        var padding: u64 = (alignment - data_bytes % alignment) % alignment;
+        return (TMX_GGUF_INFO_FIXED_BYTES + name_size + TMX_GGUF_INFO_DIM_BYTES * dims + padding) as i64;
+    }
+
     // ---- comparison ---------------------------------------------------------------
     // Compares trits a and b of a [rows, cols] tensor and, when with_scales,
     // their scales weight by weight. Fills result (status, the trit and scale
@@ -735,5 +766,15 @@ module TrinityMemoryMatrix {
         assert(reasons[4] == 1);
         assert(reasons[5] == 1);
         assert(tmx_representable(8, 3, 2, 0, values, one, 1, 1, 0, reasons) == 0);
+    }
+
+    test tmx_metadata_share {
+        assert(tmx_gguf_metadata_bytes(21, 2, 25067520, 32) == 61);
+        assert(tmx_gguf_metadata_bytes(21, 2, 25067521, 32) == 92);
+        assert(tmx_gguf_metadata_bytes(21, 2, 1, 24) == -50);
+        assert(tmx_gguf_metadata_bytes(21, 2, 1, 0) == -50);
+        assert(tmx_bits_per_weight(18, 64) == 2.25);
+        assert(tmx_bits_per_weight(1638432, 6553600) == 2.0000390625);
+        assert(tmx_bits_per_weight(1, 0) == 0.0);
     }
 }

@@ -137,6 +137,23 @@ it), `length` for a shape, group or scale count that does not tile and for value
 exactness bound of its float step, `capacity`, `format` for an unknown scale kind and
 `scale_nonfinite`. Like the strict readers it validates everything before it writes.
 
+The compatibility matrix of issue #32 (`t27/matrix.t27`, prefix `tmx_`) rejects invalid
+input with these tokens too: `format` for an unknown format id or scale kind and for a GGUF
+alignment that is not a power of two (`tmx_gguf_metadata_bytes`), `length` for a shape or
+scale count that does not fit the reference and for byte strings of different sizes,
+`capacity`, `scale_nonfinite`, and `code` in two places besides its encoders: a reference
+scale value that has no exact word of the target format's scale type
+(`tmx_convert_scales`), and a `weight_scale` whose half is not a normal bf16 value
+(`tmx_explain_ties`). On valid input it returns verdicts, not rejects: the cell statuses
+`match`, `mismatch` and `not-representable`, the explanations of a mismatch, and the reasons
+of a cell that the format cannot hold. Two reasons name conditions that are rejects when an
+encoder is called with them, so `tmx_representable` checks them first and no encoder runs:
+`shape` is the shape part of `length` (a shape the format's geometry cannot tile) and
+`code_outside` is `code` (a weight outside the format's code table). `binary_only`,
+`group_scales_differ` and `scale_precision` have no reject class: each is a tensor the
+format's codes or scales cannot express exactly. The reports carry the error and flag tokens
+of this file unchanged.
+
 ### Silent output view
 
 Every negative vector (reject, flag or silent) carries `silent_output`: one entry per

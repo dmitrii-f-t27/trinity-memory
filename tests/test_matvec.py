@@ -3,8 +3,9 @@
 The activation stream is compared with CPython's own random module; the
 committed report reports/ternary-check/matvec-2026-09-23.json is recomputed
 from the fixture cache (never from the network: the tests set
-TRINITY_FIXTURES_OFFLINE=1 and skip when a range is missing) and must match
-byte for byte. The claims docs/ternary-check.md makes about the real layer are
+TRINITY_FIXTURES_OFFLINE=1 and skip only when a cache file is missing,
+fixtures.CacheMiss; with TRINITY_REQUIRE_CACHED=1 that fails too) and must
+match byte for byte. The claims docs/ternary-check.md makes about the real layer are
 asserted on the committed report, so they hold without the cache as well.
 """
 import ctypes as C
@@ -21,6 +22,14 @@ from trinity_memory import matvec as mv
 from trinity_memory import ternary_check as tc
 
 ROOT = Path(__file__).resolve().parent.parent
+REQUIRE_CACHED = os.environ.get("TRINITY_REQUIRE_CACHED") == "1"
+
+
+def skip_or_fail(test: unittest.TestCase, why: str):
+    """A missing cache file skips the test, or fails it under TRINITY_REQUIRE_CACHED=1."""
+    if REQUIRE_CACHED:
+        test.fail(f"TRINITY_REQUIRE_CACHED=1: {why}")
+    test.skipTest(why)
 
 
 def _i32(values):
@@ -179,8 +188,9 @@ class RecomputeFromCacheTest(unittest.TestCase):
         try:
             with mock.patch.object(fx.Remote, "read", reading), mock.patch.object(fx.Remote, "prefix", prefixing):
                 text = mv.dumps(mv.run())
-        except fx.FixtureError as error:
-            self.skipTest(f"fixture cache incomplete (python3 tools/fetch-fixtures.py): {error}")
+        except fx.CacheMiss as error:
+            # Only a file missing from the cache; an unlisted range, a sha256 mismatch or a reader error fails.
+            skip_or_fail(self, f"fixture cache incomplete (python3 tools/fetch-fixtures.py): {error}")
         self.assertEqual(text, mv.REPORT.read_text())
         # The manifest tags exactly the ranges the report reads with its consumer.
         manifest = fx.Manifest(fx.MANIFEST)
@@ -194,8 +204,8 @@ class RecomputeFromCacheTest(unittest.TestCase):
             remote = tc.BONSAI[label]
             try:
                 prefix = remote.prefix(remote.entry.prefix_end)
-            except fx.FixtureError as error:
-                self.skipTest(f"fixture cache incomplete: {error}")
+            except fx.CacheMiss as error:
+                skip_or_fail(self, f"fixture cache incomplete: {error}")
             self.assertIn(b"prism.hadamard.transform", prefix, label)
             self.assertIn(b"normalized-sylvester-walsh-hadamard", prefix, label)
 

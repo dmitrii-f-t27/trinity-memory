@@ -179,3 +179,13 @@ def word_indices(master: bytes, count: int, word: int, reference, trit: int, lim
     written = _check(n.call("tmx_word_indices", C.c_int64, [n.U8, n.SZ, n.SZ, C.c_uint32, n.I32, C.c_int32, n.I64, n.SZ],
                             n.octets(master), len(master), count, word, reference, trit, out, limit))
     return list(out[:written])
+
+
+def bits_per_weight(stored_bytes: int, weights: int) -> float:
+    return n.call("tmx_bits_per_weight", C.c_double, [C.c_uint64, C.c_uint64], stored_bytes, weights)
+
+
+def gguf_metadata_bytes(name_size: int, dims: int, data_bytes: int, alignment: int) -> int:
+    """Info record plus alignment padding of one GGUF tensor (tmx_gguf_metadata_bytes)."""
+    return _check(n.call("tmx_gguf_metadata_bytes", C.c_int64, [C.c_uint64, C.c_uint64, C.c_uint64, C.c_uint64],
+                         name_size, dims, data_bytes, alignment))
