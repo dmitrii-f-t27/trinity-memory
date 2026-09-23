@@ -4,10 +4,11 @@
 Compares, by git blob SHA, every file pinned in specs/formats/upstream.lock.json
 and tests/upstream/llama.cpp.lock.json with the same path at the head of the
 upstream branch (and a pinned submodule gitlink with the one at the parent's
-head), and every Hugging Face revision in fixtures/manifest.json with the
-repository's current main. A head commit that differs from the pinned commit
-is not drift by itself; a changed or missing file, a moved gitlink or a moved
-model revision is.
+head), and, by LFS SHA-256, every model file pinned in fixtures/manifest.json
+with the same file at the Hugging Face repository's current main. A head
+commit or a main revision that differs from the pinned one is not drift by
+itself (a model-card edit moves main too); a changed or missing file or a
+moved gitlink is. Moved model revisions are reported as information.
 
   python3 tools/upstream-drift.py --output build/upstream-drift.json [--summary FILE]
   python3 tools/upstream-drift.py --replay RESPONSES.json    no network: answer from recorded responses
@@ -99,6 +100,12 @@ def trim(url: str, body):
         return {"object": {"sha": body.get("object", {}).get("sha"), "type": body.get("object", {}).get("type")}}
     if "/contents/" in url:
         return {"type": body.get("type"), "sha": body.get("sha"), "path": body.get("path")}
+    if url.startswith(HF_API + "/"):
+        siblings = [s for s in body.get("siblings") or [] if isinstance(s, dict) and isinstance(s.get("lfs"), dict)]
+        return {"sha": body.get("sha"),
+                "siblings": [{"rfilename": s.get("rfilename"),
+                              "lfs": {"sha256": s["lfs"].get("sha256"), "size": s["lfs"].get("size")}}
+                             for s in siblings]}
     return {"sha": body.get("sha")}
 
 
@@ -194,21 +201,10 @@ def check(root: Path, fetch) -> dict:
         if drift and head != commit:
             entry["compare"] = f"https://github.com/{repo}/compare/{commit}...{head}"
         upstreams.append(entry)
-    manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
-    models = []
-    for model in manifest["models"]:
-        record = {"repo": model["repo"], "pinned_revision": model["revision"]}
-        try:
-            body = fetch(f"{HF_API}/models/{model['repo']}/revision/main")
-            main = body.get("sha") if isinstance(body, dict) else None
-            if not isinstance(main, str):
-                raise FetchError(model["repo"], None, "no revision SHA for main")
-            record.update(main=main, status="same" if main == model["revision"] else "moved")
-        except FetchError as error:
-            errors.append(str(error))
-            record.update(main=None, status="unknown")
-        models.append(record)
+    models = [model_record(fetch, model, errors)
+              for model in json.loads((root / MANIFEST).read_text(encoding="utf-8"))["models"]]
     files = [f for u in upstreams for f in u["files"]]
+    model_files = [f for m in models for f in m["files"]]
     count = lambda items, status: sum(1 for item in items if item["status"] == status)  # noqa: E731
     submodules = [u["submodule_of"] for u in upstreams if "submodule_of" in u]
     summary = {
@@ -216,12 +212,43 @@ def check(root: Path, fetch) -> dict:
         "files_unknown": count(files, "unknown"),
         "gitlinks": len(submodules), "gitlinks_moved": sum(1 for s in submodules if s["status"] != "same"
                                                            and s["status"] != "unknown"),
-        "models": len(models), "models_moved": count(models, "moved"), "models_unknown": count(models, "unknown"),
+        "models": len(models), "models_unknown": count(models, "unknown"),
+        "models_revision_moved": sum(1 for m in models if m["revision_moved"]),
+        "model_files": len(model_files), "model_files_changed": count(model_files, "changed"),
+        "model_files_missing": count(model_files, "missing"),
     }
-    drift = any(u["status"] == "drift" for u in upstreams) or summary["models_moved"] > 0
+    drift = any(u["status"] == "drift" for u in upstreams) or any(m["status"] == "drift" for m in models)
     return {"schema": SCHEMA, "sources": [UPSTREAM_LOCK, LLAMACPP_LOCK, MANIFEST], "drift": drift,
             "complete": not errors, "summary": summary, "github": upstreams, "huggingface": models,
             "errors": errors}
+
+
+def model_record(fetch, model, errors) -> dict:
+    """One Hugging Face model: its pinned files compared by LFS SHA-256 with the files at main."""
+    record = {"repo": model["repo"], "pinned_revision": model["revision"]}
+    pinned = [{"name": f["name"], "pinned_lfs_sha256": f["lfs_sha256"]} for f in model["files"]]
+    try:
+        body = fetch(f"{HF_API}/models/{model['repo']}/revision/main?blobs=true")
+        main = body.get("sha") if isinstance(body, dict) else None
+        if not isinstance(main, str):
+            raise FetchError(model["repo"], None, "no revision SHA for main")
+    except FetchError as error:
+        errors.append(str(error))
+        record.update(main=None, revision_moved=False, status="unknown",
+                      files=[dict(f, main_lfs_sha256=None, status="unknown") for f in pinned])
+        return record
+    at_main = {s.get("rfilename"): (s.get("lfs") or {}).get("sha256") for s in body.get("siblings") or []
+               if isinstance(s, dict)}
+    files = []
+    for f in pinned:
+        sha = at_main.get(f["name"])
+        status = "missing" if sha is None else "same" if sha == f["pinned_lfs_sha256"] else "changed"
+        files.append(dict(f, main_lfs_sha256=sha, status=status))
+    record.update(main=main, revision_moved=main != model["revision"], files=files,
+                  status="same" if all(f["status"] == "same" for f in files) else "drift")
+    if record["status"] == "drift":
+        record["commits"] = f"https://huggingface.co/{model['repo']}/commits/main"
+    return record
 
 
 def exit_status(report) -> int:
@@ -236,7 +263,12 @@ def markdown(report) -> str:
     lines = [f"## Upstream drift: {state}", "",
              f"{s['files']} pinned files: {s['files_changed']} changed, {s['files_missing']} missing, "
              f"{s['files_unknown']} unreadable; {s['gitlinks']} submodule gitlinks, {s['gitlinks_moved']} moved; "
-             f"{s['models']} model revisions, {s['models_moved']} moved, {s['models_unknown']} unreadable.", ""]
+             f"{s['model_files']} pinned model files in {s['models']} models: {s['model_files_changed']} changed, "
+             f"{s['model_files_missing']} missing, {s['models_unknown']} models unreadable.", ""]
+    if s["models_revision_moved"]:
+        moved = [m["repo"] for m in report["huggingface"] if m["revision_moved"]]
+        lines += [f"Main moved past the pinned revision without drift in a pinned file (information): "
+                  f"{', '.join(moved)}.", ""]
     rows = []
     for u in report["github"]:
         for f in u["files"]:
@@ -247,9 +279,9 @@ def markdown(report) -> str:
         if sub and sub["status"] != "same":
             rows.append(f"| {sub['repo']}@{sub['branch']} | `{sub['path']}` (gitlink) | {sub['status']} | |")
     for m in report["huggingface"]:
-        if m["status"] != "same":
-            rows.append(f"| {m['repo']} | revision main | {m['status']} | "
-                        f"{'https://huggingface.co/' + m['repo'] + '/commits/main' if m['status'] == 'moved' else ''} |")
+        for f in m["files"]:
+            if f["status"] != "same":
+                rows.append(f"| {m['repo']}@main | `{f['name']}` | {f['status']} | {m.get('commits', '')} |")
     if rows:
         lines += ["| upstream | file | status | compare |", "|---|---|---|---|", *rows, ""]
     if report["errors"]:

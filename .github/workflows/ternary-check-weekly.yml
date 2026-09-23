@@ -1,12 +1,14 @@
 name: Ternary Check weekly
 # Once a week, and on demand: are the pinned upstream sources and model
-# revisions still what the format contracts restate, and do the vectors still
+# files still what the format contracts restate, and do the vectors still
 # pass with this repository's own decoder? tools/upstream-drift.py compares
 # every file of specs/formats/upstream.lock.json and
 # tests/upstream/llama.cpp.lock.json by git blob SHA with the upstream branch
-# heads, and the revisions of fixtures/manifest.json with the models' main.
-# It only reads public APIs; nothing is posted anywhere. Drift fails the run
-# after the vectors have been rebuilt and rerun; the report is an artifact.
+# heads, and every model file of fixtures/manifest.json by LFS SHA-256 with the
+# same file at the model's main (a moved revision alone is not drift). It only
+# reads public APIs; nothing is posted anywhere. Drift fails the run after the
+# t27 decoders have been rebuilt and every vector rerun; the reports are an
+# artifact.
 on:
   schedule:
     - cron: '23 4 * * 1'
@@ -27,7 +29,7 @@ jobs:
         with:
           python-version: '3.12'
       - id: drift
-        name: Upstream drift of the pinned files and model revisions
+        name: Upstream drift of the pinned upstream and model files
         continue-on-error: true
         env:
           # Read-only token of this run: raises the GitHub API rate limit.
