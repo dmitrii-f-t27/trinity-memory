@@ -4,7 +4,7 @@
 Python standard library only; no t27 build needed. It is an independent
 check for third parties, not the product decoder (that is t27/formats.t27).
 It reads file headers and small byte ranges of the three pinned Hugging Face
-files (about 71 MB of manifest ranges, mostly the two layer-0 bf16 tensors) and
+files (about 67 MB of manifest ranges, mostly the two layer-0 bf16 tensors) and
 prints a JSON summary:
 
   scales    all ternary tensors: packed bf16 weight_scale vs the f32 scale after

@@ -3,15 +3,19 @@
 fixtures/manifest.json is the single source of truth: it pins the revision
 and size of every model file and lists every byte range this repository
 reads, with its sha256. Ranges are fetched with HTTP range requests
-(tools/fetch-fixtures.py fetches all of them), cached under build/fixtures/
-and re-hashed on every read. Reading a range that the manifest does not list
-is an error; `tools/fetch-fixtures.py --record` adds one explicitly. Whole
-checkpoints are never downloaded. Container parsing is done by the t27
-readers in trinity_memory.formats.
+(tools/fetch-fixtures.py fetches all of them) and cached under
+build/fixtures/. A cached range is re-hashed on every read; a cached prefix
+chunk is hashed on its first read in a process and again whenever prefix.bin
+changes (size, inode, mtime or ctime). Reading a range that the manifest does
+not list is an error; `tools/fetch-fixtures.py --record` adds one explicitly.
+Whole checkpoints are never downloaded. The manifest is read on first use
+from a source checkout (it is not part of the wheel). Container parsing is
+done by the t27 readers in trinity_memory.formats.
 """
 from __future__ import annotations
 from functools import lru_cache
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -114,8 +118,7 @@ class Manifest:
                     raise FixtureError(f"{entry.key}: prefix chunks must be contiguous from 0 (gap at {at})")
                 at = chunk["end"]
 
-    @staticmethod
-    def _check_record(entry: FileEntry, record: dict):
+    def _check_record(self, entry: FileEntry, record: dict):
         where = f"{entry.key}#{record.get('begin')}-{record.get('end')}"
         unknown = set(record) - set(RANGE_KEYS)
         if unknown:
@@ -127,14 +130,30 @@ class Manifest:
             raise FixtureError(f"{where}: range outside the file of {entry.size} bytes")
         if not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sha256"))):
             raise FixtureError(f"{where}: sha256 must be 64 lowercase hex digits")
-        if record["kind"] != "prefix" and "tensor" not in record:
-            raise FixtureError(f"{where}: a {record['kind']} range must name its tensor")
+        used_by = record.get("used_by")
+        if not (isinstance(used_by, list) and used_by):
+            raise FixtureError(f"{where}: used_by must list the consumers that read the range")
+        unknown = set(used_by) - set(self.data.get("consumers", {}))
+        if unknown:
+            raise FixtureError(f"{where}: used_by names consumers {sorted(unknown)} that 'consumers' does not list")
+        if record["kind"] != "prefix":
+            if "tensor" not in record:
+                raise FixtureError(f"{where}: a {record['kind']} range must name its tensor")
+            if "dtype" not in record and "ggml_type" not in record:
+                raise FixtureError(f"{where}: a {record['kind']} range must give its dtype or ggml_type")
+            if not (isinstance(record.get("shape"), list) and record["shape"]):
+                raise FixtureError(f"{where}: a {record['kind']} range must give the tensor shape")
 
     def file(self, repo: str, name: str) -> FileEntry:
         try:
             return self.entries[repo, name]
         except KeyError:
             raise FixtureError(f"{repo}/{name} is not in {self.path}") from None
+
+    @property
+    def lock_path(self) -> Path:
+        """manifest.lock.json next to this manifest."""
+        return self.path.with_name("manifest.lock.json")
 
     def lock(self) -> dict:
         """The flat {"repo@revision/file#begin-end": sha256} view (fixtures/manifest.lock.json)."""
@@ -156,11 +175,24 @@ class Manifest:
             return pad + json.dumps(value)
         return dump(self.data, 0) + "\n"
 
-    def add_range(self, repo: str, record: dict):
-        """Insert one range record in file and offset order (the explicit --record path)."""
+    def check_new_range(self, repo: str, record: dict) -> dict:
+        """Validate a range before it is fetched or added: its fields, that it
+        is new, and that a prefix chunk starts where the pinned prefix ends.
+        Returns the record reduced to RANGE_KEYS."""
         entry = self.file(repo, record["file"])
         record = {k: record[k] for k in RANGE_KEYS if k in record}
         self._check_record(entry, record)
+        if (record["begin"], record["end"]) in entry.ranges:
+            raise FixtureError(f"{entry.key}#{record['begin']}-{record['end']} is already in {self.path.name}")
+        if record["kind"] == "prefix" and record["begin"] != entry.prefix_end:
+            raise FixtureError(f"{entry.key}: a new prefix chunk must begin at {entry.prefix_end}, where the "
+                               f"pinned prefix ends (prefix chunks are contiguous from 0)")
+        return record
+
+    def add_range(self, repo: str, record: dict):
+        """Insert one range record in file and offset order (the explicit --record path)."""
+        record = self.check_new_range(repo, record)
+        entry = self.file(repo, record["file"])
         entry.add(record)
         model = next(m for m in self.data["models"] if m["repo"] == repo)
         order = [item["name"] for item in model["files"]]
@@ -177,7 +209,11 @@ def _manifest(path: str) -> Manifest:
 
 
 def manifest(path: Path | None = None) -> Manifest:
-    return _manifest(str(path or MANIFEST))
+    path = Path(path or MANIFEST)
+    if not path.is_file() and path == MANIFEST:
+        raise FixtureError(f"{path} does not exist: the fixtures manifest ships with a source checkout "
+                           f"of the repository, not with the installed package")
+    return _manifest(str(path))
 
 
 def remote(repo: str, filename: str, **options) -> "Remote":
@@ -186,12 +222,16 @@ def remote(repo: str, filename: str, **options) -> "Remote":
 
 
 def _retry_after(error: urllib.error.HTTPError, attempt: int) -> float:
-    """Seconds to wait before retrying a 429 or 5xx: the RateLimit header's
-    t=<seconds> or Retry-After when the Hub sends them, else a short backoff."""
+    """Seconds to wait before retrying a 429 or 5xx. The Hub sends a
+    RateLimit header (r=<requests left>;t=<seconds to window reset>) on
+    ordinary responses too, so t= is honoured only when the quota is spent:
+    on a 429, or when r=0. Otherwise Retry-After when given, else a short
+    exponential backoff."""
     header = error.headers.get("RateLimit", "") if error.headers else ""
-    match = re.search(r"t=(\d+)", header)
-    if match:
-        return min(float(match.group(1)) + 1, 310.0)
+    reset = re.search(r"\bt=(\d+)", header)
+    left = re.search(r"\br=(\d+)", header)
+    if reset and (error.code == 429 or (left and int(left.group(1)) == 0)):
+        return min(float(reset.group(1)) + 1, 310.0)
     retry = error.headers.get("Retry-After") if error.headers else None
     if retry and retry.isdigit():
         return min(float(retry), 310.0)
@@ -241,7 +281,9 @@ class Remote:
                     time.sleep(_retry_after(error, attempt))
                     continue
                 raise FixtureError(f"{self.key}#{begin}-{end}: HTTP {error.code} {error.reason}") from error
-            except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
+            except (OSError, http.client.HTTPException) as error:
+                # URLError, timeouts, resets, and IncompleteRead (a body cut
+                # short of its Content-Length) are all retried.
                 if attempt + 1 < ATTEMPTS:
                     time.sleep(2.0 * 2 ** attempt)
                     continue
@@ -255,7 +297,8 @@ class Remote:
         if record is None:
             raise FixtureError(f"{self.key}#{begin}-{end} is not in fixtures/manifest.json; add it with "
                                f"python3 tools/fetch-fixtures.py --record {self.repo} {self.filename} {begin} {end} "
-                               f"--kind KIND --tensor NAME")
+                               f"--kind KIND --tensor NAME --dtype DTYPE (or --ggml-type ID) --shape N ... "
+                               f"--used-by CONSUMER")
         return record
 
     def _check(self, record: dict, data: bytes, origin: str) -> bytes:
@@ -294,8 +337,10 @@ class Remote:
 
     def prefix(self, needed: int) -> bytes:
         """The manifest prefix chunks up to the first that ends at or after
-        `needed`, concatenated. Cached chunks are re-hashed; missing ones are
-        fetched and appended to prefix.bin."""
+        `needed`, concatenated. A cached chunk is hashed on its first read in
+        this process and again whenever prefix.bin changes (the memo key holds
+        its size, inode, mtime and ctime); missing chunks are fetched and
+        appended to prefix.bin, which is never truncated."""
         chunks = []
         for chunk in self.entry.prefix:
             chunks.append(chunk)
@@ -305,12 +350,17 @@ class Remote:
             raise FixtureError(f"{self.key}: {needed} header bytes needed, the manifest pins a prefix of "
                                f"{self.entry.prefix_end}; add a prefix chunk with --record")
         path = self.directory / "prefix.bin"
-        have = path.read_bytes() if path.is_file() else b""
+        have, stat = b"", None
+        if path.is_file():
+            with open(path, "rb") as handle:
+                stat = os.fstat(handle.fileno())
+                have = handle.read()
         grown = False
         for chunk in chunks:
             begin, end = chunk["begin"], chunk["end"]
             if len(have) >= end:
-                key = (str(path), begin, end, chunk["sha256"], len(have), path.stat().st_mtime_ns)
+                key = (str(path), begin, end, chunk["sha256"], len(have), stat.st_ino, stat.st_mtime_ns,
+                       stat.st_ctime_ns)
                 if key not in self._verified:
                     self._check(chunk, have[begin:end], str(path))
                     self._verified[key] = True

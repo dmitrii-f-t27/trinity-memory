@@ -9,14 +9,19 @@ trinity_memory.fixtures reads: build/fixtures/<repo>/<revision>/<file>/
 checkpoints are never downloaded.
 
   python3 tools/fetch-fixtures.py              fetch what is missing, verify everything
-  python3 tools/fetch-fixtures.py --offline    verify the cache only, fetch nothing
-  python3 tools/fetch-fixtures.py --record REPO FILE BEGIN END --kind KIND --tensor NAME ...
+  python3 tools/fetch-fixtures.py --offline    verify the cache only; fetch and write nothing
+  python3 tools/fetch-fixtures.py --record REPO FILE BEGIN END --kind KIND --tensor NAME \
+      --dtype DTYPE (or --ggml-type ID) --shape N ... --used-by CONSUMER ...
                                                add one range to the manifest (explicit update)
-  python3 tools/fetch-fixtures.py --write-lock regenerate fixtures/manifest.lock.json
+  python3 tools/fetch-fixtures.py --write-lock regenerate the manifest's lock file
 
-Strict by default: a cache file that the manifest does not list is an error
-(--no-strict reports it and goes on). The exit status is 1 on any missing
-range, sha256 or length mismatch, HTTP error or unknown cache file.
+The lock file is manifest.lock.json next to --manifest. Strict by default: a
+cache file that the manifest does not list, or a prefix.bin longer than the
+manifest's prefix, is an error (--no-strict reports it and goes on). Nothing
+in the cache is deleted or truncated: several checkouts may share one cache,
+and bytes that this manifest does not list may be pinned by another. The exit
+status is 1 on any missing range, sha256 or length mismatch, HTTP or network
+error, or unlisted cache content.
 """
 from __future__ import annotations
 import argparse
@@ -30,7 +35,8 @@ from trinity_memory import fixtures as fx  # noqa: E402  (I/O only; loads no t27
 
 
 def _unknown_paths(manifest, cache: Path):
-    """Cache entries under `cache` that no manifest file or range accounts for."""
+    """(path, reason) for cache entries under `cache` that no manifest file or
+    range accounts for, including bytes of prefix.bin past the manifest prefix."""
     known_dirs = {}
     for entry in manifest.entries.values():
         directory = cache / entry.repo.replace("/", "--") / entry.revision / entry.name
@@ -43,18 +49,20 @@ def _unknown_paths(manifest, cache: Path):
             for file_dir in sorted(revision_dir.iterdir()) if revision_dir.is_dir() else [revision_dir]:
                 entry = known_dirs.get(file_dir)
                 if entry is None:
-                    unknown.append(file_dir)
+                    unknown.append((file_dir, f"not listed in {manifest.path.name}"))
                     continue
                 for path in sorted(file_dir.iterdir()):
                     if path.name == "prefix.bin":
-                        if path.stat().st_size > entry.prefix_end:
-                            unknown.append(path)
+                        size = path.stat().st_size
+                        if size > entry.prefix_end:
+                            unknown.append((path, f"{size} bytes, past the prefix of {entry.prefix_end} "
+                                                  f"that {manifest.path.name} lists"))
                         continue
                     stem = path.name[:-4] if path.name.endswith(".bin") else ""
                     parts = stem.split("-")
                     if len(parts) != 2 or not all(p.isdigit() for p in parts) \
                             or (int(parts[0]), int(parts[1])) not in entry.ranges:
-                        unknown.append(path)
+                        unknown.append((path, f"not listed in {manifest.path.name}"))
     return unknown
 
 
@@ -88,12 +96,14 @@ class Run:
         return "fetched", end - begin
 
     def prefix(self, remote):
-        """Verify prefix.bin chunk by chunk; fetch the chunks it lacks."""
+        """Verify prefix.bin chunk by chunk; fetch the chunks it lacks or that
+        differ. Bytes past the manifest prefix are kept (the strict check
+        reports them), and in --offline mode nothing is written."""
         entry = remote.entry
         if not entry.prefix:
             return
         path = remote.directory / "prefix.bin"
-        have = path.read_bytes() if path.is_file() else b""
+        have = original = path.read_bytes() if path.is_file() else b""
         good = b""
         for chunk in entry.prefix:
             begin, end = chunk["begin"], chunk["end"]
@@ -112,8 +122,9 @@ class Run:
             good += data
             have = good + have[end:] if len(have) > end else good
             self.count("fetched", end - begin)
-        if not path.is_file() or path.read_bytes() != good:
-            fx.write_atomic(path, good)
+        updated = good + have[len(good):]
+        if not self.args.offline and updated != original:
+            fx.write_atomic(path, updated)
 
     def count(self, state, size):
         if state == "fetched":
@@ -147,8 +158,8 @@ class Run:
                     self.error(error)
                 else:
                     self.count(*result)
-        for path in _unknown_paths(manifest, cache):
-            message = f"{path}: not listed in {manifest.path.name}"
+        for path, reason in _unknown_paths(manifest, cache):
+            message = f"{path}: {reason}"
             if self.args.strict:
                 self.error(message)
             else:
@@ -159,29 +170,35 @@ class Run:
         return 1 if self.errors else 0
 
 
+def _shown(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def record(args, manifest, cache):
     repo, name, begin, end = args.record[0], args.record[1], int(args.record[2]), int(args.record[3])
-    remote = fx.Remote(manifest.file(repo, name), cache=cache, endpoint=args.endpoint, offline=args.offline)
-    if (begin, end) in remote.entry.ranges:
-        print(f"{remote.key}#{begin}-{end} is already in the manifest", file=sys.stderr)
-        return 1
     if not args.kind:
         print("--record needs --kind", file=sys.stderr)
         return 2
-    data = remote.fetch(begin, end)
     entry = {"file": name, "kind": args.kind, "tensor": args.tensor, "dtype": args.dtype,
              "ggml_type": args.ggml_type, "layout": args.layout, "shape": args.shape,
              "tensor_offset": args.tensor_offset, "begin": begin, "end": end,
-             "sha256": fx.sha256(data), "used_by": args.used_by}
+             "sha256": "0" * 64, "used_by": args.used_by}
     entry = {k: v for k, v in entry.items() if v is not None}
+    manifest.check_new_range(repo, entry)  # before anything is fetched or written
+    remote = fx.Remote(manifest.file(repo, name), cache=cache, endpoint=args.endpoint, offline=args.offline)
+    data = remote.fetch(begin, end)
+    entry["sha256"] = fx.sha256(data)
     manifest.add_range(repo, entry)
     if args.kind == "prefix":
         Run(args).prefix(remote)
     else:
         fx.write_atomic(remote.cached_path(begin, end), data)
     manifest.save()
-    fx.LOCK.write_text(manifest.lock_text())
-    print(f"recorded {remote.key}#{begin}-{end} sha256 {entry['sha256']}")
+    fx.write_atomic(manifest.lock_path, manifest.lock_text().encode())
+    print(f"recorded {remote.key}#{begin}-{end} sha256 {entry['sha256']}; wrote {_shown(manifest.lock_path)}")
     return 0
 
 
@@ -194,7 +211,8 @@ def main(argv=None):
     parser.add_argument("--no-strict", dest="strict", action="store_false",
                         help="report cache files the manifest does not list instead of failing")
     parser.add_argument("--jobs", type=int, default=4, help="concurrent range requests (default 4)")
-    parser.add_argument("--write-lock", action="store_true", help="regenerate fixtures/manifest.lock.json and exit")
+    parser.add_argument("--write-lock", action="store_true",
+                        help="regenerate manifest.lock.json next to --manifest and exit")
     parser.add_argument("--record", nargs=4, metavar=("REPO", "FILE", "BEGIN", "END"),
                         help="fetch one new range and add it to the manifest")
     parser.add_argument("--kind", choices=fx.KINDS)
@@ -204,13 +222,13 @@ def main(argv=None):
     parser.add_argument("--layout")
     parser.add_argument("--shape", type=int, nargs="+")
     parser.add_argument("--tensor-offset", type=int)
-    parser.add_argument("--used-by", nargs="+")
+    parser.add_argument("--used-by", nargs="+", help="consumers (keys of the manifest's 'consumers') that read it")
     args = parser.parse_args(argv)
     try:
         manifest = fx.Manifest(args.manifest)
         if args.write_lock:
-            fx.LOCK.write_text(manifest.lock_text())
-            print(f"wrote {fx.LOCK.relative_to(ROOT)} ({len(manifest.lock())} ranges)")
+            fx.write_atomic(manifest.lock_path, manifest.lock_text().encode())
+            print(f"wrote {_shown(manifest.lock_path)} ({len(manifest.lock())} ranges)")
             return 0
         if args.record:
             return record(args, manifest, args.cache)

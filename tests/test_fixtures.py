@@ -7,6 +7,9 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -32,13 +35,14 @@ fetch_fixtures = _load_tool("fetch_fixtures", "tools/fetch-fixtures.py")
 
 def _range(kind, begin, end, **fields):
     record = {"file": NAME, "kind": kind, **fields, "begin": begin, "end": end,
-              "sha256": hashlib.sha256(BLOB[begin:end]).hexdigest()}
+              "sha256": hashlib.sha256(BLOB[begin:end]).hexdigest(), "used_by": ["test"]}
     return record
 
 
 def _manifest_data():
     return {
         "schema": fx.SCHEMA,
+        "consumers": {"test": "tests/test_fixtures.py"},
         "models": [{
             "repo": REPO, "revision": REVISION, "license": "Apache-2.0",
             "files": [{"name": NAME, "size": SIZE}],
@@ -55,7 +59,9 @@ def _manifest_data():
 
 class Server:
     """Serves BLOB at /<repo>/resolve/<revision>/<name> with byte ranges.
-    `mode` selects a fault: ignore-range, short, rate-limit-once, not-found."""
+    `mode` selects a fault: ignore-range, short (Content-Length and body one
+    byte short), cut-body (full Content-Length, half the body, then close),
+    rate-limit-once, not-found."""
 
     def __init__(self):
         self.mode, self.requests, self.limited = "ok", [], False
@@ -89,6 +95,9 @@ class Server:
                     body = body[:-1]
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
+                if outer.mode == "cut-body":
+                    body = body[: len(body) // 2]
+                    self.close_connection = True
                 self.wfile.write(body)
 
         self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -114,15 +123,14 @@ class FixtureTestCase(unittest.TestCase):
         self.cache = self.root / "cache"
         self.directory = self.cache / REPO.replace("/", "--") / REVISION / NAME
         patches = [mock.patch.dict(os.environ, {"no_proxy": "127.0.0.1", "NO_PROXY": "127.0.0.1"}),
-                   mock.patch.object(fx.time, "sleep", lambda seconds: None),
-                   mock.patch.object(fx, "LOCK", self.root / "manifest.lock.json")]
+                   mock.patch.object(fx.time, "sleep", lambda seconds: None)]
         for patch in patches:
             patch.start()
             self.addCleanup(patch.stop)
         os.environ.pop(fx.OFFLINE_ENV, None)
 
-    def tool(self, *args, endpoint=None):
-        argv = ["--manifest", str(self.manifest_path), "--cache", str(self.cache), *args]
+    def tool(self, *args, endpoint=None, manifest=None):
+        argv = ["--manifest", str(manifest or self.manifest_path), "--cache", str(self.cache), *args]
         if endpoint:
             argv += ["--endpoint", endpoint]
         out, err = io.StringIO(), io.StringIO()
@@ -211,18 +219,127 @@ class FetchToolTest(FixtureTestCase):
         begin, end = (2 << 20) + 2048, (2 << 20) + 2080
         with Server() as server:
             status, out, err = self.tool("--record", REPO, NAME, str(begin), str(end), "--kind", "tensor",
-                                         "--tensor", "u", "--dtype", "U8", "--shape", "32",
+                                         "--tensor", "u", "--dtype", "U8", "--shape", "32", "--used-by", "test",
                                          endpoint=server.endpoint)
             self.assertEqual(status, 0, err)
-            self.assertEqual(self.tool("--record", REPO, NAME, str(begin), str(end), "--kind", "tensor",
-                                       endpoint=server.endpoint)[0], 1)
+            status, _, err = self.tool("--record", REPO, NAME, str(begin), str(end), "--kind", "tensor",
+                                       "--tensor", "u", "--dtype", "U8", "--shape", "32", "--used-by", "test",
+                                       endpoint=server.endpoint)
+            self.assertEqual(status, 1)
+            self.assertIn("already in manifest.json", err)
         manifest = fx.Manifest(self.manifest_path)
         self.assertEqual([r["begin"] for r in manifest.data["models"][0]["ranges"]][-1], begin)
         self.assertEqual(manifest.file(REPO, NAME).ranges[begin, end]["sha256"],
                          hashlib.sha256(BLOB[begin:end]).hexdigest())
         self.assertEqual(self.manifest_path.read_text(), manifest.dumps())
-        self.assertEqual(json.loads(fx.LOCK.read_text()), manifest.lock())
+        self.assertEqual(json.loads((self.root / "manifest.lock.json").read_text()), manifest.lock())
         self.assertEqual((self.directory / f"{begin}-{end}.bin").read_bytes(), BLOB[begin:end])
+
+    def test_record_validates_before_fetching(self):
+        before = self.manifest_path.read_text()
+        tensor = ["--kind", "tensor", "--tensor", "u"]
+        cases = [
+            ([str((2 << 20) + 2048), str((2 << 20) + 2080), *tensor, "--dtype", "U8", "--shape", "32"], "used_by"),
+            ([str((2 << 20) + 2048), str((2 << 20) + 2080), *tensor, "--shape", "32", "--used-by", "test"],
+             "dtype or ggml_type"),
+            ([str((2 << 20) + 2048), str((2 << 20) + 2080), *tensor, "--dtype", "U8", "--used-by", "test"], "shape"),
+            ([str((2 << 20) + 2048), str((2 << 20) + 2080), *tensor, "--dtype", "U8", "--shape", "32",
+              "--used-by", "nobody"], "consumers"),
+            ([str((2 << 20) + 3000), str((2 << 20) + 3100), "--kind", "prefix", "--used-by", "test"],
+             "must begin at 2097152"),
+        ]
+        with Server() as server:
+            for args, message in cases:
+                with self.subTest(message=message):
+                    status, _, err = self.tool("--record", REPO, NAME, *args, endpoint=server.endpoint)
+                    self.assertEqual(status, 1)
+                    self.assertIn(message, err)
+            self.assertEqual(server.requests, [])
+        self.assertEqual(self.manifest_path.read_text(), before)
+        self.assertFalse((self.root / "manifest.lock.json").exists())
+
+    def test_record_prefix_chunk_extends_the_prefix(self):
+        end = (2 << 20) + 512
+        with Server() as server:
+            status, _, err = self.tool("--record", REPO, NAME, str(2 << 20), str(end), "--kind", "prefix",
+                                       "--used-by", "test", endpoint=server.endpoint)
+        self.assertEqual(status, 0, err)
+        self.assertEqual(fx.Manifest(self.manifest_path).file(REPO, NAME).prefix_end, end)
+        self.assertEqual((self.directory / "prefix.bin").read_bytes(), BLOB[:end])
+
+    def test_lock_file_follows_the_manifest(self):
+        committed = fx.LOCK.read_text()
+        status, out, err = self.tool("--write-lock")
+        self.assertEqual(status, 0, err)
+        self.assertEqual(json.loads((self.root / "manifest.lock.json").read_text()),
+                         fx.Manifest(self.manifest_path).lock())
+        self.assertEqual(fx.LOCK.read_text(), committed)
+
+    def test_offline_writes_nothing_and_extra_prefix_bytes_fail_strict(self):
+        with Server() as server:
+            self.assertEqual(self.tool(endpoint=server.endpoint)[0], 0)
+            prefix = self.directory / "prefix.bin"
+            prefix.write_bytes(BLOB[: (2 << 20) + 11])
+            for args in (["--offline"], []):
+                with self.subTest(args=args):
+                    status, out, err = self.tool(*args, endpoint=server.endpoint)
+                    self.assertEqual(status, 1)
+                    self.assertIn("2097163 bytes, past the prefix of 2097152", err)
+                    self.assertIn("1 errors", out)
+                    self.assertEqual(prefix.read_bytes(), BLOB[: (2 << 20) + 11])
+            status, _, err = self.tool("--offline", "--no-strict")
+            self.assertEqual(status, 0, err)
+            self.assertEqual(prefix.stat().st_size, (2 << 20) + 11)
+            data = bytearray(prefix.read_bytes())
+            data[10] ^= 1
+            prefix.write_bytes(bytes(data))
+            self.assertEqual(self.tool("--offline", "--no-strict")[0], 1)
+            self.assertEqual(prefix.read_bytes(), bytes(data))
+            status, _, err = self.tool("--no-strict", endpoint=server.endpoint)
+            self.assertEqual(status, 0, err)
+        self.assertEqual(prefix.read_bytes(), BLOB[: (2 << 20) + 11])
+
+    def test_a_shorter_manifest_keeps_the_prefix_of_a_shared_cache(self):
+        data = _manifest_data()
+        data["models"][0]["ranges"].pop(1)
+        shorter = self.root / "shorter.json"
+        shorter.write_text(json.dumps(data))
+        with Server() as server:
+            self.assertEqual(self.tool(endpoint=server.endpoint)[0], 0)
+        self.assertEqual(self.tool("--offline", "--no-strict", manifest=shorter)[0], 0)
+        self.assertEqual(self.tool("--offline", manifest=shorter)[0], 1)
+        status, _, err = self.tool("--offline")
+        self.assertEqual(status, 0, err)
+        self.assertEqual((self.directory / "prefix.bin").read_bytes(), BLOB[: 2 << 20])
+
+    def test_cut_body_is_retried_then_reported(self):
+        with Server() as server:
+            server.mode = "cut-body"
+            with self.assertRaisesRegex(fx.FixtureError, "IncompleteRead"):
+                self.remote(server.endpoint).read(2 << 20, (2 << 20) + 1024)
+            self.assertEqual(len(server.requests), fx.ATTEMPTS)
+            status, out, err = self.tool("--jobs", "2", endpoint=server.endpoint)
+        self.assertEqual(status, 1)
+        self.assertIn("FAIL", err)
+        self.assertIn("manifest ranges: fetched 0", out)
+
+
+class RetryAfterTest(unittest.TestCase):
+    @staticmethod
+    def wait(code, attempt=0, **headers):
+        error = fx.urllib.error.HTTPError("http://x", code, "x", headers, io.BytesIO())
+        with error:
+            return fx._retry_after(error, attempt)
+
+    def test_ratelimit_reset_only_when_the_quota_is_spent(self):
+        header = {"RateLimit": '"resolvers";r=2999;t=260'}  # sent on ordinary Hub responses too
+        self.assertEqual([self.wait(503, a, **header) for a in range(3)], [2.0, 4.0, 8.0])
+        self.assertEqual(self.wait(500, **header), 2.0)
+        self.assertEqual(self.wait(429, **header), 261.0)
+        self.assertEqual(self.wait(503, RateLimit='"resolvers";r=0;t=5'), 6.0)
+        self.assertEqual(self.wait(429, RateLimit='"resolvers";r=0;t=900'), 310.0)
+        self.assertEqual(self.wait(503, **{"Retry-After": "7"}), 7.0)
+        self.assertEqual(self.wait(502, 1), 4.0)
 
 
 class RemoteTest(FixtureTestCase):
@@ -271,6 +388,22 @@ class RemoteTest(FixtureTestCase):
         with self.assertRaisesRegex(fx.FixtureError, "differs from the manifest"):
             offline.read(2 << 20, (2 << 20) + 1024)
 
+    def test_prefix_rewrite_with_the_same_size_and_mtime_is_rehashed(self):
+        with Server() as server:
+            self.remote(server.endpoint).prefix(2 << 20)
+        remote = self.remote(offline=True)
+        self.assertEqual(remote.prefix(10), BLOB[: 1 << 20])
+        prefix = self.directory / "prefix.bin"
+        stat = prefix.stat()
+        data = bytearray(prefix.read_bytes())
+        data[20] ^= 1
+        with open(prefix, "r+b") as handle:  # in place, as cp -p or rsync -t would
+            handle.write(bytes(data))
+        os.utime(prefix, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+        self.assertEqual((prefix.stat().st_size, prefix.stat().st_mtime_ns), (stat.st_size, stat.st_mtime_ns))
+        with self.assertRaisesRegex(fx.FixtureError, "differs from the manifest"):
+            remote.prefix(10)
+
     def test_offline_never_fetches(self):
         with mock.patch.dict(os.environ, {fx.OFFLINE_ENV: "1"}):
             remote = self.remote()
@@ -287,6 +420,10 @@ class RemoteTest(FixtureTestCase):
             (lambda d: d["models"][0]["ranges"][2].update(extra=1), "unknown fields"),
             (lambda d: d["models"][0]["ranges"].append(dict(d["models"][0]["ranges"][2])), "listed twice"),
             (lambda d: d["models"][0]["ranges"].pop(0), "contiguous"),
+            (lambda d: d["models"][0]["ranges"][2].pop("used_by"), "used_by"),
+            (lambda d: d["models"][0]["ranges"][2].update(used_by=["nobody"]), "consumers"),
+            (lambda d: d["models"][0]["ranges"][2].pop("dtype"), "dtype or ggml_type"),
+            (lambda d: d["models"][0]["ranges"][2].pop("shape"), "shape"),
         ]
         for change, message in cases:
             with self.subTest(message=message):
@@ -326,6 +463,17 @@ class CommittedManifestTest(unittest.TestCase):
         for key in audit.FILES:
             source = audit.Source(key, offline=True)
             self.assertEqual(source.revision, self.manifest.file(source.repo, source.filename).revision)
+
+    def test_ternary_check_imports_without_a_source_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shutil.copytree(ROOT / "trinity_memory", Path(directory) / "trinity_memory",
+                            ignore=shutil.ignore_patterns("__pycache__"))
+            code = ("import trinity_memory.ternary_check as t, trinity_memory.fixtures as fx\n"
+                    "try:\n    t.BITNET['gguf']\nexcept fx.FixtureError as e:\n    print(e)\n")
+            result = subprocess.run([sys.executable, "-c", code], cwd=directory, capture_output=True, text=True,
+                                    env={**os.environ, "PYTHONPATH": directory})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("source checkout", result.stdout)
 
     def test_every_i2s_tensor_has_its_trailer_range(self):
         gguf = self.manifest.file("microsoft/bitnet-b1.58-2B-4T-gguf", "ggml-model-i2_s.gguf")
