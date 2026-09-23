@@ -501,6 +501,65 @@ here: external memory (the same argument for DDR needs a DDR3 controller,
 below), power, and the 72-bit simple dual-port mode, where nine dense5 bytes
 would hold 45 trits (1.600 bits per trit) but a t27 word is at most 64 bits.
 
+**Real weights from the bitstream (2026-09-23).** The packing bench writes an LFSR
+stream; a deployed accelerator loads fixed weights. The read-only store
+[`bram_trit_rom.t27`](../t27/rtl/bram_trit_rom.t27) holds a tensor as t27 array
+initializers, which yosys maps to the RAMB36E1 INIT and INITP contents, so
+configuration loads the weights and a run only reads. It has the engine's ports (the
+adapter is unchanged), reports the same fields, and checks itself: the rotate-xor
+checksum of the decoded lanes must equal the host's checksum of the tensor, otherwise it
+reports one bad word. A wrong expected checksum makes the Icarus run fail, so the check is
+not vacuous. The tensor is rows 0-395 of the layer-0 query projection of BitNet b1.58
+2B4T (396 x 2560 = 1 013 760 trits, exactly the bench size; +1 349 720, 0 315 515,
+-1 348 525), written by [`tools/extract-bram-trits.py`](../tools/extract-bram-trits.py)
+from the pinned packed checkpoint through the t27 decoders; the I2_S tensor of the GGUF
+gives the same trits.
+
+```sh
+python3 tools/extract-bram-trits.py --rows 396 --output build/fpga/rom/trits.bin
+make -C fpga/ax7203 bram-sim BRAM_ROM=$PWD/build/fpga/rom/trits.bin                 # all three layouts, first 1 980 trits
+make -C fpga/ax7203 bram-bit bram-flash BRAM_ONLY=2 BRAM_ROM=$PWD/build/fpga/rom/trits.bin
+make -C fpga/ax7203 bram-capture BRAM_ONLY=2 BRAM_ROM=$PWD/build/fpga/rom/trits.bin PORT=/dev/cu.usbserial-110
+```
+
+Builds of commit ab52409 (yosys 0.69, nextpnr-xilinx 45a986b native, `heap` seed 1,
+`router2`, 25 MHz) and four runs per layout on the AX7203 (the run at configuration and
+three triggered runs, identical apart from the run number;
+[`reports/fpga/bram-rom-capture-2026-09-23-ab52409-*`](../reports/fpga/README.md)):
+
+| Layout | RAMB36E1 | LUT | FF | Fmax estimate | Words | Read ticks | Bad / invalid | +1 / -1 / dot |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| `b2` | 55 | 2 885 | 878 | 37.7 MHz | 56 320 | 56 321 | 0 / 0 | 349 720 / 348 525 / 4 040 |
+| `d5` | 47 | 2 850 | 875 | 32.4 MHz | 50 688 | 50 689 | 0 / 0 | 349 720 / 348 525 / 4 040 |
+| `d5d2` | 45 | 3 415 | 878 | 32.4 MHz | 46 080 | 46 081 | 0 / 0 | 349 720 / 348 525 / 4 040 |
+
+The FASM of the d5d2 build carries all 5 760 INIT and 720 INITP words of its 45
+blocks, and the first run after configuration returns the exact trits, so block-RAM
+initial contents work through prjxray on this board (DNA 0x00389c0c2d85e85c, die
+38.2 C, VCCINT 0.995 V with the store loaded). The d5 store takes 47 blocks, not the
+50 of the write-read bench: its parity bits are constant in the initializers, so yosys
+narrows the words to 32 bits and packs them across the parity columns of other address
+ranges (15 blocks per 16K-word bank; every block of bank 0 drives its four parity
+outputs and 14 have nonzero INITP). A writable memory cannot be packed that way, and
+d5d2 is still two blocks smaller.
+
+**Clock.** The benches decode, check and accumulate a word in the tick after its read;
+the longest path runs through the per-word check built from LUT-only adders (`-nocarry`).
+Carry chains do not help in this flow: the d5d2 write-read bench without `-nocarry`
+maps to 493 CARRY4 and 6 947 LUTs and nextpnr estimates 9.7 MHz
+([`reports/fpga/build-2026-09-23-37e8316-bram-d5d2-carry`](../reports/fpga/README.md)).
+The store's `PIPE 1` registers the decoded lanes, the sums over each half of the lanes and
+the per-word sums before the accumulators (read ticks = words + 4): the estimate for d5d2
+rises to 71.2 MHz (49.6 MHz with one sum stage). `CLOCK_MODE` 2 and 3 clock the bench at
+50 and 100 MHz from bits 1 and 0 of the tick counter (`BAUD_DIV` 434 and 868). Built for
+50 MHz (commit 844d6ea, `BRAM_PIPE=1 CLOCK_MODE=2 BAUD_DIV=434 FREQ_MHZ=50`: 45 RAMB36E1,
+2 750 LUT, 1 316 FF, estimate 62.4 MHz, PASS at 50 MHz), the d5d2 store ran four times on
+the AX7203 at 50 MHz with the results of the 25 MHz runs: 46 084 read ticks (0.92 ms),
+0 bad words, 0 invalid groups, the same counts, dot product and word checksum
+([`reports/fpga/bram-rom-capture-2026-09-23-844d6ea-d5d2-pipe-50mhz-*`](../reports/fpga/README.md));
+22 trits per clock at 50 MHz are 1.1 G trits per second from one read port. The 100 MHz
+build (estimate 71.2 MHz) was not flashed.
+
 **What this track does not measure, and why.** DDR and power. DDR3 on the
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open
 flow's support for those primitives is partial (gHashTag/trinity-fpga records an
