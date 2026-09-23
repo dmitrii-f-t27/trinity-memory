@@ -282,3 +282,77 @@ jobs:
           git clone https://github.com/gHashTag/trinity-sdk.git build/upstream-sdk
           git -C build/upstream-sdk checkout fa8476397ac69438315268342958759e91da9e20
       - run: PYTHONPATH=build/upstream-sdk python scripts/test_sdk_bridge.py
+  ternary-check-action:
+    # The composite Action ternary-check/action.yml from this checkout, with
+    # runtime set to the checkout (the release runtime needs published assets):
+    # the reference decoder must pass every vector, and
+    # tests/action/wrong_group_decoder.py (PQ2_0 bytes read as group-64 Q2_0)
+    # must fail with value mismatches. Both runners of the Action's support.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      CC: clang
+      CXX: clang++
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned compiler
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+      - name: Install build tools (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld libssl-dev
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        # Apple clang has no wasm32 target; tools/build-t27-wasm.sh uses zig.
+        run: brew install zig lld
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-${{ runner.os }}-${{ runner.arch }}-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Generate the t27 decoders and the contract functions
+        run: sh tools/build-t27.sh
+      - id: own
+        name: Action with the reference decoder
+        uses: ./ternary-check
+        with:
+          decoder: python3 -m trinity_memory ternary-check
+          runtime: .
+          report: build/action/own.json
+      - id: wrong
+        name: Action with a decoder that reads group-128 bytes as group 64
+        uses: ./ternary-check
+        continue-on-error: true
+        with:
+          decoder: tests/action/wrong_group_decoder.py
+          runtime: .
+          report: build/action/wrong.json
+      - name: The reference decoder passes and the wrong one fails with mismatches
+        env:
+          OWN_PASSED: ${{ steps.own.outputs.passed }}
+          WRONG_OUTCOME: ${{ steps.wrong.outcome }}
+        run: |
+          test "$OWN_PASSED" = true
+          test "$WRONG_OUTCOME" = failure
+          python3 tests/action/check_reports.py build/action/own.json build/action/wrong.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ternary-check-action-${{ matrix.os }}
+          path: build/action/
