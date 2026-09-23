@@ -21,8 +21,9 @@ What the harness shows, on random blocks and on real ternary tensors (below):
   each other and with a double reference within 1e-5 of the sum of absolute
   block terms. The AVX2 kernels keep eight lane sums, so their results round
   differently from the generic kernel (T3: 420 of 4000 identical).
-- The x86 builds (AVX2 and generic) ran under Rosetta 2 on Apple silicon. No
-  native x86 run is recorded yet; the Ubuntu CI job below will be the first.
+- The x86 builds (AVX2 and generic) ran under Rosetta 2 on Apple silicon and
+  natively on the Ubuntu x86_64 CI runner (run 35897659923 of 2026-09-23,
+  commit 8ebf8f7), with the same results.
 
 What it does not show: the cause. The maintainer who closed the issue on the
 same day attributes the output to the input model: the reporter quantized a
@@ -174,8 +175,8 @@ reports no AVX, AVX2, FMA or F16C through CPUID, so a llama.cpp build with
 macOS 26.7 with the CPUID score function of `ggml-cpu/arch/x86/cpu-feats.cpp`
 at the pin: score 0 by default, 64 for the AVX2 "haswell" variant with the
 variable set), and such a build would select that variant. The harness does
-not depend on either: it compiles the AVX2 path statically. The Ubuntu CI job runs the AVX2 path natively; until its
-logs exist, the AVX2 evidence here comes from Rosetta 2 only.
+not depend on either: it compiles the AVX2 path statically. The Ubuntu CI job
+runs the AVX2 path natively (see Native x86 below).
 
 ### Commands
 
@@ -248,9 +249,15 @@ DOTPROD)`, `x86_64 AVX2`, `x86_64 without AVX2 (generic fallback)`).
   3.9%). This is a not-representable cell for the compatibility matrix (#32),
   not a defect of TQ1_0.
 
-No native x86 result is recorded here. The Ubuntu x86_64 CI job builds and
-runs the AVX2 and generic variants natively; its logs (artifact
-`upstream-15193-ubuntu-latest`) will be the first native AVX2 result.
+Native x86: the Ubuntu x86_64 CI job (run 35897659923, 2026-09-23, commit
+8ebf8f7) built and ran the AVX2 and generic variants natively, and all four
+passed (`PASS x86_64-avx2 test`, `real`; `PASS x86_64-generic test`, `real`).
+The numbers match the Rosetta 2 runs: T2 0 mismatches for both variants; T3
+AVX2 bit-identical to the generic kernel in 420 of 4000 rows, largest
+difference 8.07e-07 of the sum of absolute block terms (generic: 4000 of
+4000, 0); T6 largest deviation from the exact integer times the scale
+2.95e-07 (AVX2) and 1.22e-07 (generic); T4 0 wrong trits or scales, 0
+re-encoded rows that differ from upstream's quantize.
 
 ## What an end-to-end confirmation would need
 

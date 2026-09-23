@@ -97,11 +97,30 @@ HTTP-статусы, лимиты, handle, правила чтения и dot, �
 [`conformance/`](conformance/), которые [`tools/generate-spec-vectors.py`](tools/generate-spec-vectors.py)
 вычисляет из спецификации без вызова нативного кода.
 
+В [`specs/formats/`](specs/formats/) лежат побайтовые контракты внешних форматов
+упаковки тернарных весов, которые читает t27 Ternary Check
+([эпик #27](https://github.com/dmitrii-f-t27/trinity-memory/issues/27)):
+[`llama_cpp.t27`](specs/formats/llama_cpp.t27) (TQ1_0, TQ2_0, Q2_0, Q1_0 и правила GGUF
+для идентификаторов типов, выравнивания и границ тензоров), [`prismml.t27`](specs/formats/prismml.t27)
+(PQ2_0, PTQ1_0), [`bitnet_cpp.t27`](specs/formats/bitnet_cpp.t27) (I2_S),
+[`hf_bitnet.t27`](specs/formats/hf_bitnet.t27) (упакованные веса transformers и
+`weight_scale`), [`mlx.t27`](specs/formats/mlx.t27) (2-битная аффинная квантизация) и
+[`onnx.t27`](specs/formats/onnx.t27) (MatMulNBits `bits=2`). Каждая повторяет
+закреплённые коммиты апстрима ([`upstream.lock.json`](specs/formats/upstream.lock.json)):
+геометрию блоков, таблицы кодов, биты на вес, правила отказа и флаги; классы статусов —
+в [`specs/formats/OWNERS.md`](specs/formats/OWNERS.md). Их векторы `conformance/formats_*.json`
+содержат отвергаемые, помечаемые и незаметные случаи и байты, вырезанные из BitNet b1.58 2B4T
+и Ternary Bonsai 2; [`tests/native_spec_formats.c`](tests/native_spec_formats.c) прогоняет
+их через спецификации и `t27/formats.t27`, а
+[`tests/spec_formats_wasm_replay.mjs`](tests/spec_formats_wasm_replay.mjs) — через
+`build/t27/formats.wasm`.
+
 Гейт [`tools/check-specs.sh`](tools/check-specs.sh) (его же запускают `make t27-test`
 и job `spec` в CI): полнота лексера и парсера, typecheck, генерация C и Verilog,
 исполнение тестов, проверка печати, валидация conformance и дифференциальный
 harness [`tests/native_spec_types.c`](tests/native_spec_types.c), связывающий
-константы спецификации с `t27/codecs.t27` и `t27/container.t27`.
+константы спецификации с `t27/codecs.t27` и `t27/container.t27`. Для `specs/formats/`
+гейт также падает, если у спецификации нет файла векторов или harness, который их прогоняет.
 [`tests/test_spec_types.py`](tests/test_spec_types.py) прогоняет векторы через
 Python-адаптеры. Соглашения и ловушки пина компилятора — в
 [`specs/memory/OWNERS.md`](specs/memory/OWNERS.md); план остальных направлений —

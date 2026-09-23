@@ -53,7 +53,8 @@ class NativeBuild(build_py):
         if target.exists():
             shutil.rmtree(target)
         target.mkdir(parents=True)
-        for name in (library, "trinity-memory-t27", "compiler.revision", "compiler.sha256", "codecs.wasm"):
+        for name in (library, "trinity-memory-t27", "compiler.revision", "compiler.sha256", "codecs.wasm",
+                     "formats.wasm"):
             shutil.copy2(directory / name, target / name)
         shutil.copytree(directory / "rtl/resources", target / "rtl/resources")
         records = {path.relative_to(target).as_posix(): sha256(path.read_bytes()).hexdigest()

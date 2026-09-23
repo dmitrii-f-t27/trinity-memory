@@ -5,6 +5,10 @@
 # Conformance files must validate and stay in sync with their generator, and
 # the differential harness ties the spec constants to the executable modules.
 set -eu
+# Sanitizer findings fail the gate: the C objects are built with
+# -fno-sanitize-recover=all, and UBSan halts on its first report.
+UBSAN_OPTIONS=${UBSAN_OPTIONS:-halt_on_error=1:print_stacktrace=1}
+export UBSAN_OPTIONS
 cd "$(dirname "$0")/.."
 : "${T27_ROOT:?Set T27_ROOT to a checkout of gHashTag/t27 at native/compiler.lock}"
 T27_ROOT=$(cd "$T27_ROOT" && pwd)
@@ -26,7 +30,7 @@ mkdir -p "$out"
 cc=${CC:-cc}
 warning_flags=
 if "$cc" --version | grep -qi clang; then warning_flags=-Wno-parentheses-equality; fi
-cflags="-std=c11 -Wall -Wextra -Werror $warning_flags -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer"
+cflags="-std=c11 -Wall -Wextra -Werror $warning_flags -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
 
 # lex-dropped exits zero even when characters were discarded: inspect its total.
 "$compiler" lex-dropped --specs-dir specs > "$out/lexer.log" 2>&1
@@ -103,12 +107,30 @@ if grep -q 'WARN' "$out/conformance.log"; then
     exit 1
 fi
 "${PYTHON:-python3}" tools/generate-spec-vectors.py --check
+# A seal alone does not pass for the format contracts: each spec under
+# specs/formats needs its vectors (conformance/formats_<name>.json naming the
+# spec) and a differential harness that includes its header; after the
+# harnesses run, one of them must report replaying those vectors.
+format_specs=
+if [ -d specs/formats ]; then format_specs=$(find specs/formats -name '*.t27' | sort); fi
+for spec in $format_specs; do
+    name=$(basename "$spec" .t27)
+    vectors="conformance/formats_$name.json"
+    if [ ! -f "$vectors" ] || ! grep -q "\"spec_path\": \"$spec\"" "$vectors"; then
+        echo "No vectors for $spec: generate $vectors with tools/generate-spec-vectors.py" >&2
+        exit 1
+    fi
+    if ! grep -l "#include \"specs/$name.h\"" tests/native_spec_*.c >/dev/null; then
+        echo "No differential harness includes specs/$name.h" >&2
+        exit 1
+    fi
+done
 # Differential harnesses: spec constants and rules against the executable
 # implementation. Implementation headers are generated next to the spec headers
 # (build/t27/specs/impl) so both can be included from one translation unit.
 impl="$out/impl"
 mkdir -p "$impl/specs"
-for module in codecs container tensorpack json json_writer tensorpack_json bridge client compute; do
+for module in codecs container tensorpack json json_writer tensorpack_json bridge client compute formats; do
     "$compiler" gen-c "t27/$module.t27" > "$impl/$module.h"
 done
 # The dot pipeline source is generated to C as well, so the harness compares the
@@ -120,15 +142,23 @@ for spec in $specs; do
 done
 cxx=${CXX:-c++}
 case $(uname -s) in Darwin) crypto_flags= ;; *) crypto_flags="-lcrypto -ldl" ;; esac
-"$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/float.cpp -o "$out/float-spec.o"
-"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -c native/platform.c -o "$out/platform-spec.o"
+"$cxx" -std=c++17 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/float.cpp -o "$out/float-spec.o"
+"$cc" -std=c11 -Wall -Wextra -Werror -O1 -g -fPIC -fsanitize=address,undefined -fno-sanitize-recover=all -c native/platform.c -o "$out/platform-spec.o"
 for harness in tests/native_spec_*.c; do
     name=$(basename "$harness" .c)
     # shellcheck disable=SC2086
     "$cc" $cflags -I "$impl" -c "$harness" -o "$out/$name.o"
     # shellcheck disable=SC2086
-    "$cxx" -fsanitize=address,undefined "$out/$name.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/$name"
-    "$out/$name"
+    "$cxx" -fsanitize=address,undefined -fno-sanitize-recover=all "$out/$name.o" "$out/float-spec.o" "$out/platform-spec.o" $crypto_flags -lm -o "$out/$name"
+    "$out/$name" > "$out/$name.log" 2>&1 || { cat "$out/$name.log" >&2; exit 1; }
+    cat "$out/$name.log"
+done
+for spec in $format_specs; do
+    vectors="conformance/formats_$(basename "$spec" .t27).json"
+    if ! grep -Eq "^replayed $vectors: [1-9][0-9]* vectors" "$out"/native_spec_*.log; then
+        echo "No differential harness replayed $vectors" >&2
+        exit 1
+    fi
 done
 # Cycle traces: generate the RTL modules from their executable sources and
 # replay every trace of the stream compute spec in Icarus Verilog.
