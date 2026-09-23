@@ -10,6 +10,7 @@ checkpoints are never downloaded.
 
   python3 tools/fetch-fixtures.py              fetch what is missing, verify everything
   python3 tools/fetch-fixtures.py --offline    verify the cache only; fetch and write nothing
+                                               (also with TRINITY_FIXTURES_OFFLINE=1)
   python3 tools/fetch-fixtures.py --record REPO FILE BEGIN END --kind KIND --tensor NAME \
       --dtype DTYPE (or --ggml-type ID) --shape N ... --used-by CONSUMER ...
                                                add one range to the manifest (explicit update)
@@ -26,6 +27,7 @@ error, or unlisted cache content.
 from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+import os
 from pathlib import Path
 import sys
 
@@ -207,7 +209,8 @@ def main(argv=None):
     parser.add_argument("--manifest", type=Path, default=fx.MANIFEST, help="default fixtures/manifest.json")
     parser.add_argument("--cache", type=Path, default=fx.CACHE, help="default build/fixtures")
     parser.add_argument("--endpoint", help="Hub base URL (default $HF_ENDPOINT or https://huggingface.co)")
-    parser.add_argument("--offline", action="store_true", help="verify the cache only; fetch nothing")
+    parser.add_argument("--offline", action="store_true",
+                        help=f"verify the cache only; fetch and write nothing (implied by {fx.OFFLINE_ENV}=1)")
     parser.add_argument("--no-strict", dest="strict", action="store_false",
                         help="report cache files the manifest does not list instead of failing")
     parser.add_argument("--jobs", type=int, default=4, help="concurrent range requests (default 4)")
@@ -224,6 +227,8 @@ def main(argv=None):
     parser.add_argument("--tensor-offset", type=int)
     parser.add_argument("--used-by", nargs="+", help="consumers (keys of the manifest's 'consumers') that read it")
     args = parser.parse_args(argv)
+    if os.environ.get(fx.OFFLINE_ENV) == "1":
+        args.offline = True
     try:
         manifest = fx.Manifest(args.manifest)
         if args.write_lock:

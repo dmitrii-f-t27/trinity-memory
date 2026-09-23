@@ -1,5 +1,12 @@
 name: Executable t27 stack
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly cold fetch of every fixture range (job "fixtures"): the cached
+    # push runs only fetch what the cache lacks.
+    - cron: '17 5 * * 1'
 permissions:
   contents: read
 jobs:
@@ -80,10 +87,14 @@ jobs:
           name: native-t27-evidence
           path: build/t27/
   fixtures:
-    # Real-weight byte ranges from Hugging Face, anonymously (no token): a
-    # clean clone fetches every range of fixtures/manifest.json, checks HTTP
-    # 206, length and sha256, then verifies the cache offline and replays the
-    # standard-library BitNet audit against its committed report.
+    # Real-weight byte ranges from Hugging Face, anonymously (no token).
+    # build/fixtures is restored from actions/cache keyed on the manifest, so
+    # a push run fetches only the ranges the cache lacks (all of them after a
+    # manifest change, none otherwise), checking HTTP 206, length and sha256.
+    # Scheduled and manual runs also fetch every range into an empty cache,
+    # so anonymous range access itself stays tested. Then the cache is
+    # verified offline and the standard-library BitNet audit is replayed
+    # against its committed report.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -95,8 +106,11 @@ jobs:
         with:
           path: build/fixtures
           key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
-      - name: Fetch every manifest range
+      - name: Fetch the manifest ranges the cache lacks
         run: python3 tools/fetch-fixtures.py --jobs 4
+      - name: Fetch every manifest range into an empty cache (scheduled and manual runs)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: python3 tools/fetch-fixtures.py --jobs 4 --cache build/fixtures-cold
       - name: Verify the cache offline
         run: python3 tools/fetch-fixtures.py --offline
       - name: Replay the BitNet audit offline
