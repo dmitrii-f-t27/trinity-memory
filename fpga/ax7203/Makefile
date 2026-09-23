@@ -115,7 +115,7 @@ capture:
 
 clean:
 	rm -rf $(BUILD)/sim $(BUILD)/$(TOP).* $(BUILD)/nextpnr*.log $(BUILD)/yosys*.log $(BUILD)/yosys_stat.txt \
-	       $(BRAM_BUILD) $(BRAM_SIMBUILD)
+	       $(BRAM_BUILD) $(BRAM_SIMBUILD) $(foreach s,-0 -1 -2,$(BUILD)/bram$(s) $(BUILD)/bram-sim$(s)) $(BUILD)/bram $(BUILD)/bram-sim
 
 # ---- block-RAM trit packing bench (tms_bram_bench.v) ----
 # Three engines store the same BRAM_TRITS trits in three 36-bit word layouts
@@ -135,7 +135,7 @@ BRAM_TRITS     ?= 1013760
 BRAM_SIM_TRITS ?= 1980
 BRAM_ONLY      ?= -1
 override BRAM_ONLY := $(strip $(BRAM_ONLY))
-ifeq ($(filter $(BRAM_ONLY),-1 0 1 2),)
+ifneq ($(words $(BRAM_ONLY)) $(filter -1 0 1 2,$(BRAM_ONLY)),1 $(BRAM_ONLY))
 $(error BRAM_ONLY must be -1 (all three layouts), 0 (b2), 1 (d5) or 2 (d5d2), not '$(BRAM_ONLY)')
 endif
 BRAM_SUFFIX    := $(if $(filter -1,$(BRAM_ONLY)),,-$(BRAM_ONLY))

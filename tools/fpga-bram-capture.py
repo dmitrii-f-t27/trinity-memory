@@ -3,12 +3,14 @@
 
 Reads the 20-byte report lines of fpga/ax7203/tms_bram_bench.v (from a serial
 port, or from a file written by tests/tb_fpga_bram_bench.v), checks every engine
-against build/fpga/bram/bram_bench_manifest.json (written by
-tools/generate-bram-bench.py from tools/bram_trit_model.py) and writes a
+against the manifest of its build (written by tools/generate-bram-bench.py from
+tools/bram_trit_model.py; build/fpga/bram-N for one layout N, build/fpga/bram
+for all three, the default derived from --expect-formats) and writes a
 `trinity.fpga-bram-capture.v1` report. Exit status 1 on any difference, any bad
 word or invalid group, or engines that disagree on the stored trits.
 
-  python3 tools/fpga-bram-capture.py --port /dev/cu.usbserial-110 --output build/fpga/bram-capture.json
+  python3 tools/fpga-bram-capture.py --port /dev/cu.usbserial-110 --expect-formats 2 \
+      --manifest build/fpga/bram-2/bram_bench_manifest.json --output build/fpga/bram-2/capture.json
   python3 tools/fpga-bram-capture.py --from-file build/fpga/bram-sim/sim_capture_1.txt \
       --manifest build/fpga/bram-sim/bram_bench_manifest.json --expect-formats 0,1,2
 """
@@ -118,13 +120,16 @@ def main():
     parser.add_argument("--trigger-byte", type=lambda v: int(v, 0), default=0xFF)
     parser.add_argument("--no-trigger", action="store_true")
     parser.add_argument("--from-file")
-    parser.add_argument("--manifest", default=str(ROOT / "build" / "fpga" / "bram" / "bram_bench_manifest.json"))
+    parser.add_argument("--manifest", help="default: build/fpga/bram-N/ for a single --expect-formats N, else build/fpga/bram/")
     parser.add_argument("--output")
     parser.add_argument("--raw")
     parser.add_argument("--label", default="")
     parser.add_argument("--expect-formats", type=lambda v: [int(x) for x in v.split(",") if x != ""],
                         help="comma-separated layouts the run must report, e.g. 0,1,2 or 2 (0 b2, 1 d5, 2 d5d2)")
     args = parser.parse_args()
+    if args.manifest is None:
+        single = args.expect_formats if args.expect_formats and len(args.expect_formats) == 1 else None
+        args.manifest = str(ROOT / "build" / "fpga" / (f"bram-{single[0]}" if single else "bram") / "bram_bench_manifest.json")
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     if args.from_file:
         data, source = Path(args.from_file).read_bytes(), {"file": args.from_file}
