@@ -268,8 +268,12 @@ static void i2s(void) {
         for (size_t i = 0; i < N; ++i) threes += ref[i] == 3;
         assert(outside == threes && memcmp(back, ref, sizeof ref) == 0);
     }
+    assert(tf_i2s_trailer_nonzero(data, sizeof data, N) == 0);
     data[N / 4 + 31] = 1;
-    assert(tf_decode_i2s(data, sizeof data, N, back, N, &scale) == TF_ERR_PADDING);
+    data[N / 4 + 4] = 7;
+    assert(tf_decode_i2s(data, sizeof data, N, back, N, &scale) >= 0);
+    assert(tf_i2s_trailer_nonzero(data, sizeof data, N) == 2);
+    assert(tf_i2s_trailer_nonzero(data, sizeof data - 1, N) == TF_ERR_LENGTH);
     assert(tf_decode_i2s(data, sizeof data - 1, N, back, N, &scale) == TF_ERR_LENGTH);
     assert(tf_decode_i2s(data, sizeof data, 100, back, N, &scale) == TF_ERR_LENGTH);
 }
@@ -394,6 +398,9 @@ static void gguf(void) {
     assert(info.tensor_type == 36 && info.offset == second_offset && info.d0 == 256 && info.d1 == 4);
     assert(tf_gguf_tensor_bytes(&info) == 1024 / 4 + 32);
     assert(tf_gguf_find(g, end, name_x, sizeof name_x - 1, &info) == TF_ERR_NOT_FOUND);
+    assert(tf_gguf_nth(g, end, 1, &info) == 0 && info.tensors == 2 && info.tensor_type == 36);
+    assert(info.name_size == sizeof name_d - 1 && memcmp(g + info.name_at, name_d, info.name_size) == 0);
+    assert(tf_gguf_nth(g, end, 2, &info) == TF_ERR_NOT_FOUND);
     /* Every shorter prefix asks for more bytes, and never for more than the header. */
     for (size_t size = 0; size < end; ++size) {
         assert(tf_gguf_find(g, size, name_d, sizeof name_d - 1, &info) == TF_ERR_TRUNCATED);
@@ -436,6 +443,46 @@ static void safetensors(void) {
            == TF_ERR_CONTAINER);
 }
 
+static void absmean(void) {
+    /* bf16 words: 1.0, -0.5, 0.25, 0.0 -> mean 0.4375, s = 1/0.4375;
+     * w*s = 2.2857, -1.1428, 0.5714, 0 -> +1, -1, +1, 0. */
+    uint8_t w[8] = {0x80, 0x3f, 0x00, 0xbf, 0x80, 0x3e, 0x00, 0x00};
+    int32_t t[4];
+    double r[2];
+    assert(tf_absmean_bf16(w, 4, 1e-5, t, 4, r) == 0);
+    assert(r[0] == 0.4375 && t[0] == 1 && t[1] == -1 && t[2] == 1 && t[3] == 0);
+    /* Exactly half after scaling rounds to zero (half to even): 1.0 and 0.5 and
+     * 0.5 and 0.0 -> mean 0.5, s = 2: 2, 1, 1, 0 are all away from 0.5 ... use
+     * 1.0, 0.25, 0.25, 0.5: mean 0.5, s = 2, 0.25*2 = 0.5 exactly -> 0. */
+    uint8_t h[8] = {0x80, 0x3f, 0x80, 0x3e, 0x80, 0x3e, 0x00, 0x3f};
+    assert(tf_absmean_bf16(h, 4, 1e-9, t, 4, r) == 2);
+    assert(r[1] == 2.0 && t[0] == 1 && t[1] == 0 && t[2] == 0 && t[3] == 1);
+    int32_t a[5] = {1, 0, -1, 1, 0}, b[5] = {1, 0, 1, 1, -1};
+    int64_t first;
+    assert(tf_mismatches(a, b, 5, &first) == 2 && first == 2);
+    assert(tf_mismatches(a, a, 5, &first) == 0 && first == -1);
+}
+
+static void scale_layouts(void) {
+    /* One scale per 128 weights (f16) against one per 64 written twice. */
+    uint32_t g128[3] = {0x3c00, 0x3400, 0xb800}, g64[6] = {0x3c00, 0x3c00, 0x3400, 0x3400, 0xb800, 0xb800};
+    int64_t first;
+    assert(tf_compare_scales(g128, 3, TF_KIND_F16, 128, g64, 6, TF_KIND_F16, 64, 384, &first) == 0 && first == -1);
+    g64[3] = 0x3401;
+    assert(tf_compare_scales(g128, 3, TF_KIND_F16, 128, g64, 6, TF_KIND_F16, 64, 384, &first) == 64 && first == 192);
+    /* bf16 0x3f80 == f16 0x3c00 == 1.0; a per-tensor f32 scale covers all. */
+    uint32_t bf[1] = {0x3f80}, f32[1] = {0x3f800000}, h[2] = {0x3c00, 0x3c00};
+    assert(tf_compare_scales(bf, 1, TF_KIND_BF16, 256, h, 2, TF_KIND_F16, 128, 256, &first) == 0);
+    assert(tf_compare_scales(f32, 1, TF_KIND_F32, 1000, bf, 1, TF_KIND_BF16, 1000, 1000, &first) == 0);
+    assert(tf_compare_scales(g128, 2, TF_KIND_F16, 128, g64, 6, TF_KIND_F16, 64, 384, &first) == TF_ERR_LENGTH);
+    uint32_t scales[3] = {0x3f80, 0x3e80, 0x3f80}, biases[3] = {0xbf80, 0xbe80, 0x3f80};
+    assert(tf_affine_not_ternary(scales, biases, 3, TF_KIND_BF16) == 1);
+    uint8_t words[6] = {0x00, 0x3c, 0x01, 0x00, 0xff, 0xff};
+    uint32_t out[3];
+    assert(tf_words(words, 6, 2, out, 3) == 3 && out[0] == 0x3c00 && out[1] == 1 && out[2] == 0xffff);
+    assert(tf_words(words, 6, 4, out, 1) == TF_ERR_LENGTH);
+}
+
 static void rejections(void) {
     int32_t codes[256] = {0};
     uint32_t scale = 0x3c00;
@@ -463,6 +510,8 @@ int main(void) {
     scale_words();
     gguf();
     safetensors();
+    absmean();
+    scale_layouts();
     rejections();
     puts("PASS formats: TQ1_0, TQ2_0, Q2_0, Q1_0, PQ2_0, PTQ1_0, I2_S, HF packed, linear 2-bit, GGUF, safetensors");
     return 0;

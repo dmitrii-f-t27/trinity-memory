@@ -295,7 +295,7 @@ module TrinityMemoryFormats {
     // ---- I2_S (bitnet.cpp) ----------------------------------------------------
     // n weights in 128-weight blocks of 32 bytes; byte p of block b holds
     // weights 128b+p, +32, +64, +96 at bit 6, 4, 2, 0. Then one little-endian
-    // f32 scale and 28 zero bytes. Codes 0, 1, 2 mean -1, 0, +1; code 3 decodes
+    // f32 scale and a 28-byte trailer (see tf_i2s_trailer_nonzero). Codes 0, 1, 2 mean -1, 0, +1; code 3 decodes
     // to 0 upstream and is reported here as the value 3.
     fn tf_i2s_bytes(count: usize) -> usize { return count / 4 + 32; }
 
@@ -316,12 +316,22 @@ module TrinityMemoryFormats {
             e = e + 1;
         }
         scale[0] = tf_read_u32(data, count / 4);
+        return outside;
+    }
+
+    // Nonzero bytes among the 28 that follow the scale. bitnet.cpp's current
+    // converter writes zeros there and the dequantizer never reads them, so a
+    // nonzero trailer is harmless for inference but makes a file impossible to
+    // reproduce byte for byte.
+    fn tf_i2s_trailer_nonzero(data: []u8, size: usize, count: usize) -> i64 {
+        if (count == 0 || count % 128 != 0 || size != tf_i2s_bytes(count)) { return TF_ERR_LENGTH as i64; }
+        var nonzero: i64 = 0;
         var pad: usize = count / 4 + 4;
         while (pad < size) {
-            if (data[pad] != 0) { return TF_ERR_PADDING as i64; }
+            if (data[pad] != 0) { nonzero = nonzero + 1; }
             pad = pad + 1;
         }
-        return outside;
+        return nonzero;
     }
 
     fn tf_encode_i2s(values: []i32, count: usize, scale: u32, out: []u8, capacity: usize) -> i64 {
@@ -456,6 +466,9 @@ module TrinityMemoryFormats {
         alignment: u64,
         needed: u64,
         prism: bool,
+        name_at: u64,
+        name_size: u64,
+        tensors: u64,
     }
 
     fn tf_same(data: []u8, at: usize, size: usize, text: []u8, text_size: usize) -> bool {
@@ -530,12 +543,25 @@ module TrinityMemoryFormats {
     // data_start + offset. Returns 0, TF_ERR_NOT_FOUND, TF_ERR_TRUNCATED (read
     // at least info.needed bytes and retry) or TF_ERR_CONTAINER.
     fn tf_gguf_find(data: []u8, size: usize, name: []u8, name_size: usize, info: *TFTensorInfo) -> i32 {
+        return tf_gguf_select(data, size, name, name_size, 0, false, info);
+    }
+
+    // The index-th tensor record (0-based) of a GGUF prefix; its name is at
+    // data[info.name_at .. info.name_at + info.name_size).
+    fn tf_gguf_nth(data: []u8, size: usize, index: u64, info: *TFTensorInfo) -> i32 {
+        return tf_gguf_select(data, size, data, 0, index, true, info);
+    }
+
+    fn tf_gguf_select(data: []u8, size: usize, name: []u8, name_size: usize, index: u64, by_index: bool,
+                      info: *TFTensorInfo) -> i32 {
         info.needed = 24; info.alignment = 32; info.prism = false; info.dims = 0;
+        info.name_at = 0; info.name_size = 0; info.tensors = 0;
         info.d0 = 1; info.d1 = 1; info.d2 = 1; info.d3 = 1;
         if (size < 24) { return TF_ERR_TRUNCATED; }
         if (tf_read_u32(data, 0) != 0x46554747 || tf_read_u32(data, 4) != 3) { return TF_ERR_CONTAINER; }
         var tensors: u64 = tf_read_u64(data, 8);
         var keys: u64 = tf_read_u64(data, 16);
+        info.tensors = tensors;
         var pos: u64 = 24;
         var k: u64 = 0;
         while (k < keys) {
@@ -569,8 +595,13 @@ module TrinityMemoryFormats {
             if (dims == 0 || dims > 4) { return TF_ERR_CONTAINER; }
             var record_end: u64 = pos + 12 + length + 8 * (dims as u64) + 12;
             if (record_end > (size as u64)) { info.needed = record_end; return TF_ERR_TRUNCATED; }
-            if (!found && tf_same(data, (pos + 8) as usize, length as usize, name, name_size)) {
+            var hit: bool = false;
+            if (by_index) { hit = t == index; }
+            else { hit = tf_same(data, (pos + 8) as usize, length as usize, name, name_size); }
+            if (!found && hit) {
                 found = true;
+                info.name_at = pos + 8;
+                info.name_size = length;
                 var dim_at: usize = (pos + 12 + length) as usize;
                 info.dims = dims;
                 info.d0 = tf_read_u64(data, dim_at);
@@ -604,6 +635,133 @@ module TrinityMemoryFormats {
         var per: u64 = tf_block_elements(format) as u64;
         if (per == 0 || info.d0 % per != 0) { return 0; }
         return (count / per) * (tf_block_bytes(format) as u64);
+    }
+
+    // ---- BitNet b1.58 absmean ternarization from bf16 master weights -------
+    // transformers WeightQuant: s = 1 / max(mean|w|, 1e-5); t = clamp(round(w*s), -1, 1)
+    // with round half to even, so exactly +-0.5 rounds to 0. The mean is taken
+    // here in f64; torch reduces in f32, so an element whose |w*s| lies within
+    // `margin` of 0.5 may round differently there and is counted as a boundary
+    // element. result[0] = mean|w|, result[1] = s. Returns the boundary count.
+    fn tf_absmean_bf16(data: []u8, count: usize, margin: f64, values: []i32, value_capacity: usize,
+                       result: []f64) -> i64 {
+        if (count == 0) { return TF_ERR_LENGTH as i64; }
+        if (count > value_capacity) { return TF_ERR_CAPACITY as i64; }
+        var sum: f64 = 0.0;
+        var i: usize = 0;
+        while (i < count) {
+            var bits: u32 = tf_read_u16(data, 2 * i);
+            if (!tf_f32_finite(bits << 16)) { return TF_ERR_CODE as i64; }
+            var w: f64 = tf_bf16_value(bits);
+            if (w < 0.0) { w = 0.0 - w; }
+            sum = sum + w;
+            i = i + 1;
+        }
+        var mean: f64 = sum / (count as f64);
+        var clamped: f64 = mean;
+        if (clamped < 0.00001) { clamped = 0.00001; }
+        var s: f64 = 1.0 / clamped;
+        result[0] = mean;
+        result[1] = s;
+        var boundary: i64 = 0;
+        var j: usize = 0;
+        while (j < count) {
+            var x: f64 = tf_bf16_value(tf_read_u16(data, 2 * j)) * s;
+            var magnitude: f64 = x;
+            if (magnitude < 0.0) { magnitude = 0.0 - magnitude; }
+            var gap: f64 = magnitude - 0.5;
+            if (gap < 0.0) { gap = 0.0 - gap; }
+            if (gap <= margin) { boundary = boundary + 1; }
+            var t: i32 = 0;
+            if (x > 0.5) { t = 1; }
+            if (x < -0.5) { t = -1; }
+            values[j] = t;
+            j = j + 1;
+        }
+        return boundary;
+    }
+
+    // Number of positions where a and b differ; first[0] is the first one or -1.
+    fn tf_mismatches(a: []i32, b: []i32, count: usize, first: []i64) -> i64 {
+        var total: i64 = 0;
+        first[0] = -1;
+        var i: usize = 0;
+        while (i < count) {
+            if (a[i] != b[i]) {
+                if (total == 0) { first[0] = i as i64; }
+                total = total + 1;
+            }
+            i = i + 1;
+        }
+        return total;
+    }
+
+    // ---- scale words across formats -----------------------------------------
+    const TF_KIND_F16: i32 = 1;
+    const TF_KIND_BF16: i32 = 2;
+    const TF_KIND_F32: i32 = 3;
+
+    fn tf_scale_value(word: u32, kind: i32) -> f64 {
+        if (kind == TF_KIND_F16) { return tf_f16_value(word); }
+        if (kind == TF_KIND_BF16) { return tf_bf16_value(word); }
+        return tf_f32_value(word);
+    }
+
+    // Compares two scale layouts over the same `weights` weights: scale a[i]
+    // covers a_group consecutive weights, b[j] covers b_group. Values are
+    // compared exactly after widening to f64. Returns the number of weights
+    // whose two scales differ; first[0] is the first such weight or -1.
+    fn tf_compare_scales(a: []u32, a_count: usize, a_kind: i32, a_group: usize,
+                         b: []u32, b_count: usize, b_kind: i32, b_group: usize,
+                         weights: usize, first: []i64) -> i64 {
+        first[0] = -1;
+        if (a_group == 0 || b_group == 0) { return TF_ERR_LENGTH as i64; }
+        if ((weights + a_group - 1) / a_group > a_count || (weights + b_group - 1) / b_group > b_count) {
+            return TF_ERR_LENGTH as i64;
+        }
+        var step: usize = a_group;
+        if (b_group < step) { step = b_group; }
+        var differing: i64 = 0;
+        var w: usize = 0;
+        while (w < weights) {
+            var left: f64 = tf_scale_value(a[w / a_group], a_kind);
+            var right: f64 = tf_scale_value(b[w / b_group], b_kind);
+            var span: usize = step;
+            if (w + span > weights) { span = weights - w; }
+            if (left != right) {
+                if (differing == 0) { first[0] = w as i64; }
+                differing = differing + (span as i64);
+            }
+            w = w + step;
+        }
+        return differing;
+    }
+
+    // MLX affine groups store a ternary weight as scale*q + bias with codes
+    // q in {0, 1, 2}; that is ternary exactly when bias == -scale. Returns the
+    // number of groups where it is not.
+    fn tf_affine_not_ternary(scales: []u32, biases: []u32, count: usize, kind: i32) -> i64 {
+        var bad: i64 = 0;
+        var i: usize = 0;
+        while (i < count) {
+            var scale: f64 = tf_scale_value(scales[i], kind);
+            var bias: f64 = tf_scale_value(biases[i], kind);
+            if (bias != 0.0 - scale) { bad = bad + 1; }
+            i = i + 1;
+        }
+        return bad;
+    }
+
+    // Reads `count` little-endian 16- or 32-bit words (width 2 or 4).
+    fn tf_words(data: []u8, size: usize, width: usize, out: []u32, count: usize) -> i64 {
+        if ((width != 2 && width != 4) || size != count * width) { return TF_ERR_LENGTH as i64; }
+        var i: usize = 0;
+        while (i < count) {
+            if (width == 2) { out[i] = tf_read_u16(data, 2 * i); }
+            else { out[i] = tf_read_u32(data, 4 * i); }
+            i = i + 1;
+        }
+        return count as i64;
     }
 
     // ---- safetensors tensor lookup --------------------------------------------

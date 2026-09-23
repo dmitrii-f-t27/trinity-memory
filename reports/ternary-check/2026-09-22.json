@@ -1,0 +1,306 @@
+{
+ "schema": "trinity.ternary-check.v1",
+ "generated": "2026-09-23T00:10:49+00:00",
+ "checks": [
+  {
+   "model": "BitNet b1.58 2B4T",
+   "tensor": {
+    "hf": "model.layers.0.self_attn.q_proj.weight",
+    "gguf": "blk.0.attn_q.weight",
+    "shape": [
+     2560,
+     2560
+    ],
+    "weights": 6553600
+   },
+   "formats": {
+    "hf_packed": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors",
+      "size": 1178623988
+     },
+     "stored_bytes": 1638402,
+     "bits_per_weight": 2.00000244140625,
+     "outside_ternary": 0,
+     "scale": {
+      "dtype": "BF16",
+      "word": 16284,
+      "value": 1.21875
+     }
+    },
+    "I2_S": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+      "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+      "file": "ggml-model-i2_s.gguf",
+      "size": 1187801280
+     },
+     "stored_bytes": 1638432,
+     "bits_per_weight": 2.0000390625,
+     "outside_ternary": 0,
+     "trailer_nonzero_bytes": 28,
+     "scale": {
+      "dtype": "F32",
+      "word": 1067189103,
+      "value": 1.2188547849655151
+     }
+    },
+    "bf16_absmean": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+      "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+      "file": "model.safetensors",
+      "size": 4825679400
+     },
+     "stored_bytes": 13107200,
+     "bits_per_weight": 16.0,
+     "boundary_weights": 0,
+     "scale": {
+      "mean_abs": 1.2188504981180044,
+      "inverse": 0.8204451666090913
+     }
+    }
+   },
+   "comparisons": [
+    {
+     "a": "hf_packed",
+     "b": "I2_S",
+     "trits": {
+      "mismatches": 0,
+      "first": -1
+     },
+     "scales_differ_weights": 6553600
+    },
+    {
+     "a": "hf_packed",
+     "b": "bf16_absmean",
+     "trits": {
+      "mismatches": 79719,
+      "first": 35
+     }
+    },
+    {
+     "a": "I2_S",
+     "b": "bf16_absmean",
+     "trits": {
+      "mismatches": 79719,
+      "first": 35
+     }
+    }
+   ],
+   "seconds": 15.08
+  },
+  {
+   "model": "BitNet b1.58 2B4T",
+   "tensor": {
+    "hf": "model.layers.0.mlp.down_proj.weight",
+    "gguf": "blk.0.ffn_down.weight",
+    "shape": [
+     2560,
+     6912
+    ],
+    "weights": 17694720
+   },
+   "formats": {
+    "hf_packed": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors",
+      "size": 1178623988
+     },
+     "stored_bytes": 4423682,
+     "bits_per_weight": 2.000000904224537,
+     "outside_ternary": 0,
+     "scale": {
+      "dtype": "BF16",
+      "word": 16394,
+      "value": 2.15625
+     }
+    },
+    "I2_S": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+      "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+      "file": "ggml-model-i2_s.gguf",
+      "size": 1187801280
+     },
+     "stored_bytes": 4423712,
+     "bits_per_weight": 2.0000144675925924,
+     "outside_ternary": 0,
+     "trailer_nonzero_bytes": 28,
+     "scale": {
+      "dtype": "F32",
+      "word": 1074426172,
+      "value": 2.163161277770996
+     }
+    },
+    "bf16_absmean": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+      "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+      "file": "model.safetensors",
+      "size": 4825679400
+     },
+     "stored_bytes": 35389440,
+     "bits_per_weight": 16.0,
+     "boundary_weights": 0,
+     "scale": {
+      "mean_abs": 2.16314335625935,
+      "inverse": 0.4622902116525767
+     }
+    }
+   },
+   "comparisons": [
+    {
+     "a": "hf_packed",
+     "b": "I2_S",
+     "trits": {
+      "mismatches": 0,
+      "first": -1
+     },
+     "scales_differ_weights": 17694720
+    },
+    {
+     "a": "hf_packed",
+     "b": "bf16_absmean",
+     "trits": {
+      "mismatches": 101673,
+      "first": 165
+     }
+    },
+    {
+     "a": "I2_S",
+     "b": "bf16_absmean",
+     "trits": {
+      "mismatches": 101673,
+      "first": 165
+     }
+    }
+   ],
+   "seconds": 49.62
+  },
+  {
+   "model": "Ternary Bonsai 2 27B",
+   "tensor": {
+    "gguf": "blk.0.ffn_down.weight",
+    "mlx": "language_model.model.layers.0.mlp.down_proj",
+    "shape": [
+     5120,
+     17408
+    ],
+    "weights": 89128960
+   },
+   "formats": {
+    "PTQ1_0": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+      "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+      "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "size": 5946648928
+     },
+     "stored_bytes": 19496960,
+     "bits_per_weight": 1.75,
+     "outside_ternary": 0,
+     "scale": {
+      "dtype": "F16",
+      "group": 128,
+      "count": 696320
+     }
+    },
+    "PQ2_0": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+      "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+      "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+      "size": 7206168928
+     },
+     "stored_bytes": 23674880,
+     "bits_per_weight": 2.125,
+     "outside_ternary": 0,
+     "scale": {
+      "dtype": "F16",
+      "group": 128,
+      "count": 696320
+     }
+    },
+    "Q2_0": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf-dev",
+      "revision": "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
+      "file": "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf",
+      "size": 7626008928
+     },
+     "stored_bytes": 25067520,
+     "bits_per_weight": 2.25,
+     "outside_ternary": 0,
+     "scale": {
+      "dtype": "F16",
+      "group": 64,
+      "count": 1392640
+     }
+    },
+    "mlx_2bit": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+      "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+      "file": "model.safetensors",
+      "size": 8595477990
+     },
+     "stored_bytes": 25067520,
+     "bits_per_weight": 2.25,
+     "outside_ternary": 0,
+     "scale": {
+      "dtype": "F16",
+      "group": 128,
+      "count": 696320,
+      "groups_where_bias_is_not_minus_scale": 0
+     }
+    }
+   },
+   "comparisons": [
+    {
+     "a": "PTQ1_0",
+     "b": "PQ2_0",
+     "trits": {
+      "mismatches": 0,
+      "first": -1
+     },
+     "scales_differ_weights": 0
+    },
+    {
+     "a": "PTQ1_0",
+     "b": "Q2_0",
+     "trits": {
+      "mismatches": 0,
+      "first": -1
+     },
+     "scales_differ_weights": 0
+    },
+    {
+     "a": "PTQ1_0",
+     "b": "mlx_2bit",
+     "trits": {
+      "mismatches": 0,
+      "first": -1
+     },
+     "scales_differ_weights": 0
+    }
+   ],
+   "runtime_requirements": {
+    "PTQ1_0": {
+     "prism_metadata": true
+    },
+    "PQ2_0": {
+     "prism_metadata": true
+    },
+    "Q2_0": {
+     "prism_metadata": true
+    }
+   },
+   "seconds": 113.86
+  }
+ ]
+}
