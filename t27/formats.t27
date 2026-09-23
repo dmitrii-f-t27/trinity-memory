@@ -491,9 +491,11 @@ module TrinityMemoryFormats {
     }
 
     // ---- I2_S (bitnet.cpp) ----------------------------------------------------
-    // The x86 ACT_PARALLEL layout (the default build: include/gemm-config.h
-    // defines ACT_PARALLEL): n weights in 128-weight blocks of 32 bytes; byte
-    // p of block b holds weights 128b+p, +32, +64, +96 at bit 6, 4, 2, 0. Then
+    // The x86 ACT_PARALLEL layout (include/gemm-config.h defines ACT_PARALLEL;
+    // the pinned build's readers, dequantize_row_i2_s and the GEMM of
+    // ggml-cpu-i2s.c, and the Python converter's writer use it): n weights in
+    // 128-weight blocks of 32 bytes; byte p of block b holds weights 128b+p,
+    // +32, +64, +96 at bit 6, 4, 2, 0. Then
     // one little-endian f32 scale at byte n/4 and a 28-byte trailer (see
     // tf_i2s_trailer_nonzero). Codes 0, 1, 2 mean -1, 0, +1. The quantizers
     // never write code 3, and bitnet.cpp's readers disagree on it at the pin:
@@ -1317,7 +1319,8 @@ module TrinityMemoryFormats {
     // and the extent bounds over the other tensors of nonzero size: has_next
     // when one begins at or above `begin`, next_begin the least such absolute
     // begin; has_prev when one begins below `begin`, prev_end the greatest
-    // absolute end among those.
+    // absolute end among those, or the start of the data section (8 + N) when
+    // none does.
     struct TFSafeInfo {
         dtype: []u8,
         dtype_size: usize,
@@ -1486,6 +1489,7 @@ module TrinityMemoryFormats {
             member = tokens[key].next;
             visited = visited + 1;
         }
+        if (!info.has_prev) { info.prev_end = 8 + header; }
         info.begin = 8 + header + begin;
         info.end = 8 + header + end;
         info.needed = info.end;
@@ -1497,11 +1501,15 @@ module TrinityMemoryFormats {
     // CONTAINER for a dtype the pinned safetensors does not define, LENGTH when
     // numel * dtype width in bits does not fit in 64 bits (as a GGUF weight
     // count that gguf.cpp refuses) or is not whole bytes, EXTENT when
-    // end - begin is not numel * dtype width, when the bytes reach another
-    // tensor's begin at or above this one's, when this tensor begins inside
-    // another one that begins below it (overlap), or when the bytes run past
-    // the end of the file. safetensors is stricter: the tensors must tile the
-    // data section exactly.
+    // end - begin is not numel * dtype width, or when this tensor does not
+    // tile with its neighbours: it must begin at prev_end (the end of the
+    // tensor before it, or the start of the data section) and end at
+    // next_begin, or at the end of the file when no tensor follows. That
+    // rejects overlap, a gap before or after it, and bytes past the end of the
+    // file or after the last tensor. safetensors is stricter only in scope:
+    // it requires the whole data section to tile (tensor.rs:627-661,
+    // :419-421), while this check looks at the tensor it reads and its two
+    // neighbours.
     fn tf_safetensors_check(info: *TFSafeInfo, file_size: u64) -> i32 {
         if (info.dtype_bits == 0) { return TF_ERR_CONTAINER; }
         // Dimensions beyond info.dims are 1.
@@ -1510,9 +1518,10 @@ module TrinityMemoryFormats {
         if (bits == top) { return TF_ERR_LENGTH; }
         if (bits % 8 != 0) { return TF_ERR_LENGTH; }
         if (info.end - info.begin != bits / 8) { return TF_ERR_EXTENT; }
-        if (info.has_next && info.end > info.next_begin) { return TF_ERR_EXTENT; }
-        if (info.has_prev && info.prev_end > info.begin) { return TF_ERR_EXTENT; }
         if (info.end > file_size) { return TF_ERR_EXTENT; }
+        if (info.prev_end != info.begin) { return TF_ERR_EXTENT; }
+        if (info.has_next && info.end != info.next_begin) { return TF_ERR_EXTENT; }
+        if (!info.has_next && info.end != file_size) { return TF_ERR_EXTENT; }
         return 0;
     }
 }

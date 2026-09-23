@@ -81,7 +81,8 @@ static uint32_t ref_block(int format, const uint8_t *block, int32_t *y) {
 
 /* bitnet.cpp canonical I2_S (QK_I2_S = 128): byte p of block b holds
  * c[128b+p]<<6 | c[128b+p+32]<<4 | c[128b+p+64]<<2 | c[128b+p+96].
- * Code 3 is undefined upstream and reported as code - 1 = +2. */
+ * Code 3 is reported as code - 1 = +2. bitnet.cpp disagrees with itself on
+ * it at the pin: dequantize_row_i2_s reads 0, mul_mat acts as +2. */
 static void ref_i2s(const uint8_t *data, size_t count, int32_t *y) {
     for (size_t b = 0; b < count / 128; ++b)
         for (size_t p = 0; p < 32; ++p) {
@@ -742,23 +743,31 @@ static void safetensors(void) {
     file[8] = '[';
     assert(tf_safetensors_find(file, 8 + n, weight, sizeof weight - 1, tokens, 256, arena, sizeof arena, &info)
            == TF_ERR_CONTAINER);
-    /* Extent rules: size != numel * width, overlap, sub-byte, unknown dtype. */
-    static const struct { const char *json; int32_t check; } cases[] = {
-        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,31]}}", TF_ERR_EXTENT},
+    /* Extent rules: size != numel * width, overlap, gaps, bytes after the
+     * last tensor, sub-byte, unknown dtype. `data` is the data section size. */
+    static const struct { const char *json; uint64_t data; int32_t check; } cases[] = {
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,31]}}", 31, TF_ERR_EXTENT},
         {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,32]},"
-         "\"s\":{\"dtype\":\"BF16\",\"shape\":[1],\"data_offsets\":[30,32]}}", TF_ERR_EXTENT},
+         "\"s\":{\"dtype\":\"BF16\",\"shape\":[1],\"data_offsets\":[30,32]}}", 32, TF_ERR_EXTENT},
         {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,32]},"
-         "\"e\":{\"dtype\":\"F32\",\"shape\":[0],\"data_offsets\":[0,0]}}", 0},
-        {"{\"w\":{\"dtype\":\"F4\",\"shape\":[3],\"data_offsets\":[0,2]}}", TF_ERR_LENGTH},
-        {"{\"w\":{\"dtype\":\"F4\",\"shape\":[4],\"data_offsets\":[0,2]}}", 0},
-        {"{\"w\":{\"dtype\":\"Q2\",\"shape\":[4],\"data_offsets\":[0,1]}}", TF_ERR_CONTAINER},
+         "\"e\":{\"dtype\":\"F32\",\"shape\":[0],\"data_offsets\":[0,0]}}", 32, 0},
+        {"{\"w\":{\"dtype\":\"F4\",\"shape\":[3],\"data_offsets\":[0,2]}}", 2, TF_ERR_LENGTH},
+        {"{\"w\":{\"dtype\":\"F4\",\"shape\":[4],\"data_offsets\":[0,2]}}", 2, 0},
+        {"{\"w\":{\"dtype\":\"Q2\",\"shape\":[4],\"data_offsets\":[0,1]}}", 1, TF_ERR_CONTAINER},
         /* 2^64 elements: the size cannot be represented (as a GGUF count gguf.cpp refuses). */
-        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4294967296,4294967296],\"data_offsets\":[0,0]}}", TF_ERR_LENGTH},
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4294967296,4294967296],\"data_offsets\":[0,0]}}", 0, TF_ERR_LENGTH},
         /* w begins inside s, which begins below it. */
         {"{\"s\":{\"dtype\":\"U8\",\"shape\":[8],\"data_offsets\":[0,8]},"
-         "\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[4,36]}}", TF_ERR_EXTENT},
+         "\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[4,36]}}", 36, TF_ERR_EXTENT},
         {"{\"s\":{\"dtype\":\"U8\",\"shape\":[4],\"data_offsets\":[0,4]},"
-         "\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[4,36]}}", 0},
+         "\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[4,36]}}", 36, 0},
+        /* A gap before w, a gap after it, w not at 0, bytes after the last tensor. */
+        {"{\"s\":{\"dtype\":\"U8\",\"shape\":[4],\"data_offsets\":[0,4]},"
+         "\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[8,40]}}", 40, TF_ERR_EXTENT},
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,32]},"
+         "\"s\":{\"dtype\":\"U8\",\"shape\":[4],\"data_offsets\":[36,40]}}", 40, TF_ERR_EXTENT},
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[4,36]}}", 36, TF_ERR_EXTENT},
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,32]}}", 33, TF_ERR_EXTENT},
     };
     uint8_t w[] = "w";
     for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
@@ -766,7 +775,7 @@ static void safetensors(void) {
         put_u64(file, 0, n);
         memcpy(file + 8, cases[i].json, n);
         assert(tf_safetensors_find(file, 8 + n, w, 1, tokens, 256, arena, sizeof arena, &info) == 0);
-        assert(tf_safetensors_check(&info, 8 + n + 64) == cases[i].check);
+        assert(tf_safetensors_check(&info, 8 + n + cases[i].data) == cases[i].check);
     }
     /* Offsets whose absolute value 8 + N + offset does not fit in 64 bits,
      * in the tensor read or in another entry, are refused by find. */

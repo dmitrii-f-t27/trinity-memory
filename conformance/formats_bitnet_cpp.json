@@ -65,8 +65,8 @@
     },
     "silent": {
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
-      "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
-      "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "i2s_layout_1x4": "I2_S bytes in the four-row layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (x86 without ACT_PARALLEL, not compiled at the pin) read as ACT_PARALLEL",
+      "i2s_layout_arm": "I2_S bytes in the ARM layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (not compiled at the pin) read as the x86 ACT_PARALLEL layout",
       "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per byte) read as ACT_PARALLEL",
       "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
       "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
@@ -79,7 +79,7 @@
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
-  "description": "I2_S in the x86 ACT_PARALLEL layout with real BitNet bytes, flags, rejections, and the ARM, four-row and four-consecutive layouts read as ACT_PARALLEL. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "description": "I2_S in the x86 ACT_PARALLEL layout with real BitNet bytes, flags, rejections, and the ARM, four-row and four-consecutive layouts read as ACT_PARALLEL. Expectations come from the upstream loops restated in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
   "format_family": "Conformance",
   "generator": "tools/generate-spec-vectors.py",
   "invariants": [
@@ -195,10 +195,12 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "src/ggml-bitnet-mad.cpp:51-96"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml-cpu/ops.cpp:4783-4829",
+            "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252"
           ],
-          "note": "quantize_i2_s writes the n/4 code bytes and the scale; the 28 bytes after the scale keep what the output buffer held, and no pinned code reads them",
-          "upstream": "bitnet.cpp"
+          "note": "the readers take the n/4 code bytes and the f32 scale at byte n/4; no pinned code reads the 28 bytes after the scale, which keep what llama-quantize's reused output buffer held",
+          "upstream": "bitnet.cpp-llama.cpp"
         }
       ],
       "source": {
@@ -509,10 +511,19 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "src/ggml-bitnet-mad.cpp:51-96",
-            "src/ggml-bitnet-mad.cpp:151-194"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"
           ],
-          "note": "a build with the default ACT_PARALLEL layout (:51-96) reads bytes that the arm writer produced as other weights",
+          "note": "the pinned build's readers use the ACT_PARALLEL positions and read these bytes as other weights",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "src/ggml-bitnet-mad.cpp:151-194",
+            "src/CMakeLists.txt:2-3"
+          ],
+          "note": "the arm layout is written by src/ggml-bitnet-mad.cpp, which the pinned build does not compile (src/CMakeLists.txt only names it in a variable it overwrites)",
           "upstream": "bitnet.cpp"
         }
       ]
@@ -548,10 +559,19 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "src/ggml-bitnet-mad.cpp:51-96",
-            "src/ggml-bitnet-mad.cpp:97-149"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"
           ],
-          "note": "a build with the default ACT_PARALLEL layout (:51-96) reads bytes that the 1x4 writer produced as other weights",
+          "note": "the pinned build's readers use the ACT_PARALLEL positions and read these bytes as other weights",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "src/ggml-bitnet-mad.cpp:97-149",
+            "src/CMakeLists.txt:2-3"
+          ],
+          "note": "the 1x4 layout is written by src/ggml-bitnet-mad.cpp, which the pinned build does not compile (src/CMakeLists.txt only names it in a variable it overwrites)",
           "upstream": "bitnet.cpp"
         }
       ]
@@ -611,10 +631,10 @@
         {
           "behaviour": "not_applicable",
           "cite": [
-            "src/ggml-bitnet-mad.cpp:65-72"
+            "ggml/src/ggml-cpu/quants.c:1358-1387"
           ],
-          "note": "quantize_i2_s writes code 0, 1 or 2 from the sign of each weight only",
-          "upstream": "bitnet.cpp"
+          "note": "the compiled quantize_i2_s takes float weights and writes code 0, 1 or 2 from the sign of each one only",
+          "upstream": "bitnet.cpp-llama.cpp"
         }
       ],
       "values_hex": "00010000010200ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"

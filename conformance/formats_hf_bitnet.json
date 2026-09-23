@@ -47,8 +47,8 @@
     },
     "silent": {
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
-      "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
-      "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "i2s_layout_1x4": "I2_S bytes in the four-row layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (x86 without ACT_PARALLEL, not compiled at the pin) read as ACT_PARALLEL",
+      "i2s_layout_arm": "I2_S bytes in the ARM layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (not compiled at the pin) read as the x86 ACT_PARALLEL layout",
       "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per byte) read as ACT_PARALLEL",
       "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
       "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
@@ -56,7 +56,7 @@
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
-  "description": "Packed uint8 BitNet weights and their bf16 weight_scale, with a real row of BitNet b1.58 2B4T. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "description": "Packed uint8 BitNet weights and their bf16 weight_scale, with a real row of BitNet b1.58 2B4T. Expectations come from the upstream loops restated in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
   "format_family": "Conformance",
   "generator": "tools/generate-spec-vectors.py",
   "invariants": [
@@ -365,7 +365,7 @@
     },
     {
       "cols": 5,
-      "description": "pack_weights stores -1, 0, +1 only; nothing is written",
+      "description": "The packed format stores -1, 0, +1 only; nothing is written",
       "error_class": "code",
       "expect": {
         "status": -53
@@ -376,11 +376,11 @@
       "rows": 12,
       "silent_output": [
         {
-          "behaviour": "not_applicable",
+          "behaviour": "decodes",
           "cite": [
             "src/transformers/integrations/bitnet.py:17-53"
           ],
-          "note": "pack_weights expects values in {-1, 0, 1} and does not check them",
+          "note": "pack_weights takes the codes directly and does not check them: -2 + 1 cast to uint8 is 255, so packed byte 7 becomes 0xff (packed tensor 49a10551a811a4ff41418509658152) and rows 1, 4, 7, 10 of column 2 unpack as +2",
           "upstream": "transformers"
         }
       ],
@@ -408,7 +408,7 @@
         "has_next": true,
         "has_prev": false,
         "next_begin": 234,
-        "prev_end": 0,
+        "prev_end": 228,
         "shape": [
           2,
           3
@@ -479,7 +479,7 @@
         "has_next": true,
         "has_prev": false,
         "next_begin": 291,
-        "prev_end": 0,
+        "prev_end": 285,
         "shape": [
           2,
           3
@@ -514,7 +514,7 @@
         "has_next": true,
         "has_prev": false,
         "next_begin": 153,
-        "prev_end": 0,
+        "prev_end": 148,
         "shape": [
           2,
           3
@@ -560,7 +560,7 @@
         "has_next": true,
         "has_prev": false,
         "next_begin": 152,
-        "prev_end": 0,
+        "prev_end": 148,
         "shape": [
           2,
           3
@@ -721,6 +721,184 @@
           6
         ],
         [
+          8,
+          10
+        ]
+      ],
+      "description": "A 2-byte gap between w at [0, 6) and s at [8, 10)",
+      "error_class": "extent",
+      "expect": {
+        "begin": 149,
+        "check": -62,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 155,
+        "find": 0,
+        "has_next": true,
+        "has_prev": false,
+        "next_begin": 157,
+        "prev_end": 149,
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "file_size": 159,
+      "id": "st_gap_after_tensor",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "8d000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c2273223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b382c31305d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:632-638"
+          ],
+          "note": "InvalidOffset: each tensor must begin where the previous one ended",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "w"
+    },
+    {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          8,
+          10
+        ]
+      ],
+      "description": "The tensor after the gap: s at [8, 10) does not begin where w ends",
+      "error_class": "extent",
+      "expect": {
+        "begin": 157,
+        "check": -62,
+        "dtype": "BF16",
+        "dtype_bits": 16,
+        "end": 159,
+        "find": 0,
+        "has_next": false,
+        "has_prev": true,
+        "next_begin": 0,
+        "prev_end": 155,
+        "shape": [
+          1
+        ]
+      },
+      "file_size": 159,
+      "id": "st_gap_before_tensor",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "8d000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c2273223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b382c31305d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:632-638"
+          ],
+          "note": "InvalidOffset: each tensor must begin where the previous one ended",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "s"
+    },
+    {
+      "data_offsets": [
+        [
+          2,
+          8
+        ]
+      ],
+      "description": "The only tensor begins 2 bytes into the data section",
+      "error_class": "extent",
+      "expect": {
+        "begin": 96,
+        "check": -62,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 102,
+        "find": 0,
+        "has_next": false,
+        "has_prev": false,
+        "next_begin": 0,
+        "prev_end": 94,
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "file_size": 102,
+      "id": "st_first_tensor_not_at_zero",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "56000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b322c385d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:632-638"
+          ],
+          "note": "InvalidOffset: each tensor must begin where the previous one ended",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "w"
+    },
+    {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          6,
+          8
+        ]
+      ],
+      "description": "Two bytes follow the last tensor, weight_scale at [6, 8)",
+      "error_class": "extent",
+      "expect": {
+        "begin": 234,
+        "check": -62,
+        "dtype": "BF16",
+        "dtype_bits": 16,
+        "end": 236,
+        "find": 0,
+        "has_next": false,
+        "has_prev": true,
+        "next_begin": 0,
+        "prev_end": 234,
+        "shape": [
+          1
+        ]
+      },
+      "file_size": 238,
+      "id": "st_bytes_after_last_tensor",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "dc000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e776569676874223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e7765696768745f7363616c65223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b362c385d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:420-422"
+          ],
+          "note": "MetadataIncompleteBuffer: the data section must end at the end of the file",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "model.layers.0.self_attn.q_proj.weight_scale"
+    },
+    {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
           6,
           8
         ]
@@ -778,7 +956,7 @@
         "has_next": false,
         "has_prev": false,
         "next_begin": 0,
-        "prev_end": 0,
+        "prev_end": 94,
         "shape": [
           2,
           3
@@ -821,7 +999,7 @@
         "has_next": false,
         "has_prev": false,
         "next_begin": 0,
-        "prev_end": 0,
+        "prev_end": 112,
         "shape": [
           4294967296,
           4294967296
@@ -863,7 +1041,7 @@
         "has_next": false,
         "has_prev": false,
         "next_begin": 0,
-        "prev_end": 0,
+        "prev_end": 92,
         "shape": [
           3
         ]
