@@ -61,12 +61,17 @@ function block(v, ids) {
   assert.equal(status, v.expect.status, v.id);
   assert.equal(Number(api.tf_block_flags(format, data, size, v.count, flags)), Math.min(status, 0), v.id);
   if (status < 0) {
-    if (v.silent) {
+    // Silent output: the upstream loop reads neither the scale nor a padding digit.
+    for (const entry of v.silent_output.filter((e) => e.values_hex !== undefined)) {
       const per = api.tf_block_elements(format), bytes = api.tf_block_bytes(format), at = api.tf_scale_offset(format);
-      const patched = bytesIn(v.data_hex);
-      for (let b = 0; b < v.count / per; b++) { u8(patched + b * bytes + at, 2).set([0x00, 0x3c]); }
-      assert.ok(Number(api.tf_decode_blocks(format, patched, size, v.count, values, v.count, scales, 64)) >= 0, v.id);
-      assert.equal(valuesHex(values, v.count), v.silent.values_hex, v.id);
+      const trits = alloc(4 * v.count);
+      for (let e = 0; e < v.count; e++) {
+        i32(trits, v.count)[e] = api.tf_block_value(format, data, Math.floor(e / per) * bytes, e % per);
+      }
+      assert.equal(valuesHex(trits, v.count), entry.values_hex, v.id);
+      const words = [];
+      for (let b = 0; b < v.count / per; b++) { const w = u8(data + b * bytes + at, 2); words.push(w[0] | (w[1] << 8)); }
+      assert.deepEqual(words, entry.scale_words, v.id);
     }
     return;
   }
@@ -90,6 +95,7 @@ function blockEncode(v, ids) {
 
 function gguf(v) {
   const data = bytesIn(v.gguf_hex), size = v.gguf_hex.length / 2;
+  assert.ok(v.file_size <= Number.MAX_SAFE_INTEGER, v.id);
   const name = Buffer.from(v.tensor);
   const nameAt = alloc(name.length); u8(nameAt, name.length).set(name);
   const info = alloc(api.tf_wasm_info_size());
@@ -101,7 +107,28 @@ function gguf(v) {
   assert.equal(field(10), v.expect.prism ? 1 : 0, v.id);
   assert.equal(field(11), v.expect.bitnet ? 1 : 0, v.id);
   assert.equal(field(12), v.expect.next_offset, v.id);
-  assert.equal(api.tf_gguf_check(info), v.expect.check, v.id);
+  assert.equal(field(14), v.expect.has_next ? 1 : 0, v.id);
+  assert.equal(field(6), v.expect.data_start, v.id);
+  assert.equal(api.tf_gguf_check(info, BigInt(v.file_size)), v.expect.check, v.id);
+}
+
+function safetensors(v) {
+  const data = bytesIn(v.safetensors_hex), size = v.safetensors_hex.length / 2;
+  const name = Buffer.from(v.tensor);
+  const nameAt = alloc(name.length); u8(nameAt, name.length).set(name);
+  const tokenCount = 512, tokens = alloc(tokenCount * api.tf_wasm_json_token_size()), arena = alloc(8192);
+  const info = alloc(api.tf_wasm_safe_info_size());
+  assert.equal(api.tf_safetensors_find(data, size, nameAt, name.length, tokens, tokenCount, arena, 8192, info),
+    v.expect.find, v.id);
+  const field = (index) => Number(api.tf_wasm_safe_info_field(info, index));
+  assert.equal(Buffer.from(u8(field(0), field(1))).toString(), v.expect.dtype, v.id);
+  assert.deepEqual([field(3), field(4), field(5), field(6)].slice(0, field(2)), v.expect.shape, v.id);
+  assert.equal(field(7), v.expect.begin, v.id);
+  assert.equal(field(8), v.expect.end, v.id);
+  assert.equal(field(10), v.expect.dtype_bits, v.id);
+  assert.equal(field(11), v.expect.next_begin, v.id);
+  assert.equal(field(12), v.expect.has_next ? 1 : 0, v.id);
+  assert.equal(api.tf_safetensors_check(info, BigInt(v.file_size)), v.expect.check, v.id);
 }
 
 function i2s(v) {
@@ -111,11 +138,14 @@ function i2s(v) {
   assert.equal(status, v.expect.status, v.id);
   assert.equal(Number(api.tf_i2s_flags(data, size, v.count, flags)), Math.min(status, 0), v.id);
   if (status < 0) {
-    if (v.silent) {
+    for (const entry of v.silent_output.filter((e) => e.values_hex !== undefined)) {
+      // The codes do not depend on the scale: read them with a scale of 1.0.
+      assert.equal(status, -58, v.id);
       const patched = bytesIn(v.data_hex);
       u8(patched + v.count / 4, 4).set([0, 0, 0x80, 0x3f]);
       assert.ok(Number(api.tf_decode_i2s(patched, size, v.count, values, v.count, scale)) >= 0, v.id);
-      assert.equal(valuesHex(values, v.count), v.silent.values_hex, v.id);
+      assert.equal(valuesHex(values, v.count), entry.values_hex, v.id);
+      assert.equal(Buffer.from(u8(data + v.count / 4, 4)).readUInt32LE(0), entry.scale_word, v.id);
     }
     return;
   }
@@ -215,15 +245,44 @@ function onnxEncode(v) {
   assert.ok(untouched(out, 4096), v.id);
 }
 
+// A declared reject class needs kind "reject" and the status of that class;
+// every reject, flag or silent vector carries its upstream readers' view, each
+// cite naming lines of a file pinned for that upstream in the document.
+const CITE = /^[A-Za-z0-9_./-]+:[0-9]+(-[0-9]+)?$/;
+let rejects = 0;
+function negative(v, document) {
+  assert.equal(v.kind === 'reject', v.error_class !== undefined, v.id);
+  const isNegative = ['error_class', 'flag_class', 'silent_class'].some((key) => v[key] !== undefined);
+  assert.equal(isNegative, v.silent_output !== undefined, v.id);
+  if (v.error_class !== undefined) {
+    const status = document.constants.errors[v.error_class];
+    assert.ok(status < 0, v.id);
+    const e = v.expect;
+    assert.ok([e.status, e.check, e.scale_status, e.affine_status].includes(status), v.id);
+    rejects++;
+  }
+  for (const entry of v.silent_output || []) {
+    assert.ok(['decodes', 'rejects', 'not_applicable', 'unknown'].includes(entry.behaviour), v.id);
+    assert.equal(entry.behaviour === 'unknown', entry.cite.includes('UNKNOWN'), v.id);
+    assert.ok(entry.cite.length > 0 && entry.note.length > 0, v.id);
+    for (const cite of entry.cite.filter((c) => c !== 'UNKNOWN')) {
+      assert.match(cite, CITE, v.id);
+      assert.ok(document.upstream[entry.upstream].files.includes(cite.split(':')[0]), `${v.id}: ${cite}`);
+    }
+  }
+}
+
 const handlers = {block, block_encode: blockEncode, gguf, i2s, i2s_encode: i2sEncode, hf_packed: hf,
-  hf_encode: hfEncode, mlx, mlx_encode: mlxEncode, onnx, onnx_encode: onnxEncode};
+  hf_encode: hfEncode, mlx, mlx_encode: mlxEncode, onnx, onnx_encode: onnxEncode, safetensors};
 for (const family of ['llama_cpp', 'prismml', 'bitnet_cpp', 'hf_bitnet', 'mlx', 'onnx']) {
   const document = JSON.parse(readFileSync(new URL(`conformance/formats_${family}.json`, root), 'utf8'));
   const ids = document.constants.format_ids;
   for (const vector of document.vectors) {
     reset();
-    const handler = handlers[vector.kind];
-    assert.ok(handler, `${family}: unknown kind ${vector.kind}`);
+    negative(vector, document);
+    const kind = vector.kind === 'reject' ? vector.reader : vector.kind;
+    const handler = handlers[kind];
+    assert.ok(handler, `${family}: unknown kind ${kind}`);
     handler(vector, ids);
     counts[family] = (counts[family] || 0) + 1;
     checks++;
@@ -242,8 +301,9 @@ const values = alloc(4 * weights), scales = alloc(4 * blocks);
 assert.equal(Number(api.tf_decode_blocks(2, data, blocks * 66, weights, values, weights, scales, blocks)), 0);
 assert.ok(i32(values, weights).every((v) => v === 0));
 
-const report = {evidence: 'actual-wasm-generated-from-t27', vectors: checks, per_family: counts,
+const report = {evidence: 'actual-wasm-generated-from-t27', vectors: checks, reject_vectors: rejects, per_family: counts,
   large_tensor_weights: weights, memory_bytes: api.memory.buffer.byteLength,
   imports: WebAssembly.Module.imports(module).length};
 writeFileSync(new URL('build/t27/formats-wasm-replay.json', root), JSON.stringify(report, null, 2) + '\n');
-console.log(`PASS formats.wasm replay: ${checks} vectors in 6 files, ${weights} weights in one call, 0 imports`);
+console.log(`PASS formats.wasm replay: ${checks} vectors in 6 files (${rejects} rejections with their classes), ` +
+  `${weights} weights in one call, 0 imports`);

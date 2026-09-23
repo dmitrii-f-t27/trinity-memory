@@ -7,6 +7,7 @@ build; this test checks that trinity_memory.formats, which only moves bytes,
 returns the same values, statuses and flags.
 """
 import json
+import re
 import subprocess
 import sys
 import unittest
@@ -25,6 +26,11 @@ def load(family):
 
 def values_of(hex_text):
     return [b - 256 if b > 127 else b for b in bytes.fromhex(hex_text)]
+
+
+def kind(vector):
+    """The reader a vector exercises: its kind, or `reader` for kind "reject"."""
+    return vector["reader"] if vector["kind"] == "reject" else vector["kind"]
 
 
 def status_of(call):
@@ -51,12 +57,37 @@ class SpecFormatsConformance(unittest.TestCase):
             lock = json.loads((ROOT / "specs" / "formats" / "upstream.lock.json").read_text(encoding="utf-8"))
             for key, upstream in document["upstream"].items():
                 self.assertEqual(upstream["commit"], lock["upstreams"][key]["commit"])
+                self.assertEqual(upstream["files"], sorted(lock["upstreams"][key]["files"]))
+
+    def test_negative_vectors_carry_classes_and_upstream_views(self):
+        cite = re.compile(r"^[A-Za-z0-9_./-]+:[0-9]+(-[0-9]+)?$")
+        rejects = 0
+        for family in FAMILIES:
+            document = load(family)
+            for v in document["vectors"]:
+                self.assertEqual(v["kind"] == "reject", "error_class" in v, v["id"])
+                negative = any(key in v for key in ("error_class", "flag_class", "silent_class"))
+                self.assertEqual(negative, "silent_output" in v, v["id"])
+                if "error_class" in v:
+                    rejects += 1
+                    status = document["constants"]["errors"][v["error_class"]]
+                    self.assertIn(status, [v["expect"].get(key) for key in
+                                           ("status", "check", "scale_status", "affine_status")], v["id"])
+                for entry in v.get("silent_output", []):
+                    self.assertIn(entry["behaviour"], ("decodes", "rejects", "not_applicable", "unknown"), v["id"])
+                    self.assertEqual(entry["behaviour"] == "unknown", "UNKNOWN" in entry["cite"], v["id"])
+                    self.assertTrue(entry["note"], v["id"])
+                    for line in entry["cite"]:
+                        if line != "UNKNOWN":
+                            self.assertRegex(line, cite)
+                            self.assertIn(line.split(":")[0], document["upstream"][entry["upstream"]]["files"], v["id"])
+        self.assertGreater(rejects, 0)
 
     def test_block_vectors(self):
         for family in ("llama_cpp", "prismml"):
             ids = load(family)["constants"]["format_ids"]
             for v in load(family)["vectors"]:
-                if v["kind"] == "block":
+                if kind(v) == "block":
                     data, fmt = bytes.fromhex(v["data_hex"]), ids[v["format"]]
                     result, status = status_of(lambda: f.decode_blocks(fmt, data, v["count"]))
                     if status:
@@ -69,26 +100,44 @@ class SpecFormatsConformance(unittest.TestCase):
                     self.assertEqual(f.block_flags(fmt, data, v["count"]), v["expect"]["flags"], v["id"])
                     if v["encode"]:
                         self.assertEqual(f.encode_blocks(fmt, list(values[:v["count"]]), words), data, v["id"])
-                elif v["kind"] == "block_encode":
+                elif kind(v) == "block_encode":
                     _, status = status_of(lambda: f.encode_blocks(ids[v["format"]], values_of(v["values_hex"]),
                                                                   v["scale_words"]))
                     self.assertEqual(status, v["expect"]["status"], v["id"])
 
     def test_gguf_vectors(self):
         for v in load("llama_cpp")["vectors"]:
-            if v["kind"] != "gguf":
+            if kind(v) != "gguf":
                 continue
             status, info = f.gguf_find(bytes.fromhex(v["gguf_hex"]), v["tensor"])
             self.assertEqual(status, v["expect"]["find"], v["id"])
-            self.assertEqual((info.tensor_type, info.prism, info.bitnet, info.offset, info.next_offset),
+            self.assertEqual((info.tensor_type, info.prism, info.bitnet, info.offset, info.next_offset, info.has_next,
+                              info.data_start),
                              (v["expect"]["ggml_type"], v["expect"]["prism"], v["expect"]["bitnet"],
-                              v["expect"]["offset"], v["expect"]["next_offset"]), v["id"])
-            result, status = status_of(lambda: f.gguf_check(info))
+                              v["expect"]["offset"], v["expect"]["next_offset"], v["expect"]["has_next"],
+                              v["expect"]["data_start"]), v["id"])
+            result, status = status_of(lambda: f.gguf_check(info, v["file_size"]))
             self.assertEqual(result if status == 0 else status, v["expect"]["check"], v["id"])
+
+    def test_safetensors_vectors(self):
+        seen = 0
+        for v in load("hf_bitnet")["vectors"]:
+            if kind(v) != "safetensors":
+                continue
+            seen += 1
+            status, info, dtype = f.safetensors_find(bytes.fromhex(v["safetensors_hex"]), v["tensor"])
+            e = v["expect"]
+            self.assertEqual((status, dtype, info.shape, info.begin, info.end, info.dtype_bits, info.has_next,
+                              info.next_begin),
+                             (e["find"], e["dtype"], e["shape"], e["begin"], e["end"], e["dtype_bits"], e["has_next"],
+                              e["next_begin"]), v["id"])
+            result, status = status_of(lambda: f.safetensors_check(info, v["file_size"]))
+            self.assertEqual(result if status == 0 else status, e["check"], v["id"])
+        self.assertGreater(seen, 0)
 
     def test_i2s_vectors(self):
         for v in load("bitnet_cpp")["vectors"]:
-            if v["kind"] == "i2s":
+            if kind(v) == "i2s":
                 data = bytes.fromhex(v["data_hex"])
                 result, status = status_of(lambda: f.decode_i2s(data, v["count"]))
                 if status:
@@ -100,13 +149,13 @@ class SpecFormatsConformance(unittest.TestCase):
                 self.assertEqual(f.i2s_flags(data, v["count"]), v["expect"]["flags"], v["id"])
                 if v.get("encode"):
                     self.assertEqual(f.encode_i2s(list(values[:v["count"]]), scale), data, v["id"])
-            elif v["kind"] == "i2s_encode":
+            elif kind(v) == "i2s_encode":
                 _, status = status_of(lambda: f.encode_i2s(values_of(v["values_hex"]), v["scale_word"]))
                 self.assertEqual(status, v["expect"]["status"], v["id"])
 
     def test_hf_vectors(self):
         for v in load("hf_bitnet")["vectors"]:
-            if v["kind"] == "hf_packed":
+            if kind(v) == "hf_packed":
                 data = bytes.fromhex(v["data_hex"])
                 result, status = status_of(lambda: f.decode_hf_packed(data, v["rows"], v["cols"]))
                 if status:
@@ -119,13 +168,13 @@ class SpecFormatsConformance(unittest.TestCase):
                 self.assertEqual(list(values[:n]), values_of(v["expect"]["values_hex"]), v["id"])
                 if v.get("encode"):
                     self.assertEqual(f.encode_hf_packed(list(values[:n]), v["rows"], v["cols"]), data, v["id"])
-            elif v["kind"] == "hf_encode":
+            elif kind(v) == "hf_encode":
                 _, status = status_of(lambda: f.encode_hf_packed(values_of(v["values_hex"]), v["rows"], v["cols"]))
                 self.assertEqual(status, v["expect"]["status"], v["id"])
 
     def test_mlx_vectors(self):
         for v in load("mlx")["vectors"]:
-            if v["kind"] == "mlx":
+            if kind(v) == "mlx":
                 data = bytes.fromhex(v["data_hex"])
                 result, status = status_of(lambda: f.decode_mlx2(data, v["rows"], v["cols"], v["group"]))
                 if status:
@@ -142,14 +191,14 @@ class SpecFormatsConformance(unittest.TestCase):
                 self.assertEqual(list(values[:n]), values_of(v["expect"]["values_hex"]), v["id"])
                 if v.get("encode"):
                     self.assertEqual(f.encode_mlx2(list(values[:n]), v["rows"], v["cols"], v["group"]), data, v["id"])
-            elif v["kind"] == "mlx_encode":
+            elif kind(v) == "mlx_encode":
                 _, status = status_of(lambda: f.encode_mlx2(values_of(v["values_hex"]), v["rows"], v["cols"], v["group"]))
                 self.assertEqual(status, v["expect"]["status"], v["id"])
 
     def test_onnx_vectors(self):
         for v in load("onnx")["vectors"]:
             zp = bytes.fromhex(v.get("zero_points_hex", ""))
-            if v["kind"] == "onnx":
+            if kind(v) == "onnx":
                 data = bytes.fromhex(v["data_hex"])
                 result, status = status_of(lambda: f.decode_onnx2(data, v["n"], v["k"], v["block_size"], zp))
                 if status:
@@ -164,7 +213,7 @@ class SpecFormatsConformance(unittest.TestCase):
                 self.assertEqual(list(values[:n]), values_of(v["expect"]["values_hex"]), v["id"])
                 if v.get("encode"):
                     self.assertEqual(f.encode_onnx2(list(values[:n]), v["n"], v["k"], v["block_size"], zp), data, v["id"])
-            elif v["kind"] == "onnx_encode":
+            elif kind(v) == "onnx_encode":
                 _, status = status_of(lambda: f.encode_onnx2(values_of(v["values_hex"]), v["n"], v["k"],
                                                              v["block_size"], zp))
                 self.assertEqual(status, v["expect"]["status"], v["id"])

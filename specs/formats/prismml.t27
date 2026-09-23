@@ -7,7 +7,9 @@
 // :209-220 (block_ptq1_0: qs[24], qh[2], d); ggml/src/ggml-quants.c:74 and :474
 // (quantize_row_q2_0_ref, dequantize_row_q2_0), :113 and :494 (quantize_row_pq2_0_ref,
 // dequantize_row_pq2_0), :2203 (stages 32/16/8), :2205 and :2255
-// (quantize_row_ptq1_0_ref, dequantize_row_ptq1_0), :5515-5552 and :5707-5718
+// (quantize_row_ptq1_0_ref, dequantize_row_ptq1_0), :2246-2248 (a qh group is
+// multiplied by 3 once more, so its fifth digit is 0), :2277-2283 (qh digits
+// 0..3 only), :5515-5552 and :5707-5718
 // (ggml_validate_row_data: finite d for Q2_0, PQ2_0 and PTQ1_0). The fork marks
 // its files with keys beginning "prism." (for example prism.hadamard.*); the
 // GGUF type-id rule is stated in specs/formats/llama_cpp.t27.
@@ -20,6 +22,7 @@ module TrinityFormatsPrismmlSpec {
     pub const TFS_PRISM_ERR_LENGTH: i32 = -51;
     pub const TFS_PRISM_ERR_CAPACITY: i32 = -52;
     pub const TFS_PRISM_ERR_CODE: i32 = -53;
+    pub const TFS_PRISM_ERR_PADDING: i32 = -54;
     pub const TFS_PRISM_ERR_SCALE_NONFINITE: i32 = -58;
     pub const TFS_PRISM_FLAG_OUTSIDE_TERNARY: u32 = 0;
     pub const TFS_PRISM_FLAG_NONCANONICAL_BASE3: u32 = 1;
@@ -97,6 +100,12 @@ module TrinityFormatsPrismmlSpec {
         return (((q * 3) >> 8) as i32) - 1;
     }
 
+    // Digit 4 of a qh byte is padding: the quantizer writes 0, the
+    // dequantizer does not read it.
+    pub fn tfs_prism_b3_padded(byte: u32) -> bool {
+        return tfs_prism_b3_trit(byte, 4) != -1;
+    }
+
     pub fn tfs_prism_b3_canonical(byte: u32, digits: u32) -> bool {
         var limit: u32 = 243;
         var factor: u32 = 1;
@@ -150,6 +159,20 @@ module TrinityFormatsPrismmlSpec {
                 return TFS_PRISM_ERR_SCALE_NONFINITE as i64;
             }
             b = b + 1;
+        }
+        // PTQ1_0: PADDING for the first qh byte whose fifth digit is not 0.
+        if (format == TFS_PRISM_PTQ1_0) {
+            b = 0;
+            while (b < count / per) {
+                var h: usize = 0;
+                while (h < (TFS_PRISM_PTQ1_0_QH_BYTES as usize)) {
+                    if (tfs_prism_b3_padded(data[b * bytes + (TFS_PRISM_PTQ1_0_QS_BYTES as usize) + h] as u32)) {
+                        return TFS_PRISM_ERR_PADDING as i64;
+                    }
+                    h = h + 1;
+                }
+                b = b + 1;
+            }
         }
         return (count / per) as i64;
     }
@@ -332,5 +355,10 @@ module TrinityFormatsPrismmlSpec {
         assert tfs_prism_flags(TFS_PRISM_PTQ1_0, pt, 56, 256, f) == TFS_PRISM_ERR_SCALE_NONFINITE && f[1] == 0;
         assert tfs_prism_decode(TFS_PRISM_PQ2_0, pt, 56, 256, v, 256, s, 2) == TFS_PRISM_ERR_LENGTH;
         assert tfs_prism_decode(7, pt, 56, 256, v, 256, s, 2) == TFS_PRISM_ERR_FORMAT;
+        pt[55] = 0;
+        pt[25] = 2;
+        assert tfs_prism_decode(TFS_PRISM_PTQ1_0, pt, 56, 256, v, 256, s, 2) == TFS_PRISM_ERR_PADDING;
+        assert tfs_prism_flags(TFS_PRISM_PTQ1_0, pt, 56, 256, f) == TFS_PRISM_ERR_PADDING && f[1] == 0;
+        assert tfs_prism_b3_padded(2) && !tfs_prism_b3_padded(1) && !tfs_prism_b3_padded(73);
     }
 }

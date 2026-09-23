@@ -17,7 +17,8 @@ NAMES = {TQ1_0: "TQ1_0", TQ2_0: "TQ2_0", Q2_0: "Q2_0", Q1_0: "Q1_0", PQ2_0: "PQ2
 ERRORS = {-50: "unknown format", -51: "length", -52: "capacity", -53: "code outside the format",
           -54: "nonzero padding", -55: "truncated", -56: "malformed container", -57: "not found",
           -58: "non-finite scale", -59: "ambiguous GGUF type id", -60: "layout without a storage contract",
-          -61: "misaligned tensor offset", -62: "tensor runs into the next one"}
+          -61: "misaligned tensor offset",
+          -62: "tensor bytes run into another tensor or past the end of the file, or do not match its shape"}
 TOKENS = {-50: "format", -51: "length", -52: "capacity", -53: "code", -54: "padding", -55: "truncated",
           -56: "container", -57: "not_found", -58: "scale_nonfinite", -59: "type_ambiguous",
           -60: "layout_unsupported", -61: "misaligned", -62: "extent"}
@@ -40,7 +41,7 @@ class TensorInfo(C.Structure):
     _fields_ = [("tensor_type", C.c_uint32), ("dims", C.c_uint32), ("d0", U64), ("d1", U64),
                 ("d2", U64), ("d3", U64), ("data_start", U64), ("offset", U64), ("alignment", U64),
                 ("needed", U64), ("prism", C.c_bool), ("name_at", U64), ("name_size", U64),
-                ("tensors", U64), ("bitnet", C.c_bool), ("next_offset", U64)]
+                ("tensors", U64), ("bitnet", C.c_bool), ("next_offset", U64), ("has_next", C.c_bool)]
 
     @property
     def shape(self):
@@ -50,7 +51,8 @@ class TensorInfo(C.Structure):
 
 class SafeInfo(C.Structure):
     _fields_ = [("dtype", n.U8), ("dtype_size", n.SZ), ("dims", n.SZ), ("d0", U64), ("d1", U64),
-                ("d2", U64), ("d3", U64), ("begin", U64), ("end", U64), ("needed", U64)]
+                ("d2", U64), ("d3", U64), ("begin", U64), ("end", U64), ("needed", U64),
+                ("dtype_bits", U64), ("next_begin", U64), ("has_next", C.c_bool)]
 
     @property
     def shape(self):
@@ -107,9 +109,9 @@ def format_of_gguf(tensor_type: int, prism: bool, bitnet: bool) -> int:
     return n.call("tf_format_of_gguf", C.c_int32, [C.c_uint32, C.c_bool, C.c_bool], tensor_type, prism, bitnet)
 
 
-def gguf_check(info: TensorInfo) -> int:
-    """Format id of a found tensor after the type-id, alignment and extent rules; raises on rejection."""
-    return _check(n.call("tf_gguf_check", C.c_int32, [C.POINTER(TensorInfo)], C.byref(info)))
+def gguf_check(info: TensorInfo, file_size: int) -> int:
+    """Format id of a found tensor after the type-id, alignment, row and extent rules; raises on rejection."""
+    return _check(n.call("tf_gguf_check", C.c_int32, [C.POINTER(TensorInfo), U64], C.byref(info), file_size))
 
 
 def gguf_tensor_bytes(info: TensorInfo) -> int:
@@ -130,6 +132,11 @@ def safetensors_find(prefix: bytes, name: str):
                     arena, len(arena), C.byref(info))
     dtype = bytes(info.dtype[: info.dtype_size]).decode() if status == 0 else None
     return status, info, dtype
+
+
+def safetensors_check(info: SafeInfo, file_size: int) -> int:
+    """0 when a found tensor's dtype, byte range and neighbours fit its shape and the file; raises otherwise."""
+    return _check(n.call("tf_safetensors_check", C.c_int32, [C.POINTER(SafeInfo), U64], C.byref(info), file_size))
 
 
 def block_geometry(fmt: int):

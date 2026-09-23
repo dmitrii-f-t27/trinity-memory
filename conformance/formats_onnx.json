@@ -50,7 +50,9 @@
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
-      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+      "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
+      "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
@@ -181,6 +183,16 @@
         11878,
         11878
       ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:619-637"
+          ],
+          "note": "v = (code - zero point) * scale, without checks",
+          "upstream": "onnxruntime"
+        }
+      ],
       "zero_points_hex": "1b2639"
     },
     {
@@ -210,6 +222,16 @@
       "scale_kind": "F16",
       "scale_words": [
         15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:619-637"
+          ],
+          "note": "v = (code - zero point) * scale, without checks",
+          "upstream": "onnxruntime"
+        }
       ],
       "zero_points_hex": ""
     },
@@ -248,6 +270,18 @@
         11878,
         11878
       ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:619-637",
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:493-494",
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:551-567"
+          ],
+          "note": "the dequantizer reads k < K only; the quantizer itself leaves nonzero codes in a partial last byte (vi keeps the previous row's codes)",
+          "upstream": "onnxruntime"
+        }
+      ],
       "zero_points_hex": ""
     },
     {
@@ -285,6 +319,16 @@
         11878,
         11878,
         11878
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:619-637"
+          ],
+          "note": "v = (code - zero point) * scale, without checks",
+          "upstream": "onnxruntime"
+        }
       ],
       "zero_points_hex": ""
     },
@@ -346,8 +390,9 @@
       },
       "id": "onnx_scale_nan",
       "k": 70,
-      "kind": "onnx",
+      "kind": "reject",
       "n": 3,
+      "reader": "onnx",
       "scale_kind": "F16",
       "scale_words": [
         11878,
@@ -359,6 +404,16 @@
         11878,
         11878,
         11878
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:619-637"
+          ],
+          "note": "v = (code - zero point) * scale, without checks",
+          "upstream": "onnxruntime"
+        }
       ],
       "zero_points_hex": ""
     },
@@ -372,8 +427,9 @@
       },
       "id": "onnx_block_size_24",
       "k": 70,
-      "kind": "onnx",
+      "kind": "reject",
       "n": 3,
+      "reader": "onnx",
       "scale_kind": "F16",
       "scale_words": [
         11878,
@@ -385,6 +441,16 @@
         11878,
         11878,
         11878
+      ],
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc:146-149"
+          ],
+          "note": "block_size must be 16, 32, 64, 128 or 256",
+          "upstream": "onnxruntime"
+        }
       ],
       "zero_points_hex": ""
     },
@@ -398,11 +464,22 @@
       },
       "id": "onnx_block_size_8",
       "k": 8,
-      "kind": "onnx",
+      "kind": "reject",
       "n": 1,
+      "reader": "onnx",
       "scale_kind": "F16",
       "scale_words": [
         15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc:146-149"
+          ],
+          "note": "block_size must be 16, 32, 64, 128 or 256",
+          "upstream": "onnxruntime"
+        }
       ],
       "zero_points_hex": ""
     },
@@ -416,8 +493,9 @@
       },
       "id": "onnx_zero_points_size",
       "k": 70,
-      "kind": "onnx",
+      "kind": "reject",
       "n": 3,
+      "reader": "onnx",
       "scale_kind": "F16",
       "scale_words": [
         11878,
@@ -429,6 +507,16 @@
         11878,
         11878,
         11878
+      ],
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc:323-327"
+          ],
+          "note": "a packed zero_points shape other than N * ceil(k_blocks / 4) is refused",
+          "upstream": "onnxruntime"
+        }
       ],
       "zero_points_hex": "1b26"
     },
@@ -442,8 +530,9 @@
       },
       "id": "onnx_size_mismatch",
       "k": 70,
-      "kind": "onnx",
+      "kind": "reject",
       "n": 3,
+      "reader": "onnx",
       "scale_kind": "F16",
       "scale_words": [
         11878,
@@ -456,6 +545,16 @@
         11878,
         11878
       ],
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc:340-344"
+          ],
+          "note": "B must have shape (N, k_blocks, block_size / 4)",
+          "upstream": "onnxruntime"
+        }
+      ],
       "zero_points_hex": ""
     },
     {
@@ -467,8 +566,19 @@
       },
       "id": "onnx_encode_rejects_code_below_0",
       "k": 70,
-      "kind": "onnx_encode",
+      "kind": "reject",
       "n": 3,
+      "reader": "onnx_encode",
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "onnxruntime/core/mlas/lib/q4_dq.cpp:551-558"
+          ],
+          "note": "the quantizer clamps every code to 0..3",
+          "upstream": "onnxruntime"
+        }
+      ],
       "values_hex": "fefefdfffefdfefefefffeffff0000fdff0000fd0000fffefdffff00fffdfefffeff0100ff0000fefefffe0100fffe01ff0100fe01fe010101ff000100ff01fe0100fe020102010000ff01010000ff000100fffffe00fe00fffffffe0001fe01fefeff0100ffff00ff0001ff01ff01ff0001ff01ffff00ff02ffffff0100000101ffffff010100fe00feffff010002020201ff01ff00010200ff0200010101ffffff020001ff0201ffffff000001fe00ffff0101fe01010001fe000000fe0101000100ff0000feff00fefe0000fefffd00fe",
       "zero_points_hex": "1b2639"
     }
