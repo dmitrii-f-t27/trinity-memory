@@ -10,6 +10,9 @@
 double tm_json_strtod(uint8_t *text) { (void)text; __builtin_trap(); }
 #include "json.h"
 #include "formats.h"
+/* The Ternary Check contract (t27/ternary_contract.t27): the strict reader and
+ * writer behind the CLI contract, class tokens, comparison and verdicts. */
+#include "ternary_contract.h"
 
 /* Freestanding wasm32 has no compiler runtime. clang turns the u64 overflow
  * test in tf_times (a > max / b, then a * b) into a 128-bit multiply, which

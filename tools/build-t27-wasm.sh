@@ -1,7 +1,9 @@
 #!/bin/sh
 # Compile the same generated codec algorithms for the standalone browser UI,
-# and the external format readers and writers (formats.wasm) for JavaScript
-# consumers and tests/spec_formats_wasm_replay.mjs.
+# and the external format readers and writers (formats.wasm, with the Ternary
+# Check contract functions of t27/ternary_contract.t27) for JavaScript
+# consumers, tests/spec_formats_wasm_replay.mjs and
+# tests/ternary_contract_wasm_replay.mjs.
 set -eu
 cd "$(dirname "$0")/.."
 out=build/t27
@@ -43,7 +45,10 @@ for name in tf_block_elements tf_block_bytes tf_scale_offset tf_scale_class tf_s
     tf_affine_check tf_affine_not_ternary tf_decode_onnx2 tf_encode_onnx2 tf_onnx2_padding_nonzero \
     tf_format_of_gguf tf_gguf_find tf_gguf_nth tf_gguf_check tf_gguf_tensor_bytes tf_wasm_info_size tf_wasm_info_field \
     tf_block_value tf_b3_padding_nonzero tf_safetensors_find tf_safetensors_check tf_wasm_json_token_size \
-    tf_wasm_safe_info_size tf_wasm_safe_info_field; do
+    tf_wasm_safe_info_size tf_wasm_safe_info_field \
+    tk_decode tk_encode tk_encoded_bytes tk_scale_count tk_scale_width tk_format_of_name tk_format_token \
+    tk_error_status tk_error_token tk_flag_token tk_outcome_token tk_parse_flags tk_flags_text tk_compare_bytes \
+    tk_compare_words tk_flag_state tk_verdict tk_fails; do
     formats_exports="$formats_exports --export=$name"
 done
 # shellcheck disable=SC2086
