@@ -556,6 +556,17 @@ estimate 60.1 MHz. Four runs each on the AX7203 (25 and 50 MHz), all PASS and id
 45 057 and 45 060 read ticks, 0 bad words, 0 invalid groups, +1 349 720, -1 348 525, dot 4040
 ([`reports/fpga/bram-rom-capture-2026-09-23-ae754b0-d5p*`](../reports/fpga/README.md)).
 
+**Every layout that fills a word (2026-09-23).** [`tools/bram-layout-study.py`](../tools/bram-layout-study.py)
+enumerates the multisets of base-3 group widths (2, 4, 5, 7, 8, 10, 12, 13, 15, 16 bits for 1-10 trits)
+that reach floor(w / log2 3) trits: 5 layouts for 18-bit words (11 trits) and 32 for 36-bit words (22
+trits). It writes each decoder as executable t27, checks the generated C against a Python statement of
+the rule on 3 002 words (all 37 match) and synthesizes it alone with yosys 0.69, LUT-only and with
+MUXF7/MUXF8 ([`reports/fpga/layout-study-2026-09-23-a548df3`](../reports/fpga/README.md)). The cheapest
+36-bit layout is two bytes and four 5-bit groups of three trits, `8, 8, 5, 5, 5, 5`: 94 LUTs at four
+levels, against 132 for `8, 8, 8, 8, 4` (d5d2 written the same way) and 136 for four plain bytes (20
+trits). The cheapest 18-bit layout is `8, 5, 5`, 47 LUTs. Groups wider than eight bits need division by
+powers of three and cost 126 to 318 LUTs.
+
 **Clock.** The benches decode, check and accumulate a word in the tick after its read;
 the longest path runs through the per-word check built from LUT-only adders (`-nocarry`).
 Carry chains do not help in this flow: the d5d2 write-read bench without `-nocarry`
