@@ -91,7 +91,8 @@ proceed sets `passed=false` and none of the counts.
   - It downloads `SHA256SUMS` and the platform wheel from that GitHub release.
   - It checks the wheel's SHA-256 against `SHA256SUMS`, unpacks the wheel into `$RUNNER_TEMP` and runs the checker from there. It does not use pip.
   - Wheels exist for Linux x86_64 and macOS arm64. Other runners stop with an error that says to use a local build.
-  - The macOS wheel loads only on macOS versions at or above the deployment target it was built for. Before the checker runs, the Action loads the native library once and stops with an error if it does not load.
+  - The macOS wheel's platform tag names the oldest macOS its binaries load on (`macosx_14_0_arm64` for v0.4.0: macOS 14 or later). On an older macOS the Action stops with an error that says so. Before the checker runs, the Action also loads the native library once and stops with an error if it does not load.
+  - Only the Action's own ref chooses the release: `resolve-runtime.sh` reads the version from that ref's `pyproject.toml`, and the Action clears the script's test overrides, so variables such as `VERSION` in the calling workflow do not change it.
 - **A directory:**
   - The directory holds the `trinity_memory` package with its native runtime. That can be a checkout of this repository after `sh tools/build-t27.sh`, which needs the t27 compiler pinned in `native/compiler.lock`, or an unpacked wheel.
   - This repository's CI uses `runtime: .` because the release assets do not exist before the release.

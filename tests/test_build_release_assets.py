@@ -6,8 +6,11 @@ files whose first bytes are an ELF x86-64 header. The package checks must
 accept it and refuse each single defect. The preflight is run against a
 temporary git repository; SHA256SUMS writing and verification, the sdist
 member check, the otool parser and, on macOS with a C compiler, the minos
-check of a real Mach-O file are tested directly. The macOS wheel build itself
-runs only in a real release (see the tool's docstring).
+check of a real Mach-O file are tested directly, as are the CI run and
+artifact checks (hand-made `gh` JSON), the gate order and unittest counts
+(with `run` replaced), the stale build directories and the rule that a macOS
+tag must not be below any minos. The macOS wheel build itself runs only in a
+real release or a --no-ci dry run (see the tool's docstring).
 """
 import hashlib
 import importlib.util
@@ -16,6 +19,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -35,7 +39,7 @@ ELF_X86_64 = b"\x7fELF\x02\x01\x01" + bytes(11) + (62).to_bytes(2, "little") + b
 
 
 def fake_linux_wheel(directory: Path, *, version=VERSION, pin=PIN, manifest_version=None, tamper=None,
-                     name=None, elf=ELF_X86_64, drop=None, source_edit=None) -> Path:
+                     name=None, elf=ELF_X86_64, drop=None, source_edit=None, stray=None) -> Path:
     """A stand-in for the CI Linux wheel; each keyword introduces one defect."""
     runtime = "trinity_memory/_native_runtime/"
     files = {"libtrinity_memory_t27.so": elf + b"library", "trinity-memory-t27": elf + b"cli",
@@ -60,6 +64,8 @@ def fake_linux_wheel(directory: Path, *, version=VERSION, pin=PIN, manifest_vers
         for key, value in files.items():
             archive.writestr(runtime + key, value)
         archive.writestr(runtime + "manifest.json", json.dumps(manifest))
+        if stray:
+            archive.writestr(stray, b"left over from an earlier build")
         archive.writestr(dist_info + "METADATA", f"Metadata-Version: 2.4\nName: trinity-ternary-memory\nVersion: {version}\n")
         archive.writestr(dist_info + "WHEEL", f"Wheel-Version: 1.0\nRoot-Is-Purelib: false\nTag: {tag}\n")
     return path
@@ -89,6 +95,10 @@ class LinuxWheelTest(unittest.TestCase):
             "edited module": dict(source_edit="ternary_check_run.py"),
             "compiler pin": dict(pin="0" * 40),
             "platform": dict(name=f"{tool.DIST}-{VERSION}-py3-none-linux_aarch64.whl"),
+            "stale subpackage": dict(stray="trinity_memory/zz_stale/evil.py"),
+            "stale data file": dict(stray="trinity_memory/stale.txt"),
+            "file outside the manifest": dict(stray="trinity_memory/_native_runtime/extra.so"),
+            "other top-level package": dict(stray="strayp/__init__.py"),
         }
         for label, defect in cases.items():
             with self.subTest(label), tempfile.TemporaryDirectory() as directory:
@@ -101,7 +111,94 @@ class LinuxWheelTest(unittest.TestCase):
         text = (ROOT / "ternary-check" / "resolve-runtime.sh").read_text()
         self.assertIn("-py3-none-(manylinux[0-9_]*_x86_64|linux_x86_64)\\.whl$", text)
         self.assertIn("-py3-none-macosx_[0-9]+_[0-9]+_arm64\\.whl$", text)
-        self.assertRegex(f"{tool.DIST}-{VERSION}-py3-none-macosx_13_0_arm64.whl", tool.MACOS_TAG)
+        self.assertRegex(f"{tool.DIST}-{VERSION}-py3-none-macosx_14_0_arm64.whl", tool.MACOS_TAG)
+
+
+def ci_run_json(directory: Path, **changes) -> Path:
+    """A `gh run view --json ...` of a successful push run of ci.yml; keywords change fields."""
+    run = {"databaseId": 42, "url": "https://github.com/dmitrii-f-t27/trinity-memory/actions/runs/42",
+           "headSha": "a" * 40, "event": "push", "status": "completed", "conclusion": "success",
+           "workflowName": "Executable t27 stack",
+           "jobs": [{"name": name, "conclusion": "success"} for name in sorted(tool.CI_JOBS)]}
+    run.update(changes)
+    path = directory / "ci-run.json"
+    path.write_text(json.dumps(run))
+    return path
+
+
+class CiRunTest(unittest.TestCase):
+    def test_ci_yml_push_run_with_every_job(self):
+        with tempfile.TemporaryDirectory() as directory:
+            facts = tool.check_ci_run(ci_run_json(Path(directory)), "a" * 40)
+        self.assertEqual((facts["workflow"], facts["event"], facts["run_id"]), ("Executable t27 stack", "push", 42))
+        self.assertEqual({job["name"] for job in facts["jobs"]}, tool.CI_JOBS)
+
+    def test_ci_jobs_are_the_jobs_of_ci_yml(self):
+        # Job names: the job ids of ci.yml, with the matrix value in parentheses.
+        text = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        ids = set(re.findall(r"^  ([a-z0-9-]+):$", text.split("\njobs:\n", 1)[1], re.M))
+        self.assertEqual({name.split(" (")[0] for name in tool.CI_JOBS}, ids)
+
+    def test_other_runs_are_refused(self):
+        one_job = [{"name": "smoke (ubuntu-latest)", "conclusion": "success"}]
+        cases = {
+            "another workflow": dict(workflowName="Ternary Check release smoke", event="workflow_dispatch",
+                                     jobs=one_job),
+            "weekly workflow": dict(workflowName="Ternary Check weekly", event="schedule"),
+            "pull request event": dict(event="pull_request"),
+            "another commit": dict(headSha="b" * 40),
+            "failed": dict(conclusion="failure"),
+            "missing job": dict(jobs=[{"name": name, "conclusion": "success"} for name in sorted(tool.CI_JOBS)][1:]),
+            "extra job": dict(jobs=[{"name": name, "conclusion": "success"} for name in sorted(tool.CI_JOBS)]
+                              + [{"name": "extra", "conclusion": "success"}]),
+            "skipped job": dict(jobs=[{"name": name, "conclusion": "skipped" if name == "sdk" else "success"}
+                                      for name in sorted(tool.CI_JOBS)]),
+        }
+        for label, change in cases.items():
+            with self.subTest(label), tempfile.TemporaryDirectory() as directory:
+                with self.assertRaises(tool.ReleaseError):
+                    tool.check_ci_run(ci_run_json(Path(directory), **change), "a" * 40)
+
+
+class LinuxArtifactTest(unittest.TestCase):
+    """The Linux wheel is tied to the CI run through the artifact digest GitHub lists."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="release-artifact-"))
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.wheel = fake_linux_wheel(self.tmp)
+        self.zip = self.tmp / "native-python-3.12.zip"
+        with zipfile.ZipFile(self.zip, "w") as archive:
+            archive.writestr("installed-wheel.json", "{}")
+            archive.write(self.wheel, f"wheels/{self.wheel.name}")
+        self.run_facts = tool.check_ci_run(ci_run_json(self.tmp), "a" * 40)
+
+    def artifacts(self, **changes) -> Path:
+        item = {"id": 7, "name": "native-python-3.12", "expired": False,
+                "digest": "sha256:" + hashlib.sha256(self.zip.read_bytes()).hexdigest(),
+                "workflow_run": {"id": 42, "head_sha": "a" * 40}}
+        item.update(changes)
+        path = self.tmp / "artifacts.json"
+        path.write_text(json.dumps({"total_count": 2, "artifacts": [
+            item, {"id": 8, "name": "native-python-3.14", "digest": "sha256:" + "0" * 64,
+                   "workflow_run": {"id": 42, "head_sha": "a" * 40}}]}))
+        return path
+
+    def test_digest_and_wheel_match(self):
+        facts = tool.check_linux_artifact(self.artifacts(), self.zip, self.wheel, self.run_facts)
+        self.assertEqual((facts["id"], facts["member"], facts["run_id"]), (7, f"wheels/{self.wheel.name}", 42))
+
+    def test_refusals(self):
+        cases = {"digest": dict(digest="sha256:" + "1" * 64),
+                 "another run": dict(workflow_run={"id": 43, "head_sha": "a" * 40}),
+                 "another commit": dict(workflow_run={"id": 42, "head_sha": "b" * 40}),
+                 "expired": dict(expired=True)}
+        for label, change in cases.items():
+            with self.subTest(label), self.assertRaises(tool.ReleaseError):
+                tool.check_linux_artifact(self.artifacts(**change), self.zip, self.wheel, self.run_facts)
+        other = fake_linux_wheel(Path(tempfile.mkdtemp(dir=self.tmp)), source_edit="ternary_check_run.py")
+        with self.assertRaisesRegex(tool.ReleaseError, "differs"):
+            tool.check_linux_artifact(self.artifacts(), self.zip, other, self.run_facts)
 
 
 class PreflightTest(unittest.TestCase):
@@ -144,6 +241,57 @@ class PreflightTest(unittest.TestCase):
                                 "--root", str(ROOT)])
         self.assertEqual(status, 1)
         self.assertFalse(out.exists())
+
+
+class GatesTest(unittest.TestCase):
+    def test_order_environment_and_counts(self):
+        calls = []
+
+        def fake_run(command, *, cwd, env=None, log_path=None):
+            calls.append((command, env))
+            if "unittest" in command:
+                log_path.write_text("test_a (tests.test_x.X.test_a) ... ok\n"
+                                    "test_b (tests.test_x.X.test_b)\nA docstring. ... skipped 'no node'\n"
+                                    "extracted 1 ranges\n\n----\nRan 2 tests in 0.1s\n\nOK (skipped=1)\n")
+            else:
+                log_path.write_text("ok\n")
+            return 0.1
+
+        original = tool.run
+        tool.run = fake_run
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                results = tool.run_gates(ROOT, sys.executable, {}, Path(directory))
+                self.assertEqual(sorted(p.name for p in Path(directory).iterdir()),
+                                 [f"gate-{i}.log" for i in range(5)])
+        finally:
+            tool.run = original
+        labels = [result["command"] for result in results]
+        # The unittest gate runs after ternary-check-verify has written build/upstream/matrix.
+        self.assertEqual(labels[-1], tool.UNITTEST_GATE)
+        self.assertLess(labels.index("OFFLINE=1 make ternary-check-verify"), labels.index(tool.UNITTEST_GATE))
+        self.assertEqual(calls[-1][1]["TRINITY_REQUIRE_CACHED"], "1")
+        self.assertEqual((results[-1]["tests_run"], results[-1]["skipped"], results[-1]["skipped_tests"]),
+                         (2, 1, [{"test": "test_b (tests.test_x.X.test_b)", "reason": "no node"}]))
+
+    def test_counts(self):
+        self.assertEqual(tool.unittest_counts("Ran 3 tests in 1s\n\nOK (skipped=2)\n")["skipped"], 2)
+        with self.assertRaises(tool.ReleaseError):
+            tool.unittest_counts("no summary\n")
+        self.assertEqual(tool.unittest_counts("Ran 247 tests in 64.2s\n\nOK\n"),
+                         {"tests_run": 247, "skipped": 0, "skipped_tests": []})
+
+
+class StaleBuildTest(unittest.TestCase):
+    def test_platform_lib_directories_are_removed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("build/lib", "build/lib.macosx-10.15-universal2-cpython-314",
+                         "build/lib.macosx-26.0-arm64-cpython-314", "build/bdist.macosx-14.0-arm64", "build/t27"):
+                (root / name).mkdir(parents=True)
+            self.assertEqual([path.name for path in tool.stale_build_dirs(root)],
+                             ["bdist.macosx-14.0-arm64", "lib", "lib.macosx-10.15-universal2-cpython-314",
+                              "lib.macosx-26.0-arm64-cpython-314"])
 
 
 class ChecksumTest(unittest.TestCase):
@@ -225,6 +373,20 @@ class MachOTest(unittest.TestCase):
                              [("program", ["13.3"], ["arm64"])])
             with self.assertRaisesRegex(tool.ReleaseError, "above the deployment target"):
                 tool.check_macho(tree, "13.0")
+            # Built for 13.3, a wheel would be tagged macosx_13_0: pip on 13.0-13.2 would install
+            # a binary that does not load there, so the tag must be at or above every minos.
+            with self.assertRaisesRegex(tool.ReleaseError, "needs 13.3"):
+                tool.check_tag_covers_minos(f"{tool.DIST}-{VERSION}-py3-none-macosx_13_0_arm64.whl", facts)
+            self.assertEqual(tool.check_tag_covers_minos(f"{tool.DIST}-{VERSION}-py3-none-macosx_14_0_arm64.whl",
+                                                         facts), "14.0")
+
+    def test_tag_must_cover_minos(self):
+        facts = [{"file": "lib.dylib", "minos": ["14.0"]}, {"file": "cli", "minos": ["13.3", "14.0"]}]
+        self.assertEqual(tool.check_tag_covers_minos(f"{tool.DIST}-{VERSION}-py3-none-macosx_14_0_arm64.whl", facts),
+                         "14.0")
+        for tag in ("macosx_13_0_arm64", "macosx_11_0_arm64"):
+            with self.subTest(tag), self.assertRaises(tool.ReleaseError):
+                tool.check_tag_covers_minos(f"{tool.DIST}-{VERSION}-py3-none-{tag}.whl", facts)
 
 
 if __name__ == "__main__":

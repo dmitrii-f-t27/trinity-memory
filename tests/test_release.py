@@ -115,12 +115,19 @@ class ChangelogTest(unittest.TestCase):
         named = {int(n) for n in re.findall(r"trinity-memory/pull/(\d+)", self.section())}
         self.assertEqual(named, MERGED_SINCE_0_3_0)
 
+    @staticmethod
+    def has_tag(tag: str) -> bool:
+        return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "-q", "--verify", f"{tag}^{{commit}}"],
+                              capture_output=True, text=True).returncode == 0
+
     def test_against_git_history_when_available(self):
-        tag = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "-q", "--verify", "v0.3.0^{commit}"],
-                             capture_output=True, text=True)
-        if tag.returncode:
+        if not self.has_tag("v0.3.0"):
             self.skipTest("the v0.3.0 tag is not in this clone")
-        log = subprocess.run(["git", "-C", str(ROOT), "log", "--merges", "--format=%s", "v0.3.0..HEAD"],
+        # Once v0.4.0 is tagged the range ends there, so pull requests merged after the
+        # release do not count; before tagging it ends at HEAD (the release pull request
+        # itself is the one allowed extra).
+        end = "v0.4.0" if self.has_tag("v0.4.0") else "HEAD"
+        log = subprocess.run(["git", "-C", str(ROOT), "log", "--merges", "--format=%s", f"v0.3.0..{end}"],
                              capture_output=True, text=True, check=True).stdout
         merged = {int(n) for n in re.findall(r"^Merge pull request #(\d+) ", log, re.M)}
         self.assertLessEqual(MERGED_SINCE_0_3_0, merged)
@@ -143,7 +150,10 @@ class ManifestTest(unittest.TestCase):
                      "recursive-include reports/ternary-check *.json",
                      "recursive-include ternary-check *.yml *.md *.sh",
                      "recursive-include conformance *.json *.md",
-                     "recursive-include specs *.t27 *.md *.json"):
+                     "recursive-include specs *.t27 *.md *.json",
+                     # read by tests/test_release.py, tests/test_upstream_harness.py, tests/test_spec_edge_demo.py
+                     "recursive-include .github/workflows *.yml",
+                     "include reports/t27/edge.json"):
             self.assertIn(line, lines)
 
 
