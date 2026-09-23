@@ -1,0 +1,71 @@
+{
+ "schema": "trinity.upstream-sources.v1",
+ "repo": "ggml-org/llama.cpp",
+ "commit": "e6ab7c1a41054a888ada952eab4c886444c2f5ad",
+ "license": "MIT (Copyright (c) 2023-2026 The ggml authors); fetched at test time into build/upstream/, never committed",
+ "directory": "llama.cpp-e6ab7c1a",
+ "files": {
+  "ggml/src/ggml-common.h": {
+   "git_blob_sha": "1dbbe326d0fc6a5ce8a86d237cb94901340443af",
+   "sha256": "0061131b615c5721fc88a78feeb22c1f8c450f1c2646a317d80796a653bf595c",
+   "size": 135161
+  },
+  "ggml/src/ggml-quants.c": {
+   "git_blob_sha": "55db802c0aeb5fd85de9ed77b4c5fe3dd84b5bd1",
+   "sha256": "7878680cc60493f98469a116e9b14af8b84789292ccf891c249230b2fa3d157f",
+   "size": 226703
+  },
+  "ggml/src/ggml-cpu/quants.c": {
+   "git_blob_sha": "5e36459f8cbc5900b375d2189414307393471a6b",
+   "sha256": "a61f1011e49d05b5f99d352b158d5b8e36cf008294bb0db309f72bdd7f1d4e35",
+   "size": 45124
+  },
+  "ggml/src/ggml-cpu/arch/x86/quants.c": {
+   "git_blob_sha": "ea54cfe44ce403fe06c8b4aa10b5a882779e7e71",
+   "sha256": "3c489fdc77e3ab484a5f188bff9c60c0e9483c951ed65c1a562a04c249d5628e",
+   "size": 197407
+  },
+  "ggml/src/ggml-cpu/arch/arm/quants.c": {
+   "git_blob_sha": "b988abf9963a192e16177661a7d99596effc0d36",
+   "sha256": "9fccd3897db24c9df89b8431b588175894e5f54697cf45768d0c6e6c5544093e",
+   "size": 216963
+  }
+ },
+ "extracts": [
+  {"file": "ggml/src/ggml-common.h", "first": 194, "last": 199, "guard": "",
+   "first_line": "#define QK4_0 32", "last_line": "static_assert(sizeof(block_q4_0) =="},
+  {"file": "ggml/src/ggml-common.h", "first": 275, "last": 281, "guard": "",
+   "first_line": "// 1.6875 bpw", "last_line": "static_assert(sizeof(block_tq1_0) =="},
+  {"file": "ggml/src/ggml-common.h", "first": 283, "last": 288, "guard": "",
+   "first_line": "// 2.0625 bpw", "last_line": "static_assert(sizeof(block_tq2_0) =="},
+  {"file": "ggml/src/ggml-common.h", "first": 370, "last": 376, "guard": "",
+   "first_line": "// This is only used for intermediate quantization and dot products", "last_line": "static_assert(sizeof(block_q8_K) =="},
+  {"file": "ggml/src/ggml-quants.c", "first": 621, "last": 626, "guard": "",
+   "first_line": "static inline int nearest_int(float fval) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-quants.c", "first": 113, "last": 148, "guard": "",
+   "first_line": "void quantize_row_q4_0_ref(const float * GGML_RESTRICT x, block_q4_0 * GGML_RESTRICT y, int64_t k) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-quants.c", "first": 459, "last": 477, "guard": "",
+   "first_line": "void dequantize_row_q4_0(const block_q4_0 * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-quants.c", "first": 2316, "last": 2412, "guard": "",
+   "first_line": "void quantize_row_tq1_0_ref(const float * GGML_RESTRICT x, block_tq1_0 * GGML_RESTRICT y, int64_t k) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-quants.c", "first": 2428, "last": 2484, "guard": "",
+   "first_line": "void dequantize_row_tq1_0(const block_tq1_0 * GGML_RESTRICT x, float * GGML_RESTRICT y, int64_t k) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-quants.c", "first": 2768, "last": 2805, "guard": "",
+   "first_line": "void quantize_row_q8_K_ref(const float * GGML_RESTRICT x, block_q8_K * GGML_RESTRICT y, int64_t k) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-cpu/quants.c", "first": 481, "last": 563, "guard": "",
+   "first_line": "void ggml_vec_dot_tq1_0_q8_K_generic(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-cpu/arch/arm/quants.c", "first": 1397, "last": 1683, "guard": "arm",
+   "first_line": "void ggml_vec_dot_tq1_0_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-cpu/arch/x86/quants.c", "first": 26, "last": 26, "guard": "x86",
+   "first_line": "#define MM256_SET_M128I(a, b)", "last_line": "#define MM256_SET_M128I(a, b)"},
+  {"file": "ggml/src/ggml-cpu/arch/x86/quants.c", "first": 43, "last": 49, "guard": "x86_avx",
+   "first_line": "static inline float hsum_float_8(const __m256 x) {", "last_line": "}"},
+  {"file": "ggml/src/ggml-cpu/arch/x86/quants.c", "first": 1376, "last": 1572, "guard": "x86",
+   "first_line": "void ggml_vec_dot_tq1_0_q8_K(int n, float * GGML_RESTRICT s, size_t bs, const void * GGML_RESTRICT vx, size_t bx, const void * GGML_RESTRICT vy, size_t by, int nrc) {", "last_line": "}"}
+ ],
+ "same_bytes_at": {
+  "34c9d765bf173c551398f1e7fa4595019bc53bab": "b6122, the reporter's build of llama.cpp issue 15193: the TQ structs, quantize, dequantize, generic, x86 and ARM ranges are byte-identical there (at other line numbers)",
+  "4e416ee7308dd6b581796f1a6241276cd5982691": "master on 2026-09-23: all five files have the git blob SHAs above",
+  "85c55223caf0a2ad0d1d88e5a73ab3fe36107867": "ggml/src/ggml-common.h only (blob 1dbbe326), the commit docs/research.md used to cite"
+ }
+}

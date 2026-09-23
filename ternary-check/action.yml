@@ -1,0 +1,112 @@
+name: t27 Ternary Check
+description: >-
+  Runs the ternary weight-format conformance vectors of dmitrii-f-t27/trinity-memory
+  (conformance/formats_*.json) against a decoder that implements the Ternary Check
+  CLI contract v1 (ternary-check/CONTRACT.md), and reports value, scale, flag and
+  rejection-class mismatches as JSON and in the job summary.
+author: dmitrii-f-t27
+branding:
+  icon: check-square
+  color: gray-dark
+inputs:
+  decoder:
+    description: >-
+      Decoder command; the contract arguments are appended (for example
+      "./build/my-decoder" or "python3 tools/my_decoder.py"). A word with a "/"
+      that names an existing path, or a later word that names an existing file
+      ("python3 decode.py"), resolves against the working directory. The
+      reference decoder is "python3 -m trinity_memory ternary-check".
+    required: true
+  vectors:
+    description: >-
+      Whitespace-separated formats_*.json files, directories or globs. Default: the
+      conformance/formats_*.json of the Action's own ref.
+    required: false
+    default: ''
+  formats:
+    description: 'Comma- or space-separated contract format names to run (default: all).'
+    required: false
+    default: ''
+  report:
+    description: Path of the JSON report (trinity.ternary-check-run.v1).
+    required: false
+    default: ternary-check-report.json
+  summary:
+    description: 'Path the Markdown summary is appended to (default: a temporary file); it also goes to the job summary.'
+    required: false
+    default: ''
+  fail-on:
+    description: >-
+      mismatch (any outcome but match, match_unflagged or rejected), silent (only a
+      silent acceptance), or never. A run that checked nothing fails under all three.
+    required: false
+    default: mismatch
+  timeout:
+    description: Seconds allowed for one decoder call.
+    required: false
+    default: '60'
+  runtime:
+    description: >-
+      "release": the platform wheel of the Action's version from its GitHub release,
+      checked against the release's SHA256SUMS (Linux x86_64 and macOS arm64). Or a
+      directory holding the trinity_memory package with its native runtime, such as a
+      checkout of this repository after tools/build-t27.sh.
+    required: false
+    default: release
+  release-url:
+    description: Base URL of the releases for runtime "release".
+    required: false
+    default: https://github.com/dmitrii-f-t27/trinity-memory/releases/download
+  python:
+    description: Python 3.10 or later that runs the checker.
+    required: false
+    default: python3
+outputs:
+  report:
+    description: Path of the JSON report; not set when the check could not run.
+    value: ${{ steps.run.outputs.report }}
+  summary:
+    description: Path of the Markdown summary.
+    value: ${{ steps.run.outputs.summary }}
+  passed:
+    description: >-
+      "true" when at least one call ran, every format named in formats ran, and no
+      call fails under fail-on; "false" otherwise, including when the check could not run.
+    value: ${{ steps.run.outputs.passed }}
+  cases:
+    description: Number of decoder calls.
+    value: ${{ steps.run.outputs.cases }}
+  failures:
+    description: Number of calls that fail under fail-on.
+    value: ${{ steps.run.outputs.failures }}
+  mismatches:
+    description: Number of calls whose values, scale words, stored bytes or reported flags differ.
+    value: ${{ steps.run.outputs.mismatches }}
+  silent:
+    description: Number of vectors the decoder had to refuse but accepted.
+    value: ${{ steps.run.outputs.silent }}
+runs:
+  using: composite
+  steps:
+    - id: runtime
+      name: Resolve the Ternary Check runtime
+      shell: bash
+      env:
+        RUNTIME: ${{ inputs.runtime }}
+        RELEASE_URL: ${{ inputs.release-url }}
+        PYTHON: ${{ inputs.python }}
+      run: bash "$GITHUB_ACTION_PATH/resolve-runtime.sh"
+    - id: run
+      name: Run the vectors against the decoder
+      shell: bash
+      env:
+        TERNARY_CHECK_PYTHONPATH: ${{ steps.runtime.outputs.pythonpath }}
+        DECODER: ${{ inputs.decoder }}
+        VECTORS: ${{ inputs.vectors }}
+        FORMATS: ${{ inputs.formats }}
+        REPORT: ${{ inputs.report }}
+        SUMMARY: ${{ inputs.summary }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        TIMEOUT: ${{ inputs.timeout }}
+        PYTHON: ${{ inputs.python }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh"
