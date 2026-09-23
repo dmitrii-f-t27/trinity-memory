@@ -215,6 +215,73 @@ class BramTritPacking(unittest.TestCase):
                 self.assertEqual(rom.count_code(value, 2), trits.count(-1))
                 self.assertEqual(rom.weighted(value, base), sum(t * (((base + j) & 7) + 1) for j, t in enumerate(trits)))
 
+    def test_matvec_model_orders_and_multiplies(self):
+        rng = random.Random(35)
+        rows, cols = 44, 30
+        trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+        acts = [rng.randrange(-128, 128) for _ in range(cols)]
+        result = model.matvec_results(model.FMT_D5D2, trits, acts, rows, cols)
+        self.assertEqual(result["outputs"], [sum(trits[r * cols + c] * acts[c] for c in range(cols)) for r in range(rows)])
+        order = model.matvec_order(trits, rows, cols, 22)
+        self.assertEqual(order[(1 * cols + 7) * 22 + 3], trits[(22 + 3) * cols + 7])   # group 1, column 7, lane 3
+        self.assertEqual((result["words"], result["read_ticks"]), (60, 60 + model.MATVEC_LATENCY))
+        self.assertEqual(model.act_words([1, -1, 127, -128, 5]), [0x807FFF01, 5])
+        with self.assertRaises(ValueError):
+            model.matvec_order(trits[:21 * cols], 21, cols, 22)
+
+    def test_matvec_generator_writes_words_acts_and_check(self):
+        generator = load_generator()
+        rng = random.Random(36)
+        rows, cols = 22, 24
+        trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+        acts = [rng.randrange(-128, 128) for _ in range(cols)]
+        with tempfile.TemporaryDirectory(prefix="trinity-bram-matvec-") as work:
+            engine = generator.matvec_engine(trits, acts, Path(work))
+            text = (Path(work) / "bram_trit_engine_d5d2.t27").read_text(encoding="utf-8")
+            with self.assertRaises(SystemExit):   # fewer than 24 columns
+                generator.matvec_engine(trits[:22 * 23], acts[:23], Path(work))
+            with self.assertRaises(SystemExit):   # not a whole group of 22 rows
+                generator.matvec_engine(trits[:21 * cols], acts, Path(work))
+        for line in ("module TrinityBramTritEngineD5D2T27;", "const ROWS: u32 = 22;", "const COLS: u32 = 24;",
+                     "const WORDS: u32 = 24;", "const ACT_WORDS: u32 = 6;", f"const Y_CHECK: u64 = {engine['chk']};"):
+            self.assertIn(line, text)
+        body = re.search(r"var mem_b0: \[B0_WORDS\]u64 = \[B0_WORDS\]u64\{(.*?)\};", text, re.S).group(1)
+        words = [int(x) for x in body.replace("\n", " ").split(",")]
+        expected = model.words_of_trits(model.FMT_D5D2, model.matvec_order(trits, rows, cols, 22))
+        self.assertEqual(words, [word for _, word in expected])
+        body = re.search(r"var act_mem: \[ACT_WORDS\]u32 = \[ACT_WORDS\]u32\{(.*?)\};", text, re.S).group(1)
+        self.assertEqual([int(x) for x in body.replace("\n", " ").split(",")], model.act_words(acts))
+
+    def test_matvec_functions_match_the_model(self):
+        # The store's functions, run in the store's order (group by group, one column
+        # per step, eight packed accumulators), give the host's y = W x.
+        u32, u64 = ctypes.c_uint32, ctypes.c_uint64
+        with tempfile.TemporaryDirectory(prefix="trinity-bram-matvec-") as work:
+            lib = build_library(ROOT / "t27/rtl/bram_trit_matvec.t27", Path(work))
+            lib.acc_next.argtypes, lib.acc_next.restype = (u64, ctypes.c_bool, u64, u32, u32, u32, u32), u64
+            lib.act_of.argtypes, lib.act_of.restype = (u32, u32), u32
+            lib.negate20.argtypes, lib.negate20.restype = (u32,), u32
+            lib.pick_hold.argtypes, lib.pick_hold.restype = (u32, u32) + (u64,) * 8, u32
+            lib.widen20.argtypes, lib.widen20.restype = (u32,), u64
+            rng = random.Random(37)
+            rows, cols = 44, 40
+            trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+            acts = [rng.choice((-128, 127, 0)) if rng.random() < 0.2 else rng.randrange(-128, 128) for _ in range(cols)]
+            words = model.words_of_trits(model.FMT_D5D2, model.matvec_order(trits, rows, cols, 22))
+            act_mem = model.act_words(acts)
+            outputs = []
+            for g in range(rows // 22):
+                accs = [0] * 8
+                for c in range(cols):
+                    lanes, _ = words[g * cols + c]
+                    xs = lib.act_of(act_mem[c >> 2], c & 3)
+                    xn = lib.negate20(xs)
+                    accs = [lib.acc_next(accs[i], c == 0, lanes, 3 * i, 3 if i < 7 else 1, xs, xn) for i in range(8)]
+                for j in range(22):
+                    wide = lib.widen20(lib.pick_hold(j // 3, j % 3, *accs))
+                    outputs.append(wide - (1 << 64) if wide >> 63 else wide)
+            self.assertEqual(outputs, model.matvec_results(model.FMT_D5D2, trits, acts, rows, cols)["outputs"])
+
 
 if __name__ == "__main__":
     unittest.main()

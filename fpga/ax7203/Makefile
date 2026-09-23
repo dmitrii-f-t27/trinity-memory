@@ -155,18 +155,37 @@ BRAM_ROM       ?=
 # BAUD_DIV must match CLOCK_MODE (1: 25 MHz, 217; 2: 50 MHz, 434; 3: 100 MHz, 868).
 BRAM_PIPE      ?= 0
 BAUD_DIV       ?= 217
-BRAM_KIND      := $(if $(BRAM_ROM),bram-rom$(if $(filter 1,$(BRAM_PIPE)),-pipe),bram)
-BRAM_GEN_ARGS  := $(if $(BRAM_ROM),--rom-trits $(abspath $(BRAM_ROM)) --pipe $(BRAM_PIPE))
+# BRAM_MATVEC: with BRAM_ROM, a file of int8 activations (tools/extract-bram-activations.py);
+# the d5d2 store computes y = W x, W the BRAM_TRITS trits as rows of that many
+# columns (t27/rtl/bram_trit_matvec.t27). d5d2 only (BRAM_ONLY=2); its simulation
+# stores BRAM_SIM_TRITS = two groups of 22 rows.
+#   make -C fpga/ax7203 bram-sim BRAM_ONLY=2 BRAM_ROM=$(ROOT)/build/fpga/rom/trits.bin BRAM_MATVEC=$(ROOT)/build/fpga/rom/act.bin
+BRAM_MATVEC    ?=
+ifneq ($(BRAM_MATVEC),)
+ifeq ($(BRAM_ROM),)
+$(error BRAM_MATVEC needs BRAM_ROM (the matrix))
+endif
+ifneq ($(BRAM_ONLY),2)
+$(error BRAM_MATVEC is a d5d2 store: set BRAM_ONLY=2)
+endif
+ifeq ($(origin BRAM_SIM_TRITS),file)
+BRAM_SIM_TRITS := 112640
+endif
+endif
+BRAM_KIND      := $(if $(BRAM_MATVEC),bram-matvec,$(if $(BRAM_ROM),bram-rom$(if $(filter 1,$(BRAM_PIPE)),-pipe),bram))
+BRAM_GEN_ARGS  := $(if $(BRAM_ROM),--rom-trits $(abspath $(BRAM_ROM)) --pipe $(BRAM_PIPE)) \
+                  $(if $(BRAM_MATVEC),--matvec-act $(abspath $(BRAM_MATVEC)))
 BRAM_BUILD     ?= $(BUILD)/$(BRAM_KIND)$(BRAM_SUFFIX)
 BRAM_SIMBUILD  ?= $(BUILD)/$(BRAM_KIND)-sim$(BRAM_SUFFIX)
 BRAM_TOP       := tms_bram_bench_ax7203
 BRAM_CORES     := fpga_tick fpga_reset fpga_uart_tx fpga_line_emitter fpga_bram_bench bram_trit_codec
-BRAM_FORMATS   := b2 d5 d5d2 $(if $(BRAM_ROM),d5p)
+BRAM_FORMATS   := $(if $(BRAM_MATVEC),d5d2,b2 d5 d5d2 $(if $(BRAM_ROM),d5p))
 BRAM_CORE_V    := $(foreach c,$(BRAM_CORES),$(RTL)/$(c).v)
 # Every source whose hash the manifest records (tools/generate-bram-bench.py, SOURCES).
 BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/t27/rtl/bram_trit_codec.t27 $(ROOT)/t27/rtl/fpga_bram_bench.t27 \
                   $(ROOT)/tools/generate-bram-bench.py $(ROOT)/tools/bram_trit_model.py \
-                  $(if $(BRAM_ROM),$(ROOT)/t27/rtl/bram_trit_rom.t27 $(abspath $(BRAM_ROM)))
+                  $(if $(BRAM_ROM),$(ROOT)/t27/rtl/bram_trit_rom.t27 $(abspath $(BRAM_ROM))) \
+                  $(if $(BRAM_MATVEC),$(ROOT)/t27/rtl/bram_trit_matvec.t27 $(abspath $(BRAM_MATVEC)))
 bram_sources    = $(BRAM_CORE_V) $(foreach f,$(BRAM_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
 # Synthesis of one layout reads only that layout's engine: the adapter elaborates
 # one slot, and in ROM mode yosys needs minutes per engine for the initializers.
