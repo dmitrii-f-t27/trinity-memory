@@ -105,6 +105,40 @@ linear 2-bit rows (MLX affine 2-bit, ONNX Runtime `MatMulNBits` with
 (open llama.cpp PR #22836) and the bitnet.cpp lookup-table layouts TL1 and
 TL2.
 
+## Contracts and negative cases
+
+Each decoded layout above has a sealed contract in [`specs/formats/`](../specs/formats/)
+that restates pinned upstream commits
+([`upstream.lock.json`](../specs/formats/upstream.lock.json)), and a vector file
+`conformance/formats_<family>.json` that the specs, `t27/formats.t27` (C and
+WASM) and the Python bindings must all reproduce. The readers reject lengths
+that are not whole blocks (truncated tensors), NaN or infinite scales, nonzero
+padding digits in TQ1_0/PTQ1_0 `qh` bytes, GGUF type ids that are ambiguous
+between the ggml-org, PrismML and bitnet.cpp namespaces, TL1 ids and TL2 ids
+in files marked as bitnet.cpp (an unmarked TL2 file reads as Q2_0 and is caught,
+if at all, by the extent check), misaligned offsets, GGUF and safetensors
+tensors that overlap the tensor before or after them or run past the end of the
+file (a GGUF tensor that begins inside a record of a type whose size the reader
+does not know is not caught), safetensors tensors with a gap before or after
+them or bytes after the last one, GGUF weight counts
+and safetensors sizes that do not fit, safetensors offsets that wrap around
+64 bits, and safetensors byte ranges that do not match
+the shape and dtype. They decode, and flag, what upstream accepts silently and
+real files may carry: 2-bit code 3 (+2), base-3 bytes that decode like
+canonical ones, negative or zero scales, nonzero I2_S trailer bytes, nonzero
+ONNX padding and MLX groups whose bias is not -scale. Group-128 bytes read as
+group-64 Q2_0 (a synthetic case), I2_S bytes in the ARM or four-row layouts
+of bitnet.cpp's `ggml-bitnet-mad.cpp` (which its pinned build does not compile)
+or from the `quantize_i2_s` of its llama.cpp submodule (four consecutive weights
+per byte), a Q1_0 byte (Q1_0 has no invalid bit pattern), and any
+corrupted code byte or scale that stays valid decode without any signal. Every
+negative vector records what each upstream reader does with the same bytes,
+with the pinned `file:line`. For I2_S code 3 bitnet.cpp disagrees with itself:
+`dequantize_row_i2_s` reads it as 0, `mul_mat` as +2. The full
+table of status classes is in [`specs/formats/OWNERS.md`](../specs/formats/OWNERS.md).
+STQ1_0 has no contract yet (the llama.cpp pull request is open), and TL1/TL2
+byte order depends on build-time tile sizes that the file does not record.
+
 ## Reproduce
 
 ```sh

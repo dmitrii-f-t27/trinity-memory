@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Generate or check the conformance vectors derived from specs/memory/*.t27.
+"""Generate or check the conformance vectors derived from specs/memory/*.t27
+and specs/formats/*.t27.
 
 The expectations here are computed from the contract stated in
 specs/memory/types.t27 with plain Python arithmetic and zlib.crc32. They do not
 call the native implementation; tests/test_spec_types.py compares the committed
 vectors with the executable stack, so the spec, this generator and the
-implementation must all agree before CI passes.
+implementation must all agree before CI passes. The specs/formats section
+restates, in Python, the upstream loops that those specs cite, as a test oracle.
 """
 import argparse
+import hashlib
 import itertools
 import json
+import re
 import struct
 import sys
 import zlib
@@ -1785,6 +1789,1503 @@ def build_edge_demo():
     }
 
 
+# ---------------------------------------------------------------------------
+# specs/formats/*.t27 -- external ternary weight-packing formats
+#
+# Test oracle only: the byte layouts below are restated from the upstream
+# loops each spec restates (the same commits and lines), independently of
+# t27/formats.t27 and of the specs' reference functions. The product readers
+# and writers are the generated t27; tests/native_spec_formats.c,
+# tests/spec_formats_wasm_replay.mjs and tests/test_spec_formats.py check that
+# the spec, the implementation (C and WASM) and these vectors agree.
+
+FORMATS_OUTPUTS = {family: ROOT / "conformance" / f"formats_{family}.json"
+                   for family in ("llama_cpp", "prismml", "bitnet_cpp", "hf_bitnet", "mlx", "onnx")}
+FORMATS_CREATED = "2026-09-23T00:00:00Z"
+UPSTREAM_LOCK = ROOT / "specs" / "formats" / "upstream.lock.json"
+
+FORMAT_ERRORS = {"format": -50, "length": -51, "capacity": -52, "code": -53, "padding": -54,
+                 "truncated": -55, "container": -56, "not_found": -57, "scale_nonfinite": -58,
+                 "type_ambiguous": -59, "layout_unsupported": -60, "misaligned": -61, "extent": -62}
+FORMAT_FLAGS = {"outside_ternary": 0, "noncanonical_base3": 1, "scale_negative": 2, "scale_zero": 3,
+                "trailer_nonzero": 4, "padding_nonzero": 5, "affine_not_ternary": 6}
+FORMAT_SILENT = {
+    "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
+    "i2s_layout_arm": "I2_S bytes in the ARM layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (not compiled at the "
+                      "pin) read as the x86 ACT_PARALLEL layout",
+    "i2s_layout_1x4": "I2_S bytes in the four-row layout of bitnet.cpp's src/ggml-bitnet-mad.cpp (x86 without "
+                      "ACT_PARALLEL, not compiled at the pin) read as ACT_PARALLEL",
+    "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per "
+                              "byte) read as ACT_PARALLEL",
+    "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
+    "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
+    "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block",
+}
+# "Silent output" view of a negative vector: what each upstream reader does
+# with the same bytes. behaviour: decodes (accepts them; values_hex, when
+# present, is its output before scaling), rejects, not_applicable (the input
+# cannot reach that upstream code, e.g. codes an encoder never receives) or
+# unknown (the reading code was not found at the pin: cite holds "UNKNOWN").
+# Every cite is "path:line" or "path:first-last" in a file pinned for that
+# upstream in specs/formats/upstream.lock.json.
+BEHAVIOURS = ("decodes", "rejects", "not_applicable", "unknown")
+CITE = re.compile(r"^[A-Za-z0-9_./-]+:[0-9]+(-[0-9]+)?$")
+FORMAT_IDS = {"TQ1_0": 1, "TQ2_0": 2, "Q2_0": 3, "Q1_0": 4, "PQ2_0": 5, "PTQ1_0": 6,
+              "I2_S": 7, "HF_PACKED": 8, "LINEAR2": 9, "ONNX2": 10}
+BLOCKS = {  # weights, bytes, scale offset, ggml type, bits per weight
+    "TQ1_0": (256, 54, 52, 34, "27/16"), "TQ2_0": (256, 66, 64, 35, "33/16"),
+    "Q2_0": (64, 18, 0, 42, "9/4"), "Q1_0": (128, 18, 0, 41, "9/8"),
+    "PQ2_0": (128, 34, 0, 142, "17/8"), "PTQ1_0": (128, 28, 26, 143, "7/4"),
+}
+KIND_BITS = {"F16": 1, "BF16": 2, "F32": 3}
+
+# Real bytes cut from the fixture cache (fixtures/manifest.lock.json ranges;
+# begin/end are file offsets). The first 128 weights of Ternary Bonsai 2 27B
+# blk.0.ffn_down agree in all four Bonsai files.
+BONSAI_GGUF = "prism-ml/Ternary-Bonsai-2-27B-gguf@6ed5e12bf84b7a63069882c91dd9e9218647d17b"
+BONSAI_DEV = "prism-ml/Ternary-Bonsai-2-27B-gguf-dev@2a263ef827a2e215f3ddd14c9871a5bd1800fcbc"
+BONSAI_MLX = "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit@fcba37d2117a7077eac6b613b2668d14d9779edd"
+BITNET_GGUF = "microsoft/bitnet-b1.58-2B-4T-gguf@a1f2f1c765812aa8af3f6eda4a313707064bba15"
+BITNET_PACKED = "microsoft/bitnet-b1.58-2B-4T@04c3b9ad9361b824064a1f25ea60a8be9599b127"
+REAL = {
+    "bonsai_q2_0": (BONSAI_DEV, "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf", "blk.0.ffn_down.weight", 749916512,
+                    "e521525069454a1a06061486260248a01016e5218a092240a25951a48a98054545502902"),
+    "bonsai_pq2_0": (BONSAI_GGUF, "Ternary-Bonsai-2-27B-PQ2_0.gguf", "blk.0.ffn_down.weight", 708874592,
+                     "e521525069454a1a06061486260248a010168a092240a25951a48a980545455029027d224508a529642690186182010588aa040560aa11a5258565166829089a20414501"),
+    "bonsai_ptq1_0": (BONSAI_GGUF, "Ternary-Bonsai-2-27B-PTQ1_0.gguf", "blk.0.ffn_down.weight", 585748832,
+                      "e64b5f784d45796fa4d1c356a8750457df18c8dc59de99a6a2abe5215f794e8355d0421c6059c9e464f2ca03728cf926a08c33b35f727d22"),
+    "bonsai_mlx_weight": (BONSAI_MLX, "model.safetensors", "language_model.model.layers.0.mlp.down_proj.weight", 7016633766,
+                          "525069454a1a06061486260248a010168a092240a25951a48a98054545502902"),
+    "bonsai_mlx_scale": (BONSAI_MLX, "model.safetensors", "language_model.model.layers.0.mlp.down_proj.scales", 2424018438, "e521"),
+    "bonsai_mlx_bias": (BONSAI_MLX, "model.safetensors", "language_model.model.layers.0.mlp.down_proj.biases", 7862603622, "e5a1"),
+    "bitnet_i2s_block": (BITNET_GGUF, "ggml-model-i2_s.gguf", "blk.0.ffn_down.weight", 665032320,
+                         "2569a1164022a956416819a89212519660141580501a450a0998050966166a64"),
+    "bitnet_i2s_tail": (BITNET_GGUF, "ggml-model-i2_s.gguf", "blk.0.ffn_down.weight", 665032320 + 6912 * 2560 // 4,
+                        "3c710a404db9d63905b8a53f6fbedc340d3920b9b8b9753d1ab099ace9b98b3f"),
+    "bitnet_hf_row0": (BITNET_PACKED, "model.safetensors", "model.layers.0.self_attn.q_proj.weight", 672931828,
+                       "5541555055545545414055416a455551"),
+}
+
+
+def real_bytes(key):
+    return bytes.fromhex(REAL[key][4])
+
+
+def real_source(key):
+    repo_rev, file, tensor, begin, data = REAL[key]
+    repo, revision = repo_rev.split("@")
+    raw = bytes.fromhex(data)
+    return {"repo": repo, "revision": revision, "file": file, "tensor": tensor,
+            "begin": begin, "end": begin + len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+
+
+class Lcg:
+    """The harnesses' generator: state = state * 1664525 + 1013904223, value = state >> 8."""
+
+    def __init__(self, seed):
+        self.state = seed
+
+    def next(self):
+        self.state = (self.state * 1664525 + 1013904223) & 0xFFFFFFFF
+        return self.state >> 8
+
+    def trits(self, count, low=-1, high=1):
+        return [low + self.next() % (high - low + 1) for _ in range(count)]
+
+    def octets(self, count):
+        return bytes(self.next() & 255 for _ in range(count))
+
+
+def i8_hex(values):
+    return bytes(v & 255 for v in values).hex()
+
+
+def scale_class(word, kind):
+    """0 positive, 1 zero, 2 negative, or the scale_nonfinite status."""
+    if kind == "F32":
+        exponent, top, magnitude, sign = (word >> 23) & 255, 255, word & 0x7FFFFFFF, word >> 31
+    elif kind == "BF16":
+        exponent, top, magnitude, sign = (word >> 7) & 255, 255, word & 0x7FFF, (word >> 15) & 1
+    else:
+        exponent, top, magnitude, sign = (word >> 10) & 31, 31, word & 0x7FFF, (word >> 15) & 1
+    if exponent == top:
+        return FORMAT_ERRORS["scale_nonfinite"]
+    return 1 if magnitude == 0 else (2 if sign else 0)
+
+
+def view(upstream, behaviour, cite, note, **values):
+    assert behaviour in BEHAVIOURS, behaviour
+    entry = {"upstream": upstream, "behaviour": behaviour, "cite": [cite] if isinstance(cite, str) else list(cite),
+             "note": note}
+    entry.update(values)
+    return entry
+
+
+def rejected(vector, *views):
+    """A strict reader refuses the input: kind reject, the reader's own kind in `reader`."""
+    assert "error_class" in vector and views, vector["id"]
+    vector["reader"] = vector.pop("kind")
+    vector["kind"] = "reject"
+    vector["silent_output"] = list(views)
+    return vector
+
+
+def viewed(vector, *views):
+    """A flagged or silent vector: the upstream readers' output of the same bytes."""
+    assert ("flag_class" in vector or "silent_class" in vector) and views, vector["id"]
+    vector["silent_output"] = list(views)
+    return vector
+
+
+def check_views(vectors, upstream_keys, lock):
+    for vector in vectors:
+        negative = any(key in vector for key in ("error_class", "flag_class", "silent_class"))
+        assert ("error_class" in vector) == (vector["kind"] == "reject"), vector["id"]
+        assert negative == ("silent_output" in vector), vector["id"]
+        for entry in vector.get("silent_output", []):
+            assert entry["upstream"] in upstream_keys, (vector["id"], entry["upstream"])
+            for cite in entry["cite"]:
+                if cite == "UNKNOWN":
+                    continue
+                assert CITE.match(cite), (vector["id"], cite)
+                assert cite.split(":")[0] in lock[entry["upstream"]]["files"], (vector["id"], cite)
+            assert (entry["behaviour"] == "unknown") == ("UNKNOWN" in entry["cite"]), vector["id"]
+
+
+def empty_flags():
+    return {token: 0 for token in FORMAT_FLAGS}
+
+
+def add_scale_flags(flags, words, kind):
+    for word in words:
+        cls = scale_class(word, kind)
+        flags["scale_zero"] += cls == 1
+        flags["scale_negative"] += cls == 2
+
+
+# ---- llama.cpp and PrismML blocks (upstream quantizer and dequantizer loops)
+
+def b3_group(digits_values, shift=False):
+    q = 0
+    for value in digits_values:
+        q = q * 3 + value + 1
+    if shift:
+        q *= 3
+    return (q * 256 + 242) // 243
+
+
+def b3_trit(byte, n):
+    q = (byte * 3 ** n) & 255
+    return ((q * 3) >> 8) - 1
+
+
+def b3_stages(qs_bytes):
+    """Byte runs of five-digit groups: 32 then 16 (TQ1_0); 16 then 8 (PTQ1_0)."""
+    runs, j = [], 0
+    for c in (32, 16, 8):
+        while j + c <= qs_bytes:
+            runs.append((j, c))
+            j += c
+    return runs
+
+
+def encode_block(fmt, values, scale_word):
+    per, size, scale_at = BLOCKS[fmt][:3]
+    out = bytearray(size)
+    out[scale_at:scale_at + 2] = scale_word.to_bytes(2, "little")
+    if fmt in ("TQ1_0", "PTQ1_0"):
+        qs, qh = (48, 4) if fmt == "TQ1_0" else (24, 2)
+        x = 0
+        for j, c in b3_stages(qs):
+            for m in range(c):
+                out[j + m] = b3_group([values[x + m + n * c] for n in range(5)])
+            x += 5 * c
+        for j in range(qh):
+            out[qs + j] = b3_group([values[x + j + m * qh] for m in range(4)], shift=True)
+    elif fmt == "TQ2_0":
+        for j in range(0, 64, 32):
+            for m in range(32):
+                out[j + m] = sum(((values[4 * j + m + n * 32] + 1) & 3) << (2 * n) for n in range(4))
+    elif fmt == "Q1_0":
+        for j in range(128):
+            if values[j] == 1:
+                out[2 + j // 8] |= 1 << (j % 8)
+    else:  # Q2_0, PQ2_0
+        for j in range(per):
+            out[2 + j // 4] |= (values[j] + 1) << (2 * (j % 4))
+    return bytes(out)
+
+
+def decode_block(fmt, block):
+    if fmt in ("TQ1_0", "PTQ1_0"):
+        qs, qh = (48, 4) if fmt == "TQ1_0" else (24, 2)
+        y = []
+        for j, c in b3_stages(qs):
+            for n in range(5):
+                y += [b3_trit(block[j + m], n) for m in range(c)]
+        for n in range(4):
+            y += [b3_trit(block[qs + j], n) for j in range(qh)]
+        return y
+    if fmt == "TQ2_0":
+        return [((block[j + m] >> (2 * l)) & 3) - 1 for j in (0, 32) for l in range(4) for m in range(32)]
+    if fmt == "Q1_0":
+        return [1 if (block[2 + j // 8] >> (j % 8)) & 1 else -1 for j in range(128)]
+    per = BLOCKS[fmt][0]
+    return [((block[2 + j // 4] >> (2 * (j % 4))) & 3) - 1 for j in range(per)]
+
+
+CANONICAL_QS = {(q * 256 + 242) // 243 for q in range(243)}
+CANONICAL_QH = {(3 * q * 256 + 242) // 243 for q in range(81)}
+
+
+def blocks_expect(fmt, data, count):
+    per, size, scale_at = BLOCKS[fmt][:3]
+    if count % per or len(data) != count // per * size:
+        return {"status": FORMAT_ERRORS["length"]}
+    words = [int.from_bytes(data[b * size + scale_at:b * size + scale_at + 2], "little") for b in range(count // per)]
+    if any(scale_class(w, "F16") < 0 for w in words):
+        return {"status": FORMAT_ERRORS["scale_nonfinite"]}
+    if fmt in ("TQ1_0", "PTQ1_0"):
+        qs, qh = (48, 4) if fmt == "TQ1_0" else (24, 2)
+        if any(b3_trit(data[b * size + qs + j], 4) != -1 for b in range(count // per) for j in range(qh)):
+            return {"status": FORMAT_ERRORS["padding"]}
+    values = []
+    flags = empty_flags()
+    for b in range(count // per):
+        block = data[b * size:(b + 1) * size]
+        values += decode_block(fmt, block)
+        if fmt in ("TQ1_0", "PTQ1_0"):
+            qs, qh = (48, 4) if fmt == "TQ1_0" else (24, 2)
+            flags["noncanonical_base3"] += sum(byte not in CANONICAL_QS for byte in block[:qs])
+            flags["noncanonical_base3"] += sum(byte not in CANONICAL_QH for byte in block[qs:qs + qh])
+    flags["outside_ternary"] = sum(v > 1 for v in values)
+    add_scale_flags(flags, words, "F16")
+    return {"status": flags["outside_ternary"], "values_hex": i8_hex(values), "scale_words": words, "flags": flags}
+
+
+def check_classes(vector, *statuses):
+    """The declared class must be what the expectation shows."""
+    expect = vector["expect"]
+    if "error_class" in vector:
+        assert FORMAT_ERRORS[vector["error_class"]] in statuses, vector["id"]
+    elif "flag_class" in vector:
+        assert expect["status"] >= 0 and expect["flags"][vector["flag_class"]] > 0, vector["id"]
+    else:
+        assert all(status >= 0 for status in statuses), vector["id"]
+    return vector
+
+
+def corruption_intended(fmt, original, count, source=None):
+    """The bytes before corruption (with their provenance) and what they decode to."""
+    expect = blocks_expect(fmt, original, count)
+    intended = {"format": fmt, "count": count, "data_hex": original.hex(), "values_hex": expect["values_hex"],
+                "scale_words": expect["scale_words"]}
+    if source:
+        intended["source"] = source
+    return intended
+
+
+def block_vector(identifier, fmt, data, count, description, encode=False, source=None, **extra):
+    vector = {"id": identifier, "kind": "block", "format": fmt, "count": count, "data_hex": data.hex(),
+              "expect": blocks_expect(fmt, data, count), "encode": encode, "description": description}
+    if source:
+        vector["source"] = source
+    vector.update(extra)
+    return check_classes(vector, vector["expect"]["status"])
+
+
+def encode_blocks(fmt, values, words):
+    per = BLOCKS[fmt][0]
+    return b"".join(encode_block(fmt, values[b * per:(b + 1) * per], words[b]) for b in range(len(words)))
+
+
+# Upstream code for the block formats: (lock key, dequantizer, quantizer,
+# ggml_validate_row_data case). The fork's Q2_0 has its own lines.
+BLOCK_UPSTREAM = {
+    "TQ1_0": ("llama.cpp", "ggml/src/ggml-quants.c:2428-2465", "ggml/src/ggml-quants.c:2316-2380",
+              "ggml/src/ggml-quants.c:5570-5573"),
+    "TQ2_0": ("llama.cpp", "ggml/src/ggml-quants.c:2467-2484", "ggml/src/ggml-quants.c:2382-2412",
+              "ggml/src/ggml-quants.c:5574-5577"),
+    "Q2_0": ("llama.cpp", "ggml/src/ggml-quants.c:439-457", "ggml/src/ggml-quants.c:74-110",
+             "ggml/src/ggml-quants.c:5507-5510"),
+    "Q1_0": ("llama.cpp", "ggml/src/ggml-quants.c:419-437", "ggml/src/ggml-quants.c:40-72",
+             "ggml/src/ggml-quants.c:5503-5506"),
+    "PQ2_0": ("prismml", "ggml/src/ggml-quants.c:494-512", "ggml/src/ggml-quants.c:113-145",
+              "ggml/src/ggml-quants.c:5711-5714"),
+    "PTQ1_0": ("prismml", "ggml/src/ggml-quants.c:2255-2285", "ggml/src/ggml-quants.c:2205-2253",
+               "ggml/src/ggml-quants.c:5715-5718"),
+    "prism Q2_0": ("prismml", "ggml/src/ggml-quants.c:474-492", "ggml/src/ggml-quants.c:74-110",
+                   "ggml/src/ggml-quants.c:5707-5710"),
+}
+# qh padding digit: the quantizer multiplies by 3 once more; the dequantizer reads digits 0..3.
+B3_PADDING = {"TQ1_0": ("ggml/src/ggml-quants.c:2372-2373", "ggml/src/ggml-quants.c:2457-2462"),
+              "PTQ1_0": ("ggml/src/ggml-quants.c:2246-2248", "ggml/src/ggml-quants.c:2277-2283")}
+# gguf.cpp and the model loader: type id range, row length in whole blocks,
+# offsets equal to the padded end of the previous tensor, data within the file.
+GGUF_UPSTREAM = {
+    "llama.cpp": ("ggml/src/gguf.cpp:722-727", "ggml/src/gguf.cpp:732-738", "ggml/src/gguf.cpp:787-793",
+                  "src/llama-model-loader.h:46-48"),
+    "prismml": ("ggml/src/gguf.cpp:714-719", "ggml/src/gguf.cpp:724-730", "ggml/src/gguf.cpp:781-787",
+                "src/llama-model-loader.h:46-48"),
+    "bitnet.cpp-llama.cpp": ("ggml/src/gguf.cpp:701-706", "ggml/src/gguf.cpp:711-717", "ggml/src/gguf.cpp:766-772",
+                             "src/llama-model-loader.h:46-48"),
+}
+
+
+def block_upstream(fmt, family):
+    return BLOCK_UPSTREAM["prism Q2_0" if (fmt, family) == ("Q2_0", "prismml") else fmt]
+
+
+def block_view(fmt, family, note, **values):
+    key, dequant = block_upstream(fmt, family)[:2]
+    return view(key, "decodes", dequant, note, **values)
+
+
+def silent_values(fmt, data, count):
+    """Trits of the upstream dequantizer loop (padding digits and scales ignored) and the raw scale words."""
+    per, size, scale_at = BLOCKS[fmt][:3]
+    words, values = [], []
+    for b in range(count // per):
+        block = data[b * size:(b + 1) * size]
+        words.append(int.from_bytes(block[scale_at:scale_at + 2], "little"))
+        values += decode_block(fmt, block)
+    return {"values_hex": i8_hex(values), "scale_words": words}
+
+
+def block_family_vectors(formats, seed, family):
+    rng = Lcg(seed)
+    vectors = []
+    for fmt in formats:
+        per, size = BLOCKS[fmt][:2]
+        key, dequant, quant, validate = block_upstream(fmt, family)
+        gguf_type, gguf_row, gguf_offset, loader = GGUF_UPSTREAM[key]
+        low = -1
+        high = 1
+        values = rng.trits(2 * per, low, high)
+        if fmt == "Q1_0":
+            values = [1 if v >= 0 else -1 for v in values]
+        words = [0x3C00, 0x2E66]
+        data = encode_blocks(fmt, values, words)
+        vectors.append(block_vector(f"{fmt.lower()}_random_two_blocks", fmt, data, 2 * per,
+                                    f"Two {fmt} blocks of deterministic ternary codes; the encoder must reproduce the bytes",
+                                    encode=True))
+        # Every code a byte position can hold, in the upstream order.
+        if fmt in ("TQ1_0", "PTQ1_0"):
+            groups = list(range(243))
+            qs = 48 if fmt == "TQ1_0" else 24
+            blocks = (243 + qs - 1) // qs
+            data = bytearray()
+            for b in range(blocks):
+                block = bytearray(size)
+                for j in range(qs):
+                    block[j] = (groups[(b * qs + j) % 243] * 256 + 242) // 243
+                for j in range(qs, size - 2):
+                    block[j] = (3 * ((b * qs + j) % 81) * 256 + 242) // 243
+                block[size - 2:] = (0x3800).to_bytes(2, "little")
+                data += block
+            vectors.append(block_vector(f"{fmt.lower()}_all_base3_groups", fmt, bytes(data), blocks * per,
+                                        f"All 243 canonical qs bytes and canonical qh bytes of {fmt}; the encoder reproduces them",
+                                        encode=True))
+            bad = bytearray(encode_blocks(fmt, [0] * per, [0x3C00]))
+            bad[0], bad[1], bad[qs] = 1, 237, 1
+            vectors.append(viewed(block_vector(f"{fmt.lower()}_noncanonical_bytes", fmt, bytes(bad), per,
+                                               "Bytes the ceiling rule never writes (qs 1 and 237, qh 1, whose padding "
+                                               "digit is 0) decode silently and are flagged",
+                                               flag_class="noncanonical_base3"),
+                                  block_view(fmt, family, "decoded like the canonical byte of the same digits")))
+            # A qh byte whose fifth (padding) digit is 1: the dequantizer
+            # reads digits 0..3 only, so it yields the intended weights.
+            padded = bytearray(encode_blocks(fmt, values[:per], [0x3C00]))
+            w = 0
+            for n in range(4):
+                w = w * 3 + values[per - 4 * (qs // 12) + n * (qs // 12)] + 1
+            assert padded[qs] == (3 * w * 256 + 242) // 243
+            padded[qs] = ((3 * w + 1) * 256 + 242) // 243
+            quant_line, dequant_line = B3_PADDING[fmt]
+            vector = block_vector(f"{fmt.lower()}_qh_padding_digit", fmt, bytes(padded), per,
+                                  "qh byte 0 carries a nonzero fifth digit, which the quantizer always writes as 0 "
+                                  "and the dequantizer never reads", error_class="padding")
+            vectors.append(rejected(vector, view(key, "decodes", [dequant_line, quant_line],
+                                                 "digits 0..3 decode; the padding digit is ignored",
+                                                 **silent_values(fmt, bytes(padded), per))))
+            assert vector["silent_output"][0]["values_hex"] == i8_hex(values[:per])
+        if fmt in ("TQ2_0", "Q2_0", "PQ2_0"):
+            plus = [0] * per
+            plus[0], plus[per - 1] = 2, 2
+            data = encode_blocks(fmt, plus, [0x3C00])
+            vectors.append(viewed(block_vector(f"{fmt.lower()}_code3_is_plus2", fmt, data, per,
+                                               "Code 3 decodes to +2 upstream; the reader keeps the value and flags it",
+                                               encode=True, flag_class="outside_ternary"),
+                                  block_view(fmt, family, "code 3 is (3 - 1) * d = +2d")))
+        data = encode_blocks(fmt, values[:per], [0xB800])
+        vectors.append(viewed(block_vector(f"{fmt.lower()}_negative_scale", fmt, data, per,
+                                           "A negative scale is accepted upstream (signs flip); flagged", encode=True,
+                                           flag_class="scale_negative"),
+                              block_view(fmt, family, "every weight is its trit times the negative d")))
+        data = encode_blocks(fmt, values[:per], [0x8000])
+        vectors.append(viewed(block_vector(f"{fmt.lower()}_zero_scale", fmt, data, per,
+                                           "A zero scale (here -0) makes every weight 0 upstream; flagged", encode=True,
+                                           flag_class="scale_zero"),
+                              block_view(fmt, family, "every weight is its trit times 0")))
+        for word, name in ((0x7E00, "nan"), (0x7C00, "inf"), (0xFC00, "negative_inf")):
+            data = encode_blocks(fmt, values, [0x3C00, word])
+            vector = block_vector(f"{fmt.lower()}_scale_{name}", fmt, data, 2 * per,
+                                  f"Block 2 scale 0x{word:04x}: ggml_validate_row_data rejects it with --check-tensors; decoding without the check gives non-finite weights",
+                                  error_class="scale_nonfinite")
+            load_check = [validate] + (["src/llama-model-loader.cpp:1486-1488"] if key == "llama.cpp" else [])
+            vectors.append(rejected(vector,
+                                    block_view(fmt, family, "the default load path multiplies the trits by the "
+                                               "non-finite d", **silent_values(fmt, data, 2 * per)),
+                                    view(key, "rejects", load_check, "only when the model is loaded with --check-tensors")))
+        data = encode_blocks(fmt, values, words)
+        vectors.append(rejected(block_vector(f"{fmt.lower()}_truncated", fmt, data[:-1], 2 * per,
+                                             "One byte short of two blocks", error_class="length"),
+                                view(key, "rejects", loader, "a tensor whose bytes pass the end of the file is refused")))
+        vectors.append(rejected(block_vector(f"{fmt.lower()}_partial_block", fmt, data, 2 * per - 1,
+                                             "A weight count that is not whole blocks", error_class="length"),
+                                view(key, "rejects", gguf_row, "a row that is not whole blocks is refused")))
+        bad_value = 2 if fmt in ("TQ1_0", "PTQ1_0") else (0 if fmt == "Q1_0" else 3)
+        codes = list(values[:per])
+        codes[per // 2] = bad_value
+        vectors.append(rejected({"id": f"{fmt.lower()}_encode_rejects_{'zero' if bad_value == 0 else 'value_' + str(bad_value)}",
+                                 "kind": "block_encode", "format": fmt, "count": per, "values_hex": i8_hex(codes),
+                                 "scale_words": [0x3C00], "error_class": "code", "expect": {"status": FORMAT_ERRORS["code"]},
+                                 "description": f"{fmt} cannot store the value {bad_value}; nothing is written"},
+                                view(key, "not_applicable", quant,
+                                     "the quantizer derives codes from float weights and never produces this value")))
+    return vectors
+
+
+# ---- GGUF headers for the type-id and offset rules
+
+def gguf_bytes(arch, prism, tensors, alignment=None):
+    """tensors: (name, ne list, ggml type, offset)."""
+    def text(value):
+        raw = value.encode()
+        return struct.pack("<Q", len(raw)) + raw
+    kv = [(b"general.architecture", 8, text(arch))]
+    if alignment is not None:
+        kv.append((b"general.alignment", 4, struct.pack("<I", alignment)))
+    if prism:
+        kv.append((b"prism.hadamard.block_size", 4, struct.pack("<I", 1024)))
+    out = bytearray(struct.pack("<IIQQ", 0x46554747, 3, len(tensors), len(kv)))
+    for key, vtype, value in kv:
+        out += struct.pack("<Q", len(key)) + key + struct.pack("<I", vtype) + value
+    for name, ne, ggml_type, offset in tensors:
+        out += text(name) + struct.pack("<I", len(ne)) + b"".join(struct.pack("<Q", d) for d in ne)
+        out += struct.pack("<IQ", ggml_type, offset)
+    return bytes(out)
+
+
+def gguf_format(ggml_type, prism, bitnet):
+    if ggml_type in (34, 35, 41):
+        return {34: "TQ1_0", 35: "TQ2_0", 41: "Q1_0"}[ggml_type]
+    if ggml_type in (36, 38, 42, 142, 143) and prism and bitnet:
+        return "type_ambiguous"
+    if ggml_type == 36:
+        return "I2_S" if bitnet else None
+    if ggml_type in (38, 42) and bitnet:
+        return "layout_unsupported"
+    if ggml_type == 42:
+        return "Q2_0"
+    if prism and ggml_type in (142, 143):
+        return {142: "PQ2_0", 143: "PTQ1_0"}[ggml_type]
+    return None
+
+
+INT64_MAX = (1 << 63) - 1
+
+
+def gguf_elements(ne):
+    """gguf.cpp:684-711: every ne a non-negative int64 and a nonzero product below INT64_MAX; None if refused."""
+    ne = list(ne) + [1] * (4 - len(ne))
+    if any(d > INT64_MAX for d in ne):
+        return None
+    if 0 in ne:
+        return 0
+    if (INT64_MAX // ne[1] <= ne[0] or INT64_MAX // ne[2] <= ne[0] * ne[1]
+            or INT64_MAX // ne[3] <= ne[0] * ne[1] * ne[2]):
+        return None
+    return ne[0] * ne[1] * ne[2] * ne[3]
+
+
+def gguf_layout_bytes(fmt, ne0, count):
+    if fmt == "I2_S":
+        return count // 4 + 32
+    per, block = BLOCKS[fmt][:2]
+    return 0 if ne0 % per else count // per * block
+
+
+def gguf_record_bytes(ggml_type, ne, prism, bitnet):
+    """Bytes of a record the reader knows: ternary layouts, F32 (0), F16 (1), BF16 (30); 0 otherwise."""
+    count = gguf_elements(ne)
+    if not count:
+        return 0
+    if ggml_type == 0:
+        return count * 4
+    if ggml_type in (1, 30):
+        return count * 2
+    fmt = gguf_format(ggml_type, prism, bitnet)
+    if fmt is None or fmt in FORMAT_ERRORS:
+        return 0
+    return gguf_layout_bytes(fmt, ne[0], count)
+
+
+def gguf_vector(identifier, arch, prism, tensors, target, description, alignment=None, data_bytes=None, views=()):
+    """The file is data_start + data_bytes long; data_bytes defaults to the highest offset + 1024."""
+    data = gguf_bytes(arch, prism, tensors, alignment)
+    align = alignment or 32
+    data_start = -(-len(data) // align) * align
+    if data_bytes is None:
+        data_bytes = max(t[3] for t in tensors) + 1024
+    file_size = data_start + data_bytes
+    bitnet = arch == "bitnet-b1.58" or any(t[2] in (36, 38) for t in tensors)
+    index = next(i for i, t in enumerate(tensors) if t[0] == target)
+    name, ne, ggml_type, offset = tensors[index]
+    # Other records that hold at least one weight bound the extent: from above
+    # the least offset at or above this one, from below the greatest end of a
+    # record of known size that begins below it.
+    holding = [t for i, t in enumerate(tensors) if i != index and gguf_elements(t[1]) != 0]
+    others = [t[3] for t in holding if t[3] >= offset]
+    has_next = bool(others)
+    next_offset = min(others) if others else 0
+    ends = [t[3] + gguf_record_bytes(t[2], t[1], prism, bitnet) for t in holding
+            if t[3] < offset and gguf_record_bytes(t[2], t[1], prism, bitnet)]
+    has_prev = bool(ends)
+    prev_end = min(max(ends), (1 << 64) - 1) if ends else 0
+    resolved = gguf_format(ggml_type, prism, bitnet)
+    count = gguf_elements(ne)
+    expect = {"find": 0, "ggml_type": ggml_type, "prism": prism, "bitnet": bitnet, "offset": offset,
+              "alignment": align, "data_start": data_start, "has_next": has_next, "next_offset": next_offset,
+              "has_prev": has_prev, "prev_end": prev_end}
+    if resolved in FORMAT_ERRORS:
+        expect["check"], error_class = FORMAT_ERRORS[resolved], resolved
+    elif offset % align:
+        expect["check"], error_class = FORMAT_ERRORS["misaligned"], "misaligned"
+    elif resolved is None:
+        expect["check"], error_class = 0, None
+    elif count is None:
+        expect["check"], error_class = FORMAT_ERRORS["length"], "length"
+    else:
+        size = gguf_layout_bytes(resolved, ne[0], count)
+        expect["tensor_bytes"] = size
+        if size == 0:
+            expect["check"], error_class = FORMAT_ERRORS["length"], "length"
+        elif ((has_next and offset + size > next_offset) or (has_prev and prev_end > offset)
+              or data_start + offset + size > file_size):
+            expect["check"], error_class = FORMAT_ERRORS["extent"], "extent"
+        else:
+            expect["check"], error_class = FORMAT_IDS[resolved], None
+    vector = {"id": identifier, "kind": "gguf", "gguf_hex": data.hex(), "tensor": target, "file_size": file_size,
+              "expect": expect, "description": description}
+    if error_class:
+        vector["error_class"] = error_class
+        return rejected(vector, *views)
+    assert not views, identifier
+    return vector
+
+
+def gguf_vectors():
+    q2 = 256 // 64 * 18 * 2
+    org_type, org_row, org_offset, org_loader = GGUF_UPSTREAM["llama.cpp"]
+    bit_type, bit_row, bit_offset, bit_loader = GGUF_UPSTREAM["bitnet.cpp-llama.cpp"]
+    pr_type = GGUF_UPSTREAM["prismml"][0]
+    contiguous = view("llama.cpp", "rejects", org_offset, "every offset must equal the padded end of the previous tensor")
+    tl2 = view("bitnet.cpp-llama.cpp", "decodes", ["ggml/include/ggml.h:433", "ggml/src/ggml.c:1314-1321"],
+               "bitnet.cpp reads id 42 as TL2, a lookup-table layout of other size")
+    q2_org = view("llama.cpp", "decodes", ["ggml/include/ggml.h:432", "ggml/src/ggml-quants.c:439-457"],
+                  "ggml-org reads id 42 as group-64 Q2_0")
+    return [
+        gguf_vector("gguf_q2_0_plain", "llama", False, [("a.weight", [256, 2], 42, 0), ("b.weight", [256], 0, 160)],
+                    "a.weight", "Id 42 without namespace markers is ggml-org Q2_0 (group 64)"),
+        gguf_vector("gguf_prism_q2_0_stays_group_64", "qwen35", True, [("a.weight", [256, 2], 42, 0)], "a.weight",
+                    "The PrismML fork keeps id 42 as group-64 Q2_0"),
+        gguf_vector("gguf_prism_pq2_0", "qwen35", True, [("a.weight", [256, 2], 142, 0)], "a.weight",
+                    "Id 142 is PQ2_0 in a file with prism.* keys"),
+        gguf_vector("gguf_prism_ptq1_0", "qwen35", True, [("a.weight", [256, 2], 143, 0)], "a.weight",
+                    "Id 143 is PTQ1_0 in a file with prism.* keys"),
+        gguf_vector("gguf_143_without_prism_keys", "llama", False, [("a.weight", [256, 2], 143, 0)], "a.weight",
+                    "Id 143 without prism.* keys is not a ternary layout of that namespace"),
+        gguf_vector("gguf_bitnet_i2_s", "bitnet-b1.58", False, [("a.weight", [256, 2], 36, 0)], "a.weight",
+                    "Id 36 is I2_S in bitnet.cpp files; its bytes are n/4 + 32"),
+        gguf_vector("gguf_bitnet_42_is_tl2", "bitnet-b1.58", False, [("a.weight", [256, 2], 42, 0)], "a.weight",
+                    "In bitnet.cpp id 42 is TL2, a lookup-table layout without a storage contract",
+                    views=(tl2, q2_org)),
+        gguf_vector("gguf_42_marked_by_an_i2_s_tensor", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("b.weight", [256], 36, 160)], "a.weight",
+                    "A type-36 tensor marks the file as bitnet.cpp, so id 42 is TL2",
+                    views=(tl2, view("llama.cpp", "rejects", [org_row, "ggml/src/ggml.c:928-945"],
+                                     "ids 36 to 38 are removed in ggml-org (block size 0), so the file is refused"))),
+        gguf_vector("gguf_tl1", "bitnet-b1.58", False, [("a.weight", [256, 2], 38, 0)], "a.weight",
+                    "Id 38 is TL1 in bitnet.cpp",
+                    views=(view("bitnet.cpp-llama.cpp", "decodes", ["ggml/include/ggml.h:428", "ggml/src/ggml.c:1314-1321"],
+                                "bitnet.cpp reads id 38 as TL1 with its generated kernels"),
+                           view("llama.cpp", "rejects", [org_row, "ggml/src/ggml.c:928-945"],
+                                "a removed id of block size 0 is refused"))),
+        gguf_vector("gguf_42_with_both_markers", "bitnet-b1.58", True, [("a.weight", [256, 2], 42, 0)], "a.weight",
+                    "prism.* keys and the bitnet-b1.58 architecture give id 42 two meanings",
+                    views=(tl2, view("prismml", "decodes", ["ggml/include/ggml.h:432", "ggml/src/ggml-quants.c:474-492"],
+                                     "the PrismML fork reads id 42 as group-64 Q2_0"))),
+        gguf_vector("gguf_143_with_both_markers", "bitnet-b1.58", True, [("a.weight", [256, 2], 143, 0)], "a.weight",
+                    "prism.* keys and the bitnet-b1.58 architecture give id 143 two meanings",
+                    views=(view("prismml", "decodes", ["ggml/include/ggml.h:436", "ggml/src/ggml-quants.c:2255-2285"],
+                                "the PrismML fork reads id 143 as PTQ1_0"),
+                           view("bitnet.cpp-llama.cpp", "rejects", bit_type, "ids from 43 up are outside its type range"))),
+        gguf_vector("gguf_tq2_0_in_any_namespace", "bitnet-b1.58", True, [("a.weight", [256, 2], 35, 0)], "a.weight",
+                    "Ids 34, 35 and 41 mean the same layout in every namespace"),
+        gguf_vector("gguf_offset_shifted_by_one", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("b.weight", [256], 42, 161)], "b.weight",
+                    "A tensor offset one byte past its aligned position", views=(contiguous,)),
+        gguf_vector("gguf_offset_alignment_64", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("b.weight", [256], 42, 160)], "b.weight",
+                    "general.alignment 64: offset 160 is not aligned", alignment=64, views=(contiguous,)),
+        gguf_vector("gguf_group_128_bytes_labelled_42", "llama", False,
+                    [("a.weight", [1152], 42, 0), ("b.weight", [256], 0, 320)], "a.weight",
+                    "1152 weights stored as group-128 PQ2_0 (306 bytes, next tensor at 320) but labelled id 42: "
+                    "Q2_0 needs 324 bytes, so the tensor would run into the next one (synthetic)",
+                    views=(contiguous,)),
+        gguf_vector("gguf_overlapping_offsets", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("b.weight", [256, 2], 42, 0)], "b.weight",
+                    "Two tensor records share offset 0: the tensors overlap", views=(contiguous,)),
+        gguf_vector("gguf_offset_shifted_back_into_previous", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("b.weight", [256], 42, 96)], "a.weight",
+                    "b.weight starts at 96, inside a.weight's 144 bytes", views=(contiguous,)),
+        gguf_vector("gguf_shifted_record_read_itself", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("b.weight", [256], 42, 96)], "b.weight",
+                    "The shifted record itself: b.weight at 96 begins inside a.weight's 144 bytes, and no record "
+                    "follows it", views=(contiguous,)),
+        gguf_vector("gguf_begins_inside_f32_record", "llama", False,
+                    [("norm.weight", [64], 0, 0), ("a.weight", [256, 2], 42, 128)], "a.weight",
+                    "a.weight at 128 begins inside the 256 bytes of the F32 record at 0", views=(contiguous,)),
+        gguf_vector("gguf_zero_weight_record_shares_offset", "llama", False,
+                    [("z.weight", [0], 0, 0), ("a.weight", [256, 2], 42, 0)], "a.weight",
+                    "A zero-weight record holds no bytes (ggml_nbytes is 0), so the next record starts at the same "
+                    "offset, as gguf.cpp's writer places it"),
+        gguf_vector("gguf_zero_weight_record_between", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("z.weight", [0, 4], 42, 160), ("b.weight", [256, 2], 42, 160)],
+                    "a.weight", "a.weight is bounded by b.weight at 160, not by the zero-weight record there"),
+        gguf_vector("gguf_zero_weight_record_before", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("z.weight", [0, 4], 42, 160), ("b.weight", [256, 2], 42, 160)],
+                    "b.weight", "b.weight shares its offset with a zero-weight record and follows a.weight's padded end"),
+        gguf_vector("gguf_weight_count_not_representable", "llama", False,
+                    [("a.weight", [64, (1 << 58) + 1, 64], 42, 0)], "a.weight",
+                    "64 x (2^58 + 1) x 64 weights: the product does not fit in 64 bits and wraps to 4096 "
+                    "(1152 bytes, which the file holds)", data_bytes=1152,
+                    views=(view("llama.cpp", "rejects", "ggml/src/gguf.cpp:699-711",
+                                "the total number of elements must be representable (below INT64_MAX)"),)),
+        gguf_vector("gguf_weight_count_at_int64_max", "llama", False,
+                    [("a.weight", [64, 1 << 57], 42, 0)], "a.weight",
+                    "64 x 2^57 = 2^63 weights fit in a u64 but not below INT64_MAX", data_bytes=1152,
+                    views=(view("llama.cpp", "rejects", "ggml/src/gguf.cpp:699-711",
+                                "INT64_MAX / ne[1] <= ne[0]: the count is not representable"),)),
+        gguf_vector("gguf_last_tensor_within_file", "llama", False,
+                    [("a.weight", [1152], 42, 0)], "a.weight",
+                    "The last tensor ends exactly at the end of the file", data_bytes=324),
+        gguf_vector("gguf_last_tensor_past_end_of_file", "llama", False,
+                    [("a.weight", [1152], 42, 0)], "a.weight",
+                    "A truncated file: the last tensor needs 324 bytes, 323 remain",
+                    data_bytes=323,
+                    views=(view("llama.cpp", "rejects", org_loader, "tensor data not within the file bounds"),)),
+        gguf_vector("gguf_last_tensor_shifted_by_alignment", "llama", False,
+                    [("a.weight", [256, 2], 42, 0), ("b.weight", [256, 2], 42, 192)], "b.weight",
+                    "b.weight shifted by one alignment unit (160 to 192) in a file that ends at its intended end",
+                    data_bytes=160 + 144,
+                    views=(contiguous, view("llama.cpp", "rejects", org_loader, "tensor data not within the file bounds"))),
+        gguf_vector("gguf_row_not_whole_blocks", "llama", False, [("a.weight", [100, 2], 42, 0)], "a.weight",
+                    "ne[0] = 100 is not a whole number of 64-weight blocks",
+                    views=(view("llama.cpp", "rejects", org_row, "a row that is not whole blocks is refused"),)),
+        gguf_vector("gguf_exact_fit", "llama", False, [("a.weight", [256, 2], 42, 0), ("b.weight", [256], 0, q2)],
+                    "a.weight", "The next tensor starts exactly where this one ends"),
+    ]
+
+
+def formats_document(family, module, name, description, constants, invariants, vectors, upstream_keys):
+    lock = json.loads(UPSTREAM_LOCK.read_text(encoding="utf-8"))["upstreams"]
+    ids = [vector["id"] for vector in vectors]
+    assert len(ids) == len(set(ids)), family
+    check_views(vectors, upstream_keys, lock)
+    base = {"errors": FORMAT_ERRORS, "flags": FORMAT_FLAGS, "silent": FORMAT_SILENT, "format_ids": FORMAT_IDS}
+    base.update(constants)
+    return {
+        "module": module,
+        "spec_path": f"specs/formats/{family}.t27",
+        "schema_version": 2,
+        "format_family": "Conformance",
+        "vector_name": name,
+        "description": description + " Expectations come from the upstream loops restated in "
+                                     "tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+        "created_at": FORMATS_CREATED,
+        "generator": "tools/generate-spec-vectors.py",
+        "upstream": {key: {"repo": lock[key]["repo"], "commit": lock[key]["commit"],
+                           "files": sorted(lock[key]["files"])} for key in upstream_keys},
+        "constants": base,
+        "invariants": invariants,
+        "vectors": vectors,
+    }
+
+
+def block_constants(formats):
+    return {"formats": {fmt: {"id": FORMAT_IDS[fmt], "ggml_type": BLOCKS[fmt][3], "block_weights": BLOCKS[fmt][0],
+                              "block_bytes": BLOCKS[fmt][1], "scale_offset": BLOCKS[fmt][2], "scale": "F16",
+                              "bits_per_weight": BLOCKS[fmt][4]} for fmt in formats}}
+
+
+def build_formats_llama_cpp():
+    vectors = block_family_vectors(("TQ1_0", "TQ2_0", "Q2_0", "Q1_0"), 2709, "llama_cpp")
+    # Worked examples of the upstream quantizer: codes x0=1, x1=0.5, x2=-0.5,
+    # x64=-1, x96=1 with d = 1.0.
+    codes = [0] * 256
+    codes[0], codes[1], codes[2], codes[64], codes[96] = 1, 1, -1, -1, 1
+    for fmt, words in (("TQ1_0", [0x3C00]), ("TQ2_0", [0x3C00]), ("Q2_0", [0x3C00] * 4)):
+        vectors.append(block_vector(f"{fmt.lower()}_quantizer_example", fmt, encode_blocks(fmt, codes, words), 256,
+                                    "Codes of the upstream quantizer for x0=1, x1=0.5, x2=-0.5, x64=-1, x96=1 and d=1",
+                                    encode=True))
+    q1 = bytes([0x00, 0x34, 0xA5, 0x03] + [0] * 14)
+    vectors.append(block_vector("q1_0_worked_example", "Q1_0", q1, 128,
+                                "Q1_0 bits are read low bit first; a set bit is +d, a clear bit -d", encode=True))
+    real = real_bytes("bonsai_q2_0")
+    vectors.append(block_vector("q2_0_real_bonsai_blk0_ffn_down", "Q2_0", real, 128,
+                                "The first two group-64 blocks of Ternary Bonsai 2 27B blk.0.ffn_down.weight (PrismML dev file)",
+                                encode=True, source=real_source("bonsai_q2_0")))
+    corrupt = bytearray(q1)
+    corrupt[5] ^= 0xFF
+    vector = block_vector("q1_0_corrupted_payload_decodes", "Q1_0", bytes(corrupt), 128,
+                          "One Q1_0 byte inverted: eight weights change sign and nothing can detect it",
+                          silent_class="q1_0_payload")
+    vector["intended"] = corruption_intended("Q1_0", q1, 128)
+    vectors.append(viewed(vector, block_view("Q1_0", "llama_cpp", "every bit is a sign; there is no invalid pattern")))
+    # Corrupted real bytes that stay valid: a code byte and a scale.
+    real = real_bytes("bonsai_q2_0")
+    corrupt = bytearray(real)
+    first = corrupt[2] & 3
+    assert first < 3
+    corrupt[2] = (corrupt[2] & 0xFC) | ((first + 1) % 3)
+    vector = block_vector("q2_0_real_corrupted_code_byte", "Q2_0", bytes(corrupt), 128,
+                          "Real Bonsai Q2_0 bytes with the first code changed to another ternary code: weight 0 "
+                          "decodes to another trit and nothing can detect it", silent_class="payload_corrupted")
+    vector["intended"] = corruption_intended("Q2_0", real, 128, real_source("bonsai_q2_0"))
+    vectors.append(viewed(vector, block_view("Q2_0", "llama_cpp", "decodes the changed code")))
+    corrupt = bytearray(real)
+    corrupt[1] ^= 0x10
+    vector = block_vector("q2_0_real_corrupted_scale", "Q2_0", bytes(corrupt), 128,
+                          "Real Bonsai Q2_0 bytes with bit 12 of block 0's fp16 scale flipped: the scale stays finite "
+                          "and positive, the trits are unchanged, block 0 is rescaled by 2^4 and nothing can detect it",
+                          silent_class="scale_corrupted")
+    vector["intended"] = corruption_intended("Q2_0", real, 128, real_source("bonsai_q2_0"))
+    vectors.append(viewed(vector, block_view("Q2_0", "llama_cpp", "multiplies the trits by the changed d")))
+    vectors += gguf_vectors()
+    constants = block_constants(("TQ1_0", "TQ2_0", "Q2_0", "Q1_0"))
+    constants["base3"] = {"qs_canonical": 243, "qh_canonical": 81,
+                          "qs_noncanonical": sorted(set(range(256)) - CANONICAL_QS),
+                          "qh_padding_nonzero": sum(b3_trit(b, 4) != -1 for b in range(256)),
+                          "qh_noncanonical_flagged": sorted(b for b in set(range(256)) - CANONICAL_QH
+                                                            if b3_trit(b, 4) == -1)}
+    constants["gguf"] = {"magic": "GGUF", "version": 3, "default_alignment": 32, "max_dims": 4,
+                         "info_fixed_bytes": 24, "info_bytes_per_dim": 8,
+                         "namespaces": {"prism": "a key beginning prism.",
+                                        "bitnet": "general.architecture bitnet-b1.58, or a tensor of type 36 or 38"}}
+    invariants = [
+        {"id": "llama_tq1_0_bits_per_weight", "condition": "54 * 8 * 16 == 27 * 256"},
+        {"id": "llama_tq2_0_bits_per_weight", "condition": "66 * 8 * 16 == 33 * 256"},
+        {"id": "llama_q2_0_bits_per_weight", "condition": "18 * 8 * 4 == 9 * 64"},
+        {"id": "llama_q1_0_bits_per_weight", "condition": "18 * 8 * 8 == 9 * 128"},
+        {"id": "llama_tq1_0_digits_cover_the_block", "condition": "5 * 48 + 4 * 4 == 256"},
+        {"id": "llama_base3_code_counts", "condition": "243 == 3^5, 81 == 3^4"},
+        {"id": "llama_gguf_alignment_is_a_power_of_two", "condition": "32 & 31 == 0, 24 == 8 + 4 + 4 + 8"},
+    ]
+    return formats_document("llama_cpp", "TrinityFormatsLlamaCppSpec", "llama.cpp ternary blocks and GGUF rules",
+                            "TQ1_0, TQ2_0, Q2_0 (group 64) and Q1_0 blocks, their flags and rejections, and GGUF "
+                            "type-id, alignment and extent rules.",
+                            constants, invariants, vectors, ["llama.cpp", "bitnet.cpp-llama.cpp", "prismml"])
+
+
+def build_formats_prismml():
+    vectors = block_family_vectors(("PQ2_0", "PTQ1_0"), 142, "prismml")
+    p = [0] * 128
+    p[0], p[1], p[2], p[3] = 1, 0, -1, 1
+    vectors.append(block_vector("pq2_0_worked_example", "PQ2_0", encode_blocks("PQ2_0", p, [0x3800]), 128,
+                                "PQ2_0 codes low bits first after the fp16 scale", encode=True))
+    p = [0] * 128
+    for index, value in ((0, 1), (16, 0), (32, -1), (48, 1), (64, 0), (120, -1), (122, 1), (124, 0), (126, 1)):
+        p[index] = value
+    vectors.append(block_vector("ptq1_0_worked_example", "PTQ1_0", encode_blocks("PTQ1_0", p, [0x3800]), 128,
+                                "PTQ1_0 stages of 16 and 8 five-digit bytes, then 2 qh bytes", encode=True))
+    same = None
+    for key, fmt in (("bonsai_pq2_0", "PQ2_0"), ("bonsai_ptq1_0", "PTQ1_0")):
+        vector = block_vector(f"{fmt.lower()}_real_bonsai_blk0_ffn_down", fmt, real_bytes(key), 256,
+                              f"The first two {fmt} blocks of Ternary Bonsai 2 27B blk.0.ffn_down.weight",
+                              encode=(fmt == "PQ2_0"), source=real_source(key))
+        values = vector["expect"]["values_hex"]
+        assert same is None or same == values, "PQ2_0 and PTQ1_0 hold the same trits"
+        same = values
+        vectors.append(vector)
+    q2 = block_vector("q2_0_fork_group_64", "Q2_0", real_bytes("bonsai_q2_0"), 128,
+                      "The fork's id-42 Q2_0 is group 64; its two blocks hold the same trits as PQ2_0 block 0",
+                      encode=True, source=real_source("bonsai_q2_0"))
+    assert q2["expect"]["values_hex"] == same[:2 * 128]
+    vectors.append(q2)
+    # Group-128 bytes read as group 64: 306 bytes are 9 PQ2_0 blocks or 17 Q2_0 blocks.
+    seed = 306
+    while True:
+        intended = Lcg(seed).trits(1152)
+        words = [0x2000 + 37 * b for b in range(9)]
+        data = encode_blocks("PQ2_0", intended, words)
+        if blocks_expect("Q2_0", data, 1088)["status"] >= 0:
+            break
+        seed += 1
+    vector = block_vector("group_128_bytes_read_as_group_64", "Q2_0", data, 1088,
+                          "Synthetic: nine PQ2_0 blocks declared as Q2_0 decode as 17 blocks without error; "
+                          "scales are read from code bytes and PQ2_0 scale bytes become codes",
+                          silent_class="group_size_mismatch")
+    vector["intended"] = {"format": "PQ2_0", "count": 1152, "values_hex": i8_hex(intended), "scale_words": words}
+    vectors.append(viewed(vector, block_view("Q2_0", "prismml",
+                                             "a group-64 reader decodes the bytes as 17 blocks; this repository's "
+                                             "synthetic case, not a published file (the published Q2_0 file holds "
+                                             "valid group-64 blocks)")))
+    constants = block_constants(("PQ2_0", "PTQ1_0", "Q2_0"))
+    constants["common_byte_run"] = {"bytes": 306, "pq2_0_blocks": 9, "q2_0_blocks": 17}
+    constants["ptq1_0_stages"] = [16, 8]
+    invariants = [
+        {"id": "prism_bits_per_weight", "condition": "34 * 8 * 8 == 17 * 128, 28 * 8 * 4 == 7 * 128, 18 * 8 * 4 == 9 * 64"},
+        {"id": "prism_ptq1_0_stages_cover_qs", "condition": "16 + 8 == 24, 5 * 16 + 5 * 8 + 4 * 2 == 128"},
+        {"id": "prism_common_byte_run", "condition": "306 == 9 * 34 == 17 * 18"},
+    ]
+    return formats_document("prismml", "TrinityFormatsPrismmlSpec", "PrismML fork PQ2_0, PTQ1_0 and Q2_0",
+                            "PQ2_0 and PTQ1_0 (group 128) and the fork's group-64 Q2_0, with real Bonsai blocks and "
+                            "the synthetic group-128-as-64 case.",
+                            constants, invariants, vectors, ["prismml"])
+
+
+# ---- bitnet.cpp I2_S
+
+def i2s_encode(values, rows, cols, scale_word, layout="x86", trailer=b"\0" * 28):
+    count = rows * cols
+    out = bytearray(count // 4 + 32)
+    for e, value in enumerate(values):
+        code = value + 1
+        if layout == "x86":      # ggml-bitnet-mad.cpp:78-85
+            at, shift = (e // 128) * 32 + (e % 128) % 32, 6 - 2 * ((e % 128) // 32)
+        elif layout == "arm":    # :174-181
+            at, shift = (e // 64) * 16 + (e % 64) % 16, 6 - 2 * ((e % 64) // 16)
+        elif layout == "1x4":    # :122-138, four rows per byte
+            r, c = divmod(e, cols)
+            at, shift = (r // 4) * cols + c, 6 - 2 * (r % 4)
+        else:                    # submodule ggml-cpu/quants.c:1378-1380, four consecutive weights
+            at, shift = e // 4, 6 - 2 * (e % 4)
+        out[at] |= code << shift
+    out[count // 4:count // 4 + 4] = scale_word.to_bytes(4, "little")
+    out[count // 4 + 4:] = trailer
+    return bytes(out)
+
+
+def i2s_expect(data, count):
+    if count == 0 or count % 128 or len(data) != count // 4 + 32:
+        return {"status": FORMAT_ERRORS["length"]}
+    word = int.from_bytes(data[count // 4:count // 4 + 4], "little")
+    if scale_class(word, "F32") < 0:
+        return {"status": FORMAT_ERRORS["scale_nonfinite"]}
+    values = [((data[(e // 128) * 32 + (e % 128) % 32] >> (6 - 2 * ((e % 128) // 32))) & 3) - 1 for e in range(count)]
+    flags = empty_flags()
+    flags["outside_ternary"] = sum(v == 2 for v in values)
+    flags["trailer_nonzero"] = sum(b != 0 for b in data[count // 4 + 4:])
+    add_scale_flags(flags, [word], "F32")
+    return {"status": flags["outside_ternary"], "values_hex": i8_hex(values), "scale_word": word, "flags": flags}
+
+
+def i2s_vector(identifier, data, count, description, **extra):
+    vector = {"id": identifier, "kind": "i2s", "count": count, "data_hex": data.hex(),
+              "expect": i2s_expect(data, count), "description": description}
+    vector.update(extra)
+    return check_classes(vector, vector["expect"]["status"])
+
+
+def build_formats_bitnet_cpp():
+    rng = Lcg(36)
+    vectors = []
+    t = [0] * 128
+    t[0], t[32], t[64], t[96] = 1, 0, -1, 1
+    vectors.append(i2s_vector("i2s_worked_example", i2s_encode(t, 1, 128, 0x3F800000), 128,
+                              "Weights 0, 32, 64, 96 share byte 0 at bits 6, 4, 2, 0", encode=True))
+    values = rng.trits(512)
+    data = i2s_encode(values, 4, 128, 0x3D4CCCCD)
+    vectors.append(i2s_vector("i2s_random_four_blocks", data, 512,
+                              "Four blocks of deterministic codes with a zero trailer (the Python converter's output)",
+                              encode=True))
+    real = real_bytes("bitnet_i2s_block") + real_bytes("bitnet_i2s_tail")
+    source = {"block": real_source("bitnet_i2s_block"), "tail": real_source("bitnet_i2s_tail")}
+    vectors.append(viewed(i2s_vector("i2s_real_block_scale_and_trailer", real, 128,
+                                     "Assembled from real bytes of BitNet b1.58 2B4T blk.0.ffn_down.weight: its first 32 "
+                                     "bytes, then the tensor's f32 scale and the 28 trailer bytes that llama-quantize "
+                                     "left there", source=source, flag_class="trailer_nonzero"),
+                          view("bitnet.cpp-llama.cpp", "decodes",
+                               ["ggml/src/ggml-cpu/quants.c:1335-1356", "ggml/src/ggml-cpu/ops.cpp:4783-4829",
+                                "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252"],
+                               "the readers take the n/4 code bytes and the f32 scale at byte n/4; no pinned code "
+                               "reads the 28 bytes after the scale, which keep what llama-quantize's reused output "
+                               "buffer held")))
+    threes = bytearray(i2s_encode(values[:128], 1, 128, 0x3D4CCCCD))
+    threes[0] |= 0xC0
+    threes[31] = 0xFF
+    # bitnet.cpp's llama.cpp submodule: the to_float/get_rows reader and the
+    # mul_mat path (ggml/src/ggml-cpu/*, the files its build compiles).
+    dequant = ["ggml/src/ggml-cpu/quants.c:1335-1356", "ggml/src/ggml.c:936", "ggml/src/ggml-cpu/ops.cpp:4783-4829"]
+    mul_mat = ["ggml/src/ggml-cpu/ggml-cpu.c:1217-1252", "ggml/src/ggml-cpu/ggml-cpu.c:1491-1545",
+               "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"]
+    code3 = i2s_expect(bytes(threes), 128)["values_hex"]
+    vectors.append(viewed(i2s_vector("i2s_code3", bytes(threes), 128,
+                                     "Code 3 is never written; bitnet.cpp reads it as 0 through dequantize_row_i2_s and "
+                                     "as +2 through mul_mat; reported as +2 and flagged",
+                                     flag_class="outside_ternary"),
+                          view("bitnet.cpp-llama.cpp", "decodes", dequant,
+                               "dequantize_row_i2_s maps codes through {-1, 0, +1, 0}: code 3 is 0",
+                               values_hex=bytes(0 if v == 2 else v & 255 for v in bytes.fromhex(code3)).hex(),
+                               code3_value=0),
+                          view("bitnet.cpp-llama.cpp", "decodes", mul_mat,
+                               "mul_mat multiplies the raw codes 0..3 and subtracts the activation sum: code 3 is +2",
+                               values_hex=code3, code3_value=2)))
+    for word, name, flag, effect in ((0xBF800000, "negative", "scale_negative", "flips the sign of every weight"),
+                                     (0, "zero", "scale_zero", "makes every weight 0")):
+        vector = i2s_vector(f"i2s_{name}_scale", i2s_encode(values[:128], 1, 128, word), 128,
+                            f"A {name} f32 scale; flagged", encode=True, flag_class=flag)
+        vectors.append(viewed(vector,
+                              view("bitnet.cpp-llama.cpp", "decodes", dequant,
+                                   f"y = scale * trit with no check of the scale: it {effect}"),
+                              view("bitnet.cpp-llama.cpp", "decodes", mul_mat,
+                                   f"the dot product is multiplied by the scale with no check: it {effect}")))
+    for word, name, effect in ((0x7FC00000, "nan", "every weight is NaN"),
+                               (0x7F800000, "inf", "+1 and -1 become +inf and -inf, 0 becomes NaN (0 * inf)")):
+        data = i2s_encode(values[:128], 1, 128, word)
+        vector = i2s_vector(f"i2s_scale_{name}", data, 128, f"f32 scale 0x{word:08x}", error_class="scale_nonfinite")
+        trits = i2s_expect(i2s_encode(values[:128], 1, 128, 0x3F800000), 128)["values_hex"]
+        vectors.append(rejected(vector,
+                                view("bitnet.cpp-llama.cpp", "decodes", dequant,
+                                     f"no check of the scale; these trits times the scale: {effect}",
+                                     values_hex=trits, scale_word=word),
+                                view("bitnet.cpp-llama.cpp", "decodes", mul_mat,
+                                     "no check of the scale; every dot product is multiplied by it")))
+    data = i2s_encode(values[:128], 1, 128, 0x3D4CCCCD)
+    vectors.append(rejected(i2s_vector("i2s_trailer_missing", data[:-1], 128, "n/4 + 31 bytes", error_class="length"),
+                            view("bitnet.cpp-llama.cpp", "rejects",
+                                 ["ggml/src/ggml.c:1314-1321", "src/llama-model-loader.h:46-48"],
+                                 "the tensor is n/4 + 32 bytes; data past the end of the file is refused")))
+    vectors.append(rejected(i2s_vector("i2s_count_not_whole_blocks", data[:64 // 4 + 32], 64,
+                                       "64 weights are not a whole 128-weight block of the x86 layout",
+                                       error_class="length"),
+                            view("bitnet.cpp-llama.cpp", "decodes", ["ggml/src/ggml.c:931-937"] + dequant[:1],
+                                 "I2_S has block size 1, so gguf.cpp accepts any row length; dequantize_row_i2_s reads "
+                                 "a 32-byte group for 64 weights, so bytes 16..31 (the scale and trailer at n/4) "
+                                 "decode as weights 16..31 and 48..63")))
+    intended = rng.trits(256)
+    for layout, token, rows, cols in (("arm", "i2s_layout_arm", 2, 128), ("1x4", "i2s_layout_1x4", 4, 64),
+                                      ("consecutive", "i2s_layout_consecutive", 2, 128)):
+        data = i2s_encode(intended, rows, cols, 0x3F800000, layout)
+        vector = i2s_vector(f"i2s_{layout}_bytes_read_as_act_parallel", data, 256,
+                            f"bitnet.cpp's {layout} layout writes the same codes to other bytes; read as ACT_PARALLEL "
+                            "they decode without error to other weights", silent_class=token)
+        vector["intended"] = {"layout": layout, "rows": rows, "cols": cols, "values_hex": i8_hex(intended)}
+        if layout == "consecutive":
+            vectors.append(viewed(vector, view("bitnet.cpp-llama.cpp", "decodes",
+                                               ["ggml/src/ggml-cpu/quants.c:1358-1387", dequant[0], "ggml/src/ggml.c:7787"],
+                                               "the submodule's own quantize_i2_s writes these bytes and its own "
+                                               "dequantize_row_i2_s reads them as other weights")))
+            continue
+        writer = "src/ggml-bitnet-mad.cpp:151-194" if layout == "arm" else "src/ggml-bitnet-mad.cpp:97-149"
+        vectors.append(viewed(vector,
+                              view("bitnet.cpp-llama.cpp", "decodes", [dequant[0], mul_mat[2]],
+                                   "the pinned build's readers use the ACT_PARALLEL positions and read these bytes "
+                                   "as other weights"),
+                              view("bitnet.cpp", "not_applicable", [writer, "src/CMakeLists.txt:2-3"],
+                                   f"the {layout} layout is written by src/ggml-bitnet-mad.cpp, which the pinned build "
+                                   "does not compile (src/CMakeLists.txt only names it in a variable it overwrites)")))
+    bad = list(values[:128])
+    bad[5] = 2
+    vectors.append(rejected({"id": "i2s_encode_rejects_value_2", "kind": "i2s_encode", "count": 128,
+                             "values_hex": i8_hex(bad), "scale_word": 0x3F800000, "error_class": "code",
+                             "expect": {"status": FORMAT_ERRORS["code"]},
+                             "description": "I2_S stores -1, 0, +1 only; nothing is written"},
+                            view("bitnet.cpp-llama.cpp", "not_applicable", "ggml/src/ggml-cpu/quants.c:1358-1387",
+                                 "the compiled quantize_i2_s takes float weights and writes code 0, 1 or 2 from the "
+                                 "sign of each one only")))
+    constants = {"i2s": {"id": 7, "ggml_type": 36, "block_weights": 128, "group_bytes": 32, "tail_bytes": 32,
+                         "scale": "F32", "scale_offset": "n/4", "trailer_bytes": 28, "bits_per_weight": "2 + 256/n",
+                         "layout": "x86 ACT_PARALLEL"},
+                 "other_layouts": {"arm": {"block_weights": 64, "group_bytes": 16},
+                                   "1x4": {"rows_per_byte": 4, "byte": "(r/4)*cols + c", "shift": "6 - 2(r%4)"},
+                                   "consecutive": {"byte": "e/4", "shift": "6 - 2(e%4)"}},
+                 "type_ids": {"I2_S": 36, "TL1": 38, "TL2": 42}}
+    invariants = [
+        {"id": "bitnet_block_is_32_bytes", "condition": "128 * 2 == 32 * 8, 64 * 2 == 16 * 8"},
+        {"id": "bitnet_tail_is_scale_and_trailer", "condition": "4 + 28 == 32"},
+    ]
+    return formats_document("bitnet_cpp", "TrinityFormatsBitnetCppSpec", "bitnet.cpp I2_S",
+                            "I2_S in the x86 ACT_PARALLEL layout with real BitNet bytes, flags, rejections, and the ARM, "
+                            "four-row and four-consecutive layouts read as ACT_PARALLEL.",
+                            constants, invariants, vectors, ["bitnet.cpp", "bitnet.cpp-llama.cpp"])
+
+
+# ---- transformers BitNet packed weights
+
+def hf_encode(values, rows, cols):
+    stride = rows // 4
+    out = bytearray(stride * cols)
+    for i in range(4):  # integrations/bitnet.py:47-50
+        for r in range(stride):
+            for k in range(cols):
+                out[r * cols + k] |= (values[(i * stride + r) * cols + k] + 1) << (2 * i)
+    return bytes(out)
+
+
+def hf_expect(data, rows, cols, scale_word):
+    if rows == 0 or cols == 0 or rows % 4 or len(data) != rows // 4 * cols:
+        return {"status": FORMAT_ERRORS["length"]}
+    stride = rows // 4
+    values = [0] * (rows * cols)
+    for i in range(4):  # unpack_weights :114-121
+        for r in range(stride):
+            for k in range(cols):
+                values[(i * stride + r) * cols + k] = ((data[r * cols + k] >> (2 * i)) & 3) - 1
+    flags = empty_flags()
+    flags["outside_ternary"] = sum(v == 2 for v in values)
+    scale_status = scale_class(scale_word, "BF16")
+    if scale_status >= 0:
+        add_scale_flags(flags, [scale_word], "BF16")
+    return {"status": flags["outside_ternary"], "values_hex": i8_hex(values), "flags": flags,
+            "scale_status": min(scale_status, 0)}
+
+
+def hf_vector(identifier, data, rows, cols, scale_word, description, **extra):
+    vector = {"id": identifier, "kind": "hf_packed", "rows": rows, "cols": cols, "data_hex": data.hex(),
+              "scale_word": scale_word, "scale_kind": "BF16", "expect": hf_expect(data, rows, cols, scale_word),
+              "description": description}
+    vector.update(extra)
+    return check_classes(vector, vector["expect"]["status"], vector["expect"].get("scale_status", 0))
+
+
+def build_formats_hf_bitnet():
+    rng = Lcg(8)
+    vectors = [hf_vector("hf_docstring_example", bytes([161, 24, 144, 10]), 8, 2, 0x3F80,
+                         "The unpack_weights docstring example: packed [[161, 24], [144, 10]] is an 8 x 2 tensor",
+                         encode=True)]
+    values = rng.trits(12 * 5)
+    vectors.append(hf_vector("hf_random_12x5", hf_encode(values, 12, 5), 12, 5, 0x3F9C,
+                             "Deterministic codes, 12 rows (stride 3) and 5 columns", encode=True))
+    vectors.append(hf_vector("hf_real_q_proj_rows_0_640_1280_1920", real_bytes("bitnet_hf_row0"), 4, 16, 0x3F9C,
+                             "Packed row 0, columns 0..15 of BitNet b1.58 2B4T layers.0.self_attn.q_proj.weight "
+                             "(U8 [640, 2560]) holds rows 0, 640, 1280 and 1920; read as a 4 x 16 tensor with the "
+                             "tensor's bf16 weight_scale 1.21875", encode=True, source=real_source("bitnet_hf_row0")))
+    three = bytearray(hf_encode(values, 12, 5))
+    three[0] |= 0xC0
+    scaled = view("transformers", "decodes", "src/transformers/integrations/bitnet.py:291-292",
+                  "AutoBitLinear (offline) multiplies the output by weight_scale")
+    vectors.append(viewed(hf_vector("hf_code3", bytes(three), 12, 5, 0x3F9C, "Code 3 unpacks to +2; flagged",
+                                    flag_class="outside_ternary"),
+                          view("transformers", "decodes", "src/transformers/integrations/bitnet.py:114-121", "unpack_weights returns code - 1: +2")))
+    vectors.append(viewed(hf_vector("hf_negative_scale", hf_encode(values, 12, 5), 12, 5, 0xBF9C,
+                                    "A negative weight_scale; flagged", encode=True, flag_class="scale_negative"),
+                          scaled))
+    vectors.append(rejected(hf_vector("hf_scale_nan", hf_encode(values, 12, 5), 12, 5, 0x7FC0,
+                                      "A NaN weight_scale", error_class="scale_nonfinite"), scaled))
+    vectors.append(rejected(hf_vector("hf_scale_inf", hf_encode(values, 12, 5), 12, 5, 0xFF80,
+                                      "A negative infinite weight_scale", error_class="scale_nonfinite"), scaled))
+    vectors.append(rejected(hf_vector("hf_rows_not_multiple_of_4", hf_encode(values, 12, 5), 10, 5, 0x3F9C,
+                                      "rows % 4 != 0 has no storage in the packed tensor", error_class="length"),
+                            view("transformers", "not_applicable", "src/transformers/integrations/bitnet.py:104-111",
+                                 "a packed [rows/4, cols] tensor cannot state rows % 4; unpack_weights returns "
+                                 "4 * packed rows")))
+    vectors.append(rejected(hf_vector("hf_size_mismatch", hf_encode(values, 12, 5)[:-1], 12, 5, 0x3F9C,
+                                      "One packed byte missing", error_class="length"),
+                            view("safetensors", "rejects", "safetensors/src/tensor.rs:642-661",
+                                 "a byte range that is not numel * dtype width is refused")))
+    bad = list(values)
+    bad[7] = -2
+    # pack_weights (bitnet.py:17-53) takes codes, not floats, and checks none:
+    # (value + 1) cast to uint8 (-1 becomes 255), shifted in uint8 and ORed in.
+    packed = bytearray(3 * 5)
+    for i in range(4):
+        for r in range(3):
+            for k in range(5):
+                packed[r * 5 + k] |= (((bad[(i * 3 + r) * 5 + k] + 1) & 0xFF) << (2 * i)) & 0xFF
+    clobbered = [row for row in range(12) if row % 3 == 1 and (packed[7] >> (2 * (row // 3))) & 3 == 3]
+    vectors.append(rejected({"id": "hf_encode_rejects_minus_2", "kind": "hf_encode", "rows": 12, "cols": 5,
+                             "values_hex": i8_hex(bad), "error_class": "code",
+                             "expect": {"status": FORMAT_ERRORS["code"]},
+                             "description": "The packed format stores -1, 0, +1 only; nothing is written"},
+                            view("transformers", "decodes", "src/transformers/integrations/bitnet.py:17-53",
+                                 "pack_weights takes the codes directly and does not check them: -2 + 1 cast to uint8 "
+                                 f"is 255, so packed byte 7 becomes 0x{packed[7]:02x} (packed tensor "
+                                 f"{bytes(packed).hex()}) and rows {', '.join(map(str, clobbered))} of column 2 "
+                                 "unpack as +2")))
+    vectors += safetensors_vectors()
+    constants = {"hf_packed": {"id": 8, "values_per_byte": 4, "code": "T + 1 at bits 2*(i / (rows/4))",
+                               "packed_shape": "[rows/4, cols] uint8", "weight_scale": "[1] in the model dtype (BF16)",
+                               "value": "trit * weight_scale (AutoBitLinear, offline)", "bits_per_weight": "2 + 16/n"}}
+    invariants = [{"id": "hf_four_codes_per_byte", "condition": "4 * 2 == 8"}]
+    return formats_document("hf_bitnet", "TrinityFormatsHfBitnetSpec", "transformers BitNet packed weights",
+                            "Packed uint8 BitNet weights and their bf16 weight_scale, with a real row of BitNet b1.58 2B4T.",
+                            constants, invariants, vectors, ["transformers", "safetensors"])
+
+
+# ---- safetensors extents (huggingface/safetensors tensor.rs)
+
+SAFETENSORS_BITS = {"F4": 4, "F6_E3M2": 6, "F6_E2M3": 6, "BOOL": 8, "U8": 8, "I8": 8, "F8_E5M2": 8, "F8_E4M3": 8,
+                    "F8_E8M0": 8, "F8_E4M3FNUZ": 8, "F8_E5M2FNUZ": 8, "I16": 16, "U16": 16, "F16": 16, "BF16": 16,
+                    "I32": 32, "U32": 32, "F32": 32, "I64": 64, "U64": 64, "F64": 64, "C64": 64}
+TENSOR_RS = "safetensors/src/tensor.rs"
+
+
+def safetensors_vector(identifier, entries, target, description, data_bytes=None, views=()):
+    """entries: (name, dtype, shape, begin, end) relative to the data section."""
+    header = {"__metadata__": {"format": "pt"}}
+    for name, dtype, shape, begin, end in entries:
+        header[name] = {"dtype": dtype, "shape": shape, "data_offsets": [begin, end]}
+    text = json.dumps(header, separators=(",", ":")).encode()
+    blob = struct.pack("<Q", len(text)) + text
+    base = len(blob)
+    if data_bytes is None:
+        data_bytes = max(e[4] for e in entries)
+    file_size = base + data_bytes
+    name, dtype, shape, begin, end = next(e for e in entries if e[0] == target)
+    later = [e[3] for e in entries if e[0] != target and e[4] > e[3] and e[3] >= begin]
+    earlier = [e[4] for e in entries if e[0] != target and e[4] > e[3] and e[3] < begin]
+    bits = SAFETENSORS_BITS.get(dtype, 0)
+    numel = 1
+    for d in shape:
+        numel *= d
+    # Absolute offsets base + data_offsets must fit in 64 bits for every entry.
+    wraps = any(base + e[4] >= 1 << 64 for e in entries)
+    if wraps:
+        check, error_class = FORMAT_ERRORS["extent"], "extent"
+    elif bits == 0:
+        check, error_class = FORMAT_ERRORS["container"], "container"
+    elif bits * numel >= 1 << 64 or bits * numel % 8:
+        check, error_class = FORMAT_ERRORS["length"], "length"
+    elif (end - begin != bits * numel // 8 or base + end > file_size
+          # tensor.rs:627-661, :419-421: the tensors tile the data section, so
+          # this one begins where the one below it ends (at 0 when none does)
+          # and ends where the next begins, or at the end of the file.
+          or begin != (max(earlier) if earlier else 0)
+          or (later and end != min(later)) or (not later and base + end != file_size)):
+        check, error_class = FORMAT_ERRORS["extent"], "extent"
+    else:
+        check, error_class = 0, None
+    expect = {"find": 0, "dtype": dtype, "shape": shape, "begin": base + begin, "end": base + end,
+              "dtype_bits": bits, "has_next": bool(later), "next_begin": base + min(later) if later else 0,
+              "has_prev": bool(earlier), "prev_end": base + max(earlier) if earlier else base, "check": check}
+    if wraps:
+        # tf_safetensors_find refuses the header; the range fields stay 0.
+        expect.update({"find": check, "begin": 0, "end": 0, "has_next": False, "next_begin": 0,
+                       "has_prev": False, "prev_end": 0})
+    vector = {"id": identifier, "kind": "safetensors", "safetensors_hex": blob.hex(), "tensor": target,
+              "file_size": file_size, "description": description, "expect": expect,
+              "data_offsets": [[e[3], e[4]] for e in entries]}
+    if error_class:
+        vector["error_class"] = error_class
+        return rejected(vector, *views)
+    assert not views, identifier
+    return vector
+
+
+def safetensors_vectors():
+    extent = view("safetensors", "rejects", f"{TENSOR_RS}:659-661", "TensorInvalidInfo: end - begin != numel * width")
+    tiling = view("safetensors", "rejects", f"{TENSOR_RS}:632-638",
+                  "InvalidOffset: each tensor must begin where the previous one ended")
+    covered = view("safetensors", "rejects", f"{TENSOR_RS}:420-422",
+                   "MetadataIncompleteBuffer: the data section must end at the end of the file")
+    packed = ("model.layers.0.self_attn.q_proj.weight", "U8", [2, 3], 0, 6)
+    scale = ("model.layers.0.self_attn.q_proj.weight_scale", "BF16", [1], 6, 8)
+    return [
+        safetensors_vector("st_packed_weight_and_scale", [packed, scale], packed[0],
+                           "A packed U8 [2, 3] weight followed by its BF16 weight_scale; the file ends after the scale"),
+        safetensors_vector("st_scale_last", [packed, scale], scale[0], "The BF16 [1] weight_scale ends the file"),
+        safetensors_vector("st_zero_size_neighbour", [packed, ("empty", "F32", [0], 0, 0), scale], packed[0],
+                           "A zero-size tensor at the same begin holds no bytes and bounds nothing"),
+        safetensors_vector("st_extent_not_numel_times_width", [("w", "U8", [2, 3], 0, 5), ("s", "BF16", [1], 5, 7)],
+                           "w", "U8 [2, 3] needs 6 bytes; data_offsets give 5", views=(extent,)),
+        safetensors_vector("st_overlapping_tensors", [("w", "U8", [2, 3], 0, 6), ("s", "BF16", [1], 4, 6)], "w",
+                           "s begins at 4, inside w's 6 bytes", views=(tiling,)),
+        safetensors_vector("st_overlapping_tensor_read_itself", [("w", "U8", [2, 3], 0, 6), ("s", "BF16", [1], 4, 6)],
+                           "s", "The overlapping tensor itself: s at [4, 6) begins inside w at [0, 6)", views=(tiling,)),
+        safetensors_vector("st_offsets_wrap_around", [("a", "U8", [2], (1 << 64) - 16, (1 << 64) - 14)], "a",
+                           "data_offsets near 2^64: 8 + header + offset wraps to bytes inside the JSON header",
+                           data_bytes=8, views=(tiling,)),
+        safetensors_vector("st_other_offsets_wrap_around",
+                           [("a", "U8", [4], 0, 4), ("b", "U8", [2], (1 << 64) - 16, (1 << 64) - 14)], "a",
+                           "Another entry's data_offsets wrap around; the header is refused whichever tensor is read",
+                           data_bytes=8, views=(tiling,)),
+        safetensors_vector("st_gap_after_tensor", [("w", "U8", [2, 3], 0, 6), ("s", "BF16", [1], 8, 10)], "w",
+                           "A 2-byte gap between w at [0, 6) and s at [8, 10)", views=(tiling,)),
+        safetensors_vector("st_gap_before_tensor", [("w", "U8", [2, 3], 0, 6), ("s", "BF16", [1], 8, 10)], "s",
+                           "The tensor after the gap: s at [8, 10) does not begin where w ends", views=(tiling,)),
+        safetensors_vector("st_first_tensor_not_at_zero", [("w", "U8", [2, 3], 2, 8)], "w",
+                           "The only tensor begins 2 bytes into the data section", views=(tiling,)),
+        safetensors_vector("st_bytes_after_last_tensor", [packed, scale], scale[0],
+                           "Two bytes follow the last tensor, weight_scale at [6, 8)", data_bytes=10,
+                           views=(covered,)),
+        safetensors_vector("st_past_end_of_file", [packed, scale], scale[0],
+                           "A truncated file: weight_scale needs bytes 6..8 of the data section, 7 remain",
+                           data_bytes=7, views=(covered,)),
+        safetensors_vector("st_unknown_dtype", [("w", "Q2", [2, 3], 0, 6)], "w",
+                           "Q2 is not a safetensors dtype",
+                           views=(view("safetensors", "rejects", [f"{TENSOR_RS}:416-418", f"{TENSOR_RS}:867-891"],
+                                       "the header does not deserialize: Q2 is no Dtype"),)),
+        safetensors_vector("st_shape_overflows", [("w", "U8", [4294967296, 4294967296], 0, 8)], "w",
+                           "2^64 elements: the bit count does not fit in 64 bits (length, as a GGUF weight "
+                           "count that gguf.cpp refuses)",
+                           views=(view("safetensors", "rejects", f"{TENSOR_RS}:642-650",
+                                       "ValidationOverflow: numel * bitsize does not fit"),)),
+        safetensors_vector("st_sub_byte_not_whole_bytes", [("w", "F4", [3], 0, 2)], "w",
+                           "Three F4 elements are 12 bits, not whole bytes",
+                           views=(view("safetensors", "rejects", f"{TENSOR_RS}:652-654", "MisalignedSlice"),)),
+    ]
+
+
+# ---- MLX 2-bit affine
+
+def mlx_encode(values, rows, cols):
+    out = bytearray(rows * cols // 4)
+    for r in range(rows):
+        for w in range(cols // 16):  # ops.cpp:4975, shifts 2^(0, 2, ..., 30)
+            word = sum((values[r * cols + 16 * w + k] + 1) << (2 * k) for k in range(16))
+            out[4 * (r * cols // 16 + w):4 * (r * cols // 16 + w) + 4] = word.to_bytes(4, "little")
+    return bytes(out)
+
+
+def mlx_ternary(scale, bias):
+    return ((scale & 0x7FFF) == 0 and (bias & 0x7FFF) == 0) or bias == scale ^ 0x8000
+
+
+def mlx_expect(data, rows, cols, group, scales, biases, kind):
+    if rows == 0 or cols == 0 or group not in (32, 64, 128) or cols % group or len(data) != rows * cols // 4:
+        return {"status": FORMAT_ERRORS["length"]}
+    values = []
+    for r in range(rows):
+        for k in range(cols):
+            word = int.from_bytes(data[4 * (r * cols // 16 + k // 16):4 * (r * cols // 16 + k // 16) + 4], "little")
+            values.append(((word >> (2 * (k % 16))) & 3) - 1)
+    flags = empty_flags()
+    flags["outside_ternary"] = sum(v == 2 for v in values)
+    if any(scale_class(w, kind) < 0 for w in scales + biases):
+        affine = FORMAT_ERRORS["scale_nonfinite"]
+    else:
+        affine = 0
+        add_scale_flags(flags, scales, kind)
+        flags["affine_not_ternary"] = sum(not mlx_ternary(s, b) for s, b in zip(scales, biases))
+    return {"status": flags["outside_ternary"], "values_hex": i8_hex(values), "flags": flags, "affine_status": affine}
+
+
+def mlx_vector(identifier, data, rows, cols, group, scales, biases, description, kind="F16", **extra):
+    vector = {"id": identifier, "kind": "mlx", "rows": rows, "cols": cols, "group": group, "data_hex": data.hex(),
+              "scale_kind": kind, "scale_words": scales, "bias_words": biases,
+              "expect": mlx_expect(data, rows, cols, group, scales, biases, kind), "description": description}
+    vector.update(extra)
+    return check_classes(vector, vector["expect"]["status"], vector["expect"].get("affine_status", 0))
+
+
+def build_formats_mlx():
+    rng = Lcg(16)
+    vectors = []
+    t = [0] * 32
+    t[0], t[1], t[15], t[16] = 1, -1, 1, 1
+    vectors.append(mlx_vector("mlx_worked_example", mlx_encode(t, 1, 32), 1, 32, 32, [0x3C00], [0xBC00],
+                              "Sixteen codes per little-endian uint32 word, low bits first", encode=True))
+    values = rng.trits(2 * 128)
+    scales = [0x2E66, 0x2A00, 0x3000, 0x2C00]
+    biases = [s ^ 0x8000 for s in scales]
+    vectors.append(mlx_vector("mlx_random_group_64", mlx_encode(values, 2, 128), 2, 128, 64, scales, biases,
+                              "Two rows of 128 weights, groups of 64, bias = -scale", encode=True))
+    vectors.append(mlx_vector("mlx_real_bonsai_down_proj_row0_group0", real_bytes("bonsai_mlx_weight"), 1, 128, 128,
+                              [int.from_bytes(real_bytes("bonsai_mlx_scale"), "little")],
+                              [int.from_bytes(real_bytes("bonsai_mlx_bias"), "little")],
+                              "Row 0, group 0 of Ternary Bonsai 2 27B layers.0.mlp.down_proj (U32 words, F16 scale and "
+                              "bias); the trits equal the first PTQ1_0 block of the same tensor", encode=True,
+                              source={"weight": real_source("bonsai_mlx_weight"), "scale": real_source("bonsai_mlx_scale"),
+                                      "bias": real_source("bonsai_mlx_bias")}))
+    three = list(values)
+    three[5] = 2
+    affine = view("mlx", "decodes", "mlx/ops.cpp:5297-5298", "w = q * scale + bias per group, without checks")
+    shapes = view("mlx", "rejects", "mlx/ops.cpp:5249-5256",
+                  "affine_dequantize refuses words, scales and biases whose shapes disagree for the group size")
+    vectors.append(viewed(mlx_vector("mlx_code3", mlx_encode(three, 2, 128), 2, 128, 64, scales, biases,
+                                     "Code 3 with bias = -scale is +2; flagged", encode=True, flag_class="outside_ternary"),
+                          affine))
+    off = list(biases)
+    off[2] = 0x0000
+    vectors.append(viewed(mlx_vector("mlx_group_not_ternary", mlx_encode(values, 2, 128), 2, 128, 64, scales, off,
+                                     "A group whose bias is not -scale holds affine, not ternary, values; flagged",
+                                     encode=True, flag_class="affine_not_ternary"), affine))
+    neg = [scales[0] ^ 0x8000] + scales[1:]
+    vectors.append(viewed(mlx_vector("mlx_negative_scale", mlx_encode(values, 2, 128), 2, 128, 64, neg,
+                                     [s ^ 0x8000 for s in neg], "A negative scale with bias = -scale; flagged",
+                                     encode=True, flag_class="scale_negative"), affine))
+    vectors.append(rejected(mlx_vector("mlx_scale_nan", mlx_encode(values, 2, 128), 2, 128, 64, [0x7E00] + scales[1:],
+                                       biases, "A NaN scale", error_class="scale_nonfinite"), affine))
+    vectors.append(rejected(mlx_vector("mlx_bias_inf", mlx_encode(values, 2, 128), 2, 128, 64, scales,
+                                       biases[:3] + [0xFC00], "An infinite bias", error_class="scale_nonfinite"), affine))
+    vectors.append(rejected(mlx_vector("mlx_group_48", mlx_encode(values, 2, 128), 2, 128, 48, scales, biases,
+                                       "Group sizes are 32, 64 or 128", error_class="length"),
+                            view("mlx", "rejects", ["mlx/ops.cpp:5007-5012", "mlx/ops.cpp:5249-5256"],
+                                 "the quantizer offers groups of 32, 64 and 128 only; the dequantizer refuses scales "
+                                 "that do not cover the row in groups of 48")))
+    vectors.append(rejected(mlx_vector("mlx_cols_not_divisible", mlx_encode(values, 2, 128)[:2 * 24], 2, 96, 64, scales,
+                                       biases, "96 columns are not whole groups of 64", error_class="length"),
+                            view("mlx", "rejects", ["mlx/ops.cpp:5207-5214", "mlx/ops.cpp:5249-5256"],
+                                 "the last dimension must be whole groups")))
+    vectors.append(rejected(mlx_vector("mlx_size_mismatch", mlx_encode(values, 2, 128)[:-4], 2, 128, 64, scales, biases,
+                                       "One word missing", error_class="length"), shapes))
+    bad = list(values)
+    bad[3] = 3
+    vectors.append(rejected({"id": "mlx_encode_rejects_value_3", "kind": "mlx_encode", "rows": 2, "cols": 128,
+                             "group": 64, "values_hex": i8_hex(bad), "error_class": "code",
+                             "expect": {"status": FORMAT_ERRORS["code"]},
+                             "description": "A 2-bit code holds q = 0..3, values -1..2; nothing is written"},
+                            view("mlx", "not_applicable", "mlx/ops.cpp:4957-5002",
+                                 "pack_and_quantize clips codes to 0..3 from float weights")))
+    constants = {"mlx": {"id": 9, "bits": 2, "codes_per_word": 16, "groups": [32, 64, 128], "zero_point": 1,
+                         "value": "scale * q + bias; ternary iff bias == -scale",
+                         "bits_per_weight": {"32": "3", "64": "5/2", "128": "9/4"}}}
+    invariants = [{"id": "mlx_bits_per_weight_group_128", "condition": "4 * (128 * 2 + 16 + 16) == 9 * 128"}]
+    return formats_document("mlx", "TrinityFormatsMlxSpec", "MLX 2-bit affine",
+                            "MLX 2-bit codes with per-group scales and biases, with a real Bonsai group.",
+                            constants, invariants, vectors, ["mlx"])
+
+
+# ---- ONNX Runtime MatMulNBits bits=2
+
+def onnx_geometry(n, k, bs):
+    return n > 0 and k > 0 and bs >= 16 and bs & (bs - 1) == 0
+
+
+def onnx_zero_point(zp, n, b, zp_row):
+    return 2 if not zp else (zp[n * zp_row + b // 4] >> (2 * (b % 4))) & 3
+
+
+def onnx_encode(values, n, k, bs, zp=b"", padding=0):
+    blocks = -(-k // bs)
+    row, zp_row = blocks * bs // 4, -(-blocks // 4)
+    out = bytearray(n * row)
+    for r in range(n):
+        for c in range(blocks * bs):
+            code = values[r * k + c] + onnx_zero_point(zp, r, c // bs, zp_row) if c < k else padding
+            out[r * row + c // 4] |= code << (2 * (c % 4))
+    return bytes(out)
+
+
+def onnx_expect(data, n, k, bs, zp, scales, kind):
+    blocks = -(-k // bs) if bs else 0
+    if not onnx_geometry(n, k, bs) or len(data) != n * blocks * bs // 4 or (zp and len(zp) != n * -(-blocks // 4)):
+        return {"status": FORMAT_ERRORS["length"]}
+    row, zp_row = blocks * bs // 4, -(-blocks // 4)
+    values = []
+    padding = 0
+    for r in range(n):
+        for c in range(blocks * bs):
+            code = (data[r * row + c // 4] >> (2 * (c % 4))) & 3
+            if c < k:
+                values.append(code - onnx_zero_point(zp, r, c // bs, zp_row))
+            else:
+                padding += code != 0
+    flags = empty_flags()
+    flags["outside_ternary"] = sum(not -1 <= v <= 1 for v in values)
+    flags["padding_nonzero"] = padding
+    scale_status = 0
+    if any(scale_class(w, kind) < 0 for w in scales):
+        scale_status = FORMAT_ERRORS["scale_nonfinite"]
+    else:
+        add_scale_flags(flags, scales, kind)
+    return {"status": flags["outside_ternary"], "values_hex": i8_hex(values), "flags": flags,
+            "scale_status": scale_status}
+
+
+def onnx_vector(identifier, data, n, k, bs, zp, scales, description, kind="F16", **extra):
+    vector = {"id": identifier, "kind": "onnx", "n": n, "k": k, "block_size": bs, "data_hex": data.hex(),
+              "zero_points_hex": zp.hex(), "scale_kind": kind, "scale_words": scales,
+              "expect": onnx_expect(data, n, k, bs, zp, scales, kind), "description": description}
+    vector.update(extra)
+    return check_classes(vector, vector["expect"]["status"], vector["expect"].get("scale_status", 0))
+
+
+def build_formats_onnx():
+    rng = Lcg(2)
+    vectors = []
+    vectors.append(onnx_vector("onnx_default_zero_point", onnx_encode([1, 0, -1, 1], 1, 4, 16), 1, 4, 16, b"",
+                               [0x3C00], "Default zero point 2: +1, 0, -1, +1 are codes 3, 2, 1, 3", encode=True))
+    values = rng.trits(3 * 70)
+    scales = [0x2E66] * 9
+    vectors.append(onnx_vector("onnx_padded_rows", onnx_encode(values, 3, 70, 32), 3, 70, 32, b"", scales,
+                               "K = 70 with block 32: three blocks per row, the last one padded with zero codes",
+                               encode=True))
+    zp = bytes([0x1B, 0x26, 0x39])
+    blocks = 3
+    shifted = []
+    for r in range(3):
+        for c in range(70):
+            z = (zp[r] >> (2 * (c // 32))) & 3
+            shifted.append(rng.next() % 4 - z)
+    dequant = view("onnxruntime", "decodes", "onnxruntime/core/mlas/lib/q4_dq.cpp:619-637", "v = (code - zero point) * scale, without checks")
+    vectors.append(viewed(onnx_vector("onnx_packed_zero_points", onnx_encode(shifted, 3, 70, 32, zp), 3, 70, 32, zp,
+                                      scales, "Packed per-block zero points 3, 2, 1 / 2, 1, 2 / 1, 2, 3; every code "
+                                      "0..3 occurs, so values outside +-1 are flagged", encode=True,
+                                      flag_class="outside_ternary"), dequant))
+    zeros = onnx_encode([-2] * 16, 1, 16, 16)
+    vectors.append(viewed(onnx_vector("onnx_code0_is_minus_2", zeros, 1, 16, 16, b"", [0x3C00],
+                                      "Under the default zero point code 0 is -2, which a ternary tensor never uses; "
+                                      "flagged", encode=True, flag_class="outside_ternary"), dequant))
+    vectors.append(viewed(onnx_vector("onnx_padding_nonzero", onnx_encode(values, 3, 70, 32, padding=1), 3, 70, 32, b"",
+                                      scales, "Padding codes (k >= K) are never read; nonzero ones are flagged",
+                                      flag_class="padding_nonzero"),
+                          view("onnxruntime", "decodes", ["onnxruntime/core/mlas/lib/q4_dq.cpp:619-637", "onnxruntime/core/mlas/lib/q4_dq.cpp:493-494", "onnxruntime/core/mlas/lib/q4_dq.cpp:551-567"],
+                               "the dequantizer reads k < K only; the quantizer itself leaves nonzero codes in a "
+                               "partial last byte (vi keeps the previous row's codes)")))
+    vectors.append(viewed(onnx_vector("onnx_negative_scale", onnx_encode(values, 3, 70, 32), 3, 70, 32, b"",
+                                      [0xAE66] + scales[1:], "A negative block scale; flagged", encode=True,
+                                      flag_class="scale_negative"), dequant))
+    vectors.append(onnx_vector("onnx_f32_scales", onnx_encode(values, 3, 70, 32), 3, 70, 32, b"",
+                               [0x3D4CCCCD] * 9, "f32 scales (the scales share the type of input A)", kind="F32",
+                               encode=True))
+    vectors.append(rejected(onnx_vector("onnx_scale_nan", onnx_encode(values, 3, 70, 32), 3, 70, 32, b"",
+                                        scales[:4] + [0x7E00] + scales[5:], "A NaN block scale",
+                                        error_class="scale_nonfinite"), dequant))
+    block_sizes = view("onnxruntime", "rejects", "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc:146-149", "block_size must be 16, 32, 64, 128 or 256")
+    vectors.append(rejected(onnx_vector("onnx_block_size_24", onnx_encode(values, 3, 70, 32), 3, 70, 24, b"", scales,
+                                        "block_size must be a power of two, at least 16", error_class="length"),
+                            block_sizes))
+    vectors.append(rejected(onnx_vector("onnx_block_size_8", onnx_encode(values[:8], 1, 8, 16), 1, 8, 8, b"", [0x3C00],
+                                        "block_size 8 is below the minimum of 16", error_class="length"), block_sizes))
+    vectors.append(rejected(onnx_vector("onnx_zero_points_size", onnx_encode(shifted, 3, 70, 32, zp), 3, 70, 32, zp[:2],
+                                        scales, "zero_points must be N * ceil(k_blocks / 4) bytes",
+                                        error_class="length"),
+                            view("onnxruntime", "rejects", "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc:323-327",
+                                 "a packed zero_points shape other than N * ceil(k_blocks / 4) is refused")))
+    vectors.append(rejected(onnx_vector("onnx_size_mismatch", onnx_encode(values, 3, 70, 32)[:-1], 3, 70, 32, b"",
+                                        scales, "One byte short of three rows", error_class="length"),
+                            view("onnxruntime", "rejects", "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc:340-344",
+                                 "B must have shape (N, k_blocks, block_size / 4)")))
+    bad = list(shifted)
+    bad[66] = -2
+    vectors.append(rejected({"id": "onnx_encode_rejects_code_below_0", "kind": "onnx_encode", "n": 3, "k": 70,
+                             "block_size": 32, "zero_points_hex": zp.hex(), "values_hex": i8_hex(bad),
+                             "error_class": "code", "expect": {"status": FORMAT_ERRORS["code"]},
+                             "description": "Value -2 in row 0, block 2 (zero point 1) would be code -1; nothing is "
+                                            "written"},
+                            view("onnxruntime", "not_applicable", "onnxruntime/core/mlas/lib/q4_dq.cpp:551-558",
+                                 "the quantizer clamps every code to 0..3")))
+    assert blocks == 3
+    constants = {"onnx": {"id": 10, "bits": 2, "default_zero_point": 2, "min_block_size": 16,
+                          "b_shape": "(N, ceil(K / block_size), block_size / 4) uint8",
+                          "zero_points": "(N, ceil(k_blocks / 4)) uint8, 2 bits per block, low bits first",
+                          "value": "(code - zero_point) * scale",
+                          "bits_per_weight": "2 + scale_bits / block_size (+ zero points)"}}
+    invariants = [{"id": "onnx_example_is_17_8_bits_per_weight", "condition": "(4096 * 2 + 32 * 16) * 8 == 17 * 4096"}]
+    return formats_document("onnx", "TrinityFormatsOnnxSpec", "ONNX Runtime MatMulNBits bits=2",
+                            "MatMulNBits 2-bit weights with default and packed zero points, padding and scales.",
+                            constants, invariants, vectors, ["onnxruntime"])
+
+
+FORMATS_BUILDERS = {"llama_cpp": build_formats_llama_cpp, "prismml": build_formats_prismml,
+                    "bitnet_cpp": build_formats_bitnet_cpp, "hf_bitnet": build_formats_hf_bitnet,
+                    "mlx": build_formats_mlx, "onnx": build_formats_onnx}
+
+
 def render(document):
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -1796,6 +3297,7 @@ def main():
     documents = ((OUTPUT, render(build())), (BRIDGE_OUTPUT, render(build_bridge())),
                  (TENSORPACK_OUTPUT, render(build_tensorpack())), (STREAM_OUTPUT, render(build_stream_compute())),
                  (LAB_OUTPUT, render(build_conformance())), (EDGE_OUTPUT, render(build_edge_demo())))
+    documents += tuple((FORMATS_OUTPUTS[family], render(builder())) for family, builder in FORMATS_BUILDERS.items())
     stale = 0
     for output, text in documents:
         if args.check:
