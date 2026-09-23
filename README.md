@@ -1,10 +1,13 @@
 # Trinity Memory
 
 [![Executable t27 stack](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ci.yml)
+[![Ternary Check weekly](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ternary-check-weekly.yml/badge.svg?branch=master)](https://github.com/dmitrii-f-t27/trinity-memory/actions/workflows/ternary-check-weekly.yml)
 
 **Ternary memory stack: Bridge, TensorPack, Stream Compute, Conformance Lab and Edge Demo.**
 
-**Version 0.3 implements the stack in executable t27:** codecs, containers,
+**Version 0.4 adds [t27 Ternary Check](#t27-ternary-check-v04)**, an exact
+compatibility check of the public ternary weight formats ([changelog](CHANGELOG.md)).
+**Since version 0.3 the stack is implemented in executable t27:** codecs, containers,
 JSON/HTTP Bridge, compute, experiments, reports and CLI live in [`t27/`](t27/).
 The compiler generates native C, Verilog and the browser's WebAssembly codec.
 Python is a compatibility adapter; the v0.2 implementation is a frozen test oracle.
@@ -22,7 +25,7 @@ ecosystem. This repository contains the native implementation and evidence
 for storing and retrieving balanced ternary values (`-1`, `0`, `+1`) using
 binary memory. It has its own code, tests, reports, and hardware roadmap.
 
-Version 0.3 is a **working software and RTL-simulation demonstrator**. A real
+Version 0.4 is a **working software and RTL-simulation demonstrator**. A real
 loopback HTTP client/server connects tensor files to emulated memory and exact
 integer computations; an optional Icarus replay verifies the retrieved weights
 in RTL. On 2026-09-11 an ALINX AX7203 (XC7A200T) ran the player written in t27: all 34
@@ -36,6 +39,116 @@ also t27, stored one 1 013 760-trit tensor on the device in 55, 50 and 45 RAMB36
 2.000, 1.800 and 1.636 bits per trit) and read every word back without error, 18, 20
 and 22 trits per read ([docs/hardware.md](docs/hardware.md)). DDR and power remain
 unmeasured.
+
+## t27 Ternary Check (v0.4)
+
+Ternary Check answers one question for the public ternary weight-packing
+formats: **do two files, or a file and a decoder, hold the same trits and the
+same scale values, exactly?** Between files, scales are compared as values (an
+f16 and a bf16 word of the same number are equal); against a decoder, the
+Action compares the scale words as stored, bit for bit. Every verdict of the
+matrix and of the Action is made by executable t27
+([`t27/formats.t27`](t27/formats.t27), [`t27/matrix.t27`](t27/matrix.t27),
+[`t27/ternary_contract.t27`](t27/ternary_contract.t27)); Python only moves bytes.
+The scale and trailer checks over all 210 BitNet ternary tensors (findings 1
+and 3) come from [`tools/bitnet_audit.py`](tools/bitnet_audit.py), a
+standard-library Python cross-check whose committed report the CI job
+`fixtures` replays.
+It covers llama.cpp TQ1_0, TQ2_0, Q2_0 and Q1_0, the PrismML fork's PQ2_0 and
+PTQ1_0, bitnet.cpp I2_S, transformers BitNet packed `uint8`, MLX 2-bit and
+ONNX Runtime `MatMulNBits` with `bits=2`, against byte-level contracts in
+[`specs/formats/`](specs/formats/) pinned to upstream commits.
+
+**Real checkpoints.** Layer 0 of BitNet b1.58 2B4T (`q_proj`, `down_proj`) and of
+Ternary Bonsai 2 27B (`ffn_down`), read by HTTP range requests from pinned
+Hugging Face revisions, in every format
+([`reports/ternary-check.json`](reports/ternary-check.json),
+[`reports/ternary-check.html`](reports/ternary-check.html): download the HTML to
+view it). Each tensor is compared with a reference, one of its published forms:
+
+<!-- ternary-check-table: generated from reports/ternary-check.json, checked by tests/test_release.py -->
+| Format | BitNet `q_proj` | BitNet `down_proj` | Bonsai `ffn_down` |
+|---|---|---|---|
+| HF packed uint8 + bf16 weight_scale | reference | reference | not representable |
+| I2_S (bitnet.cpp) | mismatch (published) | mismatch (published) | not representable |
+| PTQ1_0 (PrismML) | match (t27 round trip) | match (t27 round trip) | reference |
+| PQ2_0 (PrismML) | match (t27 round trip) | match (t27 round trip) | match (published) |
+| Q2_0, group 64 (llama.cpp) | match (t27 round trip) | match (t27 round trip) | match (published) |
+| MLX 2-bit affine, group 128 | match (t27 round trip) | match (t27 round trip) | match (published) |
+| TQ1_0 (llama.cpp) | match (t27 round trip) | match (t27 round trip) | not representable |
+| TQ2_0 (llama.cpp) | match (t27 round trip) | match (t27 round trip) | not representable |
+| Q1_0, binary (llama.cpp) | not representable | not representable | not representable |
+| ONNX MatMulNBits bits=2, block 128 | match (t27 round trip) | match (t27 round trip) | match (t27 round trip) |
+| TQ1_0 by llama.cpp quantize_row_tq1_0_ref | mismatch (llama.cpp writer) | match (llama.cpp writer) | not representable |
+| TQ2_0 by llama.cpp quantize_row_tq2_0_ref | mismatch (llama.cpp writer) | match (llama.cpp writer) | not representable |
+<!-- /ternary-check-table -->
+
+36 cells: 23 match, 4 mismatch, 9 not representable. The 12 cells marked
+reference, published or llama.cpp writer are third-party evidence (bytes of the
+pinned checkpoints, or bytes written by llama.cpp's pinned reference
+quantizers); the 15 t27 round trips show only that a format can hold the
+tensor. "Not representable" names a reason, such as one scale per tensor or per
+256 weights for Bonsai's 128-weight groups, or no code for 0 in binary Q1_0.
+The I2_S mismatch is the scale precision of finding 1; the llama.cpp writers
+store the scale 0 for 50 all-zero blocks of `q_proj`, where every weight still
+dequantizes to the same value. Every mismatch has a reproduction in
+[`reports/ternary-check/repro/`](reports/ternary-check/repro/).
+
+**Four findings** ([docs/ternary-check.md](docs/ternary-check.md)):
+
+1. BitNet stores one scale at two precisions: bf16 in the packed checkpoint,
+   f32 in the GGUF I2_S file, the bf16 value being the f32 value rounded, in
+   all 210 ternary tensors; the trits of the compared tensors are identical
+   ([details](docs/ternary-check.md#results)).
+2. The packed BitNet trits cannot be recomputed from the published bf16
+   weights: `transformers` `WeightQuant` on them differs from the packed trits
+   for 79,719 weights of layer-0 `q_proj` (1.22%) and 101,673 of `down_proj`
+   (0.57%), all at the bf16 value `0.5 × weight_scale`, where the packed file
+   stores both ±1 and 0 ([details](docs/ternary-check.md#results)).
+3. I2_S trailers carry leftover bytes: after the f32 scale, 28 bytes that are
+   not all zero in all 210 I2_S tensors, equal to the bytes an earlier tensor
+   holds at the same offset (a reused buffer); the dequantizer does not read them, so inference
+   is unaffected ([details](docs/ternary-check.md#results)).
+4. Ternary Bonsai 2 is consistent across its four distributions: PTQ1_0, PQ2_0,
+   Q2_0 (group 64) and MLX 2-bit hold the same trits and fp16 scales for layer
+   0 `ffn_down`; the GGUF files declare `prism.*` metadata, a Hadamard rotation
+   the runtime must apply
+   ([details](docs/ternary-check.md#results)).
+
+Storage and integer arithmetic only: three tensors compared trit for trit (the
+BitNet scale and trailer checks cover all 210 ternary tensors), no model was
+run.
+
+**One command** from a clean clone reproduces the reports byte for byte (it
+fetches the pinned fixture ranges, 205.8 MiB, and builds the pinned t27
+compiler; `OFFLINE=1` uses the caches only):
+
+```sh
+make ternary-check          # writes reports/ternary-check.json, .html and repro/
+make ternary-check-verify   # recompute and compare with the committed reports
+```
+
+**Check your own decoder** in GitHub Actions. It must implement the small
+[CLI contract](ternary-check/CONTRACT.md) (see also the
+[Action documentation](ternary-check/README.md)). The Action runs the 126
+payload vectors of `conformance/formats_*.json`, 178 decoder calls, and compares
+values, scale words, flags and refusals with their error classes; by default
+any mismatch, wrong refusal or silent acceptance fails the step:
+
+```yaml
+- uses: dmitrii-f-t27/trinity-memory/ternary-check@v0.4.0
+  with:
+    decoder: ./build/my-decoder   # the contract arguments are appended
+    formats: TQ1_0,TQ2_0          # optional: only the formats you implement
+```
+
+By default (`runtime: release`) the Action runs from the release wheel, so the
+runner must be Linux x86_64, or macOS arm64 with macOS 14 or later; elsewhere,
+build from source and set `runtime` to the checkout
+([runtime](ternary-check/README.md#runtime)).
+
+The weekly workflow (badge above) checks that the pinned upstream files and
+model files have not changed and reruns every vector.
 
 ## Five directions, one reproducible chain
 

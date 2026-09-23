@@ -1,0 +1,128 @@
+{
+  "description": "Upstream sources restated by specs/formats/*.t27: one commit per upstream and the git blob SHA of every cited file. A blob SHA that differs at an upstream branch head marks a contract to re-read.",
+  "schema": "trinity.upstream-pins.v1",
+  "upstreams": {
+    "bitnet.cpp": {
+      "branch": "main",
+      "commit": "0b341e582afbf9e1011f24744b554c96a3477eb5",
+      "files": {
+        ".gitmodules": "b7fbdb264ecd5016c518ce5af8c6de45c0d7f87e",
+        "include/gemm-config.h": "6a88c42488a3b7aa612d6266f1894d08e241a119",
+        "src/CMakeLists.txt": "bac8459611a161ae3b6684d54b804dcd6668526c",
+        "src/ggml-bitnet-mad.cpp": "ad18bac046371fc92e2ec1d9fb880ecef5e1fd52",
+        "utils/convert-hf-to-gguf-bitnet.py": "b11e831b9066bf0f2c34b10d37c4c256daeffb87"
+      },
+      "repo": "microsoft/BitNet",
+      "specs": [
+        "specs/formats/bitnet_cpp.t27"
+      ]
+    },
+    "bitnet.cpp-llama.cpp": {
+      "branch": "release-bitnet-embedding-0.6b-270m",
+      "commit": "390c307752ab78fd8189f359d6954c9ba1be74af",
+      "files": {
+        "ggml/include/ggml.h": "b02fd48d7f0f91fb12ff97ce4ed6e642df1bc5c4",
+        "ggml/src/ggml-cpu/CMakeLists.txt": "fd5ba9989079398e69b6c1518ccab89925743949",
+        "ggml/src/ggml-cpu/ggml-cpu-i2s.c": "d2ea0d7292fd0f01dbef96f0052ce747b8f927bd",
+        "ggml/src/ggml-cpu/ggml-cpu.c": "ec88ef29adfb84280b0bec91456c2a80be4ebf4a",
+        "ggml/src/ggml-cpu/ops.cpp": "a7d6ecba3f8cac4dfc811cc746c0bbe52debc2c4",
+        "ggml/src/ggml-cpu/quants.c": "603f51c547a5b93f6751878f342a596fde1b7049",
+        "ggml/src/ggml.c": "fcf1f13a4b64d2711a17f52c4dee92fdeb7fd4f3",
+        "ggml/src/gguf.cpp": "5e1986182515b3baadd3ab4c45c7e09038d0b64e",
+        "src/llama-arch.cpp": "0181e59611c32d02b8a957018f6e3e6a3fc82f90",
+        "src/llama-model-loader.h": "c476026d3e510ad03d3e6f0d619ecea7fc95319c"
+      },
+      "repo": "isHuangXin/llama.cpp",
+      "specs": [
+        "specs/formats/bitnet_cpp.t27",
+        "specs/formats/llama_cpp.t27"
+      ],
+      "submodule_of": {
+        "commit": "0b341e582afbf9e1011f24744b554c96a3477eb5",
+        "path": "3rdparty/llama.cpp",
+        "repo": "microsoft/BitNet"
+      }
+    },
+    "llama.cpp": {
+      "branch": "master",
+      "commit": "e6ab7c1a41054a888ada952eab4c886444c2f5ad",
+      "files": {
+        "ggml/include/ggml.h": "224bdef927ac90bfa07ee39db3247b7bac4f14ec",
+        "ggml/include/gguf.h": "b3a1e1230a06110a0a5f04469d849ac2000b467c",
+        "ggml/src/ggml-common.h": "1dbbe326d0fc6a5ce8a86d237cb94901340443af",
+        "ggml/src/ggml-quants.c": "55db802c0aeb5fd85de9ed77b4c5fe3dd84b5bd1",
+        "ggml/src/ggml.c": "a286083b9320acbe9654b34c1cec68930a8d39ee",
+        "ggml/src/gguf.cpp": "0eb9fb744d289c5805431de5ac8987a352bae122",
+        "src/llama-arch.cpp": "03b7951c3cc109c92c0e03f4e0bea41a4af21db8",
+        "src/llama-model-loader.cpp": "43c396f15af3475e405da8dd73e6a8010ce3d7a5",
+        "src/llama-model-loader.h": "9e51d0ce750503788d2236b4892b8fa3e409b478"
+      },
+      "repo": "ggml-org/llama.cpp",
+      "specs": [
+        "specs/formats/llama_cpp.t27"
+      ]
+    },
+    "mlx": {
+      "branch": "main",
+      "commit": "59d600b5e64c238427d0f8d897ab7c682ef4d3d2",
+      "files": {
+        "mlx/ops.cpp": "95010eb854f3bebe7f793d758d31ca0497cec285"
+      },
+      "repo": "ml-explore/mlx",
+      "specs": [
+        "specs/formats/mlx.t27"
+      ]
+    },
+    "onnxruntime": {
+      "branch": "main",
+      "commit": "2ecddca37183e39694d02f2dae222bed9931c9af",
+      "files": {
+        "docs/ContribOperators.md": "98fe8d10708d59cbb34063a67f8d88339ebbf42d",
+        "onnxruntime/contrib_ops/cpu/quantization/matmul_nbits.cc": "110acc10a8deea1219d1d5e8bb3f3ece813a8207",
+        "onnxruntime/core/mlas/lib/q4_dq.cpp": "a356c89db540120301f3805bb88622fc401ffd90"
+      },
+      "repo": "microsoft/onnxruntime",
+      "specs": [
+        "specs/formats/onnx.t27"
+      ]
+    },
+    "prismml": {
+      "branch": "prism",
+      "commit": "bdc23b56b4458b9f1655aec5287f3ab56ee8daaa",
+      "files": {
+        "ggml/include/ggml.h": "d875a15ed066e29e3b43415bdba9ea9b59c75a47",
+        "ggml/src/ggml-common.h": "65075cad860c8bd6075432f4d562bc236b72d33b",
+        "ggml/src/ggml-quants.c": "bfb3892a599c0dd1cc67024408b5e21c14537da4",
+        "ggml/src/gguf.cpp": "d97df4a8deea9a028bb215f6d4cfbbe44f54e096",
+        "src/llama-model-loader.h": "e9fe3592d421da6f0fb539d6696009802d960282"
+      },
+      "repo": "PrismML-Eng/llama.cpp",
+      "specs": [
+        "specs/formats/llama_cpp.t27",
+        "specs/formats/prismml.t27"
+      ]
+    },
+    "safetensors": {
+      "branch": "main",
+      "commit": "e246a2560645b7525f5775669ed816eb57c5bcc8",
+      "files": {
+        "safetensors/src/tensor.rs": "089d0933edba9f0147919df560c0a79463297163"
+      },
+      "repo": "huggingface/safetensors",
+      "specs": [
+        "specs/formats/hf_bitnet.t27"
+      ]
+    },
+    "transformers": {
+      "branch": "main",
+      "commit": "2c4914fb939fe9de0d8e7a798af4684d552f18b4",
+      "files": {
+        "src/transformers/integrations/bitnet.py": "0465c54b5377d7133a68a56cb9cd25bf93167750"
+      },
+      "repo": "huggingface/transformers",
+      "specs": [
+        "specs/formats/hf_bitnet.t27"
+      ]
+    }
+  }
+}
