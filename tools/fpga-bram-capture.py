@@ -9,8 +9,8 @@ tools/generate-bram-bench.py from tools/bram_trit_model.py) and writes a
 word or invalid group, or engines that disagree on the stored trits.
 
   python3 tools/fpga-bram-capture.py --port /dev/cu.usbserial-110 --output build/fpga/bram-capture.json
-  python3 tools/fpga-bram-capture.py --from-file build/fpga/bram-sim/sim_capture.txt \
-      --manifest build/fpga/bram-sim/bram_bench_manifest.json
+  python3 tools/fpga-bram-capture.py --from-file build/fpga/bram-sim/sim_capture_1.txt \
+      --manifest build/fpga/bram-sim/bram_bench_manifest.json --expect-formats 0,1,2
 """
 from __future__ import annotations
 
@@ -67,16 +67,19 @@ def parse(data: bytes):
     return runs, bad
 
 
-def compare(run, manifest):
+def compare(run, manifest, expect_formats=None):
     """Compare every engine the run reports (matched by format) with the manifest.
 
     A bitstream may carry all three layouts or one (ONLY in tms_bram_bench.v); the
-    engines it announces must all be present and each must match its layout.
+    engines it announces must all be present and each must match its layout. With
+    expect_formats the set of reported layouts must be exactly that set.
     """
     rows, ok = [], True
     reported = [e for e in run["engines"].values() if "format" in e]
     if (run["format"] != manifest["report_format"] or not reported
             or run["engines_announced"] != len(run["engines"]) or len(reported) != len(run["engines"])):
+        ok = False
+    if expect_formats is not None and sorted(e["format"] for e in reported) != sorted(expect_formats):
         ok = False
     by_format = {e["format"]: e for e in manifest["engines"]}
     for got in sorted(reported, key=lambda e: e["engine"]):
@@ -98,10 +101,11 @@ def compare(run, manifest):
                      "trits_per_read_tick": (expect["trits"] / got["read_ticks"]) if got.get("read_ticks") else None,
                      "read_microseconds": (got["read_ticks"] / CLOCK_HZ * 1e6) if got.get("read_ticks") else None})
     same = {(r["device"].get("pos"), r["device"].get("neg"), r["device"].get("dot")) for r in rows}
-    agree = len(same) == 1
+    # With one engine there is nothing to agree with; its counts are checked against the model above.
+    agree = (len(same) == 1) if len(rows) > 1 else None
     if run["done"] is None or run["done"]["bad_words"] or run["done"]["invalid_groups"]:
         ok = False
-    return ok and agree, rows, agree
+    return ok and agree is not False, rows, agree
 
 
 def main():
@@ -118,6 +122,8 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--raw")
     parser.add_argument("--label", default="")
+    parser.add_argument("--expect-formats", type=lambda v: [int(x) for x in v.split(",") if x != ""],
+                        help="comma-separated layouts the run must report, e.g. 0,1,2 or 2 (0 b2, 1 d5, 2 d5d2)")
     args = parser.parse_args()
     manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
     if args.from_file:
@@ -135,14 +141,15 @@ def main():
         print(f"no complete run in the capture ({len(runs)} headers, {len(bad)} unparsed lines)", file=sys.stderr)
         sys.exit(1)
     run = complete[0]
-    ok, rows, agree = compare(run, manifest)
+    ok, rows, agree = compare(run, manifest, args.expect_formats)
     summary = {
         "schema": "trinity.fpga-bram-capture.v1",
         "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "source": source, "label": args.label, "run": run["run"], "runs_in_capture": len(runs),
         "unparsed_lines": len(bad), "manifest": {"trits": manifest["trits"], "seed": manifest["seed"],
                                                   "sources": manifest["sources"]},
-        "engines": rows, "engines_agree_on_trits": agree, "device_totals": run["done"],
+        "engines": rows, "engines_agree_on_trits": agree, "expected_formats": args.expect_formats,
+        "device_totals": run["done"],
         "result": "PASS" if ok else "FAIL", "evidence": "fpga" if ok and args.port else "capture-file",
     }
     if args.output:

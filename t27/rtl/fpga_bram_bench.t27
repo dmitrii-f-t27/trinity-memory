@@ -5,9 +5,10 @@ module TrinityFpgaBramBenchT27;
 // format, the line emitter and the UART; `engines` is how many slots are
 // populated, from slot 0, and an empty slot is tied done with zero results).
 // One run: a header line, one start pulse to every engine, a wait until all are
-// done, eight report lines per populated engine, a totals line. A run starts after reset and again on a UART start bit that
-// arrives while the bench is idle; edges during a run are ignored, so a trigger
-// byte with several falling edges still starts exactly one run.
+// done, eight report lines per populated engine, a totals line. A run starts
+// after reset and again on a UART start bit that arrives while the bench is idle;
+// edges during a run are ignored, so a trigger byte with several falling edges
+// still starts exactly one run.
 // Report lines (tag, a, b), b is 40 bits:
 //   H a=run number            b=(REPORT_FORMAT << 32) | populated engines
 //   P a=(engine << 16) | (format << 8) | lanes     b=words
@@ -44,7 +45,6 @@ var state: u32 = 0;
 var after_line: u32 = 0;
 var arm: u32 = 0;
 var auto_started: bool = false;
-var trigger_pending: bool = false;
 var rx1: bool = true;
 var rx2: bool = true;
 var rx3: bool = true;
@@ -60,6 +60,13 @@ var run_done: bool = false;
 var any_bad: bool = false;
 var run_active: bool;
 run_active = state != S_IDLE;
+
+// The H line's b field. A typed local, not the constant: gen-c emits constants as
+// untyped macros, and REPORT_FORMAT << 32 would be a 32-bit int shift in C.
+fn header_b(engines: u32) -> u64 {
+    var fmt: u64 = REPORT_FORMAT;
+    return (fmt << 32) | (engines as u64);
+}
 
 fn field_tag(f: u32) -> u32 {
     if (f == 0) { return TAG_P; }
@@ -101,21 +108,18 @@ fn on_clock(uart_rx: bool, line_idle: bool, engines: u32,
             d1: bool, words1: u32, fmt1: u32, lanes1: u32, wt1: u32, rt1: u32, bad1: u32, inv1: u32, pos1: u32, neg1: u32, dot1: i64, chk1: u64,
             d2: bool, words2: u32, fmt2: u32, lanes2: u32, wt2: u32, rt2: u32, bad2: u32, inv2: u32, pos2: u32, neg2: u32, dot2: i64, chk2: u64) {
     line_go = false;
-    if (rx3 && !rx2 && state == S_IDLE) { trigger_pending = true; }
-    rx3 = rx2;
-    rx2 = rx1;
-    rx1 = uart_rx;
     if (state == S_IDLE) {
         engines_start = false;
-        if (trigger_pending || !auto_started) {
+        // The edge is read from the old rx3/rx2 (shifted at the end of the tick), and
+        // only while idle, so a trigger byte with several falling edges starts one run.
+        if ((rx3 && !rx2) || !auto_started) {
             auto_started = true;
-            trigger_pending = false;
             run_done = false;
             any_bad = false;
             line_tag = TAG_H;
             line_a = runs + 1;
             runs = runs + 1;
-            line_b = (REPORT_FORMAT << 32) | (engines as u64);
+            line_b = header_b(engines);
             line_go = true;
             after_line = S_START;
             state = S_LINE_START;
@@ -168,8 +172,12 @@ fn on_clock(uart_rx: bool, line_idle: bool, engines: u32,
         after_line = S_IDLE;
         state = S_LINE_START;
     }
+    rx3 = rx2;
+    rx2 = rx1;
+    rx1 = uart_rx;
 }
 
+test header_fields { assert_eq(header_b(3), 4294967299); assert_eq(header_b(1), 4294967297); }
 test tags_are_ascii { assert_eq(field_tag(0), 80); assert_eq(field_tag(7), 90); assert_eq(TAG_D, 68); }
 test pick_selects { assert_eq(pick32(1, 5, 6, 7), 6); assert_eq(pick64(2, 5, 6, 7), 7); }
 test counts_share_a_line { assert_eq(field_b(5, 0, 0, 0, 0, 0, 3, 2, 0, 0), 3145730); }

@@ -19,9 +19,11 @@ TOP       := tms_trace_player_ax7203
 IMAGE     ?= regymm/openxc7:latest
 DOCKER    ?= docker run --rm -v "$(ROOT):/work" -w /work $(IMAGE)
 # Each tool runs from the repository root with repository-relative paths: in the
-# image by default, or natively, e.g. YOSYS="cd $$PWD && yosys" and
-# NEXTPNR="cd $$PWD && ../tools-native/nextpnr-xilinx/build/nextpnr-xilinx" (the
-# same nextpnr-xilinx revision built for the host; it reads the image's chip database).
+# image by default, or natively, e.g. (single quotes, so make expands $(ROOT))
+#   make ... YOSYS='cd $(ROOT) && yosys' \
+#            NEXTPNR='cd $(ROOT) && ../tools-native/nextpnr-xilinx/build/nextpnr-xilinx'
+# with a host build of the image's nextpnr-xilinx revision (it reads the image's
+# chip database).
 YOSYS     ?= $(DOCKER) yosys
 NEXTPNR   ?= $(DOCKER) nextpnr-xilinx
 PACK      ?= $(DOCKER)
@@ -30,6 +32,7 @@ SEEDS     ?= 1 2 3 4 5 6
 PLACERS   ?= sa heap
 YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -family xc7
 FREQ_MHZ  ?= 200.0
+# The CP2102N's name follows the USB socket (-10, -110, ...): list /dev/cu.usbserial-*.
 PORT      ?= /dev/cu.usbserial-10
 CABLE     ?= digilent_hs2
 BUILD_ID  ?= $(shell git -C $(ROOT) rev-parse --short=8 HEAD)
@@ -39,6 +42,7 @@ CORES     := dot_stream stream_storage stream_view stream_join \
 SOURCES   := $(foreach c,$(CORES),$(RTL)/$(c).v) $(BUILD)/fpga_trace_rom.v \
              $(CURDIR)/tms_dut_wrappers.v $(BUILD)/tms_trace_bank.v $(CURDIR)/tms_trace_player.v
 REL       = $(patsubst $(ROOT)/%,%,$(1))
+comma     := ,
 
 .PHONY: gen sim synth chipdb pnr bit flash capture detect clean \
         bram-gen bram-sim bram-synth bram-pnr bram-bit bram-flash bram-capture bram-ooc
@@ -64,8 +68,12 @@ sim: gen
 	mkdir -p $(BUILD)/sim
 	@for mode in 1 0; do \
 	  iverilog -g2012 -Ptb_fpga_trace_player.CLOCK_MODE=$$mode -o $(BUILD)/sim/player_$$mode.vvp -s tb_fpga_trace_player $(CURDIR)/sim/xilinx_stubs.v $(SOURCES) $(ROOT)/tests/tb_fpga_trace_player.v || exit 1; \
-	  (cd $(BUILD)/sim && vvp player_$$mode.vvp +capture=$(BUILD)/sim_capture_$$mode.txt | tail -2) || exit 1; \
-	  python3 $(ROOT)/tools/fpga-capture.py --from-file $(BUILD)/sim_capture_$$mode.txt --manifest $(BUILD)/tms_trace_manifest.json --output $(BUILD)/sim_capture_$$mode.json | tail -1 || exit 1; \
+	  (cd $(BUILD)/sim && vvp player_$$mode.vvp +capture=$(BUILD)/sim_capture_$$mode.txt > vvp_$$mode.log 2>&1); st=$$?; \
+	  tail -2 $(BUILD)/sim/vvp_$$mode.log; \
+	  [ $$st -eq 0 ] && grep -q '^TB_PASS' $(BUILD)/sim/vvp_$$mode.log || { echo "player simulation failed (CLOCK_MODE=$$mode)"; exit 1; }; \
+	  python3 $(ROOT)/tools/fpga-capture.py --from-file $(BUILD)/sim_capture_$$mode.txt --manifest $(BUILD)/tms_trace_manifest.json \
+	    --output $(BUILD)/sim_capture_$$mode.json > $(BUILD)/sim/compare_$$mode.log 2>&1; st=$$?; \
+	  tail -1 $(BUILD)/sim/compare_$$mode.log; [ $$st -eq 0 ] || exit 1; \
 	done
 	cp $(BUILD)/sim_capture_$(CLOCK_MODE).txt $(BUILD)/sim_capture.txt; cp $(BUILD)/sim_capture_$(CLOCK_MODE).json $(BUILD)/sim_capture.json
 
@@ -116,22 +124,35 @@ clean:
 # needs `read_verilog -nomem2reg`, otherwise yosys turns the engines' arrays
 # (written in a process with an asynchronous reset) into flip-flops.
 #
-#   make -C fpga/ax7203 bram-gen bram-sim            generated cores, Icarus run, host comparison
-#   make -C fpga/ax7203 bram-bit bram-flash bram-capture
+#   make -C fpga/ax7203 bram-sim                          all three layouts in Icarus, host comparison
+#   make -C fpga/ax7203 bram-bit bram-flash bram-capture BRAM_ONLY=2 PORT=/dev/cu.usbserial-110
+#
+# BRAM_ONLY: -1 all three layouts in one design (simulation; 150 RAMB36E1, which
+# nextpnr-xilinx does not route), 0 b2, 1 d5, 2 d5d2 (one layout: the device
+# builds). Every value has its own build directories, so switching layouts never
+# reuses another layout's netlist or bitstream.
 BRAM_TRITS     ?= 1013760
 BRAM_SIM_TRITS ?= 1980
-BRAM_ONLY      ?= -1        # -1: all three layouts in one bitstream; 0 b2, 1 d5, 2 d5d2: that layout alone
-# All three layouts in one bitstream (150 RAMB36E1) do not route with nextpnr-xilinx;
-# the device builds are one layout each, heap placer first, router2.
+BRAM_ONLY      ?= -1
+override BRAM_ONLY := $(strip $(BRAM_ONLY))
+ifeq ($(filter $(BRAM_ONLY),-1 0 1 2),)
+$(error BRAM_ONLY must be -1 (all three layouts), 0 (b2), 1 (d5) or 2 (d5d2), not '$(BRAM_ONLY)')
+endif
+BRAM_SUFFIX    := $(if $(filter -1,$(BRAM_ONLY)),,-$(BRAM_ONLY))
+# yosys chparam does not take a negative literal; -1 is the Verilog default anyway.
+BRAM_CHPARAM   := $(if $(BRAM_SUFFIX),-set ONLY $(BRAM_ONLY),)
+BRAM_EXPECT    := $(if $(BRAM_SUFFIX),$(BRAM_ONLY),0$(comma)1$(comma)2)
 BRAM_PLACERS   ?= heap sa
 BRAM_ROUTER    ?= router2
-BRAM_BUILD     ?= $(BUILD)/bram
-BRAM_SIMBUILD  ?= $(BUILD)/bram-sim
+BRAM_BUILD     ?= $(BUILD)/bram$(BRAM_SUFFIX)
+BRAM_SIMBUILD  ?= $(BUILD)/bram-sim$(BRAM_SUFFIX)
 BRAM_TOP       := tms_bram_bench_ax7203
 BRAM_CORES     := fpga_tick fpga_reset fpga_uart_tx fpga_line_emitter fpga_bram_bench bram_trit_codec
 BRAM_FORMATS   := b2 d5 d5d2
 BRAM_CORE_V    := $(foreach c,$(BRAM_CORES),$(RTL)/$(c).v)
-BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/tools/generate-bram-bench.py $(ROOT)/tools/bram_trit_model.py
+# Every source whose hash the manifest records (tools/generate-bram-bench.py, SOURCES).
+BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/t27/rtl/bram_trit_codec.t27 $(ROOT)/t27/rtl/fpga_bram_bench.t27 \
+                  $(ROOT)/tools/generate-bram-bench.py $(ROOT)/tools/bram_trit_model.py
 bram_sources    = $(BRAM_CORE_V) $(foreach f,$(BRAM_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
 # synth_xilinx with the block RAM library restricted to the 1K x 36 configuration
 # (brams_x36.txt): every layout is mapped the same way, one 36-bit word per RAMB36
@@ -141,9 +162,13 @@ bram_synth      = $(YOSYS_SYNTH) -top $(1) -run :map_memory; \
                   techmap -map +/xilinx/lutrams_xc5v_map.v -map +/xilinx/brams_xc6v_map.v; \
                   $(YOSYS_SYNTH) -top $(1) -run map_ffram:
 
-$(BRAM_BUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS)
+# Stamps name the values a directory was built with, so changing BRAM_TRITS or
+# CLOCK_MODE rebuilds what depends on them.
+$(BRAM_BUILD)/trits-$(BRAM_TRITS).stamp $(BRAM_SIMBUILD)/trits-$(BRAM_SIM_TRITS).stamp $(BRAM_BUILD)/clock-$(CLOCK_MODE).stamp:
+	mkdir -p $(dir $@); rm -f $(dir $@)$(firstword $(subst -, ,$(notdir $@)))-*.stamp; touch $@
+$(BRAM_BUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS) $(BRAM_BUILD)/trits-$(BRAM_TRITS).stamp
 	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_TRITS) --output-dir $(BRAM_BUILD)
-$(BRAM_SIMBUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS)
+$(BRAM_SIMBUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS) $(BRAM_SIMBUILD)/trits-$(BRAM_SIM_TRITS).stamp
 	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_SIM_TRITS) --output-dir $(BRAM_SIMBUILD)
 $(BRAM_BUILD)/bram_trit_engine_%.v: $(BRAM_BUILD)/bram_bench_manifest.json
 	@test -x "$(T27C)" || { echo "T27_ROOT must point at the pinned compiler checkout (native/compiler.lock)"; exit 1; }
@@ -158,21 +183,29 @@ bram-sim: $(call bram_sources,$(BRAM_SIMBUILD))
 	@for mode in 1 0; do \
 	  iverilog -g2012 -Ptb_fpga_bram_bench.CLOCK_MODE=$$mode -Ptb_fpga_bram_bench.ONLY=$(BRAM_ONLY) -o $(BRAM_SIMBUILD)/bench_$$mode.vvp -s tb_fpga_bram_bench \
 	    $(CURDIR)/sim/xilinx_stubs.v $(call bram_sources,$(BRAM_SIMBUILD)) $(ROOT)/tests/tb_fpga_bram_bench.v || exit 1; \
-	  (cd $(BRAM_SIMBUILD) && vvp bench_$$mode.vvp +capture=$(BRAM_SIMBUILD)/sim_capture_$$mode.txt | tail -2) || exit 1; \
-	  python3 $(ROOT)/tools/fpga-bram-capture.py --from-file $(BRAM_SIMBUILD)/sim_capture_$$mode.txt \
-	    --manifest $(BRAM_SIMBUILD)/bram_bench_manifest.json --output $(BRAM_SIMBUILD)/sim_capture_$$mode.json | tail -1 || exit 1; \
+	  (cd $(BRAM_SIMBUILD) && vvp bench_$$mode.vvp +capture=$(BRAM_SIMBUILD)/sim_capture_$$mode.txt > vvp_$$mode.log 2>&1); st=$$?; \
+	  tail -2 $(BRAM_SIMBUILD)/vvp_$$mode.log; \
+	  [ $$st -eq 0 ] && grep -q '^TB_PASS' $(BRAM_SIMBUILD)/vvp_$$mode.log || { echo "bench simulation failed (CLOCK_MODE=$$mode)"; exit 1; }; \
+	  python3 $(ROOT)/tools/fpga-bram-capture.py --from-file $(BRAM_SIMBUILD)/sim_capture_$$mode.txt --expect-formats $(BRAM_EXPECT) \
+	    --manifest $(BRAM_SIMBUILD)/bram_bench_manifest.json --output $(BRAM_SIMBUILD)/sim_capture_$$mode.json > $(BRAM_SIMBUILD)/compare_$$mode.log 2>&1; st=$$?; \
+	  tail -1 $(BRAM_SIMBUILD)/compare_$$mode.log; [ $$st -eq 0 ] || exit 1; \
 	done
 
 bram-synth: $(BRAM_BUILD)/$(BRAM_TOP).json
-$(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD)) $(CURDIR)/brams_x36.txt
-	$(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set ONLY $(BRAM_ONLY) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
+$(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD)) $(CURDIR)/brams_x36.txt $(BRAM_BUILD)/clock-$(CLOCK_MODE).stamp
+	$(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(BRAM_CHPARAM) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
 
-# Cells of each layout on its own (engine + encoder + decoder, tms_bram_ooc.v),
-# synthesized out of context with the same yosys flags as the bench.
+# Cells of each layout on its own, synthesized out of context with the same
+# yosys flags as the bench: the engine with its encoder and decoder
+# (tms_bram_ooc.v, ooc_<f>.stat) and the codec alone (tms_bram_codec_ooc.v,
+# codec_<f>_<op>.stat, op 0 encoder, 1 decoder).
 bram-ooc: $(call bram_sources,$(BRAM_BUILD))
 	@for f in 0 1 2; do \
 	  $(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/ooc_$$f.log -p "read_verilog -nomem2reg $(foreach s,$(filter-out %/tms_bram_bench.v,$(call bram_sources,$(BRAM_BUILD))),$(call REL,$(s))) $(call REL,$(CURDIR))/tms_bram_ooc.v; chparam -set FORMAT $$f tms_bram_ooc; $(call bram_synth,tms_bram_ooc); tee -o $(call REL,$(BRAM_BUILD))/ooc_$$f.stat stat" || exit 1; \
 	  echo "layout $$f: $$(grep -E 'RAMB36E1|RAMB18E1' $(BRAM_BUILD)/ooc_$$f.stat | tr -s ' ' | tr '\n' ' ')"; \
+	  for op in 0 1; do \
+	    $(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/codec_$${f}_$$op.log -p "read_verilog $(call REL,$(RTL))/bram_trit_codec.v $(call REL,$(CURDIR))/tms_bram_codec_ooc.v; chparam -set FORMAT $$f -set OP $$op tms_bram_codec_ooc; $(YOSYS_SYNTH) -top tms_bram_codec_ooc; tee -o $(call REL,$(BRAM_BUILD))/codec_$${f}_$$op.stat stat" || exit 1; \
+	  done; \
 	done
 
 bram-pnr: $(BRAM_BUILD)/$(BRAM_TOP).fasm
@@ -196,5 +229,5 @@ bram-flash: $(BRAM_BUILD)/$(BRAM_TOP).bit
 	openFPGALoader -c $(CABLE) $<
 
 bram-capture:
-	python3 $(ROOT)/tools/fpga-bram-capture.py --port $(PORT) --manifest $(BRAM_BUILD)/bram_bench_manifest.json \
+	python3 $(ROOT)/tools/fpga-bram-capture.py --port $(PORT) --manifest $(BRAM_BUILD)/bram_bench_manifest.json --expect-formats $(BRAM_EXPECT) \
 	  --output $(BRAM_BUILD)/capture.json --raw $(BRAM_BUILD)/capture.txt --label "$(LABEL)"

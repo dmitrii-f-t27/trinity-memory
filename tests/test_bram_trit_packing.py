@@ -5,10 +5,12 @@ t27/rtl/bram_trit_engine.t27 is loaded with ctypes and compared with
 tools/bram_trit_model.py, an independent Python statement of the same rules, on
 random inputs (valid and invalid words). The whole bench (three engines, the
 sequencer, the UART report) is checked in Icarus by `make -C fpga/ax7203 bram-sim`.
+Runs with T27_ROOT set (tools/test-t27.sh, the native CI job); skipped without the compiler.
 """
 from __future__ import annotations
 
 import ctypes
+import importlib.util
 import os
 import random
 import re
@@ -35,6 +37,13 @@ def build_library(source: Path, work: Path) -> ctypes.CDLL:
     subprocess.run(["cc", "-shared", "-fPIC", "-O1", "-Wno-parentheses-equality", str(header), "-o", str(library)],
                    check=True, capture_output=True)
     return ctypes.CDLL(str(library))
+
+
+def load_generator():
+    spec = importlib.util.spec_from_file_location("generate_bram_bench", ROOT / "tools/generate-bram-bench.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def random_lanes(rng: random.Random, count: int) -> int:
@@ -82,7 +91,7 @@ class BramTritPacking(unittest.TestCase):
                 self.assertEqual(self.codec.decode(fmt, word), lanes | (bad << 48), (fmt, hex(word)))
                 self.assertEqual(self.codec.on_comb(fmt, 1, word), lanes | (bad << 48))
 
-    def test_round_trip_and_density(self):
+    def test_round_trip_fits_the_36_bit_word(self):
         rng = random.Random(29)
         for fmt, lanes in model.LANES.items():
             for _ in range(500):
@@ -90,7 +99,19 @@ class BramTritPacking(unittest.TestCase):
                 word = self.codec.encode(fmt, value)
                 self.assertLess(word, 1 << 36)
                 self.assertEqual(self.codec.decode(fmt, word), value)
-        self.assertEqual([36 / k for k in (18, 20, 22)], [2.0, 1.8, 36 / 22])
+
+    def test_generator_banks_and_block_count(self):
+        generator = load_generator()
+        self.assertEqual(generator.bank_sizes(56320), [16384, 16384, 16384, 7168])
+        self.assertEqual(generator.bank_sizes(46080), [16384, 16384, 13312, 0])
+        with self.assertRaises(SystemExit):
+            generator.bank_sizes(4 * 16384 + 1)
+        blocks = [sum(-(-size // 1024) for size in generator.bank_sizes(1013760 // k)) for k in (18, 20, 22)]
+        self.assertEqual(blocks, [55, 50, 45])
+        text = generator.specialize(model.FMT_D5D2, 46080, model.DEFAULT_SEED)
+        for line in ("module TrinityBramTritEngineD5D2T27;", "const LANES: u32 = 22;", "const WORDS: u32 = 46080;",
+                     "const B2_WORDS: u32 = 13312;", "const B3_WORDS: u32 = 1;"):
+            self.assertIn(line, text)
 
     def test_lfsr_advance_and_lanes_match_the_model(self):
         rng = random.Random(30)

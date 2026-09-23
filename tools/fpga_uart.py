@@ -11,12 +11,13 @@ import time
 def read_port(port, baud, timeout, trigger, settle=0.5, quiet=0.5, trigger_byte=0xFF):
     """Trigger one run and return its bytes, from its `H` line through its `D` line.
 
-    Opening the port can glitch the device's RX line, and the trace player starts
-    a run on every falling edge of RX (one pending start is queued while a run is
-    active). Let every run started that way finish: wait for the settle time,
-    then until the line has been quiet. 0xFF has exactly one falling edge on the
-    wire (the start bit); a byte such as "r" has three, which the trace player
-    turns into a second run behind the first.
+    Opening the port can glitch the device's RX line and start a run, so wait for
+    the settle time and then until the line has been quiet before triggering.
+    The current trace player and the block-RAM bench accept a start only while
+    idle; players built before 2026-09-22 (f07a667 and earlier) queued one more
+    start for a trigger byte with several falling edges, so a byte such as "r"
+    (three edges) gave two runs there. 0xFF has exactly one falling edge (the
+    start bit) and gives one run on both, so it stays the default.
     """
     import serial  # pyserial
 

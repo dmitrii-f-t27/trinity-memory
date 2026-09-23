@@ -47,5 +47,6 @@ node tests/native/test_wasm.mjs
 "${PYTHON:-python3}" -m unittest discover -s tests/native -v
 "${PYTHON:-python3}" tests/t27_rtl.py --compiler "$T27_ROOT/target/release/t27c"
 "${PYTHON:-python3}" tests/t27_storage.py --compiler "$T27_ROOT/target/release/t27c"
+"${PYTHON:-python3}" -m unittest tests.test_bram_trit_packing -v
 sh tools/check-specs.sh
 echo "PASS native C regeneration and reference/CLI parity"

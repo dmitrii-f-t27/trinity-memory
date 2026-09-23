@@ -26,8 +26,12 @@ module TrinityBramTritEngineT27;
 // 46, 56 320 -> 56). An unused bank has one word and is never written. The banks
 // infer block RAM only with yosys `read_verilog -nomem2reg`; each read register
 // takes its bank's word directly and has no reset value.
-// Every statement reads a variable before the same tick writes it, so the C and
-// the Verilog backends agree.
+// Every statement of on_clock reads a variable before the same tick writes it.
+// The pinned gen-c does not lower the module-level assignments (enc_lanes, rdata,
+// got, w_bank, w_off), so its on_clock is not a model of the engine: the functions
+// are checked in C against tools/bram_trit_model.py
+// (tests/test_bram_trit_packing.py) and the engine as a whole in Verilog
+// (`make -C fpga/ax7203 bram-sim`).
 const FORMAT: u32 = 2;
 const LANES: u32 = 22;
 const WORDS: u32 = 90;

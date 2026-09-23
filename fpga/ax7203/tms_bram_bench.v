@@ -90,8 +90,11 @@ module tms_bram_bench_ax7203 #(
     wire [63:0] s2_chk;
     wire [31:0] engines = (ONLY < 0) ? 32'd3 : 32'd1;
 
-    generate if (ONLY < 0) begin : all_layouts
-        begin : slot0
+    // Slot 0 holds format F0 (all three: b2; one layout: that layout); slots 1 and 2
+    // hold d5 and d5d2 when all three are built, and are empty otherwise.
+    localparam integer F0 = (ONLY < 0) ? 0 : ONLY;
+    generate
+        if (F0 == 0) begin : slot0_b2
             wire [63:0] lanes, word, rdata, dec;
             TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd0), .op(32'd0), .x(lanes), .result(word));
             TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd0), .op(32'd1), .x(rdata), .result(dec));
@@ -102,8 +105,30 @@ module tms_bram_bench_ax7203 #(
                 .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
                 .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
             );
+        end else if (F0 == 1) begin : slot0_d5
+            wire [63:0] lanes, word, rdata, dec;
+            TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd0), .x(lanes), .result(word));
+            TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd1), .x(rdata), .result(dec));
+            TrinityBramTritEngineD5T27 eng (
+                .clk(clk), .rst_n(!rst), .en(tick), .ready(),
+                .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
+                .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),
+                .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
+                .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
+            );
+        end else begin : slot0_d5d2
+            wire [63:0] lanes, word, rdata, dec;
+            TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd2), .op(32'd0), .x(lanes), .result(word));
+            TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd2), .op(32'd1), .x(rdata), .result(dec));
+            TrinityBramTritEngineD5D2T27 eng (
+                .clk(clk), .rst_n(!rst), .en(tick), .ready(),
+                .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
+                .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),
+                .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
+                .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
+            );
         end
-        begin : slot1
+        if (ONLY < 0) begin : slot1_d5
             wire [63:0] lanes, word, rdata, dec;
             TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd0), .x(lanes), .result(word));
             TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd1), .x(rdata), .result(dec));
@@ -114,8 +139,13 @@ module tms_bram_bench_ax7203 #(
                 .write_ticks(s1_wt), .read_ticks(s1_rt), .bad_words(s1_bad), .invalid_groups(s1_inv),
                 .pos(s1_pos), .neg(s1_neg), .dot(s1_dot), .chk(s1_chk)
             );
+        end else begin : slot1_empty
+            assign s1_done = 1'b1;
+            assign s1_words = 32'd0; assign s1_fmt = 32'd0; assign s1_k = 32'd0; assign s1_wt = 32'd0;
+            assign s1_rt = 32'd0; assign s1_bad = 32'd0; assign s1_inv = 32'd0; assign s1_pos = 32'd0;
+            assign s1_neg = 32'd0; assign s1_dot = 64'sd0; assign s1_chk = 64'd0;
         end
-        begin : slot2
+        if (ONLY < 0) begin : slot2_d5d2
             wire [63:0] lanes, word, rdata, dec;
             TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd2), .op(32'd0), .x(lanes), .result(word));
             TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd2), .op(32'd1), .x(rdata), .result(dec));
@@ -126,51 +156,13 @@ module tms_bram_bench_ax7203 #(
                 .write_ticks(s2_wt), .read_ticks(s2_rt), .bad_words(s2_bad), .invalid_groups(s2_inv),
                 .pos(s2_pos), .neg(s2_neg), .dot(s2_dot), .chk(s2_chk)
             );
+        end else begin : slot2_empty
+            assign s2_done = 1'b1;
+            assign s2_words = 32'd0; assign s2_fmt = 32'd0; assign s2_k = 32'd0; assign s2_wt = 32'd0;
+            assign s2_rt = 32'd0; assign s2_bad = 32'd0; assign s2_inv = 32'd0; assign s2_pos = 32'd0;
+            assign s2_neg = 32'd0; assign s2_dot = 64'sd0; assign s2_chk = 64'd0;
         end
-    end else begin : one_layout
-        if (ONLY == 0) begin : b2
-            wire [63:0] lanes, word, rdata, dec;
-            TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd0), .op(32'd0), .x(lanes), .result(word));
-            TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd0), .op(32'd1), .x(rdata), .result(dec));
-            TrinityBramTritEngineB2T27 eng (
-                .clk(clk), .rst_n(!rst), .en(tick), .ready(),
-                .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
-                .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),
-                .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
-                .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
-            );
-        end else if (ONLY == 1) begin : d5
-            wire [63:0] lanes, word, rdata, dec;
-            TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd0), .x(lanes), .result(word));
-            TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd1), .x(rdata), .result(dec));
-            TrinityBramTritEngineD5T27 eng (
-                .clk(clk), .rst_n(!rst), .en(tick), .ready(),
-                .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
-                .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),
-                .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
-                .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
-            );
-        end else begin : d5d2
-            wire [63:0] lanes, word, rdata, dec;
-            TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd2), .op(32'd0), .x(lanes), .result(word));
-            TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd2), .op(32'd1), .x(rdata), .result(dec));
-            TrinityBramTritEngineD5D2T27 eng (
-                .clk(clk), .rst_n(!rst), .en(tick), .ready(),
-                .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
-                .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),
-                .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
-                .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
-            );
-        end
-        assign s1_done = 1'b1;
-        assign s1_words = 32'd0; assign s1_fmt = 32'd0; assign s1_k = 32'd0; assign s1_wt = 32'd0;
-        assign s1_rt = 32'd0; assign s1_bad = 32'd0; assign s1_inv = 32'd0; assign s1_pos = 32'd0;
-        assign s1_neg = 32'd0; assign s1_dot = 64'sd0; assign s1_chk = 64'd0;
-        assign s2_done = 1'b1;
-        assign s2_words = 32'd0; assign s2_fmt = 32'd0; assign s2_k = 32'd0; assign s2_wt = 32'd0;
-        assign s2_rt = 32'd0; assign s2_bad = 32'd0; assign s2_inv = 32'd0; assign s2_pos = 32'd0;
-        assign s2_neg = 32'd0; assign s2_dot = 64'sd0; assign s2_chk = 64'd0;
-    end endgenerate
+    endgenerate
 
     // ---- bench sequencer ----
     wire run_active, run_done, any_bad;
