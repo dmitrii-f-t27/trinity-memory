@@ -14,6 +14,7 @@
 #include "sparsity.h"
 #include "json.h"
 #include "json_writer.h"
+#include "formats.h"
 #include "tensorpack.h"
 #include "tensorpack_json.h"
 #include "tensorpack_cli.h"
