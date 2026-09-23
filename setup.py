@@ -59,8 +59,9 @@ class NativeBuild(build_py):
         shutil.copytree(directory / "rtl/resources", target / "rtl/resources")
         records = {path.relative_to(target).as_posix(): sha256(path.read_bytes()).hexdigest()
                    for path in sorted(target.rglob("*")) if path.is_file()}
+        # The version is pyproject.toml's, so the manifest cannot fall behind a release bump.
         manifest = {"schema": "trinity.native-wheel.v1", "compiler_revision": pin,
-                    "version": "0.3.0", "files": records}
+                    "version": self.distribution.get_version(), "files": records}
         (target / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
 
 
