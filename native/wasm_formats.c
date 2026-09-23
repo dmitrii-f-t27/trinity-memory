@@ -1,5 +1,7 @@
-/* WASM ABI for the external format readers and writers; the implementation is
- * unchanged compiler output (formats.h). The exports are listed in
+/* WASM ABI for the external format readers and writers, the real-layer
+ * matrix-vector product and the compatibility matrix cells; the
+ * implementation is unchanged compiler output (formats.h, compute.h,
+ * random.h, matvec.h, matrix.h). The exports are listed in
  * tools/build-t27-wasm.sh. Callers place their buffers above __heap_base and
  * grow the memory as needed. */
 #include <stddef.h>
@@ -13,6 +15,13 @@ double tm_json_strtod(uint8_t *text) { (void)text; __builtin_trap(); }
 /* The Ternary Check contract (t27/ternary_contract.t27): the strict reader and
  * writer behind the CLI contract, class tokens, comparison and verdicts. */
 #include "ternary_contract.h"
+/* The real-layer product (issue #33): tm_dot_i64 of compute.h, the CPython
+ * random stream of random.h and t27/matvec.t27, which needs both. */
+#include "compute.h"
+#include "random.h"
+#include "matvec.h"
+/* The compatibility matrix cells (issue #32): t27/matrix.t27 over formats.h. */
+#include "matrix.h"
 
 /* Freestanding wasm32 has no compiler runtime. clang turns the u64 overflow
  * test in tf_times (a > max / b, then a * b) into a 128-bit multiply, which
