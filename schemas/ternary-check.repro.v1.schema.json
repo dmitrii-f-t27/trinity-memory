@@ -1,0 +1,51 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/dmitrii-f-t27/trinity-memory/blob/master/schemas/ternary-check.repro.v1.schema.json",
+ "title": "trinity.ternary-check.repro.v1",
+ "description": "Minimal reproduction of one mismatching cell of reports/ternary-check.json (reports/ternary-check/repro/<cell>.json): the explanation, the counts, and weights with their file offsets, bytes and decoded trits, so that the difference can be checked with byte-range reads of the pinned files.",
+ "type": "object",
+ "required": ["schema", "cell", "status", "component", "explanation", "explanation_text", "weights"],
+ "properties": {
+  "schema": {"const": "trinity.ternary-check.repro.v1"},
+  "cell": {"type": "string", "pattern": "^[a-z0-9_-]+--[a-z0-9_]+$"},
+  "status": {"const": "mismatch"},
+  "component": {"enum": ["trits", "scales"]},
+  "explanation": {"enum": ["scale_bf16_rounding", "tie_split", "scale_zero_weights", "unexplained"]},
+  "explanation_text": {"type": "string"},
+  "weights": {
+   "type": "object", "required": ["compared"],
+   "additionalProperties": {"type": "integer", "minimum": -1},
+   "properties": {"compared": {"type": "integer", "minimum": 1}}
+  },
+  "sample_weights": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/weight"}},
+  "first_mismatches": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/weight"}},
+  "same_bf16_value_both_trits": {
+   "type": "object", "minProperties": 2,
+   "additionalProperties": {"type": "array", "items": {"$ref": "#/$defs/weight"}}
+  },
+  "check": {"type": "string"}
+ },
+ "allOf": [
+  {"if": {"properties": {"explanation": {"const": "tie_split"}}},
+   "then": {"required": ["weight_scale", "tie", "absmean", "counts_at_ties", "first_mismatches",
+                         "same_bf16_value_both_trits", "check"]},
+   "else": {"required": ["reference", "stored", "sample_weights"]}}
+ ],
+ "$defs": {
+  "location": {
+   "type": "object", "required": ["file_offset", "byte_hex", "position", "position_is", "trit"],
+   "properties": {"file_offset": {"type": "integer", "minimum": 0}, "byte_hex": {"type": "string", "pattern": "^[0-9a-f]{2}$"},
+                  "position": {"type": "integer", "minimum": 0}, "position_is": {"type": "string"},
+                  "trit": {"type": "integer", "minimum": -2, "maximum": 2},
+                  "scale_file_offset": {"type": "integer", "minimum": 0},
+                  "scale_bytes_hex": {"type": "string", "pattern": "^([0-9a-f]{2})+$"}}
+  },
+  "weight": {
+   "type": "object", "required": ["index", "row", "col"],
+   "properties": {"index": {"type": "integer", "minimum": 0}, "row": {"type": "integer", "minimum": 0},
+                  "col": {"type": "integer", "minimum": 0},
+                  "reference": {"$ref": "#/$defs/location"}, "stored": {"$ref": "#/$defs/location"},
+                  "packed": {"$ref": "#/$defs/location"}, "i2_s": {"$ref": "#/$defs/location"}}
+  }
+ }
+}

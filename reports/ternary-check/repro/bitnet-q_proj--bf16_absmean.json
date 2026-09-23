@@ -1,0 +1,395 @@
+{
+ "schema": "trinity.ternary-check.repro.v1",
+ "cell": "bitnet-q_proj--bf16_absmean",
+ "status": "mismatch",
+ "component": "trits",
+ "explanation": "tie_split",
+ "explanation_text": "every differing trit is at a weight whose bf16 master value is +-0.5 x weight_scale, and the packed checkpoint stores both 0 and +-1 for that value, so no rule applied to the published bf16 values gives the packed trits (item 2 of docs/ternary-check.md)",
+ "weights": {
+  "compared": 6553600,
+  "trits_differ": 79719,
+  "first": 35
+ },
+ "weight_scale": {
+  "word": 16284,
+  "value": 1.21875,
+  "source": {
+   "repo": "microsoft/bitnet-b1.58-2B-4T",
+   "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+   "file": "model.safetensors",
+   "range": [
+    656760922,
+    656760924
+   ]
+  }
+ },
+ "tie": {
+  "word": 16156,
+  "value": 0.609375,
+  "times_s": 0.499958773402415
+ },
+ "absmean": {
+  "mean_abs": 1.2188504981180044,
+  "s": 0.8204451666090913
+ },
+ "counts_at_ties": {
+  "positive": {
+   "packed_nonzero": 39708,
+   "packed_zero": 41560
+  },
+  "negative": {
+   "packed_nonzero": 40011,
+   "packed_zero": 41944
+  },
+  "differ_elsewhere": 0
+ },
+ "first_mismatches": [
+  {
+   "index": 35,
+   "row": 0,
+   "col": 35,
+   "master": {
+    "file_offset": 779290734,
+    "bytes_hex": "1c3f",
+    "word": 16156,
+    "value": 0.609375
+   },
+   "packed": {
+    "file_offset": 672931863,
+    "byte_hex": "56",
+    "position": 0,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 1
+   },
+   "i2_s": {
+    "file_offset": 680399651,
+    "byte_hex": "29",
+    "position": 4,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 1,
+    "scale_file_offset": 682038048,
+    "scale_bytes_hex": "6f039c3f"
+   },
+   "absmean_trit": 0
+  },
+  {
+   "index": 61,
+   "row": 0,
+   "col": 61,
+   "master": {
+    "file_offset": 779290786,
+    "bytes_hex": "1cbf",
+    "word": 48924,
+    "value": -0.609375
+   },
+   "packed": {
+    "file_offset": 672931889,
+    "byte_hex": "50",
+    "position": 0,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": -1
+   },
+   "i2_s": {
+    "file_offset": 680399677,
+    "byte_hex": "06",
+    "position": 4,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": -1,
+    "scale_file_offset": 682038048,
+    "scale_bytes_hex": "6f039c3f"
+   },
+   "absmean_trit": 0
+  },
+  {
+   "index": 73,
+   "row": 0,
+   "col": 73,
+   "master": {
+    "file_offset": 779290810,
+    "bytes_hex": "1c3f",
+    "word": 16156,
+    "value": 0.609375
+   },
+   "packed": {
+    "file_offset": 672931901,
+    "byte_hex": "4a",
+    "position": 0,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 1
+   },
+   "i2_s": {
+    "file_offset": 680399657,
+    "byte_hex": "19",
+    "position": 2,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 1,
+    "scale_file_offset": 682038048,
+    "scale_bytes_hex": "6f039c3f"
+   },
+   "absmean_trit": 0
+  },
+  {
+   "index": 76,
+   "row": 0,
+   "col": 76,
+   "master": {
+    "file_offset": 779290816,
+    "bytes_hex": "1cbf",
+    "word": 48924,
+    "value": -0.609375
+   },
+   "packed": {
+    "file_offset": 672931904,
+    "byte_hex": "54",
+    "position": 0,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": -1
+   },
+   "i2_s": {
+    "file_offset": 680399660,
+    "byte_hex": "a1",
+    "position": 2,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": -1,
+    "scale_file_offset": 682038048,
+    "scale_bytes_hex": "6f039c3f"
+   },
+   "absmean_trit": 0
+  }
+ ],
+ "same_bf16_value_both_trits": {
+  "+tie_packed_nonzero": [
+   {
+    "index": 35,
+    "row": 0,
+    "col": 35,
+    "master": {
+     "file_offset": 779290734,
+     "bytes_hex": "1c3f",
+     "word": 16156,
+     "value": 0.609375
+    },
+    "packed": {
+     "file_offset": 672931863,
+     "byte_hex": "56",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 1
+    },
+    "i2_s": {
+     "file_offset": 680399651,
+     "byte_hex": "29",
+     "position": 4,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 1,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   },
+   {
+    "index": 73,
+    "row": 0,
+    "col": 73,
+    "master": {
+     "file_offset": 779290810,
+     "bytes_hex": "1c3f",
+     "word": 16156,
+     "value": 0.609375
+    },
+    "packed": {
+     "file_offset": 672931901,
+     "byte_hex": "4a",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 1
+    },
+    "i2_s": {
+     "file_offset": 680399657,
+     "byte_hex": "19",
+     "position": 2,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 1,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   }
+  ],
+  "+tie_packed_zero": [
+   {
+    "index": 7,
+    "row": 0,
+    "col": 7,
+    "master": {
+     "file_offset": 779290678,
+     "bytes_hex": "1c3f",
+     "word": 16156,
+     "value": 0.609375
+    },
+    "packed": {
+     "file_offset": 672931835,
+     "byte_hex": "45",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0
+    },
+    "i2_s": {
+     "file_offset": 680399655,
+     "byte_hex": "55",
+     "position": 6,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   },
+   {
+    "index": 26,
+    "row": 0,
+    "col": 26,
+    "master": {
+     "file_offset": 779290716,
+     "bytes_hex": "1c3f",
+     "word": 16156,
+     "value": 0.609375
+    },
+    "packed": {
+     "file_offset": 672931854,
+     "byte_hex": "65",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0
+    },
+    "i2_s": {
+     "file_offset": 680399674,
+     "byte_hex": "55",
+     "position": 6,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   }
+  ],
+  "-tie_packed_nonzero": [
+   {
+    "index": 61,
+    "row": 0,
+    "col": 61,
+    "master": {
+     "file_offset": 779290786,
+     "bytes_hex": "1cbf",
+     "word": 48924,
+     "value": -0.609375
+    },
+    "packed": {
+     "file_offset": 672931889,
+     "byte_hex": "50",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": -1
+    },
+    "i2_s": {
+     "file_offset": 680399677,
+     "byte_hex": "06",
+     "position": 4,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": -1,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   },
+   {
+    "index": 76,
+    "row": 0,
+    "col": 76,
+    "master": {
+     "file_offset": 779290816,
+     "bytes_hex": "1cbf",
+     "word": 48924,
+     "value": -0.609375
+    },
+    "packed": {
+     "file_offset": 672931904,
+     "byte_hex": "54",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": -1
+    },
+    "i2_s": {
+     "file_offset": 680399660,
+     "byte_hex": "a1",
+     "position": 2,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": -1,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   }
+  ],
+  "-tie_packed_zero": [
+   {
+    "index": 6,
+    "row": 0,
+    "col": 6,
+    "master": {
+     "file_offset": 779290676,
+     "bytes_hex": "1cbf",
+     "word": 48924,
+     "value": -0.609375
+    },
+    "packed": {
+     "file_offset": 672931834,
+     "byte_hex": "55",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0
+    },
+    "i2_s": {
+     "file_offset": 680399654,
+     "byte_hex": "44",
+     "position": 6,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   },
+   {
+    "index": 10,
+    "row": 0,
+    "col": 10,
+    "master": {
+     "file_offset": 779290684,
+     "bytes_hex": "1cbf",
+     "word": 48924,
+     "value": -0.609375
+    },
+    "packed": {
+     "file_offset": 672931838,
+     "byte_hex": "55",
+     "position": 0,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0
+    },
+    "i2_s": {
+     "file_offset": 680399658,
+     "byte_hex": "54",
+     "position": 6,
+     "position_is": "lowest bit of the 2-bit code",
+     "trit": 0,
+     "scale_file_offset": 682038048,
+     "scale_bytes_hex": "6f039c3f"
+    },
+    "absmean_trit": 0
+   }
+  ]
+ },
+ "check": "the listed weights share one bf16 master word, yet the packed checkpoint (and I2_S) store +-1 for some and 0 for others; WeightQuant gives 0 for all of them (|w * s| < 0.5)"
+}

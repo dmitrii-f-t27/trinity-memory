@@ -1,0 +1,303 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/dmitrii-f-t27/trinity-memory/blob/master/schemas/ternary-check.v1.schema.json",
+ "title": "trinity.ternary-check.v1",
+ "description": "Compatibility matrix of t27 Ternary Check (issue #32): every real tensor x every storage format, decided by t27/matrix.t27. Written by python3 -m trinity_memory.ternary_check as reports/ternary-check.json; the minimal reproductions of its mismatches follow schemas/ternary-check.repro.v1.schema.json.",
+ "type": "object",
+ "required": ["schema", "issue", "reproduce", "compiler", "fixtures", "run_metadata", "comparison", "taxonomy",
+              "upstream", "formats", "tensors", "cells", "derived", "summary", "matvec"],
+ "additionalProperties": false,
+ "properties": {
+  "schema": {"const": "trinity.ternary-check.v1"},
+  "issue": {"type": "string"},
+  "reproduce": {"type": "string"},
+  "compiler": {
+   "type": "object", "required": ["repo", "commit"], "additionalProperties": false,
+   "properties": {"repo": {"type": "string"}, "commit": {"$ref": "#/$defs/sha1"}}
+  },
+  "fixtures": {"type": "string"},
+  "run_metadata": {"type": "string"},
+  "comparison": {"type": "string"},
+  "taxonomy": {
+   "type": "object",
+   "required": ["cell_status", "explanations", "reasons", "provenance", "errors", "flags", "source"],
+   "additionalProperties": false,
+   "properties": {
+    "cell_status": {
+     "type": "object", "additionalProperties": false, "required": ["match", "mismatch", "not-representable"],
+     "properties": {"match": {"const": 0}, "mismatch": {"const": 1}, "not-representable": {"const": 2}}
+    },
+    "explanations": {
+     "type": "object", "additionalProperties": false,
+     "required": ["scale_bf16_rounding", "tie_split", "scale_zero_weights", "unexplained"],
+     "properties": {
+      "scale_bf16_rounding": {"$ref": "#/$defs/coded_text"},
+      "tie_split": {"$ref": "#/$defs/coded_text"},
+      "scale_zero_weights": {"$ref": "#/$defs/coded_text"},
+      "unexplained": {"$ref": "#/$defs/coded_text"}
+     }
+    },
+    "reasons": {
+     "type": "object", "additionalProperties": false,
+     "required": ["shape", "binary_only", "code_outside", "group_scales_differ", "scale_precision"],
+     "properties": {
+      "shape": {"$ref": "#/$defs/coded_unit"},
+      "binary_only": {"$ref": "#/$defs/coded_unit"},
+      "code_outside": {"$ref": "#/$defs/coded_unit"},
+      "group_scales_differ": {"$ref": "#/$defs/coded_unit"},
+      "scale_precision": {"$ref": "#/$defs/coded_unit"}
+     }
+    },
+    "provenance": {
+     "type": "object", "additionalProperties": false,
+     "required": ["reference", "published", "t27_round_trip", "upstream_encoder", "derived"],
+     "properties": {
+      "reference": {"type": "string"}, "published": {"type": "string"}, "t27_round_trip": {"type": "string"},
+      "upstream_encoder": {"type": "string"}, "derived": {"type": "string"}
+     }
+    },
+    "errors": {"type": "object", "additionalProperties": {"type": "integer", "maximum": -50}},
+    "flags": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "source": {"type": "string"}
+   }
+  },
+  "upstream": {
+   "type": "object", "required": ["llama.cpp"], "additionalProperties": false,
+   "properties": {
+    "llama.cpp": {
+     "type": "object", "additionalProperties": false,
+     "required": ["repo", "commit", "lock", "files", "functions", "writer", "input", "applies_to"],
+     "properties": {
+      "repo": {"type": "string"}, "commit": {"$ref": "#/$defs/sha1"}, "lock": {"type": "string"},
+      "files": {"type": "object", "additionalProperties": {"$ref": "#/$defs/sha256"}},
+      "functions": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[^:]+:[0-9]+-[0-9]+$"}},
+      "writer": {"type": "string"}, "input": {"type": "string"}, "applies_to": {"type": "string"}
+     }
+    }
+   }
+  },
+  "formats": {
+   "type": "array", "minItems": 5,
+   "items": {
+    "type": "object", "additionalProperties": false,
+    "required": ["id", "name", "t27_format", "scale_dtype", "scale_group", "group_argument", "writer"],
+    "properties": {
+     "id": {"$ref": "#/$defs/column"}, "name": {"type": "string"},
+     "t27_format": {"type": "integer", "minimum": 1, "maximum": 10},
+     "scale_dtype": {"$ref": "#/$defs/dtype"}, "scale_group": {"type": "integer", "minimum": 0},
+     "group_argument": {"type": "integer", "minimum": 0}, "writer": {"type": "string"}
+    }
+   }
+  },
+  "tensors": {
+   "type": "array", "minItems": 2,
+   "items": {
+    "type": "object", "additionalProperties": false,
+    "required": ["id", "model", "family", "names", "shape", "weights", "reference"],
+    "properties": {
+     "id": {"$ref": "#/$defs/tensor_id"}, "model": {"type": "string"},
+     "family": {"enum": ["bitnet", "bonsai"]},
+     "names": {"type": "object", "additionalProperties": {"type": "string"}},
+     "shape": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1}},
+     "weights": {"type": "integer", "minimum": 1},
+     "reference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["column", "source", "trits_sha256_le", "scale"],
+      "properties": {
+       "column": {"$ref": "#/$defs/column"},
+       "source": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+       "trits_sha256_le": {"$ref": "#/$defs/sha256"},
+       "scale": {
+        "type": "object", "additionalProperties": false, "required": ["dtype", "group", "count", "first_word"],
+        "properties": {"dtype": {"$ref": "#/$defs/dtype"}, "group": {"type": "integer", "minimum": 0},
+                       "count": {"type": "integer", "minimum": 1}, "first_word": {"type": "integer", "minimum": 0}}
+       }
+      }
+     },
+     "runtime_requirements": {
+      "type": "object", "additionalProperties": false, "required": ["hadamard_rotation", "evidence", "note"],
+      "properties": {"hadamard_rotation": {"type": "boolean"}, "evidence": {"type": "string"}, "note": {"type": "string"}}
+     }
+    }
+   }
+  },
+  "cells": {"type": "array", "minItems": 10, "items": {"$ref": "#/$defs/cell"}},
+  "derived": {"type": "array", "items": {"$ref": "#/$defs/derived_cell"}},
+  "summary": {
+   "type": "object", "additionalProperties": false,
+   "required": ["tensors", "columns", "cells", "status", "provenance", "families", "derived_cells", "mismatches_with_repro"],
+   "properties": {
+    "tensors": {"type": "integer", "minimum": 1}, "columns": {"type": "integer", "minimum": 5},
+    "cells": {"type": "integer", "minimum": 10},
+    "status": {"type": "object", "additionalProperties": false,
+               "properties": {"match": {"type": "integer"}, "mismatch": {"type": "integer"},
+                              "not-representable": {"type": "integer"}}},
+    "provenance": {"type": "object", "additionalProperties": {"type": "integer"}},
+    "families": {
+     "type": "object", "minProperties": 2,
+     "additionalProperties": {
+      "type": "object", "additionalProperties": false, "required": ["formats", "third_party_formats"],
+      "properties": {"formats": {"type": "integer", "minimum": 5},
+                     "third_party_formats": {"type": "array", "items": {"$ref": "#/$defs/column"}}}
+     }
+    },
+    "derived_cells": {"type": "integer", "minimum": 0},
+    "mismatches_with_repro": {"type": "integer", "minimum": 0}
+   }
+  },
+  "matvec": {
+   "type": "object", "required": ["schema", "issue", "activations", "arithmetic", "statuses", "tensors"],
+   "properties": {"schema": {"const": "trinity.ternary-check.matvec.v1"}, "tensors": {"type": "array", "minItems": 1}}
+  }
+ },
+ "$defs": {
+  "sha1": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+  "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+  "dtype": {"enum": ["F16", "BF16", "F32"]},
+  "status": {"enum": ["match", "mismatch", "not-representable"]},
+  "column": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+  "tensor_id": {"type": "string", "pattern": "^[a-z0-9_]+-[a-z0-9_]+$"},
+  "explanation": {"enum": [null, "scale_bf16_rounding", "tie_split", "scale_zero_weights", "unexplained"]},
+  "index": {"type": "integer", "minimum": -1},
+  "coded_text": {
+   "type": "object", "additionalProperties": false, "required": ["code", "text"],
+   "properties": {"code": {"type": "integer", "minimum": 1}, "text": {"type": "string"}}
+  },
+  "coded_unit": {
+   "type": "object", "additionalProperties": false, "required": ["code", "unit"],
+   "properties": {"code": {"type": "integer", "minimum": 0}, "unit": {"type": "string"}}
+  },
+  "source": {
+   "type": "object",
+   "properties": {
+    "repo": {"type": "string"}, "revision": {"$ref": "#/$defs/sha1"}, "file": {"type": "string"},
+    "upstream": {"type": "string"}, "writer": {"type": "string"},
+    "range": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 0}}
+   },
+   "required": ["file", "range"]
+  },
+  "trits": {
+   "type": "object", "additionalProperties": false, "required": ["compared", "differ", "first", "explanation"],
+   "properties": {"compared": {"type": "integer", "minimum": 1}, "differ": {"type": "integer", "minimum": 0},
+                  "first": {"$ref": "#/$defs/index"}, "explanation": {"$ref": "#/$defs/explanation"}}
+  },
+  "scales": {
+   "type": "object", "additionalProperties": false,
+   "required": ["dtype", "group", "count", "first_word", "words_sha256_le", "differ", "first", "explanation"],
+   "properties": {"dtype": {"$ref": "#/$defs/dtype"}, "group": {"type": "integer", "minimum": 0},
+                  "count": {"type": "integer", "minimum": 1}, "first_word": {"type": "integer", "minimum": 0},
+                  "words_sha256_le": {"$ref": "#/$defs/sha256"}, "differ": {"type": "integer", "minimum": 0},
+                  "first": {"$ref": "#/$defs/index"}, "explanation": {"$ref": "#/$defs/explanation"}}
+  },
+  "byte_check": {
+   "type": "object", "additionalProperties": false, "required": ["differ_bytes", "first", "note"],
+   "properties": {"differ_bytes": {"type": "integer", "minimum": 0}, "first": {"$ref": "#/$defs/index"},
+                  "note": {"type": "string"}}
+  },
+  "flags": {
+   "type": "object", "additionalProperties": false,
+   "required": ["outside_ternary", "noncanonical_base3", "scale_negative", "scale_zero", "trailer_nonzero",
+                "padding_nonzero", "affine_not_ternary"],
+   "properties": {
+    "outside_ternary": {"type": "integer", "minimum": 0}, "noncanonical_base3": {"type": "integer", "minimum": 0},
+    "scale_negative": {"type": "integer", "minimum": 0}, "scale_zero": {"type": "integer", "minimum": 0},
+    "trailer_nonzero": {"type": "integer", "minimum": 0}, "padding_nonzero": {"type": "integer", "minimum": 0},
+    "affine_not_ternary": {"type": "integer", "minimum": 0}
+   }
+  },
+  "reason": {
+   "type": "object", "additionalProperties": false, "required": ["reason", "count", "of", "first", "unit"],
+   "properties": {"reason": {"enum": ["shape", "binary_only", "code_outside", "group_scales_differ", "scale_precision"]},
+                  "count": {"type": "integer", "minimum": 1}, "of": {"type": "integer", "minimum": 1},
+                  "first": {"$ref": "#/$defs/index"},
+                  "unit": {"type": "string"}}
+  },
+  "repro_path": {"type": "string", "pattern": "^reports/ternary-check/repro/[a-z0-9_-]+--[a-z0-9_]+\\.json$"},
+  "cell": {
+   "type": "object",
+   "required": ["id", "tensor", "format", "provenance", "evidence", "status"],
+   "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9_-]+--[a-z0-9_]+$"},
+    "tensor": {"$ref": "#/$defs/tensor_id"}, "format": {"$ref": "#/$defs/column"},
+    "provenance": {"enum": ["reference", "published", "t27_round_trip", "upstream_encoder"]},
+    "evidence": {"enum": ["third-party", "t27"]},
+    "status": {"$ref": "#/$defs/status"},
+    "source": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/source"}},
+    "trits": {"$ref": "#/$defs/trits"}, "scales": {"$ref": "#/$defs/scales"}, "flags": {"$ref": "#/$defs/flags"},
+    "reasons": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/reason"}},
+    "stored_bytes": {"type": "integer", "minimum": 1}, "bits_per_weight": {"type": "number", "exclusiveMinimum": 0},
+    "outside_ternary": {"type": "integer", "minimum": 0},
+    "bytes_sha256": {"$ref": "#/$defs/sha256"},
+    "t27_reencode": {"$ref": "#/$defs/byte_check"}, "t27_round_trip_bytes": {"$ref": "#/$defs/byte_check"},
+    "repro": {"$ref": "#/$defs/repro_path"}, "note": {"type": "string"}
+   },
+   "additionalProperties": false,
+   "allOf": [
+    {"if": {"properties": {"status": {"const": "not-representable"}}},
+     "then": {"required": ["reasons"], "not": {"anyOf": [{"required": ["trits"]}, {"required": ["scales"]}]}},
+     "else": {"required": ["trits", "scales", "stored_bytes", "bits_per_weight"], "not": {"required": ["reasons"]}}},
+    {"if": {"properties": {"status": {"const": "match"}}},
+     "then": {"properties": {"trits": {"properties": {"differ": {"const": 0}}},
+                             "scales": {"properties": {"differ": {"const": 0}}}}}},
+    {"if": {"properties": {"status": {"const": "mismatch"}}}, "then": {"required": ["repro"]}},
+    {"if": {"properties": {"provenance": {"enum": ["reference", "published", "upstream_encoder"]},
+                           "status": {"enum": ["match", "mismatch"]}}},
+     "then": {"required": ["source", "flags", "t27_reencode"]}},
+    {"if": {"properties": {"provenance": {"const": "t27_round_trip"}}},
+     "then": {"properties": {"evidence": {"const": "t27"}}}},
+    {"if": {"properties": {"provenance": {"enum": ["reference", "published"]}}},
+     "then": {"properties": {"evidence": {"const": "third-party"}}}}
+   ]
+  },
+  "derived_cell": {
+   "type": "object", "additionalProperties": false,
+   "required": ["id", "tensor", "format", "provenance", "evidence", "derivation", "source", "status", "trits",
+                "scales", "boundary_weights", "ties", "triple_check"],
+   "properties": {
+    "id": {"type": "string", "pattern": "^[a-z0-9_-]+--bf16_absmean$"},
+    "tensor": {"$ref": "#/$defs/tensor_id"}, "format": {"const": "bf16_absmean"},
+    "provenance": {"const": "derived"}, "evidence": {"const": "derived"},
+    "derivation": {"type": "string"}, "source": {"$ref": "#/$defs/source"},
+    "status": {"enum": ["match", "mismatch"]},
+    "trits": {"$ref": "#/$defs/trits"},
+    "scales": {
+     "type": "object", "additionalProperties": false, "required": ["compared", "mean_abs", "s", "note"],
+     "properties": {"compared": {"const": false}, "mean_abs": {"type": "number"}, "s": {"type": "number"},
+                    "note": {"type": "string"}}
+    },
+    "boundary_weights": {"type": "integer", "minimum": 0},
+    "ties": {
+     "type": "object", "additionalProperties": false,
+     "required": ["tie_word", "tie_value", "tie_times_s", "positive", "negative", "differ_at_ties",
+                  "differ_elsewhere", "first_elsewhere", "derived_nonzero_at_ties"],
+     "properties": {
+      "tie_word": {"type": "integer", "minimum": 0, "maximum": 65535}, "tie_value": {"type": "number"},
+      "tie_times_s": {"type": "number"},
+      "positive": {"$ref": "#/$defs/tie_split"}, "negative": {"$ref": "#/$defs/tie_split"},
+      "differ_at_ties": {"type": "integer", "minimum": 0}, "differ_elsewhere": {"type": "integer", "minimum": 0},
+      "first_elsewhere": {"$ref": "#/$defs/index"}, "derived_nonzero_at_ties": {"type": "integer", "minimum": 0}
+     }
+    },
+    "triple_check": {
+     "type": "object", "additionalProperties": false,
+     "required": ["tensor", "bf16_absmean_vs_hf_packed", "hf_packed_vs_i2_s", "bf16_absmean_vs_i2_s", "holds"],
+     "properties": {
+      "tensor": {"$ref": "#/$defs/tensor_id"},
+      "bf16_absmean_vs_hf_packed": {"$ref": "#/$defs/trits"}, "hf_packed_vs_i2_s": {"$ref": "#/$defs/trits"},
+      "bf16_absmean_vs_i2_s": {"$ref": "#/$defs/trits"},
+      "holds": {
+       "type": "object", "additionalProperties": false, "required": ["packed_equals_i2_s", "absmean_equals_packed"],
+       "properties": {"packed_equals_i2_s": {"type": "boolean"}, "absmean_equals_packed": {"type": "boolean"}}
+      }
+     }
+    },
+    "repro": {"$ref": "#/$defs/repro_path"}
+   },
+   "allOf": [{"if": {"properties": {"status": {"const": "mismatch"}}}, "then": {"required": ["repro"]}}]
+  },
+  "tie_split": {
+   "type": "object", "additionalProperties": false, "required": ["packed_nonzero", "packed_zero"],
+   "properties": {"packed_nonzero": {"type": "integer", "minimum": 0}, "packed_zero": {"type": "integer", "minimum": 0}}
+  }
+ }
+}

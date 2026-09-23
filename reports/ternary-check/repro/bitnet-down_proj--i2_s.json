@@ -1,0 +1,93 @@
+{
+ "schema": "trinity.ternary-check.repro.v1",
+ "cell": "bitnet-down_proj--i2_s",
+ "status": "mismatch",
+ "component": "scales",
+ "explanation": "scale_bf16_rounding",
+ "explanation_text": "every differing scale pair is a bf16 word and an f32 word, and the bf16 word is the f32 word rounded to nearest-even (item 1 of docs/ternary-check.md)",
+ "weights": {
+  "compared": 17694720,
+  "scales_differ": 17694720,
+  "first": 0,
+  "trits_differ": 0
+ },
+ "reference": {
+  "column": "hf_packed",
+  "source": {
+   "repo": "microsoft/bitnet-b1.58-2B-4T",
+   "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+   "file": "model.safetensors",
+   "range": [
+    656736848,
+    656736850
+   ]
+  },
+  "bytes_hex": "0a40",
+  "word": 16394,
+  "dtype": "BF16",
+  "value": 2.15625
+ },
+ "stored": {
+  "column": "i2_s",
+  "source": {
+   "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+   "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+   "file": "ggml-model-i2_s.gguf",
+   "range": [
+    665032320,
+    669456032
+   ]
+  },
+  "file_offset": 669456000,
+  "bytes_hex": "3c710a40",
+  "word": 1074426172,
+  "dtype": "F32",
+  "value": 2.163161277770996,
+  "bf16_rounding": 16394
+ },
+ "sample_weights": [
+  {
+   "index": 0,
+   "row": 0,
+   "col": 0,
+   "reference": {
+    "file_offset": 657612788,
+    "byte_hex": "a0",
+    "position": 0,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": -1
+   },
+   "stored": {
+    "file_offset": 665032320,
+    "byte_hex": "25",
+    "position": 6,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": -1,
+    "scale_file_offset": 669456000,
+    "scale_bytes_hex": "3c710a40"
+   }
+  },
+  {
+   "index": 1,
+   "row": 0,
+   "col": 1,
+   "reference": {
+    "file_offset": 657612789,
+    "byte_hex": "a9",
+    "position": 0,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 0
+   },
+   "stored": {
+    "file_offset": 665032321,
+    "byte_hex": "69",
+    "position": 6,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 0,
+    "scale_file_offset": 669456000,
+    "scale_bytes_hex": "3c710a40"
+   }
+  }
+ ],
+ "check": "read the two scale words at the offsets above: the bf16 word equals the f32 word rounded to nearest-even (t27 tmx_bf16_round), and the codes of the sampled weights give the same trits"
+}

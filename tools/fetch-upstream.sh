@@ -3,7 +3,9 @@
 # and verify each against its sha256. Nothing fetched here is committed: the
 # sources keep their own licenses and are only compiled by test harnesses.
 #   sh tools/fetch-upstream.sh [tests/upstream/llama.cpp.lock.json]
-# A file already present with the locked sha256 is not downloaded again.
+# A file already present with the locked sha256 is not downloaded again. With
+# TRINITY_UPSTREAM_OFFLINE=1 nothing is downloaded: a missing file or one with
+# another sha256 fails.
 set -eu
 cd "$(dirname "$0")/.."
 lock=${1:-tests/upstream/llama.cpp.lock.json}
@@ -26,6 +28,10 @@ printf '%s\n' "$entries" | while read -r repo commit directory path sha; do
     if [ -f "$target" ] && [ "$(digest "$target")" = "$sha" ]; then
         echo "ok (cached) $repo@$commit $path"
         continue
+    fi
+    if [ "${TRINITY_UPSTREAM_OFFLINE:-0}" = 1 ]; then
+        echo "TRINITY_UPSTREAM_OFFLINE=1: $target is missing or differs from the lock ($repo@$commit $path)" >&2
+        exit 1
     fi
     mkdir -p "$(dirname "$target")"
     url="https://raw.githubusercontent.com/$repo/$commit/$path"
