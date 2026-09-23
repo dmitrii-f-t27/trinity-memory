@@ -46,17 +46,32 @@ static int t1_digits(void) {
     return bad != 0 || noncanon != 13;
 }
 
-/* T2: integer parity on arbitrary bytes, including TQ1_0 bytes the quantizer
- * never emits and TQ2_0 code 3. With x.d = y.d = 1 every float is an exact
- * integer, so the four results must be equal. */
+/* The fifth base-3 digit of a TQ1_0 qh byte (the digit rule of T1 at
+ * position 4). quantize_row_tq1_0_ref always writes 0 there and the
+ * dequantizer never reads it; the t27 reader rejects any other value
+ * (TF_ERR_PADDING), while upstream decodes the block silently. */
+static int qh_padding_digit(uint8_t b) { uint8_t q = (uint8_t)(b * 81); return ((uint16_t)q * 3) >> 8; }
+
+/* T2: integer parity on arbitrary bytes, including TQ1_0 qs bytes the
+ * quantizer never emits and TQ2_0 code 3. With x.d = y.d = 1 every float is
+ * an exact integer, so the four results must be equal. In 7 of 8 rows the
+ * TQ1_0 qh bytes are drawn with a zero padding digit; in every 8th row they
+ * are arbitrary, upstream still decodes them, and t27 must return
+ * TF_ERR_PADDING exactly when some qh byte has a nonzero padding digit. */
 static int t2_kernels(int rows, int ylo, int yhi) {
     static block_tq1_0 x1[NB]; static block_tq2_0 x2[NB]; static block_q8_K y[NB];
     static float deq[K]; static int32_t vals[K]; static uint32_t sc[NB];
-    long bad = 0, code3_rows = 0;
+    long bad = 0, code3_rows = 0, padding_rows = 0;
     for (int r = 0; r < rows; ++r) {
+        int padding = 0;
         for (int b = 0; b < NB; ++b) {
             for (size_t j = 0; j < sizeof x1[b].qs; ++j) x1[b].qs[j] = (uint8_t)rnd();
-            for (size_t j = 0; j < sizeof x1[b].qh; ++j) x1[b].qh[j] = (uint8_t)rnd();
+            for (size_t j = 0; j < sizeof x1[b].qh; ++j) {
+                uint8_t v;
+                do { v = (uint8_t)rnd(); } while (r % 8 != 7 && qh_padding_digit(v) != 0);
+                x1[b].qh[j] = v;
+                padding |= qh_padding_digit(v) != 0;
+            }
             for (size_t j = 0; j < sizeof x2[b].qs; ++j) x2[b].qs[j] = (uint8_t)rnd();
             x1[b].d = x2[b].d = 0x3C00;
         }
@@ -79,6 +94,19 @@ static int t2_kernels(int rows, int ylo, int yhi) {
             }
             int64_t out = tf_decode_blocks(f ? TF_TQ2_0 : TF_TQ1_0, (uint8_t *)x, (size_t)NB * (f ? 66 : 54), K, vals, K, sc, NB);
             if (code3) ++code3_rows;
+            if (!f && padding) {
+                /* rejected by t27, decoded silently upstream: the upstream
+                 * functions must still agree with each other */
+                long ref = 0;
+                for (int i = 0; i < K; ++i) ref += (long)deq[i] * y[i / QK_K].qs[i % QK_K];
+                ++padding_rows;
+                if (out != TF_ERR_PADDING || (long)sg != ref || (long)sa != ref) {
+                    if (bad < 5) printf("  mismatch f=0 row=%d padding digit: t27 status=%lld (want %d) ref=%ld generic=%.1f arch=%.1f\n",
+                                        r, (long long)out, TF_ERR_PADDING, ref, sg, sa);
+                    ++bad;
+                }
+                continue;
+            }
             long ref = 0, t27 = 0, value_bad = 0;
             for (int i = 0; i < K; ++i) {
                 int yv = y[i / QK_K].qs[i % QK_K];
@@ -93,9 +121,10 @@ static int t2_kernels(int rows, int ylo, int yhi) {
         }
     }
     printf("T2 [%s] %d rows x K=%d, random bytes, y in [%d,%d]: %ld mismatches among dequantize / t27 tf_decode_blocks / "
-           "generic vec_dot / arch vec_dot (TQ2_0 rows with a code-3 digit, decoded as +2 and counted by t27: %ld)\n",
-           arch_name(), rows, K, ylo, yhi, bad, code3_rows);
-    return bad != 0;
+           "generic vec_dot / arch vec_dot (TQ2_0 rows with a code-3 digit, decoded as +2 and counted by t27: %ld; "
+           "TQ1_0 rows with a nonzero qh padding digit, decoded upstream and rejected by t27 as padding: %ld)\n",
+           arch_name(), rows, K, ylo, yhi, bad, code3_rows, padding_rows);
+    return bad != 0 || padding_rows == 0;
 }
 
 /* T3: real scales: generic vs arch float results relative to the sum of the
