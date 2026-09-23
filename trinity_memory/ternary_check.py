@@ -5,6 +5,7 @@ readers (trinity_memory.formats) and compared trit for trit and scale for
 scale. This module chooses tensors, moves bytes and writes the JSON report.
 """
 from __future__ import annotations
+from collections.abc import Mapping
 from datetime import datetime, timezone
 import gc
 import json
@@ -17,21 +18,42 @@ from . import formats as f
 SCHEMA = "trinity.ternary-check.v1"
 ROOT = Path(__file__).resolve().parent.parent
 
-# Revisions and file sizes come from fixtures/manifest.json.
-BITNET = {
-    "packed": fx.remote("microsoft/bitnet-b1.58-2B-4T", "model.safetensors"),
-    "bf16": fx.remote("microsoft/bitnet-b1.58-2B-4T-bf16", "model.safetensors"),
-    "gguf": fx.remote("microsoft/bitnet-b1.58-2B-4T-gguf", "ggml-model-i2_s.gguf"),
-}
+
+class _Files(Mapping):
+    """Label -> fixtures.Remote. Revisions and file sizes come from
+    fixtures/manifest.json, which is read on first access, so importing this
+    module does not need the manifest (it ships with a source checkout, not
+    with the wheel)."""
+
+    def __init__(self, files: dict):
+        self._files, self._remotes = files, {}
+
+    def __getitem__(self, label):
+        if label not in self._remotes:
+            self._remotes[label] = fx.remote(*self._files[label])
+        return self._remotes[label]
+
+    def __iter__(self):
+        return iter(self._files)
+
+    def __len__(self):
+        return len(self._files)
+
+
+BITNET = _Files({
+    "packed": ("microsoft/bitnet-b1.58-2B-4T", "model.safetensors"),
+    "bf16": ("microsoft/bitnet-b1.58-2B-4T-bf16", "model.safetensors"),
+    "gguf": ("microsoft/bitnet-b1.58-2B-4T-gguf", "ggml-model-i2_s.gguf"),
+})
 BITNET_TENSORS = [("model.layers.0.self_attn.q_proj.weight", "blk.0.attn_q.weight"),
                   ("model.layers.0.mlp.down_proj.weight", "blk.0.ffn_down.weight")]
 
-BONSAI = {
-    "PTQ1_0": fx.remote("prism-ml/Ternary-Bonsai-2-27B-gguf", "Ternary-Bonsai-2-27B-PTQ1_0.gguf"),
-    "PQ2_0": fx.remote("prism-ml/Ternary-Bonsai-2-27B-gguf", "Ternary-Bonsai-2-27B-PQ2_0.gguf"),
-    "Q2_0": fx.remote("prism-ml/Ternary-Bonsai-2-27B-gguf-dev", "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf"),
-    "mlx": fx.remote("prism-ml/Ternary-Bonsai-2-27B-mlx-2bit", "model.safetensors"),
-}
+BONSAI = _Files({
+    "PTQ1_0": ("prism-ml/Ternary-Bonsai-2-27B-gguf", "Ternary-Bonsai-2-27B-PTQ1_0.gguf"),
+    "PQ2_0": ("prism-ml/Ternary-Bonsai-2-27B-gguf", "Ternary-Bonsai-2-27B-PQ2_0.gguf"),
+    "Q2_0": ("prism-ml/Ternary-Bonsai-2-27B-gguf-dev", "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf"),
+    "mlx": ("prism-ml/Ternary-Bonsai-2-27B-mlx-2bit", "model.safetensors"),
+})
 BONSAI_TENSORS = [("blk.0.ffn_down.weight", "language_model.model.layers.0.mlp.down_proj")]
 
 
