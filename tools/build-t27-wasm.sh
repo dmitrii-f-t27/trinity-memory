@@ -31,8 +31,11 @@ wasm_cc -I "$out" -c native/wasm.c -o "$out/codecs.wasm.o"
 # The readers zero-initialise local arrays, which clang lowers to a memset call
 # unless bulk memory lets it emit memory.fill; LLVM enables bulk memory by
 # default only from version 20, so older clang (18 on ubuntu-24.04) would leave
-# memset undefined in this freestanding link.
-wasm_cc -mbulk-memory -I native/wasm-include -I "$out" -c native/wasm_formats.c -o "$out/formats.wasm.o"
+# memset undefined in this freestanding link. The feature set is spelled out
+# (LLVM 18's generic CPU plus bulk memory) so that clang 18 on CI and clang 20
+# or zig here compile the same module.
+wasm_cc -mcpu=mvp -msign-ext -mmutable-globals -mbulk-memory -I native/wasm-include -I "$out" \
+    -c native/wasm_formats.c -o "$out/formats.wasm.o"
 formats_exports=
 for name in tf_block_elements tf_block_bytes tf_scale_offset tf_scale_class tf_scales_check tf_b3_canonical \
     tf_decode_blocks tf_encode_blocks tf_block_flags tf_decode_i2s tf_encode_i2s tf_i2s_flags tf_i2s_trailer_nonzero \
