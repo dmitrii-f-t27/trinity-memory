@@ -1,0 +1,826 @@
+{
+ "schema": "trinity.ternary-check.matvec.v1",
+ "issue": "dmitrii-f-t27/trinity-memory#33",
+ "reproduce": "python3 -m trinity_memory.matvec --check",
+ "compiler": {
+  "repo": "gHashTag/t27",
+  "commit": "bff21b85b206a0dd367876343e56dcd8312d81ba"
+ },
+ "fixtures": "fixtures/manifest.json, consumer layer0_matvec",
+ "activations": {
+  "generator": "cpython-random.Random(seed).randint(-128,127)",
+  "seed": 27,
+  "count": 17408,
+  "dtype": "int8",
+  "sha256_le": "1987f31010ec5241e9d434f20548a884e656dd3e4dff9b2dba4ee837d6a0b8c6",
+  "first": [
+   117,
+   13,
+   18,
+   -28,
+   -91,
+   -95,
+   2,
+   42
+  ]
+ },
+ "arithmetic": {
+  "activations": "x[i] = CPython random.Random(27).randint(-128, 127), drawn in index order by t27 tmv_activations (t27/random.t27); the vector for n columns is the first n draws",
+  "accumulators": "W is the decoded [out_features, in_features] trit matrix (row r, column k); p[r][j] = sum over k in group j (64 columns) of W[r][k] * x[k], each one tm_dot_i64 call (t27/compute.t27) on the row widened to i64; y_int[r] = sum_j p[r][j] in i64. 64 divides every scale group here (64 for Q2_0, 128 for PTQ1_0, PQ2_0 and MLX)",
+  "bitnet_float_step": "y[r] = y_int[r] * weight_scale in f64: bf16 weight_scale for the transformers packed checkpoint, the f32 scale after the I2_S codes for bitnet.cpp. transformers 2c4914fb src/transformers/integrations/bitnet.py:292, AutoBitLinear.forward (config linear_class autobitlinear, quantization_mode offline): output = output * self.weight_scale, a multiplication; BitLinear (:181) divides but is not the class this checkpoint uses. |y_int| < 2^29 and a scale has at most 24 significant bits, so each product is exact and order-free",
+  "bonsai_float_step": "y[r] = sum over j ascending of f16(scale of partial j) * p[r][j], summed in f64 left to right from 0; each product is exact (|p| < 2^29), the running sum rounds to nearest-even when it needs more than 53 bits. Exact integer form: sum_j (f16 * 2^24) * p[r][j] in checked i64, the exact value times 2^24. For MLX (w = q * scale + bias) this equals the affine result only in groups where bias = -scale, counted by groups_where_bias_is_not_minus_scale",
+  "activation_scale": "x stands for quantized activations with one scale per token: the model output is the float step divided by that scale (transformers ActQuant, bitnet.py:235-236: scale = 127 / max|x|), a common factor for every format of the same tensor, so it is left out. How each runtime quantizes activations is not modeled",
+  "hadamard": "the Bonsai GGUF files carry prism.hadamard.* metadata (prism_metadata true): the PrismML runtime applies a Walsh-Hadamard rotation at inference. It is a runtime transform, not storage: the stored trits and scales are identical in all four formats, and the products here use them as stored, without the rotation, so y is not the model's layer output"
+ },
+ "statuses": {
+  "format": -50,
+  "length": -51,
+  "capacity": -52,
+  "code": -53,
+  "scale_nonfinite": -58
+ },
+ "tensors": [
+  {
+   "model": "BitNet b1.58 2B4T",
+   "tensor": {
+    "hf": "model.layers.0.self_attn.q_proj.weight",
+    "gguf": "blk.0.attn_q.weight",
+    "shape": [
+     2560,
+     2560
+    ],
+    "weights": 6553600
+   },
+   "x": {
+    "count": 2560,
+    "sha256_le": "14910f836b6da885c8d75b0f7a9ce3e344313d10e736a30e6481b182939b4631",
+    "first": [
+     117,
+     13,
+     18,
+     -28,
+     -91,
+     -95,
+     2,
+     42
+    ]
+   },
+   "formats": {
+    "hf_packed": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "36cd5b74dd266694fba934cf683ae9156a62d64bed0412591355e369e72c78b4",
+      "first": [
+       -2561,
+       2660,
+       -52,
+       -2385,
+       1269,
+       3446,
+       3451,
+       -2365
+      ],
+      "max_abs": 10924
+     },
+     "partials": {
+      "group": 64,
+      "count": 102400,
+      "sha256_le": "fc21e6dfa92294d3a7f6f155bfa4bef1133fb829facc7b686c554ec54bc24a80",
+      "max_abs": 2039
+     },
+     "float_step": {
+      "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+      "scale": {
+       "dtype": "BF16",
+       "word": 16284,
+       "value": 1.21875
+      },
+      "sha256_le": "7066c69cf62258a47ab1e8ddca86c5219f8fde30200014411d35595138f95e04",
+      "first": [
+       -3121.21875,
+       3241.875,
+       -63.375,
+       -2906.71875,
+       1546.59375,
+       4199.8125,
+       4205.90625,
+       -2882.34375
+      ]
+     }
+    },
+    "I2_S": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+      "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+      "file": "ggml-model-i2_s.gguf"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "36cd5b74dd266694fba934cf683ae9156a62d64bed0412591355e369e72c78b4",
+      "first": [
+       -2561,
+       2660,
+       -52,
+       -2385,
+       1269,
+       3446,
+       3451,
+       -2365
+      ],
+      "max_abs": 10924
+     },
+     "partials": {
+      "group": 64,
+      "count": 102400,
+      "sha256_le": "fc21e6dfa92294d3a7f6f155bfa4bef1133fb829facc7b686c554ec54bc24a80",
+      "max_abs": 2039
+     },
+     "float_step": {
+      "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+      "scale": {
+       "dtype": "F32",
+       "word": 1067189103,
+       "value": 1.2188547849655151
+      },
+      "sha256_le": "052628f0a92809af95e6a80c55d5cca979c4db9d672ef21a893278d9c5d52008",
+      "first": [
+       -3121.4871042966843,
+       3242.1537280082703,
+       -63.38044881820679,
+       -2906.9686621427536,
+       1546.7267221212387,
+       4200.173588991165,
+       4206.267862915993,
+       -2882.5915664434433
+      ]
+     }
+    },
+    "bf16_absmean": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+      "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+      "file": "model.safetensors"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "d44ba151c37986de15ae12059e8a458c2e27a2e3be5e810c58c610860a64ed0b",
+      "first": [
+       -1086,
+       3089,
+       267,
+       -3005,
+       1115,
+       2802,
+       2644,
+       -2906
+      ],
+      "max_abs": 10841
+     },
+     "partials": {
+      "group": 64,
+      "count": 102400,
+      "sha256_le": "fc2c59937447f5eadb4777563608413443d7d616ee6d60455756602109da3b56",
+      "max_abs": 2061
+     },
+     "derived": "absmean ternarization of the bf16 master weights by t27 tf_absmean_bf16 (transformers WeightQuant in f64); not a published storage format",
+     "float_step": null
+    }
+   },
+   "comparisons": [
+    {
+     "a": "hf_packed",
+     "b": "I2_S",
+     "trits": {
+      "differ": 0,
+      "first": -1
+     },
+     "accumulator_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "partials": {
+      "differ": 0,
+      "first": -1
+     },
+     "float_step_rows": {
+      "differ": 2560,
+      "first": 0
+     },
+     "float_step_note": "equal integers times two different scale values, the bf16 weight_scale and the f32 I2_S scale (item 1 of docs/ternary-check.md); the products are exact, so exactly the rows with y_int = 0 agree"
+    },
+    {
+     "a": "hf_packed",
+     "b": "bf16_absmean",
+     "trits": {
+      "differ": 79719,
+      "first": 35
+     },
+     "accumulator_rows": {
+      "differ": 2529,
+      "first": 0
+     },
+     "partials": {
+      "differ": 50762,
+      "first": 0
+     },
+     "difference_tensor": {
+      "nonzero": 79719,
+      "rows_with_nonzero": 2534,
+      "y_difference": {
+       "sha256_le": "e5030725436554de4f4556eb61026cd305f2efca3078835982df9174d692be33",
+       "first": [
+        -1475,
+        -429,
+        -319,
+        620,
+        154,
+        644,
+        807,
+        541
+       ]
+      },
+      "rows_where_y_a_minus_y_b_is_not_D_x": {
+       "differ": 0,
+       "first": -1
+      }
+     }
+    }
+   ]
+  },
+  {
+   "model": "BitNet b1.58 2B4T",
+   "tensor": {
+    "hf": "model.layers.0.mlp.down_proj.weight",
+    "gguf": "blk.0.ffn_down.weight",
+    "shape": [
+     2560,
+     6912
+    ],
+    "weights": 17694720
+   },
+   "x": {
+    "count": 6912,
+    "sha256_le": "30c7c094beca03af6c22afecaa13657a1e7ad0241f980d61b145b7d610cf6d08",
+    "first": [
+     117,
+     13,
+     18,
+     -28,
+     -91,
+     -95,
+     2,
+     42
+    ]
+   },
+   "formats": {
+    "hf_packed": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T",
+      "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+      "file": "model.safetensors"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "ea29b8aed8b0280a30b9ae2fd96445e2f7cb4700e65b029c17f9c21a85670e6e",
+      "first": [
+       2375,
+       4149,
+       -3986,
+       -11707,
+       14011,
+       -4605,
+       -747,
+       6983
+      ],
+      "max_abs": 18753
+     },
+     "partials": {
+      "group": 64,
+      "count": 276480,
+      "sha256_le": "b6324e917fb00d6d2140a77a8d7296752f5911347c0382c40828259972b4889c",
+      "max_abs": 2323
+     },
+     "float_step": {
+      "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+      "scale": {
+       "dtype": "BF16",
+       "word": 16394,
+       "value": 2.15625
+      },
+      "sha256_le": "deacd8c2364163d524b22770d52e53a6c30b971355184b2e988628112cf8c963",
+      "first": [
+       5121.09375,
+       8946.28125,
+       -8594.8125,
+       -25243.21875,
+       30211.21875,
+       -9929.53125,
+       -1610.71875,
+       15057.09375
+      ]
+     }
+    },
+    "I2_S": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+      "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+      "file": "ggml-model-i2_s.gguf"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "ea29b8aed8b0280a30b9ae2fd96445e2f7cb4700e65b029c17f9c21a85670e6e",
+      "first": [
+       2375,
+       4149,
+       -3986,
+       -11707,
+       14011,
+       -4605,
+       -747,
+       6983
+      ],
+      "max_abs": 18753
+     },
+     "partials": {
+      "group": 64,
+      "count": 276480,
+      "sha256_le": "b6324e917fb00d6d2140a77a8d7296752f5911347c0382c40828259972b4889c",
+      "max_abs": 2323
+     },
+     "float_step": {
+      "formula": "y_int[r] * weight_scale, one f64 product per row, exact",
+      "scale": {
+       "dtype": "F32",
+       "word": 1074426172,
+       "value": 2.163161277770996
+      },
+      "sha256_le": "3ac32c76e38025bd1425e693276e1bff29691fdfd7cce5824f9985600c5b491b",
+      "first": [
+       5137.508034706116,
+       8974.956141471863,
+       -8622.36085319519,
+       -25324.12907886505,
+       30308.052662849426,
+       -9961.357684135437,
+       -1615.881474494934,
+       15105.355202674866
+      ]
+     }
+    },
+    "bf16_absmean": {
+     "source": {
+      "repo": "microsoft/bitnet-b1.58-2B-4T-bf16",
+      "revision": "276681394656abdadb8e80e5b2c3db5e5d7fcaff",
+      "file": "model.safetensors"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "767747b3eee83feedeb5094b1fbf4c2f6860c96da5fb8162abe01fdc4264dc84",
+      "first": [
+       1872,
+       3708,
+       -3628,
+       -11946,
+       13960,
+       -5845,
+       -1088,
+       6560
+      ],
+      "max_abs": 18408
+     },
+     "partials": {
+      "group": 64,
+      "count": 276480,
+      "sha256_le": "1978b28e8d930624dd0fb8f3733ae63b647cbfe3acbf6187d0c93fd811b5074e",
+      "max_abs": 2292
+     },
+     "derived": "absmean ternarization of the bf16 master weights by t27 tf_absmean_bf16 (transformers WeightQuant in f64); not a published storage format",
+     "float_step": null
+    }
+   },
+   "comparisons": [
+    {
+     "a": "hf_packed",
+     "b": "I2_S",
+     "trits": {
+      "differ": 0,
+      "first": -1
+     },
+     "accumulator_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "partials": {
+      "differ": 0,
+      "first": -1
+     },
+     "float_step_rows": {
+      "differ": 2560,
+      "first": 0
+     },
+     "float_step_note": "equal integers times two different scale values, the bf16 weight_scale and the f32 I2_S scale (item 1 of docs/ternary-check.md); the products are exact, so exactly the rows with y_int = 0 agree"
+    },
+    {
+     "a": "hf_packed",
+     "b": "bf16_absmean",
+     "trits": {
+      "differ": 101673,
+      "first": 165
+     },
+     "accumulator_rows": {
+      "differ": 2549,
+      "first": 0
+     },
+     "partials": {
+      "differ": 84494,
+      "first": 2
+     },
+     "difference_tensor": {
+      "nonzero": 101673,
+      "rows_with_nonzero": 2550,
+      "y_difference": {
+       "sha256_le": "4559e9a54a4a0ce8ba2c754b773753c87783aa03067a9d1239f31b64736fc649",
+       "first": [
+        503,
+        441,
+        -358,
+        239,
+        51,
+        1240,
+        341,
+        423
+       ]
+      },
+      "rows_where_y_a_minus_y_b_is_not_D_x": {
+       "differ": 0,
+       "first": -1
+      }
+     }
+    }
+   ]
+  },
+  {
+   "model": "Ternary Bonsai 2 27B",
+   "tensor": {
+    "gguf": "blk.0.ffn_down.weight",
+    "mlx": "language_model.model.layers.0.mlp.down_proj",
+    "shape": [
+     5120,
+     17408
+    ],
+    "weights": 89128960
+   },
+   "x": {
+    "count": 17408,
+    "sha256_le": "1987f31010ec5241e9d434f20548a884e656dd3e4dff9b2dba4ee837d6a0b8c6",
+    "first": [
+     117,
+     13,
+     18,
+     -28,
+     -91,
+     -95,
+     2,
+     42
+    ]
+   },
+   "formats": {
+    "PTQ1_0": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+      "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+      "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+      "first": [
+       2395,
+       -16744,
+       -801,
+       -1377,
+       11708,
+       -2537,
+       -5469,
+       6584
+      ],
+      "max_abs": 36778
+     },
+     "partials": {
+      "group": 64,
+      "count": 1392640,
+      "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+      "max_abs": 2364
+     },
+     "float_step": {
+      "scale": {
+       "dtype": "F16",
+       "group": 128,
+       "count": 696320,
+       "partials_per_scale": 2
+      },
+      "f64": {
+       "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+       "first": [
+        26.915611267089844,
+        -202.77806854248047,
+        -3.2950363159179688,
+        -16.735031127929688,
+        143.97399139404297,
+        -27.556907653808594,
+        -73.49837493896484,
+        69.86248016357422
+       ]
+      },
+      "exact_times_2_24": {
+       "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+       "first": [
+        451569024,
+        -3402051456,
+        -55281536,
+        -280767232,
+        2415482752,
+        -462328192,
+        -1233098112,
+        1172097920
+       ]
+      },
+      "rows_where_f64_is_not_exact": {
+       "differ": 0,
+       "first": -1
+      }
+     },
+     "prism_metadata": true
+    },
+    "PQ2_0": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+      "revision": "6ed5e12bf84b7a63069882c91dd9e9218647d17b",
+      "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+      "first": [
+       2395,
+       -16744,
+       -801,
+       -1377,
+       11708,
+       -2537,
+       -5469,
+       6584
+      ],
+      "max_abs": 36778
+     },
+     "partials": {
+      "group": 64,
+      "count": 1392640,
+      "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+      "max_abs": 2364
+     },
+     "float_step": {
+      "scale": {
+       "dtype": "F16",
+       "group": 128,
+       "count": 696320,
+       "partials_per_scale": 2
+      },
+      "f64": {
+       "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+       "first": [
+        26.915611267089844,
+        -202.77806854248047,
+        -3.2950363159179688,
+        -16.735031127929688,
+        143.97399139404297,
+        -27.556907653808594,
+        -73.49837493896484,
+        69.86248016357422
+       ]
+      },
+      "exact_times_2_24": {
+       "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+       "first": [
+        451569024,
+        -3402051456,
+        -55281536,
+        -280767232,
+        2415482752,
+        -462328192,
+        -1233098112,
+        1172097920
+       ]
+      },
+      "rows_where_f64_is_not_exact": {
+       "differ": 0,
+       "first": -1
+      }
+     },
+     "prism_metadata": true
+    },
+    "Q2_0": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf-dev",
+      "revision": "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
+      "file": "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+      "first": [
+       2395,
+       -16744,
+       -801,
+       -1377,
+       11708,
+       -2537,
+       -5469,
+       6584
+      ],
+      "max_abs": 36778
+     },
+     "partials": {
+      "group": 64,
+      "count": 1392640,
+      "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+      "max_abs": 2364
+     },
+     "float_step": {
+      "scale": {
+       "dtype": "F16",
+       "group": 64,
+       "count": 1392640,
+       "partials_per_scale": 1
+      },
+      "f64": {
+       "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+       "first": [
+        26.915611267089844,
+        -202.77806854248047,
+        -3.2950363159179688,
+        -16.735031127929688,
+        143.97399139404297,
+        -27.556907653808594,
+        -73.49837493896484,
+        69.86248016357422
+       ]
+      },
+      "exact_times_2_24": {
+       "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+       "first": [
+        451569024,
+        -3402051456,
+        -55281536,
+        -280767232,
+        2415482752,
+        -462328192,
+        -1233098112,
+        1172097920
+       ]
+      },
+      "rows_where_f64_is_not_exact": {
+       "differ": 0,
+       "first": -1
+      }
+     },
+     "prism_metadata": true
+    },
+    "mlx_2bit": {
+     "source": {
+      "repo": "prism-ml/Ternary-Bonsai-2-27B-mlx-2bit",
+      "revision": "fcba37d2117a7077eac6b613b2668d14d9779edd",
+      "file": "model.safetensors"
+     },
+     "status": "ok",
+     "accumulators": {
+      "sha256_le": "476ef9715f37e2b1464944f65de98377ecceb981b378fea92bf80c8b6c605f3a",
+      "first": [
+       2395,
+       -16744,
+       -801,
+       -1377,
+       11708,
+       -2537,
+       -5469,
+       6584
+      ],
+      "max_abs": 36778
+     },
+     "partials": {
+      "group": 64,
+      "count": 1392640,
+      "sha256_le": "4febe8b3a9f9375685707aea0c8a0b2f230e6c215c5c450c22f73add3ea92ce4",
+      "max_abs": 2364
+     },
+     "float_step": {
+      "scale": {
+       "dtype": "F16",
+       "group": 128,
+       "count": 696320,
+       "partials_per_scale": 2
+      },
+      "f64": {
+       "sha256_le": "11688bdaab31187f48eefd8c700d2f021af25d6b6002a99ac6f816b17ae41685",
+       "first": [
+        26.915611267089844,
+        -202.77806854248047,
+        -3.2950363159179688,
+        -16.735031127929688,
+        143.97399139404297,
+        -27.556907653808594,
+        -73.49837493896484,
+        69.86248016357422
+       ]
+      },
+      "exact_times_2_24": {
+       "sha256_le": "9e7a5b67cd4caf680f72c58cb80f16797eba384c0648e9546b0e313d8495246c",
+       "first": [
+        451569024,
+        -3402051456,
+        -55281536,
+        -280767232,
+        2415482752,
+        -462328192,
+        -1233098112,
+        1172097920
+       ]
+      },
+      "rows_where_f64_is_not_exact": {
+       "differ": 0,
+       "first": -1
+      },
+      "groups_where_bias_is_not_minus_scale": 0
+     }
+    }
+   },
+   "comparisons": [
+    {
+     "a": "PTQ1_0",
+     "b": "PQ2_0",
+     "partials": {
+      "differ": 0,
+      "first": -1
+     },
+     "accumulator_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "float_step_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "exact_rows": {
+      "differ": 0,
+      "first": -1
+     }
+    },
+    {
+     "a": "PTQ1_0",
+     "b": "Q2_0",
+     "partials": {
+      "differ": 0,
+      "first": -1
+     },
+     "accumulator_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "float_step_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "exact_rows": {
+      "differ": 0,
+      "first": -1
+     }
+    },
+    {
+     "a": "PTQ1_0",
+     "b": "mlx_2bit",
+     "partials": {
+      "differ": 0,
+      "first": -1
+     },
+     "accumulator_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "float_step_rows": {
+      "differ": 0,
+      "first": -1
+     },
+     "exact_rows": {
+      "differ": 0,
+      "first": -1
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -159,6 +159,80 @@ run a model, so it was not reproduced here. Note, commands and numbers:
 [`docs/upstream/llama.cpp-15193.md`](upstream/llama.cpp-15193.md). Nothing
 was reported upstream.
 
+## Real layer: int8 matvec on decoded weights (#33)
+
+For the three tensors above, every stored form is decoded by `t27/formats.t27`
+and multiplied with one int8 activation vector by `t27/matvec.t27`, in
+generated C and in `formats.wasm`. The activations are
+`random.Random(27).randint(-128, 127)` of CPython, drawn in index order by the
+t27 port of its generator (`t27/random.t27`); a tensor with n input columns
+uses the first n of 17,408 draws (sha256 of the int8 bytes `1987f310…`, first
+values 117, 13, 18, -28). Each row is widened to i64 once, and every group of
+64 columns is one `tm_dot_i64` call of `t27/compute.t27`, so the report
+carries partial sums per 64 columns as well as the row sums `y_int`. 64
+divides every scale group here (64 for Q2_0, 128 for PTQ1_0, PQ2_0 and MLX).
+
+| Model, tensor | Shape | Stored forms | Integer accumulators | max \|y_int\| | Float step |
+| --- | --- | --- | --- | ---: | --- |
+| BitNet 2B4T, layer 0 `q_proj` | 2560 × 2560 | HF packed, GGUF I2_S | identical: 2,560 rows, 102,400 partials | 10,924 | `y_int × weight_scale`: bf16 1.21875 vs f32 1.2188548, so all 2,560 rows differ |
+| BitNet 2B4T, layer 0 `down_proj` | 2560 × 6912 | HF packed, GGUF I2_S | identical: 2,560 rows, 276,480 partials | 18,753 | bf16 2.15625 vs f32 2.1631613, all 2,560 rows differ |
+| Ternary Bonsai 2 27B, layer 0 `ffn_down` | 5120 × 17408 | PTQ1_0, PQ2_0, Q2_0 (group 64), MLX 2-bit | identical: 5,120 rows, 1,392,640 partials | 36,778 | identical in all four, and equal to the exact value in all 5,120 rows |
+
+So for every format that stores these tensors the integer results are the
+same bits; the BitNet float results differ only because the two files store
+the scale at two precisions (item 1), and every product there is exact.
+
+The float step, with the arithmetic used:
+
+- BitNet: `y[r] = y_int[r] × weight_scale`, one f64 product per row, with the
+  bf16 `weight_scale` of the transformers checkpoint or the f32 scale of the
+  I2_S tensor. The packed checkpoint's config selects `AutoBitLinear`
+  (`linear_class: autobitlinear`, `quantization_mode: offline`, as
+  [`specs/formats/hf_bitnet.t27`](../specs/formats/hf_bitnet.t27) records;
+  `bitnet.py:317-324`), whose forward pass multiplies by `weight_scale`
+  (transformers `2c4914fb`, `src/transformers/integrations/bitnet.py:292`);
+  the class that divides, `BitLinear` (`:181`), is not used by this model.
+  `|y_int| < 2^29` and a scale has at most 24 significant bits, so each
+  product is exact.
+- Bonsai: `y[r] = Σ_j f16(scale_j) × p[r][j]` over the 272 partials of a row,
+  j ascending, summed in f64 from 0. Each product is exact; the sum could
+  round, so an exact integer form `Σ_j (f16(scale_j) × 2^24) × p[r][j]` is
+  computed in checked i64 as well, and the f64 result equals it in every row
+  of every format. MLX computes `q × scale + bias`; that equals the ternary
+  form because the bias is minus the scale in all 696,320 groups (item 4).
+- Activation scale: `x` stands for activations already quantized with one
+  scale per token. transformers' `ActQuant` (`bitnet.py:235-236`) uses
+  `127 / max|x|`; the layer output is the float step divided by that scale,
+  a common factor for every format of the same tensor, so it is left out.
+  How each runtime quantizes its activations is not modeled.
+- Hadamard rotation: the three Bonsai GGUF files carry `prism.hadamard.*`
+  metadata (transform `normalized-sylvester-walsh-hadamard`), which the
+  PrismML runtime applies at inference. It is a runtime transform, not
+  storage: the products here use the stored trits and scales without it, so
+  `y` is not the model's layer output, and the rotation cannot change the
+  agreement between formats that store the same trits and scales.
+
+The bf16 master weights are not a stored ternary form. Ternarized with
+`WeightQuant` (item 2) they give accumulators that differ from the packed ones
+in 2,529 of 2,560 rows of `q_proj` and 2,549 of 2,560 rows of `down_proj`.
+The difference tensor D = packed − absmean is nonzero at exactly the 79,719
+and 101,673 weights of item 2 (in 2,534 and 2,550 rows), and in every row
+`y_packed − y_absmean = D · x` exactly; in 5 and 1 rows the differing trits
+cancel. The accumulators differ because the trits differ, which is item 2:
+the packed trits cannot be recomputed from the published bf16 weights.
+
+Full data, deterministic (no timestamps): [`reports/ternary-check/matvec-2026-09-23.json`](../reports/ternary-check/matvec-2026-09-23.json),
+with the sha256 of `x`, and per tensor and form the sha256 and first values of
+the accumulators, the partials and the float step. `python3 -m trinity_memory.matvec --check`
+recomputes it from the fixture cache, `tests/test_matvec.py` does the same in
+the unit tests, `tests/native_matvec.c` checks the module against oracles
+written in C (including the CPython stream for four seeds), and
+`tests/matvec_wasm.mjs` recomputes all eight stored forms in `formats.wasm`
+and checks them against the report. The consumer `layer0_matvec` of
+`fixtures/manifest.json` is now implemented; this supersedes the note under
+Fixtures that it is planned. It reads the same 36 ranges as
+`trinity_memory.ternary_check`.
+
 ## Reproduce
 
 ```sh
