@@ -153,3 +153,58 @@ standard library, reads about 63 MB of byte ranges and prints the 210-tensor
 scale and trailer table and the layer-0 counts above as JSON
 (`python3 tools/bitnet_audit.py > audit.json`). The t27 build needs a Rust
 toolchain (`cargo +1.94.0`) for the pinned compiler.
+
+## Fixtures
+
+[`fixtures/manifest.json`](../fixtures/manifest.json) (schema
+`trinity.fixtures-manifest.v1`) is the single source of truth for the real
+weights used here. For each of the six Hugging Face repositories above it
+pins the full commit sha, the license, and the name and size of every file
+read; for every byte range it gives the file, the kind (`prefix`, `tensor`,
+`scale`, `trailer`), the tensor name, dtype or GGUF type id, shape, begin,
+end (exclusive), sha256 and `used_by`, the consumers that read it. It
+lists 544 ranges, 205.8 MiB in total, exactly what
+`trinity_memory.ternary_check` (36 ranges) and `tools/bitnet_audit.py`
+(521 ranges, 66,692,572 bytes measured, the "about 63 MB" above in MiB)
+read; 13 of them are read by both. They include all 210 I2_S trailers,
+whose first 4 bytes are the f32 scale words tabulated in
+`reports/ternary-check/bitnet-scales-2026-09-22.json`. The consumer
+`layer0_matvec` (#33) is planned, not implemented: it tags the same 36
+ranges `ternary_check` reads (BitNet layer-0 `q_proj` and `down_proj` in all
+three forms with their scales; Bonsai `ffn_down` in PTQ1_0, PQ2_0, Q2_0 and
+MLX with scales and biases) and adds no range of its own. No whole
+checkpoint is ever downloaded. This supersedes the note under Sources that
+the lock holds only the ranges of the t27 run: every range
+`tools/bitnet_audit.py` reads, trailers included, is now pinned by sha256 in
+the manifest and in `fixtures/manifest.lock.json`.
+
+One command fetches them into `build/fixtures/`:
+
+```sh
+python3 tools/fetch-fixtures.py            # fetch missing ranges, verify all
+python3 tools/fetch-fixtures.py --offline  # verify the cache; no network, nothing written
+```
+
+Each range is an anonymous HTTP range request (no token is sent) that must
+answer 206 with exactly the requested length and match its sha256 before it
+is written. A first run sends 544 range requests. Hugging Face allows
+anonymous clients 3,000 resolver requests per IP address per 5-minute window
+(its rate-limit page, September 2025); the tool retries a 429 after the time
+the `RateLimit` header gives, retries a 5xx, a network error or a body cut
+short after 2, 4 and 8 seconds (the header's time only when it reports no
+requests left), and uses 4 concurrent requests by default (`--jobs`).
+`trinity_memory.fixtures` re-hashes a cached range on every read; a cached
+prefix chunk is hashed on its first read in a process and again whenever
+`prefix.bin` changes (size, inode, modification or change time). It refuses
+a range the manifest does not list; `tools/fetch-fixtures.py --record REPO
+FILE BEGIN END --kind KIND --tensor NAME --dtype DTYPE --shape N ...
+--used-by CONSUMER` adds one explicitly, and a new prefix chunk must start
+where the pinned prefix ends. With `TRINITY_FIXTURES_OFFLINE=1` (or
+`tools/bitnet_audit.py --offline`, or `tools/fetch-fixtures.py --offline`)
+nothing is fetched. The tool never
+deletes or truncates cache files, since several checkouts may share one
+cache; a file the manifest does not list, or a `prefix.bin` longer than the
+pinned prefix, fails the check unless `--no-strict` is given.
+`fixtures/manifest.lock.json` is generated from the manifest (`--write-lock`
+writes `manifest.lock.json` next to `--manifest`) and keeps the flat
+`range: sha256` view referenced above.
