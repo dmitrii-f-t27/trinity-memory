@@ -377,8 +377,10 @@ fixture cache and fails unless the committed reports come out exactly; then, wit
 recompute every cell and stored form in `formats.wasm` and the unit tests of both
 reports recompute them in the generated C, and a skip fails.
 `tests/test_ternary_check.py` validates the report and every reproduction against
-the schemas, checks that every number this section quotes is the report's and is
-written here, and recomputes all committed files from the caches (skipped only
+the schemas, checks that every count, group size and bits-per-weight value this
+section quotes from the report is the report's and is written here (the item and
+issue numbers, dates and the definition `0.5 × weight_scale` are not report
+values), and recomputes all committed files from the caches (skipped only
 when a cache file is missing); `tests/native_matrix.c` checks the t27 module
 against oracles written in C, including a consistent tie rule that must stay
 unexplained and a zero-scale block with a nonzero trit on one side.
@@ -388,8 +390,11 @@ the first run's snapshot, kept as history. It carries the schema string
 `trinity.ternary-check.v1` but predates the JSON Schema: its shape is
 `{schema, generated, checks}`, with a timestamp and run times, it does not
 validate against `schemas/ternary-check.v1.schema.json` (whose `$comment` says
-so), and nothing regenerates it. `reports/ternary-check.json` holds each of its
-numbers, and `tests/test_ternary_check.py` checks that they are equal.
+so), and nothing regenerates it. `reports/ternary-check.json` holds every number
+of the Results table and the snapshot's tensor measurements (weights, stored
+bytes and bits per weight of every stored form, flags, scales, comparisons), and `tests/test_ternary_check.py` checks that they are equal; the
+snapshot's source file sizes (they are in `fixtures/manifest.json`), its
+`bf16_absmean` sizes and its run times are not in the report.
 
 Limits: three tensors; the t27 round trips are not third-party evidence;
 llama.cpp is the only upstream writer run here; no model was run.

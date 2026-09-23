@@ -2,7 +2,7 @@
  "$schema": "https://json-schema.org/draft/2020-12/schema",
  "$id": "https://github.com/dmitrii-f-t27/trinity-memory/blob/master/schemas/ternary-check.v1.schema.json",
  "title": "trinity.ternary-check.v1",
- "$comment": "reports/ternary-check/2026-09-22.json carries the same schema string but predates this schema: it is the first-run snapshot kept as history, with the shape {schema, generated, checks}, and does not validate here. tests/test_ternary_check.py (FirstSnapshotTest) checks that shape and that every number in it equals the report this schema describes.",
+ "$comment": "reports/ternary-check/2026-09-22.json carries the same schema string but predates this schema: it is the first-run snapshot kept as history, with the shape {schema, generated, checks}, and does not validate here. tests/test_ternary_check.py (FirstSnapshotTest) checks that shape and that its tensor measurements and every Results-table number equal the report this schema describes (its source file sizes, bf16_absmean sizes and run times are not in the report).",
  "description": "Compatibility matrix of t27 Ternary Check (issue #32): every real tensor x every storage format, decided by t27/matrix.t27. Written by python3 -m trinity_memory.ternary_check as reports/ternary-check.json; the minimal reproductions of its mismatches follow schemas/ternary-check.repro.v1.schema.json.",
  "type": "object",
  "required": ["schema", "issue", "reproduce", "compiler", "fixtures", "run_metadata", "comparison", "taxonomy",

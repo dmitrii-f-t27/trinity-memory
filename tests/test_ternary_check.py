@@ -3,8 +3,9 @@
 The committed report reports/ternary-check.json must validate against
 schemas/ternary-check.v1.schema.json (and each reproduction against
 schemas/ternary-check.repro.v1.schema.json) and meet the acceptance of #32;
-every number the Matrix section of docs/ternary-check.md quotes must be in
-the report and, written as the section writes it, in the section. The first
+every count, group size and bits-per-weight value the Matrix section of
+docs/ternary-check.md quotes from the report must be the report's and, written
+as the section writes it, in the section. The first
 snapshot reports/ternary-check/2026-09-22.json (the "Full data" of the
 Results table, a pre-schema shape) must hold the same numbers as the report.
 The Python mirror of the t27 status codes is checked against the generated
@@ -207,7 +208,8 @@ class SchemaTest(unittest.TestCase):
 class FirstSnapshotTest(unittest.TestCase):
     """reports/ternary-check/2026-09-22.json predates schemas/ternary-check.v1.schema.json although it carries
     the same schema string; it stays as history, and the Results table cites it. Nothing regenerates it, so
-    this test checks its shape and that every number in it is the number of the current report."""
+    this test checks its shape and that its tensor measurements are those of the current report (its source
+    file sizes, bf16_absmean sizes and run times are not in the report)."""
 
     def setUp(self):
         self.snapshot = json.loads(SNAPSHOT.read_text())
@@ -494,7 +496,7 @@ class NumbersInTheDocsTest(unittest.TestCase):
         self.assertIn(f"Totals: {status['match']} match, {status['mismatch']} mismatch, "
                       f"{status['not-representable']} not representable", section)
         self.assertIn(f"give {summary['cells']} cells", section)
-        words = {3: "three", 4: "four", 5: "five", 9: "nine", 10: "ten", 12: "twelve", 15: "15"}
+        words = {2: "two", 3: "three", 4: "four", 5: "five", 9: "nine", 10: "ten", 12: "twelve", 15: "15"}
         self.assertIn(f"{words[summary['storage_formats']]} storage formats in {words[summary['columns']]} columns",
                       section)
         provenance = summary["provenance"]
@@ -503,6 +505,27 @@ class NumbersInTheDocsTest(unittest.TestCase):
         self.assertIn(f"The other {provenance['t27_round_trip'] + provenance['not_written']} cells are t27's alone: "
                       f"{provenance['t27_round_trip']} t27 round trips", section)
         self.assertIn(f"{provenance['not_written']} not-representable cells", section)
+        self.assertIn(f"None of these {provenance['t27_round_trip'] + provenance['not_written']} is", section)
+        self.assertIn(f"recomputes all {summary['cells']} cells and the {words[summary['derived_cells']]} "
+                      f"derived", section)
+        # The 50 zero-scale blocks of llama.cpp's q_proj output, each place the section names them.
+        zero_blocks = {cells[f"bitnet-q_proj--{ext}_llamacpp"]["flags"]["scale_zero"] for ext in ("tq1_0", "tq2_0")}
+        self.assertEqual(len(zero_blocks), 1)
+        (blocks,) = zero_blocks
+        group = {f["id"]: f["scale_group"] for f in self.report["formats"]}
+        self.assertEqual(blocks * group["tq1_0_llamacpp"], cells["bitnet-q_proj--tq1_0_llamacpp"]["scales"]["differ"])
+        for phrase in (f"scales of {blocks} all-zero blocks", f"scale 0 for {blocks} blocks of {group['tq1_0']} weights",
+                       f"those {blocks} scale words"):
+            self.assertIn(phrase, section)
+        # Bits per weight of Bonsai Q2_0, without and with its metadata share.
+        q2 = cells["bonsai-ffn_down--q2_0"]
+        self.assertIn(f"so {q2['bits_per_weight']:g} bits per weight become {q2['metadata']['bits_per_weight']:.7f}",
+                      section)
+        # Group sizes the section names.
+        for phrase in (f"Q2_0, group {group['q2_0']}", f"MLX 2-bit, group {group['mlx_2bit']}",
+                       f"block {group['onnx_2bit']}", f"one scale per {group['tq1_0']} weights",
+                       f"its {group['ptq1_0']}-weight groups", f"Q2_0 (group {group['q2_0']})"):
+            self.assertIn(phrase, section)
 
     def test_the_real_layer_section_quotes_the_matvec_numbers(self):
         section = docs_section("Real layer: int8 matvec")
