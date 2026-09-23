@@ -105,6 +105,17 @@ linear 2-bit rows (MLX affine 2-bit, ONNX Runtime `MatMulNBits` with
 (open llama.cpp PR #22836) and the bitnet.cpp lookup-table layouts TL1 and
 TL2.
 
+## llama.cpp issue 15193 (TQ1_0/TQ2_0 on CPU)
+
+The garbage output reported in llama.cpp issue 15193 comes from quantizing a
+float-trained model (Qwen3-4B-Instruct-2507) to TQ1_0, not from TQ storage or
+the CPU kernels; the issue was closed upstream on 2025-08-09 for that reason.
+At llama.cpp `e6ab7c1a` the upstream TQ1_0/TQ2_0 quantizers, dequantizers and
+the generic, NEON and AVX2 `vec_dot` kernels agree with the t27 decoders and
+encoders bit for bit on random blocks and on the BitNet layer-0 tensors above.
+Note, commands and numbers: [`docs/upstream/llama.cpp-15193.md`](upstream/llama.cpp-15193.md).
+Nothing was reported upstream.
+
 ## Reproduce
 
 ```sh
