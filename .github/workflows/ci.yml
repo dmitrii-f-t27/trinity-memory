@@ -79,6 +79,70 @@ jobs:
         with:
           name: native-t27-evidence
           path: build/t27/
+  fixtures:
+    # Real-weight byte ranges from Hugging Face, anonymously (no token): a
+    # clean clone fetches every range of fixtures/manifest.json, checks HTTP
+    # 206, length and sha256, then verifies the cache offline and replays the
+    # standard-library BitNet audit against its committed report.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: build/fixtures
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+      - name: Fetch every manifest range
+        run: python3 tools/fetch-fixtures.py --jobs 4
+      - name: Verify the cache offline
+        run: python3 tools/fetch-fixtures.py --offline
+      - name: Replay the BitNet audit offline
+        run: |
+          python3 tools/bitnet_audit.py --offline > build/bitnet-audit.json
+          cmp build/bitnet-audit.json reports/ternary-check/bitnet-audit-2026-09-23.json
+  ternary-check:
+    needs: [native, fixtures]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TRINITY_FIXTURES_OFFLINE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-t27-evidence
+          path: build/t27
+      - uses: actions/cache/restore@v4
+        with:
+          path: build/fixtures
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+          fail-on-cache-miss: true
+      - name: Reproduce the committed Ternary Check report from the cached ranges
+        run: |
+          python3 tools/fetch-fixtures.py --offline
+          python3 -m trinity_memory.ternary_check > /dev/null
+          python3 - <<'PY'
+          import json
+          def core(path):
+              report = json.load(open(path))
+              report.pop("generated")
+              for check in report["checks"]:
+                  check.pop("seconds")
+              return report
+          assert core("build/ternary-check.json") == core("reports/ternary-check/2026-09-22.json"), "report differs"
+          print("build/ternary-check.json matches reports/ternary-check/2026-09-22.json")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ternary-check
+          path: build/ternary-check.json
   python:
     needs: native
     runs-on: ubuntu-latest
