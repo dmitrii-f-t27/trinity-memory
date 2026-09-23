@@ -159,6 +159,246 @@ run a model, so it was not reproduced here. Note, commands and numbers:
 [`docs/upstream/llama.cpp-15193.md`](upstream/llama.cpp-15193.md). Nothing
 was reported upstream.
 
+## Real layer: int8 matvec on decoded weights (#33)
+
+For the three tensors above, every stored form is decoded by `t27/formats.t27`
+and multiplied with one int8 activation vector by `t27/matvec.t27`, in
+generated C and in `formats.wasm`. The activations are
+`random.Random(27).randint(-128, 127)` of CPython, drawn in index order by the
+t27 port of its generator (`t27/random.t27`); a tensor with n input columns
+uses the first n of 17,408 draws (sha256 of the int8 bytes `1987f310…`, first
+values 117, 13, 18, -28). Each row is widened to i64 once, and every group of
+64 columns is one `tm_dot_i64` call of `t27/compute.t27`, so the report
+carries partial sums per 64 columns as well as the row sums `y_int`. 64
+divides every scale group here (64 for Q2_0, 128 for PTQ1_0, PQ2_0 and MLX).
+
+| Model, tensor | Shape | Stored forms | Integer accumulators | max \|y_int\| | Float step |
+| --- | --- | --- | --- | ---: | --- |
+| BitNet 2B4T, layer 0 `q_proj` | 2560 × 2560 | HF packed, GGUF I2_S | identical: 2,560 rows, 102,400 partials | 10,924 | `y_int × weight_scale`: bf16 1.21875 vs f32 1.2188548, so all 2,560 rows differ |
+| BitNet 2B4T, layer 0 `down_proj` | 2560 × 6912 | HF packed, GGUF I2_S | identical: 2,560 rows, 276,480 partials | 18,753 | bf16 2.15625 vs f32 2.1631613, all 2,560 rows differ |
+| Ternary Bonsai 2 27B, layer 0 `ffn_down` | 5120 × 17408 | PTQ1_0, PQ2_0, Q2_0 (group 64), MLX 2-bit | identical: 5,120 rows, 1,392,640 partials | 36,778 | identical in all four, and equal to the exact value in all 5,120 rows |
+
+So for every format that stores these tensors the integer results are the
+same bits; the BitNet float results differ only because the two files store
+the scale at two precisions (item 1), and every product there is exact.
+
+The float step, with the arithmetic used:
+
+- BitNet: `y[r] = y_int[r] × weight_scale`, one f64 product per row, with the
+  bf16 `weight_scale` of the transformers checkpoint or the f32 scale of the
+  I2_S tensor. The packed checkpoint's config selects `AutoBitLinear`
+  (`linear_class: autobitlinear`, `quantization_mode: offline`, as
+  [`specs/formats/hf_bitnet.t27`](../specs/formats/hf_bitnet.t27) records;
+  `bitnet.py:317-324`), whose forward pass multiplies by `weight_scale`
+  (transformers `2c4914fb`, `src/transformers/integrations/bitnet.py:292`);
+  the class that divides, `BitLinear` (`:181`), is not used by this model.
+  `|y_int| < 2^29` and a scale has at most 24 significant bits, so each
+  product is exact.
+- Bonsai: `y[r] = Σ_j f16(scale_j) × p[r][j]` over the 272 partials of a row,
+  j ascending, summed in f64 from 0. Each product is exact; the sum could
+  round, so an exact integer form `Σ_j (f16(scale_j) × 2^24) × p[r][j]` is
+  computed in checked i64 as well, and the f64 result equals it in every row
+  of every format. MLX computes `q × scale + bias`; that equals the ternary
+  form because the bias is minus the scale in all 696,320 groups (item 4).
+- Activation scale: `x` stands for activations already quantized with one
+  scale per token. transformers' `ActQuant` (`bitnet.py:235-236`) uses
+  `127 / max|x|`; the layer output is the float step divided by that scale,
+  a common factor for every format of the same tensor, so it is left out.
+  How each runtime quantizes its activations is not modeled.
+- Hadamard rotation: the three Bonsai GGUF files carry `prism.hadamard.*`
+  metadata (transform `normalized-sylvester-walsh-hadamard`), which the
+  PrismML runtime applies at inference. It is a runtime transform, not
+  storage: the products here use the stored trits and scales without it, so
+  `y` is not the model's layer output, and the rotation cannot change the
+  agreement between formats that store the same trits and scales.
+
+The bf16 master weights are not a stored ternary form. Ternarized with
+`WeightQuant` (item 2) they give accumulators that differ from the packed ones
+in 2,529 of 2,560 rows of `q_proj` and 2,549 of 2,560 rows of `down_proj`.
+The difference tensor D = packed − absmean is nonzero at exactly the 79,719
+and 101,673 weights of item 2 (in 2,534 and 2,550 rows), and in every row
+`y_packed − y_absmean = D · x` exactly; in 5 and 1 rows the differing trits
+cancel. The accumulators differ because the trits differ, which is item 2:
+the packed trits cannot be recomputed from the published bf16 weights.
+
+Full data, deterministic (no timestamps): [`reports/ternary-check/matvec-2026-09-23.json`](../reports/ternary-check/matvec-2026-09-23.json),
+with the sha256 of `x`, and per tensor and form the sha256 and first values of
+the accumulators, the partials and the float step. `python3 -m trinity_memory.matvec --check`
+recomputes it from the fixture cache, `tests/test_matvec.py` does the same in
+the unit tests, `tests/native_matvec.c` checks the module against oracles
+written in C (including the CPython stream for four seeds), and
+`tests/matvec_wasm.mjs` recomputes all eight stored forms in `formats.wasm`
+and checks them against the report when the fixture cache holds them (the CI
+job `ternary-check` runs it with `TRINITY_REQUIRE_CACHED=1`, so a skipped form
+fails there). The consumer `layer0_matvec` of
+`fixtures/manifest.json` is now implemented; this supersedes the note under
+Fixtures that it is planned. It reads the same 36 ranges as
+`trinity_memory.ternary_check`.
+
+## Matrix: every real tensor in every format (#32)
+
+The three tensors above (BitNet 2B4T layer 0 `q_proj` and `down_proj`, Ternary
+Bonsai 2 27B layer 0 `ffn_down`) against ten storage formats in twelve columns
+(TQ1_0 and TQ2_0 each written by t27 and by llama.cpp) give 36 cells.
+Every cell is decided by executable t27, `t27/matrix.t27` over the readers and
+writers of `t27/formats.t27` (generated C, and `formats.wasm`, where
+`tests/matrix_wasm.mjs` recomputes all 36 cells and the two derived ones below
+when the caches hold their bytes; the CI job `ternary-check` runs it with
+`TRINITY_REQUIRE_CACHED=1`, so a skipped cell fails there); Python only moves
+bytes and renders. Each tensor has a reference, a published form chosen as the
+baseline (HF packed for BitNet, PTQ1_0 for Bonsai; the choice says nothing
+about which form was published first), and a cell is:
+
+- `match`: trits identical, and every weight's scale has the same value (scales
+  are compared weight by weight as exact values, so an f16 and a bf16 word of the
+  same number are equal);
+- `mismatch`: trits or scales differ, with the count, the first differing index,
+  an explanation code checked by t27 and a minimal reproduction in
+  `reports/ternary-check/repro/`;
+- `not-representable`: the format cannot hold the tensor, with every reason that
+  applies (`shape`, `binary_only`, `code_outside`, `group_scales_differ`,
+  `scale_precision`), the number of affected units and the first weight index.
+
+A cell's bytes come from one of three places, or from none (the `provenance` of
+the cell). Published bytes of the pinned checkpoints (3 references and 5 other
+cells) and bytes written by the pinned llama.cpp reference quantizers
+`quantize_row_tq1_0_ref` and `quantize_row_tq2_0_ref` (4 cells, BitNet only) are
+third-party evidence: for BitNet HF packed, I2_S, TQ1_0 and TQ2_0, for Bonsai
+PTQ1_0, PQ2_0, Q2_0 (group 64) and MLX 2-bit. The other 24 cells are t27's alone:
+15 t27 round trips (the t27 encoder writes the reference, the t27 decoder reads
+it back), which show that a format can hold the tensor, and 9 not-representable
+cells (provenance `not_written`), which t27 decides from the reference before
+anything is written, so neither the t27 encoder nor a llama.cpp quantizer runs
+for them (among them TQ1_0 and TQ2_0 of the Bonsai tensor in both columns).
+None of these 24 is third-party evidence. The llama.cpp input is
+`w = t × weight_scale` in float, one quantize call per row
+(`tests/upstream/encode_llamacpp_tq.c`); the sources are the pinned ones of the
+issue 15193 harness, fetched and sha256-checked by
+`tests/upstream/run-llamacpp-matrix.sh`.
+
+| Format | BitNet `q_proj` | BitNet `down_proj` | Bonsai `ffn_down` |
+| --- | --- | --- | --- |
+| HF packed + bf16 `weight_scale` | reference | reference | not representable: one scale per tensor; 608,946 of 696,320 f16 scales have no bf16 word |
+| I2_S (bitnet.cpp) | mismatch: scales, bf16 rounding of the f32 scale | mismatch: scales, bf16 rounding | not representable: one scale per tensor |
+| PTQ1_0 | match (t27 round trip) | match (t27 round trip) | reference |
+| PQ2_0 | match (t27 round trip) | match (t27 round trip) | match (published) |
+| Q2_0, group 64 | match (t27 round trip) | match (t27 round trip) | match (published) |
+| MLX 2-bit, group 128 | match (t27 round trip) | match (t27 round trip) | match (published) |
+| TQ1_0, TQ2_0 (t27) | match (t27 round trip) | match (t27 round trip) | not representable: 347,140 of 348,160 blocks span two scales |
+| TQ1_0, TQ2_0 (llama.cpp writer) | mismatch: scales of 50 all-zero blocks | match | not representable (decided before writing) |
+| Q1_0 (binary) | not representable: 3,251,715 zeros | not representable: 6,761,794 zeros | not representable: 29,214,453 of 89,128,960 zeros |
+| ONNX `MatMulNBits` bits=2, block 128 | match (t27 round trip) | match (t27 round trip) | match (t27 round trip) |
+
+Totals: 23 match, 4 mismatch, 9 not representable. What the matrix adds:
+
+- **I2_S against HF packed.** The trits are identical and the scale differs for
+  every weight; t27 checks that the bf16 `weight_scale` is the f32 I2_S scale
+  rounded to nearest-even (explanation `scale_bf16_rounding`, item 1). Written
+  again by the t27 encoder, the decoded I2_S tensor differs from the published
+  bytes in exactly the 28 trailer bytes that `trailer_nonzero` counts (item 3).
+- **llama.cpp's TQ1_0 and TQ2_0 writers on BitNet.** Both keep every trit of both
+  tensors. In `q_proj` they store the scale 0 for 50 blocks of 256 weights
+  (12,800 weights from index 3,934,464) whose trits are all 0, where the
+  reference has the tensor scale: explanation `scale_zero_weights`, so every
+  weight dequantizes to the same value. Given the scale words the upstream file
+  holds, the t27 encoder writes the upstream bytes exactly; the t27 round trip,
+  which writes the tensor scale into every block, differs from them in the 100
+  bytes of those 50 scale words. In `down_proj` the upstream and t27 bytes are
+  identical.
+- **Triple check for BitNet.** The packed trits equal the I2_S trits; the bf16
+  master weights under `WeightQuant` (a derived cell, not a storage format) differ
+  from both in 79,719 (`q_proj`) and 101,673 (`down_proj`) weights, all of them at
+  the bf16 value `0.5 × weight_scale` (0.609375 and 1.078125, where `|w·s|` is
+  0.49996 and 0.49841). The packed file stores both trits there: at +0.609375
+  39,708 ±1 and 41,560 zeros, at −0.609375 40,011 and 41,944; at ±1.078125 50,812
+  and 453,819, and 50,861 and 453,976. t27 records this as `tie_split`: the same
+  bf16 value carries different packed trits, so the packed trits cannot be
+  recomputed from the published bf16 weights (item 2).
+- **Ternary Bonsai 2.** PQ2_0, Q2_0 and MLX match PTQ1_0 (item 4), and the t27
+  encoder writes each published tensor back byte for byte. Formats with one scale
+  per 256 weights or per tensor cannot hold it, because its 128-weight groups have
+  their own scales, and Q1_0 has no code for 0. The Hadamard rotation that the
+  Bonsai GGUF files declare is a runtime transform, not storage, so it is not a
+  reason for any cell; the report records it per tensor.
+- **ONNX Runtime `MatMulNBits` with `bits=2`** (block 128, fp16 scales, default
+  zero point 2) holds all three tensors in t27 round trips.
+- **Bits per weight.** Every cell with bytes carries `stored_bytes` and
+  `bits_per_weight` (codes, scales, zero points or biases, and the format's own
+  padding, as the table under "Bits per weight" in `specs/formats/OWNERS.md`
+  counts them) and `metadata`, the tensor's metadata share as OWNERS.md defines
+  it, both computed by t27 (`tmx_bits_per_weight`, `tmx_gguf_metadata_bytes`).
+  For a published GGUF tensor the share is its info record and the alignment
+  padding after its data: 61 bytes for Bonsai `ffn_down` in Q2_0, so 2.25 bits
+  per weight become 2.2500055 (the case `specs/formats/llama_cpp.t27` tests).
+  A safetensors tensor has no share of its own (the JSON header is file
+  overhead), and neither have bytes in no container: the t27 round trips and
+  the llama.cpp writers' output.
+
+Reports, all deterministic (the time and host of a run go to
+`build/ternary-check/run.json`, outside them):
+[`reports/ternary-check.json`](../reports/ternary-check.json) (schema
+`trinity.ternary-check.v1`, JSON Schema
+[`schemas/ternary-check.v1.schema.json`](../schemas/ternary-check.v1.schema.json);
+its `matvec` section is the #33 report above),
+[`reports/ternary-check.html`](../reports/ternary-check.html) (the table as one
+self-contained page), and one reproduction per mismatch in
+[`reports/ternary-check/repro/`](../reports/ternary-check/repro/) (schema
+[`schemas/ternary-check.repro.v1.schema.json`](../schemas/ternary-check.repro.v1.schema.json)):
+file offsets, bytes, bit positions, decoded trits and scale words of the first
+differing weights, and for the derived cells weights with the same bf16 master
+word and different packed trits. The error and flag tokens of the report
+(`taxonomy.errors`, `taxonomy.flags`) are those of `specs/formats/OWNERS.md`
+(`constants.errors`, `constants.flags` of the conformance files), and each
+published cell carries its reader flags. The cell statuses, reasons and
+explanations are the `TMX_*` tokens of `t27/matrix.t27`: verdicts on valid
+input, not rejects (OWNERS.md relates them to the reject classes in its
+paragraph on `t27/matrix.t27`).
+
+One command, from a clean clone:
+
+```sh
+make ternary-check            # fetch fixtures (strict), build t27, run llama.cpp's writers, write the reports
+make ternary-check OFFLINE=1  # the same from the caches only (build/fixtures, build/upstream, T27_ROOT)
+make ternary-check-verify     # recompute and compare with the committed reports
+```
+
+Without `T27_ROOT` the script fetches gHashTag/t27 at `native/compiler.lock` into
+`build/compiler`. For the matrix this replaces the two commands under Reproduce
+below: `python3 -m trinity_memory.ternary_check` alone now also needs the
+llama.cpp-encoded tensors in `build/upstream/matrix/` (written by
+`sh tests/upstream/run-llamacpp-matrix.sh`, which `make ternary-check` runs), it
+writes `build/ternary-check.json`, `build/ternary-check.html` and
+`build/ternary-check/repro/`, and when a cache file is missing it stops with
+exit status 2 and a message naming the step, not a traceback.
+
+The CI job `ternary-check` runs `make ternary-check` on a clean checkout with the
+fixture cache and fails unless the committed reports come out exactly; then, with
+`TRINITY_REQUIRE_CACHED=1`, `tests/matrix_wasm.mjs` and `tests/matvec_wasm.mjs`
+recompute every cell and stored form in `formats.wasm` and the unit tests of both
+reports recompute them in the generated C, and a skip fails.
+`tests/test_ternary_check.py` validates the report and every reproduction against
+the schemas, checks that every count, group size and bits-per-weight value this
+section quotes from the report is the report's and is written here (the item and
+issue numbers, dates and the definition `0.5 × weight_scale` are not report
+values), and recomputes all committed files from the caches (skipped only
+when a cache file is missing); `tests/native_matrix.c` checks the t27 module
+against oracles written in C, including a consistent tie rule that must stay
+unexplained and a zero-scale block with a nonzero trit on one side.
+
+`reports/ternary-check/2026-09-22.json`, the "Full data" of the Results table, is
+the first run's snapshot, kept as history. It carries the schema string
+`trinity.ternary-check.v1` but predates the JSON Schema: its shape is
+`{schema, generated, checks}`, with a timestamp and run times, it does not
+validate against `schemas/ternary-check.v1.schema.json` (whose `$comment` says
+so), and nothing regenerates it. `reports/ternary-check.json` holds every number
+of the Results table and the snapshot's tensor measurements (weights, stored
+bytes and bits per weight of every stored form, flags, scales, comparisons), and `tests/test_ternary_check.py` checks that they are equal; the
+snapshot's source file sizes (they are in `fixtures/manifest.json`), its
+`bf16_absmean` sizes and its run times are not in the report.
+
+Limits: three tensors; the t27 round trips are not third-party evidence;
+llama.cpp is the only upstream writer run here; no model was run.
+
 ## Reproduce
 
 ```sh

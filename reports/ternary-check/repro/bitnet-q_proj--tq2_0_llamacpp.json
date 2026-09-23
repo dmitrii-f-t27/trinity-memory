@@ -1,0 +1,77 @@
+{
+ "schema": "trinity.ternary-check.repro.v1",
+ "cell": "bitnet-q_proj--tq2_0_llamacpp",
+ "status": "mismatch",
+ "component": "scales",
+ "explanation": "scale_zero_weights",
+ "explanation_text": "scales differ only at weights whose trit is 0 in both tensors, so every weight dequantizes to the same value: the llama.cpp TQ1_0/TQ2_0 quantizers store d = 0 for a block of zero weights",
+ "weights": {
+  "compared": 6553600,
+  "trits_differ": 0,
+  "trits_first": -1,
+  "scales_differ": 12800,
+  "scales_first": 3934464
+ },
+ "reference": {
+  "column": "hf_packed",
+  "source": [
+   {
+    "repo": "microsoft/bitnet-b1.58-2B-4T",
+    "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+    "file": "model.safetensors",
+    "range": [
+     672931828,
+     674570228
+    ]
+   },
+   {
+    "repo": "microsoft/bitnet-b1.58-2B-4T",
+    "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+    "file": "model.safetensors",
+    "range": [
+     656760922,
+     656760924
+    ]
+   }
+  ]
+ },
+ "stored": {
+  "column": "tq2_0_llamacpp",
+  "source": [
+   {
+    "upstream": "llama.cpp",
+    "writer": "quantize_row_tq2_0_ref",
+    "file": "build/upstream/matrix/bitnet-q_proj.tq2_0",
+    "range": [
+     0,
+     1689600
+    ]
+   }
+  ]
+ },
+ "sample_weights": [
+  {
+   "index": 3934464,
+   "row": 1536,
+   "col": 2304,
+   "reference": {
+    "file_offset": 673589492,
+    "byte_hex": "14",
+    "position": 4,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 0
+   },
+   "stored": {
+    "file_offset": 1014354,
+    "byte_hex": "55",
+    "position": 0,
+    "position_is": "lowest bit of the 2-bit code",
+    "trit": 0,
+    "scale_file_offset": 1014418,
+    "scale_bytes_hex": "0000"
+   },
+   "reference_scale": 16284,
+   "stored_scale": 0
+  }
+ ]
+}

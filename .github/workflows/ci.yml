@@ -118,45 +118,70 @@ jobs:
           python3 tools/bitnet_audit.py --offline > build/bitnet-audit.json
           cmp build/bitnet-audit.json reports/ternary-check/bitnet-audit-2026-09-23.json
   ternary-check:
-    needs: [native, fixtures]
+    # Issue #32: the one command from a clean clone, make ternary-check, then the
+    # committed reports must come out exactly: reports/ternary-check.json,
+    # reports/ternary-check.html and reports/ternary-check/repro/. The fixture
+    # ranges come from the cache of job "fixtures" (sha256-checked, no network);
+    # the script fetches the pinned compiler and the pinned llama.cpp sources
+    # (sha256-checked) and builds everything else here. With every cache in
+    # place, formats.wasm and the unit tests then recompute all cells, and
+    # TRINITY_REQUIRE_CACHED=1 turns any skipped cell into a failure.
+    needs: fixtures
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     env:
+      CC: clang
+      CXX: clang++
       TRINITY_FIXTURES_OFFLINE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v4
+      - uses: actions/setup-node@v4
         with:
-          name: native-t27-evidence
-          path: build/t27
+          node-version: '24'
+      - name: Install build tools
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y clang lld libssl-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
       - uses: actions/cache/restore@v4
         with:
           path: build/fixtures
           key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
           fail-on-cache-miss: true
-      - name: Reproduce the committed Ternary Check report from the cached ranges
+      - name: make ternary-check
+        run: make ternary-check
+      - name: The committed reports are reproduced exactly
         run: |
-          python3 tools/fetch-fixtures.py --offline
-          python3 -m trinity_memory.ternary_check > /dev/null
-          python3 - <<'PY'
-          import json
-          def core(path):
-              report = json.load(open(path))
-              report.pop("generated")
-              for check in report["checks"]:
-                  check.pop("seconds")
-              return report
-          assert core("build/ternary-check.json") == core("reports/ternary-check/2026-09-22.json"), "report differs"
-          print("build/ternary-check.json matches reports/ternary-check/2026-09-22.json")
-          PY
+          paths="reports/ternary-check.json reports/ternary-check.html reports/ternary-check/repro"
+          git status --porcelain -- $paths
+          git diff --stat -- $paths
+          test -z "$(git status --porcelain -- $paths)"
+      - name: formats.wasm and the unit tests recompute every real cell, none skipped
+        env:
+          TRINITY_REQUIRE_CACHED: '1'
+        run: |
+          node tests/matrix_wasm.mjs
+          node tests/matvec_wasm.mjs
+          python -m unittest tests.test_ternary_check tests.test_matvec -v
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ternary-check
-          path: build/ternary-check.json
+          path: |
+            reports/ternary-check.json
+            reports/ternary-check.html
+            reports/ternary-check/repro/
+            build/ternary-check/run.json
   upstream-15193:
     # llama.cpp issue 15193 harness: pinned upstream TQ1_0/TQ2_0 functions
     # against the t27 decoders; x86_64 AVX2 natively on Ubuntu, NEON (DOTPROD

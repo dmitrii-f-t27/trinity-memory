@@ -45,6 +45,12 @@ class FixtureError(RuntimeError):
     pass
 
 
+class CacheMiss(FixtureError):
+    """A listed range (or another cached input) is not on disk and fetching is
+    off. Every other FixtureError means the manifest, the cache or the reader
+    is wrong, so tests may skip on this one only."""
+
+
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -263,7 +269,7 @@ class Remote:
     def fetch(self, begin: int, end: int) -> bytes:
         """Bytes [begin, end) over HTTP: the answer must be 206 with exactly that length."""
         if self.offline:
-            raise FixtureError(f"{self.key}#{begin}-{end}: not in the cache and fetching is off "
+            raise CacheMiss(f"{self.key}#{begin}-{end}: not in the cache and fetching is off "
                                f"(run python3 tools/fetch-fixtures.py)")
         if not 0 <= begin < end <= self.size:
             raise FixtureError(f"{self.key}: range {begin}-{end} outside file of {self.size} bytes")
