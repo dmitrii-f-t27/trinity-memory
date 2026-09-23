@@ -1,0 +1,74 @@
+name: Ternary Check weekly
+# Once a week, and on demand: are the pinned upstream sources and model
+# files still what the format contracts restate, and do the vectors still
+# pass with this repository's own decoder? tools/upstream-drift.py compares
+# every file of specs/formats/upstream.lock.json and
+# tests/upstream/llama.cpp.lock.json by git blob SHA with the upstream branch
+# heads, and every model file of fixtures/manifest.json by LFS SHA-256 with the
+# same file at the model's main (a moved revision alone is not drift). It only
+# reads public APIs; nothing is posted anywhere. Drift fails the run after the
+# t27 decoders have been rebuilt and every vector rerun; the reports are an
+# artifact.
+on:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CC: clang
+      CXX: clang++
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - id: drift
+        name: Upstream drift of the pinned upstream and model files
+        continue-on-error: true
+        env:
+          # Read-only token of this run: raises the GitHub API rate limit.
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/upstream-drift.py --output build/upstream-drift.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Fetch pinned compiler and install build tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y clang lld libssl-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-${{ runner.os }}-${{ runner.arch }}-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Rebuild the t27 decoders and the contract functions
+        run: sh tools/build-t27.sh
+      - id: vectors
+        name: Rerun every vector with the reference decoder
+        uses: ./ternary-check
+        with:
+          decoder: python3 -m trinity_memory ternary-check
+          runtime: .
+          report: build/ternary-check-weekly.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ternary-check-weekly
+          path: |
+            build/upstream-drift.json
+            build/ternary-check-weekly.json
+      - name: Fail on upstream drift
+        if: steps.drift.outcome != 'success'
+        run: |
+          echo "::error title=upstream drift::tools/upstream-drift.py found drift or could not read an upstream head; see build/upstream-drift.json in the ternary-check-weekly artifact"
+          exit 1

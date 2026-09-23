@@ -1,9 +1,11 @@
 #!/bin/sh
 # Compile the same generated codec algorithms for the standalone browser UI,
-# and the external format readers and writers with the real-layer product of
+# and the external format readers and writers with the Ternary Check contract
+# functions of t27/ternary_contract.t27, the real-layer product of
 # t27/matvec.t27 and the matrix cells of t27/matrix.t27 (formats.wasm) for
 # JavaScript consumers, tests/spec_formats_wasm_replay.mjs,
-# tests/matvec_wasm.mjs and tests/matrix_wasm.mjs.
+# tests/ternary_contract_wasm_replay.mjs, tests/matvec_wasm.mjs and
+# tests/matrix_wasm.mjs.
 set -eu
 cd "$(dirname "$0")/.."
 out=build/t27
@@ -52,6 +54,9 @@ for name in tf_block_elements tf_block_bytes tf_scale_offset tf_scale_class tf_s
     tmx_float_bits tmx_bf16_round tmx_scale_count tmx_scale_kind tmx_scale_group tmx_representable \
     tmx_convert_scales tmx_encode tmx_decode tmx_compare tmx_explain_ties tmx_round_trip tmx_bytes_differ \
     tmx_reencode tmx_locate tmx_mismatch_indices tmx_word_indices tmx_bits_per_weight tmx_gguf_metadata_bytes \
+    tk_decode tk_encode tk_encoded_bytes tk_scale_count tk_scale_width tk_format_of_name tk_format_token \
+    tk_error_status tk_error_token tk_flag_token tk_outcome_token tk_parse_flags tk_flags_text tk_compare_bytes \
+    tk_compare_words tk_flag_state tk_verdict tk_fails tk_run_passed \
     tf_absmean_bf16; do
     formats_exports="$formats_exports --export=$name"
 done

@@ -12,6 +12,9 @@
 double tm_json_strtod(uint8_t *text) { (void)text; __builtin_trap(); }
 #include "json.h"
 #include "formats.h"
+/* The Ternary Check contract (t27/ternary_contract.t27): the strict reader and
+ * writer behind the CLI contract, class tokens, comparison and verdicts. */
+#include "ternary_contract.h"
 /* The real-layer product (issue #33): tm_dot_i64 of compute.h, the CPython
  * random stream of random.h and t27/matvec.t27, which needs both. */
 #include "compute.h"
