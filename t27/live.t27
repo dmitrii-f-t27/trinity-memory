@@ -1,0 +1,506 @@
+// SPDX-License-Identifier: Apache-2.0
+// Ternary Check Live (issues #49 and #50): verdicts on a complete GGUF header
+// beyond the per-tensor rules of t27/formats.t27. Canonical executable source:
+// the shared library is generated from it; Python only moves bytes.
+//
+//  - tlv_hadamard: the PrismML fork's rules for the prism.hadamard.* keys,
+//    restated from PrismML-Eng/llama.cpp@bdc23b56b4458b9f1655aec5287f3ab56ee8daaa
+//    (the pin of specs/formats/upstream.lock.json; unchanged at 0324c665, the
+//    branch head on 2026-09-24): the keys, their GGUF types and values, the
+//    verified architectures and weight paths (src/llama-model.cpp:1196-1335,
+//    key getters in src/llama-model-loader.cpp:310-352 and GKV::get_kv), and,
+//    per listed weight, a tensor whose ne[0] the block size divides and a sign
+//    vector of that width (src/llama-model.cpp:1971-2050). The first rule
+//    that fails, in the order the fork checks them, gives the status. A file without
+//    prism.hadamard.version passes with out.present false: the fork then
+//    applies no rotation at all (PrismML-Eng/llama.cpp#242).
+//  - tlv_layout_fit: for a ternary record rejected on its extent, the layout
+//    whose size fits the bytes the record really has (PrismML-Eng/llama.cpp#167:
+//    type 42 declared, 128-weight groups stored).
+//  - tlv_prism_unmarked: a record of the fork-only type ids 142 or 143 in a
+//    file without any "prism." key (the official Ternary Bonsai 27B PQ2_0 file
+//    has none).
+//  - tlv_record_check: one record as gguf.cpp reads it: tf_gguf_check (the
+//    unmarked fork ids read as the fork's layouts), then contiguous offsets.
+//
+// Status classes (specs/formats/OWNERS.md): -63 .. -71 reject the Hadamard
+// metadata, -72 a record whose data do not end where the next record begins;
+// header parse failures return TF_ERR_CONTAINER.
+// This module needs formats.h earlier in the same translation unit.
+module TrinityMemoryLive {
+    const TLV_ERR_HADAMARD_TYPE: i32 = -63;
+    const TLV_ERR_HADAMARD_MISSING: i32 = -64;
+    const TLV_ERR_HADAMARD_VERSION: i32 = -65;
+    const TLV_ERR_HADAMARD_BLOCK: i32 = -66;
+    const TLV_ERR_HADAMARD_TRANSFORM: i32 = -67;
+    const TLV_ERR_HADAMARD_SIGNS: i32 = -68;
+    const TLV_ERR_HADAMARD_ARCH: i32 = -69;
+    const TLV_ERR_HADAMARD_NAME: i32 = -70;
+    const TLV_ERR_HADAMARD_TENSOR: i32 = -71;
+    const TLV_ERR_OFFSETS: i32 = -72;
+
+    // One key-value pair of a GGUF header. `at` is the first byte of the
+    // value; for arrays, `elem` and `count` describe the elements and `items`
+    // is the first byte of the first one.
+    struct TLVKey {
+        found: bool,
+        vtype: u32,
+        at: u64,
+        elem: u32,
+        count: u64,
+        items: u64,
+    }
+
+    // What tlv_hadamard read. `index` is the position of the offending entry
+    // for the NAME, SIGNS and TENSOR statuses: a weight name, then the inverse
+    // names numbered after them; a sign width; or a sign value.
+    struct TLVHadamard {
+        present: bool,
+        block_size: u32,
+        names: u64,
+        inverse: u64,
+        widths: u64,
+        signs: u64,
+        explicit_signs: bool,
+        index: u64,
+    }
+
+    // ---- key-value pairs ---------------------------------------------------
+
+    // Position of the first tensor record of a complete GGUF v3 header, or
+    // TF_ERR_CONTAINER.
+    fn tlv_records(data: []u8, size: usize) -> i64 {
+        var scratch: TFTensorInfo;
+        if (size < 24) { return TF_ERR_CONTAINER as i64; }
+        if (tf_read_u32(data, 0) != 0x46554747 || tf_read_u32(data, 4) != 3) { return TF_ERR_CONTAINER as i64; }
+        var keys: u64 = tf_read_u64(data, 16);
+        var pos: u64 = 24;
+        var k: u64 = 0;
+        while (k < keys) {
+            if (pos + 8 > (size as u64)) { return TF_ERR_CONTAINER as i64; }
+            var length: u64 = tf_read_u64(data, pos as usize);
+            if (length > 65535 || pos + 12 + length > (size as u64)) { return TF_ERR_CONTAINER as i64; }
+            var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
+            var next: i64 = tf_gguf_skip(data, size, pos + 12 + length, vtype, &scratch);
+            if (next < 0) { return TF_ERR_CONTAINER as i64; }
+            pos = next as u64;
+            k = k + 1;
+        }
+        return pos as i64;
+    }
+
+    // The first key-value pair named `key`. Returns 0 (out.found tells
+    // whether it exists) or TF_ERR_CONTAINER.
+    fn tlv_key(data: []u8, size: usize, key: str, key_size: usize, out: *TLVKey) -> i32 {
+        var scratch: TFTensorInfo;
+        out.found = false; out.vtype = 0; out.at = 0; out.elem = 0; out.count = 0; out.items = 0;
+        if (size < 24) { return TF_ERR_CONTAINER; }
+        if (tf_read_u32(data, 0) != 0x46554747 || tf_read_u32(data, 4) != 3) { return TF_ERR_CONTAINER; }
+        var keys: u64 = tf_read_u64(data, 16);
+        var pos: u64 = 24;
+        var k: u64 = 0;
+        while (k < keys) {
+            if (pos + 8 > (size as u64)) { return TF_ERR_CONTAINER; }
+            var length: u64 = tf_read_u64(data, pos as usize);
+            if (length > 65535 || pos + 12 + length > (size as u64)) { return TF_ERR_CONTAINER; }
+            var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
+            var value_at: u64 = pos + 12 + length;
+            var next: i64 = tf_gguf_skip(data, size, value_at, vtype, &scratch);
+            if (next < 0) { return TF_ERR_CONTAINER; }
+            if (!out.found && tf_same_text(data, (pos + 8) as usize, length as usize, key, key_size)) {
+                out.found = true;
+                out.vtype = vtype;
+                out.at = value_at;
+                if (vtype == 9) {
+                    out.elem = tf_read_u32(data, value_at as usize);
+                    out.count = tf_read_u64(data, (value_at + 4) as usize);
+                    out.items = value_at + 12;
+                }
+            }
+            pos = next as u64;
+            k = k + 1;
+        }
+        return 0;
+    }
+
+    // A string value (type 8) at `at` that equals `text`.
+    fn tlv_text_at(data: []u8, at: u64, text: str, text_size: usize) -> bool {
+        var length: u64 = tf_read_u64(data, at as usize);
+        if (length != (text_size as u64)) { return false; }
+        return tf_same_text(data, (at + 8) as usize, length as usize, text, text_size);
+    }
+
+    fn tlv_same_bytes(data: []u8, a: u64, b: u64, length: u64) -> bool {
+        var i: u64 = 0;
+        while (i < length) {
+            if (data[(a + i) as usize] != data[(b + i) as usize]) { return false; }
+            i = i + 1;
+        }
+        return true;
+    }
+
+    // The fork's get_key: a missing optional key is fine, a present one must
+    // have exactly the expected GGUF type (llama-model-loader.cpp GKV::get_kv).
+    // The fork's get_arr (llama-model-loader.cpp:310-352): a key that is
+    // missing or not an array counts as missing; string arrays need string
+    // elements, integer arrays int32 or uint32 elements.
+    fn tlv_string_array(key: *TLVKey) -> i32 {
+        if (!key.found || key.vtype != 9) { return TLV_ERR_HADAMARD_MISSING; }
+        if (key.elem != 8) { return TLV_ERR_HADAMARD_TYPE; }
+        return 0;
+    }
+
+    fn tlv_int_array(key: *TLVKey) -> i32 {
+        if (!key.found || key.vtype != 9) { return TLV_ERR_HADAMARD_MISSING; }
+        if (key.elem != 4 && key.elem != 5) { return TLV_ERR_HADAMARD_TYPE; }
+        return 0;
+    }
+
+    // ---- verified weight paths (src/llama-model.cpp:1279-1303) ------------
+
+    fn tlv_kind(data: []u8, at: usize, size: usize) -> bool {
+        if (tf_same_text(data, at, size, "attn_q.weight", 13)) { return true; }
+        if (tf_same_text(data, at, size, "attn_k.weight", 13)) { return true; }
+        if (tf_same_text(data, at, size, "attn_v.weight", 13)) { return true; }
+        if (tf_same_text(data, at, size, "attn_qkv.weight", 15)) { return true; }
+        if (tf_same_text(data, at, size, "attn_gate.weight", 16)) { return true; }
+        if (tf_same_text(data, at, size, "attn_output.weight", 18)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_gate.weight", 15)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_up.weight", 13)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_down.weight", 15)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_gate_exps.weight", 20)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_up_exps.weight", 18)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_down_exps.weight", 20)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_gate_up_exps.weight", 23)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_gate_shexp.weight", 21)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_up_shexp.weight", 19)) { return true; }
+        if (tf_same_text(data, at, size, "ffn_down_shexp.weight", 21)) { return true; }
+        if (tf_same_text(data, at, size, "ssm_out.weight", 14)) { return true; }
+        return false;
+    }
+
+    // "output.weight", or "blk.<digits>.<kind>.weight" for a listed kind.
+    fn tlv_foldable(data: []u8, at: u64, length: u64) -> bool {
+        if (tf_same_text(data, at as usize, length as usize, "output.weight", 13)) { return true; }
+        if (length < 4 || !tf_same_text(data, at as usize, 4, "blk.", 4)) { return false; }
+        var p: u64 = 4;
+        while (p < length && data[(at + p) as usize] >= 48 && data[(at + p) as usize] <= 57) { p = p + 1; }
+        if (p == 4 || p >= length) { return false; }
+        if (data[(at + p) as usize] != 46) { return false; }
+        p = p + 1;
+        return tlv_kind(data, (at + p) as usize, (length - p) as usize);
+    }
+
+    // ---- tensor records --------------------------------------------------------
+
+    // ne[0] of the tensor named data[name_at .. name_at + name_size), or
+    // 2^64 - 1 when no record has that name. `records` from tlv_records.
+    fn tlv_tensor_ne0(data: []u8, size: usize, records: u64, name_at: u64, name_size: u64) -> u64 {
+        var none: u64 = 0xffffffffffffffff;
+        var tensors: u64 = tf_read_u64(data, 8);
+        var pos: u64 = records;
+        var t: u64 = 0;
+        while (t < tensors) {
+            if (pos + 8 > (size as u64)) { return none; }
+            var length: u64 = tf_read_u64(data, pos as usize);
+            if (length > 65535 || pos + 12 + length > (size as u64)) { return none; }
+            var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+            if (dims == 0 || dims > 4) { return none; }
+            if (pos + 12 + length + 8 * dims + 12 > (size as u64)) { return none; }
+            if (length == name_size && tlv_same_bytes(data, pos + 8, name_at, length)) {
+                return tf_read_u64(data, (pos + 12 + length) as usize);
+            }
+            pos = pos + 12 + length + 8 * dims + 12;
+            t = t + 1;
+        }
+        return none;
+    }
+
+    // Whether the explicit sign table holds a vector of `width` values: the
+    // widths array at `widths` (int32 or uint32 elements, validated).
+    fn tlv_has_width(data: []u8, widths: *TLVKey, width: u64) -> bool {
+        var i: u64 = 0;
+        while (i < widths.count) {
+            if ((tf_read_u32(data, (widths.items + 4 * i) as usize) as u64) == width) { return true; }
+            i = i + 1;
+        }
+        return false;
+    }
+
+    // One listed weight: a tensor of the file whose ne[0] the block size
+    // divides, with a sign vector of width ne[0] in explicit mode.
+    fn tlv_weight_ok(data: []u8, size: usize, records: u64, name_at: u64, name_size: u64, block: u32,
+                     explicit_signs: bool, widths: *TLVKey) -> bool {
+        var ne0: u64 = tlv_tensor_ne0(data, size, records, name_at, name_size);
+        if (ne0 == 0xffffffffffffffff) { return false; }
+        if (ne0 % (block as u64) != 0) { return false; }
+        if (explicit_signs && !tlv_has_width(data, widths, ne0)) { return false; }
+        return true;
+    }
+
+    // ---- prism.hadamard.* --------------------------------------------------------
+
+    fn tlv_hadamard(data: []u8, size: usize, out: *TLVHadamard) -> i32 {
+        out.present = false; out.block_size = 0; out.names = 0; out.inverse = 0;
+        out.widths = 0; out.signs = 0; out.explicit_signs = false; out.index = 0;
+        var version: TLVKey;
+        var block_key: TLVKey;
+        var transform: TLVKey;
+        var axis: TLVKey;
+        var mode: TLVKey;
+        var names: TLVKey;
+        var widths: TLVKey;
+        var values: TLVKey;
+        var gdn: TLVKey;
+        var inverse: TLVKey;
+        var arch: TLVKey;
+        var records: i64 = tlv_records(data, size);
+        if (records < 0) { return records as i32; }
+        // :1196-1200 version (optional u32, must be 1)
+        var status: i32 = tlv_key(data, size, "prism.hadamard.version", 22, &version);
+        if (status < 0) { return status; }
+        if (!version.found) { return 0; }
+        out.present = true;
+        if (version.vtype != 4) { return TLV_ERR_HADAMARD_TYPE; }
+        if (tf_read_u32(data, version.at as usize) != 1) { return TLV_ERR_HADAMARD_VERSION; }
+        // :1208-1212 required keys, read in this order
+        status = tlv_key(data, size, "prism.hadamard.block_size", 25, &block_key);
+        if (status < 0) { return status; }
+        if (!block_key.found) { return TLV_ERR_HADAMARD_MISSING; }
+        if (block_key.vtype != 4) { return TLV_ERR_HADAMARD_TYPE; }
+        status = tlv_key(data, size, "prism.hadamard.transform", 24, &transform);
+        if (status < 0) { return status; }
+        if (!transform.found) { return TLV_ERR_HADAMARD_MISSING; }
+        if (transform.vtype != 8) { return TLV_ERR_HADAMARD_TYPE; }
+        status = tlv_key(data, size, "prism.hadamard.axis", 19, &axis);
+        if (status < 0) { return status; }
+        if (!axis.found) { return TLV_ERR_HADAMARD_MISSING; }
+        if (axis.vtype != 8) { return TLV_ERR_HADAMARD_TYPE; }
+        status = tlv_key(data, size, "prism.hadamard.sign_mode", 24, &mode);
+        if (status < 0) { return status; }
+        if (!mode.found) { return TLV_ERR_HADAMARD_MISSING; }
+        if (mode.vtype != 8) { return TLV_ERR_HADAMARD_TYPE; }
+        status = tlv_key(data, size, "prism.hadamard.weight_names", 27, &names);
+        if (status < 0) { return status; }
+        status = tlv_string_array(&names);
+        if (status < 0) { return status; }
+        // :1214-1228 values
+        var block: u32 = tf_read_u32(data, block_key.at as usize);
+        out.block_size = block;
+        out.names = names.count;
+        if (block == 0 || (block & (block - 1)) != 0) { return TLV_ERR_HADAMARD_BLOCK; }
+        if (!tlv_text_at(data, transform.at, "normalized-sylvester-walsh-hadamard", 35)) { return TLV_ERR_HADAMARD_TRANSFORM; }
+        if (!tlv_text_at(data, axis.at, "input-last-dimension", 20)) { return TLV_ERR_HADAMARD_TRANSFORM; }
+        var explicit_signs: bool = tlv_text_at(data, mode.at, "explicit", 8);
+        if (!explicit_signs && !tlv_text_at(data, mode.at, "identity", 8)) { return TLV_ERR_HADAMARD_TRANSFORM; }
+        if (names.count == 0) { out.index = 0; return TLV_ERR_HADAMARD_NAME; }
+        // :1230-1257 explicit signs: widths partition the values, each a
+        // positive multiple of the block size, every value +1 or -1
+        out.explicit_signs = explicit_signs;
+        if (explicit_signs) {
+            status = tlv_key(data, size, "prism.hadamard.sign_widths", 26, &widths);
+            if (status < 0) { return status; }
+            status = tlv_int_array(&widths);
+            if (status < 0) { return status; }
+            status = tlv_key(data, size, "prism.hadamard.sign_values", 26, &values);
+            if (status < 0) { return status; }
+            status = tlv_int_array(&values);
+            if (status < 0) { return status; }
+            out.widths = widths.count;
+            out.signs = values.count;
+            if (widths.count == 0) { out.index = 0; return TLV_ERR_HADAMARD_SIGNS; }
+            var offset: u64 = 0;
+            var w: u64 = 0;
+            while (w < widths.count) {
+                var width: i64 = (tf_read_u32(data, (widths.items + 4 * w) as usize) as i32) as i64;
+                if (width <= 0) { out.index = w; return TLV_ERR_HADAMARD_SIGNS; }
+                if (((width as u64) % (block as u64)) != 0) { out.index = w; return TLV_ERR_HADAMARD_SIGNS; }
+                if (offset + (width as u64) > values.count) { out.index = w; return TLV_ERR_HADAMARD_SIGNS; }
+                var v: u64 = offset;
+                while (v < offset + (width as u64)) {
+                    var sign: u32 = tf_read_u32(data, (values.items + 4 * v) as usize);
+                    if (sign != 1 && sign != 0xffffffff) { out.index = v; return TLV_ERR_HADAMARD_SIGNS; }
+                    v = v + 1;
+                }
+                offset = offset + (width as u64);
+                w = w + 1;
+            }
+            if (offset != values.count) { out.index = offset; return TLV_ERR_HADAMARD_SIGNS; }
+        }
+        // :1259 gdn_v_grouped (optional bool)
+        status = tlv_key(data, size, "prism.hadamard.gdn_v_grouped", 28, &gdn);
+        if (status < 0) { return status; }
+        if (gdn.found && gdn.vtype != 7) { return TLV_ERR_HADAMARD_TYPE; }
+        // :1264-1277 verified architectures
+        status = tlv_key(data, size, "general.architecture", 20, &arch);
+        if (status < 0) { return status; }
+        var dspark: bool = false;
+        if (!arch.found || arch.vtype != 8) { return TLV_ERR_HADAMARD_ARCH; }
+        if (tlv_text_at(data, arch.at, "dspark", 6)) { dspark = true; }
+        if (!dspark && !tlv_text_at(data, arch.at, "llama", 5) && !tlv_text_at(data, arch.at, "qwen3", 5)
+            && !tlv_text_at(data, arch.at, "qwen3moe", 8) && !tlv_text_at(data, arch.at, "qwen35", 6)
+            && !tlv_text_at(data, arch.at, "qwen35moe", 9) && !tlv_text_at(data, arch.at, "qwen3next", 9)) {
+            return TLV_ERR_HADAMARD_ARCH;
+        }
+        // :1305-1318 every weight name on a verified path, no duplicates
+        var at: u64 = names.items;
+        var i: u64 = 0;
+        while (i < names.count) {
+            var length: u64 = tf_read_u64(data, at as usize);
+            var name_at: u64 = at + 8;
+            if (!tlv_foldable(data, name_at, length)) { out.index = i; return TLV_ERR_HADAMARD_NAME; }
+            if (dspark && !tf_same_text(data, name_at as usize, length as usize, "output.weight", 13)) {
+                out.index = i; return TLV_ERR_HADAMARD_NAME;
+            }
+            var other: u64 = names.items;
+            var j: u64 = 0;
+            while (j < i) {
+                var other_length: u64 = tf_read_u64(data, other as usize);
+                if (other_length == length && tlv_same_bytes(data, other + 8, name_at, length)) {
+                    out.index = i; return TLV_ERR_HADAMARD_NAME;
+                }
+                other = other + 8 + other_length;
+                j = j + 1;
+            }
+            at = name_at + length;
+            i = i + 1;
+        }
+        // :1320-1335 inverse names (optional; a key that is not an array is ignored)
+        status = tlv_key(data, size, "prism.hadamard.inverse_weight_names", 35, &inverse);
+        if (status < 0) { return status; }
+        var inverse_count: u64 = 0;
+        if (inverse.found && inverse.vtype == 9) {
+            if (inverse.elem != 8) { return TLV_ERR_HADAMARD_TYPE; }
+            inverse_count = inverse.count;
+        }
+        out.inverse = inverse_count;
+        at = inverse.items;
+        i = 0;
+        while (i < inverse_count) {
+            var length: u64 = tf_read_u64(data, at as usize);
+            var name_at: u64 = at + 8;
+            if (dspark || !tf_same_text(data, name_at as usize, length as usize, "token_embd.weight", 17)) {
+                out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
+            }
+            var listed: u64 = names.items;
+            var j: u64 = 0;
+            while (j < names.count) {
+                var listed_length: u64 = tf_read_u64(data, listed as usize);
+                if (listed_length == length && tlv_same_bytes(data, listed + 8, name_at, length)) {
+                    out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
+                }
+                listed = listed + 8 + listed_length;
+                j = j + 1;
+            }
+            var before: u64 = inverse.items;
+            j = 0;
+            while (j < i) {
+                var before_length: u64 = tf_read_u64(data, before as usize);
+                if (before_length == length && tlv_same_bytes(data, before + 8, name_at, length)) {
+                    out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
+                }
+                before = before + 8 + before_length;
+                j = j + 1;
+            }
+            at = name_at + length;
+            i = i + 1;
+        }
+        // :1971-2050 every listed weight, then every inverse table: a tensor
+        // of the file, ne[0] divisible by the block size, a sign vector of
+        // width ne[0] in explicit mode
+        at = names.items;
+        i = 0;
+        while (i < names.count) {
+            var length: u64 = tf_read_u64(data, at as usize);
+            if (!tlv_weight_ok(data, size, records as u64, at + 8, length, block, explicit_signs, &widths)) {
+                out.index = i; return TLV_ERR_HADAMARD_TENSOR;
+            }
+            at = at + 8 + length;
+            i = i + 1;
+        }
+        at = inverse.items;
+        i = 0;
+        while (i < inverse_count) {
+            var length: u64 = tf_read_u64(data, at as usize);
+            if (!tlv_weight_ok(data, size, records as u64, at + 8, length, block, explicit_signs, &widths)) {
+                out.index = names.count + i; return TLV_ERR_HADAMARD_TENSOR;
+            }
+            at = at + 8 + length;
+            i = i + 1;
+        }
+        return 0;
+    }
+
+    // ---- layout of a record rejected on its extent (issue #50) ----------------
+
+    // Whether a record of `bytes` bytes fills the space it has: up to the next
+    // record, padded to the alignment; or, for the last record, up to the end
+    // of the file with less than one alignment unit left over.
+    fn tlv_fills(info: *TFTensorInfo, file_size: u64, bytes: u64) -> bool {
+        if (bytes == 0) { return false; }
+        var padded: u64 = ((bytes + info.alignment - 1) / info.alignment) * info.alignment;
+        if (info.has_next) { return info.next_offset - info.offset == padded; }
+        if (info.data_start > file_size || file_size - info.data_start < info.offset) { return false; }
+        var room: u64 = file_size - info.data_start - info.offset;
+        return bytes <= room && room - bytes < info.alignment;
+    }
+
+    // The format id (Q2_0, PQ2_0, TQ2_0, TQ1_0, PTQ1_0 or Q1_0) whose size for
+    // this record's shape fills the space the record has, or 0 when none or
+    // more than one does.
+    fn tlv_layout_fit(info: *TFTensorInfo, file_size: u64) -> i32 {
+        var fit: i32 = 0;
+        var count: u32 = 0;
+        if (tlv_fills(info, file_size, tf_gguf_record_bytes(42, false, false, info.d0, info.d1, info.d2, info.d3))) {
+            fit = TF_Q2_0; count = count + 1;
+        }
+        if (tlv_fills(info, file_size, tf_gguf_record_bytes(142, true, false, info.d0, info.d1, info.d2, info.d3))) {
+            fit = TF_PQ2_0; count = count + 1;
+        }
+        if (tlv_fills(info, file_size, tf_gguf_record_bytes(35, false, false, info.d0, info.d1, info.d2, info.d3))) {
+            fit = TF_TQ2_0; count = count + 1;
+        }
+        if (tlv_fills(info, file_size, tf_gguf_record_bytes(34, false, false, info.d0, info.d1, info.d2, info.d3))) {
+            fit = TF_TQ1_0; count = count + 1;
+        }
+        if (tlv_fills(info, file_size, tf_gguf_record_bytes(143, true, false, info.d0, info.d1, info.d2, info.d3))) {
+            fit = TF_PTQ1_0; count = count + 1;
+        }
+        if (tlv_fills(info, file_size, tf_gguf_record_bytes(41, false, false, info.d0, info.d1, info.d2, info.d3))) {
+            fit = TF_Q1_0; count = count + 1;
+        }
+        if (count == 1) { return fit; }
+        return 0;
+    }
+
+    // ---- fork-only type ids without the fork's marker ---------------------------
+
+    fn tlv_prism_unmarked(info: *TFTensorInfo) -> bool {
+        return !info.prism && (info.tensor_type == 142 || info.tensor_type == 143);
+    }
+
+    // One tensor record as a gguf.cpp reader sees it. First tf_gguf_check,
+    // under the fork's marker for the unmarked ids 142 and 143: no other
+    // runtime defines those ids (ggml-org GGML_TYPE_COUNT is below them), so
+    // they can only mean PQ2_0 or PTQ1_0. Then gguf.cpp's rule that tensor data
+    // are contiguous in record order, every offset equal to the padded sizes
+    // before it (ggml-org/llama.cpp@e6ab7c1a ggml/src/gguf.cpp:787-801;
+    // PrismML-Eng/llama.cpp@bdc23b56 ggml/src/gguf.cpp:781-801): a record
+    // followed by another must fill the gap to it exactly, or the reader
+    // refuses the file (TLV_ERR_OFFSETS). tf_gguf_check alone catches data
+    // that run into the next record, not a gap left over. Returns the format
+    // id, 0 for a record that is not a ternary layout, or a negative status.
+    // The marker of `info` is restored before returning.
+    fn tlv_record_check(info: *TFTensorInfo, file_size: u64) -> i32 {
+        var marked: bool = info.prism;
+        if (tlv_prism_unmarked(info)) { info.prism = true; }
+        var status: i32 = tf_gguf_check(info, file_size);
+        if (status > 0 && info.has_next) {
+            var bytes: u64 = tf_gguf_tensor_bytes(info);
+            var padded: u64 = ((bytes + info.alignment - 1) / info.alignment) * info.alignment;
+            if (info.next_offset - info.offset != padded) { status = TLV_ERR_OFFSETS; }
+        }
+        info.prism = marked;
+        return status;
+    }
+}

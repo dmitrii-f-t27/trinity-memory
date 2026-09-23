@@ -15,6 +15,7 @@
 #include "json.h"
 #include "json_writer.h"
 #include "formats.h"
+#include "live.h"
 #include "ternary_contract.h"
 #include "tensorpack.h"
 #include "tensorpack_json.h"

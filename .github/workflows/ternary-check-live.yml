@@ -1,0 +1,76 @@
+name: Ternary Check Live
+# Issue #48: every public ternary GGUF file on the Hugging Face Hub, checked
+# from its header. Discovery and range reads are anonymous (no token is sent)
+# and throttled; tensor data are never downloaded. Every verdict is made by
+# the t27 library built here (t27/formats.t27, t27/live.t27). The report is an
+# artifact; publishing it is issue #53 and #54. Nothing is posted anywhere.
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      min_downloads:
+        description: 'Scan repositories with at least this many downloads over 30 days'
+        default: '100'
+      limit:
+        description: 'Scan only the N most downloaded repositories (0: all)'
+        default: '0'
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CC: clang
+      CXX: clang++
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned compiler and install build tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y clang lld libssl-dev
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-${{ runner.os }}-${{ runner.arch }}-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build the t27 library
+        run: sh tools/build-t27.sh
+      - name: Scan
+        env:
+          MIN_DOWNLOADS: ${{ inputs.min_downloads || '100' }}
+          LIMIT: ${{ inputs.limit || '0' }}
+        run: |
+          mkdir -p build/live
+          python3 -m trinity_memory.live --min-downloads "$MIN_DOWNLOADS" --limit "$LIMIT" --interval 1 \
+            --out build/live/scan.json 2> build/live/scan.log
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          report = json.load(open("build/live/scan.json"))
+          s = report["summary"]
+          print("## Ternary Check Live\n")
+          print(f"{s['repositories']} repositories, {s['scanned']} scanned, {s['files']} files, "
+                f"{s['downloads_30d_scanned']} downloads over 30 days in the scanned repositories.\n")
+          print("| Verdict | Files |\n|---|---|")
+          for verdict, count in s["verdicts"].items():
+              print(f"| {verdict} | {count} |")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ternary-check-live
+          path: |
+            build/live/scan.json
+            build/live/scan.log
