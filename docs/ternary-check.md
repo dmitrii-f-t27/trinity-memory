@@ -139,6 +139,26 @@ table of status classes is in [`specs/formats/OWNERS.md`](../specs/formats/OWNER
 STQ1_0 has no contract yet (the llama.cpp pull request is open), and TL1/TL2
 byte order depends on build-time tile sizes that the file does not record.
 
+## llama.cpp issue 15193 (TQ1_0/TQ2_0 on CPU)
+
+At llama.cpp `e6ab7c1a` we found no TQ1_0/TQ2_0 storage or CPU kernel
+defect that would explain the garbage output reported in llama.cpp issue
+15193. On random blocks and on the BitNet layer-0 tensors above, the upstream
+quantizers produce the same bytes as the t27 encoders, the upstream
+dequantizers and the t27 decoders return the same trits and scales, and the
+integer accumulators of the generic, NEON and AVX2 `vec_dot` kernels equal
+the exact integer products. The kernels' float results are not bit-identical
+(the AVX2 kernels sum in eight lanes); they agree within 1e-5 of the sum of
+absolute block terms. The AVX2 kernels ran under Rosetta 2 on Apple silicon
+and natively on the Ubuntu x86_64 CI runner, with the same results.
+
+The upstream maintainer closed the issue on 2025-08-09, attributing the output
+to quantizing a float-trained model (Qwen3-4B-Instruct-2507) to TQ1_0. The
+synthetic float rows in the note agree with that explanation, but we did not
+run a model, so it was not reproduced here. Note, commands and numbers:
+[`docs/upstream/llama.cpp-15193.md`](upstream/llama.cpp-15193.md). Nothing
+was reported upstream.
+
 ## Reproduce
 
 ```sh
