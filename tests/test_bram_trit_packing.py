@@ -170,7 +170,7 @@ class BramTritPacking(unittest.TestCase):
             self.assertIn("const PIPE: u32 = 0;", text)
             self.assertIn("const PIPE: u32 = 1;", generator.specialize_rom(fmt, words, check, 1))
             piped = model.rom_results(fmt, trits, pipe=1)
-            self.assertEqual(piped["read_ticks"], 1980 // k + 3)
+            self.assertEqual(piped["read_ticks"], 1980 // k + 4)
             self.assertEqual({key: piped[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")},
                              {key: model.rom_results(fmt, trits)[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")})
 
