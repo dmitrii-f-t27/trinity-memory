@@ -22,7 +22,7 @@ package=pathlib.Path(tm.__file__).resolve().parent
 assert 'site-packages' in str(package),package
 runtime=package/'_native_runtime'
 manifest=json.loads((runtime/'manifest.json').read_text())
-assert manifest['version']==tm.__version__=='0.3.0'
+assert manifest['version']==tm.__version__=='0.4.0'
 for name,digest in manifest['files'].items():
     assert hashlib.sha256((runtime/name).read_bytes()).hexdigest()==digest,name
 for name in ('codecs.wasm','formats.wasm'):

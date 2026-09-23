@@ -150,6 +150,13 @@ checks that each ends as `mismatch`.
 (`resolve-runtime.sh` and `run.sh`) outside GitHub. It covers the release
 runtime's SHA256SUMS check against a local stand-in release.
 
+After a release is published, `.github/workflows/ternary-check-release-smoke.yml`
+runs the Action of the release tag with `runtime: release` on `ubuntu-latest`,
+`macos-14` and `macos-15`: it downloads the published wheel, checks it against
+the release's `SHA256SUMS`, and runs the vectors with the reference decoder of
+that wheel (which must pass) and with `tests/action/wrong_group_decoder.py`
+(which must fail). It can also be started by hand for a published version.
+
 ## Weekly re-check
 
 `.github/workflows/ternary-check-weekly.yml` runs every Monday at 04:23 UTC,

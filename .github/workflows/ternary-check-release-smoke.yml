@@ -1,0 +1,88 @@
+name: Ternary Check release smoke
+# After a release is published, and on demand for a published version: the
+# Action ternary-check/ of the release tag with runtime "release". The Action
+# downloads the platform wheel of its version from the GitHub release, checks
+# it against the release's SHA256SUMS, unpacks it (no pip) and runs every
+# vector of the tag's conformance/formats_*.json. The decoder is the reference
+# decoder of that same wheel (python3 -m trinity_memory ternary-check) and must
+# pass; tests/action/wrong_group_decoder.py, which forwards to it but reads
+# PQ2_0 bytes as group-64 Q2_0, must fail with value mismatches. The tag is
+# checked out into trinity-memory/, so the working directory holds no
+# trinity_memory package: the checker and both decoders import the unpacked
+# wheel. Linux x86_64 and macOS arm64 are the platforms of the release wheels;
+# macos-14 checks that the macOS wheel's deployment target is low enough.
+# Only public release downloads are used; no secrets, read-only token.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published version to test, without the leading v (for example 0.4.0)
+        required: true
+permissions:
+  contents: read
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || format('v{0}', inputs.version) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          path: trinity-memory
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: The tag carries its own version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' trinity-memory/pyproject.toml)
+          echo "tag $TAG, pyproject.toml $version"
+          test "v$version" = "$TAG"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          test ! -e trinity_memory
+      - id: own
+        name: Action, release runtime, the wheel's reference decoder
+        uses: ./trinity-memory/ternary-check
+        with:
+          decoder: python3 -m trinity_memory ternary-check
+          runtime: release
+          report: smoke/own.json
+      - id: wrong
+        name: Action, release runtime, a decoder that reads group-128 bytes as group 64
+        uses: ./trinity-memory/ternary-check
+        continue-on-error: true
+        with:
+          decoder: trinity-memory/tests/action/wrong_group_decoder.py
+          runtime: release
+          report: smoke/wrong.json
+      - name: The reference decoder passes, the wrong one fails, both ran from the released wheel
+        env:
+          OWN_PASSED: ${{ steps.own.outputs.passed }}
+          WRONG_OUTCOME: ${{ steps.wrong.outcome }}
+        run: |
+          test "$OWN_PASSED" = true
+          test "$WRONG_OUTCOME" = failure
+          python3 trinity-memory/tests/action/check_reports.py smoke/own.json smoke/wrong.json
+          site="$RUNNER_TEMP/ternary-check-runtime-$VERSION/site"
+          PYTHONPATH="$site" python3 - "$site" "$VERSION" <<'PY'
+          import json, pathlib, sys
+          import trinity_memory
+          site, version = pathlib.Path(sys.argv[1]).resolve(), sys.argv[2]
+          package = pathlib.Path(trinity_memory.__file__).resolve().parent
+          assert package == site / "trinity_memory", package
+          manifest = json.loads((package / "_native_runtime" / "manifest.json").read_text())
+          assert trinity_memory.__version__ == manifest["version"] == version, (trinity_memory.__version__, manifest)
+          print(f"trinity_memory {version} from {package}, compiler {manifest['compiler_revision']}")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ternary-check-release-smoke-${{ matrix.os }}
+          path: smoke/
