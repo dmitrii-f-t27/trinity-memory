@@ -107,14 +107,23 @@ TL2.
 
 ## llama.cpp issue 15193 (TQ1_0/TQ2_0 on CPU)
 
-The garbage output reported in llama.cpp issue 15193 comes from quantizing a
-float-trained model (Qwen3-4B-Instruct-2507) to TQ1_0, not from TQ storage or
-the CPU kernels; the issue was closed upstream on 2025-08-09 for that reason.
-At llama.cpp `e6ab7c1a` the upstream TQ1_0/TQ2_0 quantizers, dequantizers and
-the generic, NEON and AVX2 `vec_dot` kernels agree with the t27 decoders and
-encoders bit for bit on random blocks and on the BitNet layer-0 tensors above.
-Note, commands and numbers: [`docs/upstream/llama.cpp-15193.md`](upstream/llama.cpp-15193.md).
-Nothing was reported upstream.
+At llama.cpp `e6ab7c1a` we found no TQ1_0/TQ2_0 storage or CPU kernel
+defect that would explain the garbage output reported in llama.cpp issue
+15193. On random blocks and on the BitNet layer-0 tensors above, the upstream
+quantizers produce the same bytes as the t27 encoders, the upstream
+dequantizers and the t27 decoders return the same trits and scales, and the
+integer accumulators of the generic, NEON and AVX2 `vec_dot` kernels equal
+the exact integer products. The kernels' float results are not bit-identical
+(the AVX2 kernels sum in eight lanes); they agree within 1e-5 of the sum of
+absolute block terms. The AVX2 kernels ran under Rosetta 2 on Apple silicon
+only; no native x86 run is recorded yet.
+
+The upstream maintainer closed the issue on 2025-08-09, attributing the output
+to quantizing a float-trained model (Qwen3-4B-Instruct-2507) to TQ1_0. The
+synthetic float rows in the note agree with that explanation, but we did not
+run a model, so it was not reproduced here. Note, commands and numbers:
+[`docs/upstream/llama.cpp-15193.md`](upstream/llama.cpp-15193.md). Nothing
+was reported upstream.
 
 ## Reproduce
 

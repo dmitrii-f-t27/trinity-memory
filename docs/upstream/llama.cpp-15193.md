@@ -7,13 +7,34 @@ problem?
 
 ## Verdict
 
-Neither. The reporter quantized a float-trained model (Qwen3-4B-Instruct-2507)
-to TQ1_0 with `llama-quantize`. TQ1_0 and TQ2_0 replace every block of 256
-weights by trits times one fp16 absmax scale, which destroys a model that was
-not trained for ternary weights. The storage functions and the CPU kernels
-agree with each other and with the t27 reference decoders bit for bit on
-random blocks and on real ternary tensors (below). A llama.cpp maintainer
-closed the issue on the same day for this reason.
+No storage or CPU kernel defect was found at the pinned code; the cause of the
+output was not reproduced.
+
+What the harness shows, on random blocks and on real ternary tensors (below):
+
+- Exact: the upstream quantizers write the same bytes as the t27 encoders;
+  the upstream dequantizers and the t27 decoders return the same trits and
+  scales; with unit scales the integer accumulators of the generic, NEON
+  (DOTPROD and int16) and AVX2 `vec_dot` kernels equal the exact integer
+  product in every row.
+- Within tolerance, not bit-identical: the kernels' float results agree with
+  each other and with a double reference within 1e-5 of the sum of absolute
+  block terms. The AVX2 kernels keep eight lane sums, so their results round
+  differently from the generic kernel (T3: 420 of 4000 identical).
+- The x86 builds (AVX2 and generic) ran under Rosetta 2 on Apple silicon. No
+  native x86 run is recorded yet; the Ubuntu CI job below will be the first.
+
+What it does not show: the cause. The maintainer who closed the issue on the
+same day attributes the output to the input model: the reporter quantized a
+float-trained model (Qwen3-4B-Instruct-2507) to TQ1_0 with `llama-quantize`;
+TQ1_0 and TQ2_0 replace every block of 256 weights by trits times one fp16
+absmax scale, and ternary quants are meant only for models trained for them.
+The synthetic float rows of T5 agree with that explanation (relative weight
+error 0.81-0.85, against 0.09-0.12 for Q4_0), but no model was run (see "What
+an end-to-end confirmation would need"). Also not examined: the TQ2_0, IQ1_S
+and IQ2_XXS files the reporter downloaded from Hugging Face (not named in the
+issue), and the runtime around the kernels (graph, `llama-server`, the Windows
+`GGML_CPU_ALL_VARIANTS` build).
 
 Nothing was reported upstream, and nothing will be without the founders'
 approval (#35).
@@ -96,8 +117,8 @@ reference in this repository uses that one pin.
 ## Harness
 
 Files: `tools/fetch-upstream.sh`, `tests/upstream/` (lock, extractor, fixture
-glue, two C programs, driver), Makefile target `upstream-15193`, CI job
-`upstream-15193` (Ubuntu x86_64 and macOS 14 arm64).
+glue, two C programs, AVX2 probe, driver), Makefile target `upstream-15193`, CI job
+`upstream-15193` (Ubuntu x86_64 and macOS 15 arm64).
 
 1. `tools/fetch-upstream.sh` downloads the five files from
    `raw.githubusercontent.com` at the pinned commit into
@@ -124,16 +145,29 @@ glue, two C programs, driver), Makefile target `upstream-15193`, CI job
    `tf_decode_hf_packed`). Both exit nonzero on any mismatch.
 5. `tests/upstream/run-llamacpp-15193.sh` builds and runs both programs for
    every CPU variant the host can execute: on Apple silicon NEON with DOTPROD
-   (clang default), NEON without DOTPROD (`-march=armv8-a`, the int16 path),
-   x86_64 AVX2 (`-arch x86_64 -mavx2 -mfma -mf16c`) and x86_64 without AVX2
-   (the generic fallback), the x86_64 builds under Rosetta 2; on Linux x86_64
-   the AVX2 and generic builds natively (the AVX2 run fails if the CPU does not
-   report AVX2).
+   (clang default), NEON without DOTPROD (`-march=armv8-a+nodotprod`, the
+   int16 path), x86_64 AVX2 (`-arch x86_64 -mavx2 -mfma -mf16c`) and x86_64
+   without AVX2 (the generic fallback), the x86_64 builds under Rosetta 2; on
+   Linux x86_64 the AVX2 and generic builds natively (the AVX2 run fails if the
+   CPU does not report AVX2). Each variant passes `HARNESS_EXPECT_DOTPROD` or
+   `HARNESS_EXPECT_AVX2`, and `llamacpp_harness.h` stops the build with
+   `#error` when the compiler selects another kernel path, so a variant cannot
+   pass under the wrong name. (Before LLVM 19, clang turned on the default
+   CPU's extensions under a bare `-march=armv8-a`, which on a Mac includes
+   DOTPROD; hence `+nodotprod`.)
+6. The driver refuses to run when the generated headers or the library in
+   `build/t27` do not match the current `t27/*.t27` and `native/` sources
+   (their lines of `build/t27/SHA256SUMS`).
 
-Rosetta 2 runs AVX2 instructions but reports no AVX2 through CPUID, so a
-llama.cpp build with `GGML_CPU_ALL_VARIANTS` would not pick the AVX2 variant
-there; the harness compiles the AVX2 path statically instead. The native AVX2
-confirmation is the Ubuntu CI job.
+Rosetta 2 translates AVX2, FMA and F16C only from macOS 15 on; on macOS 14
+and earlier the AVX2 binaries stop at their first VEX instruction. The driver
+first runs a small probe with the instructions the kernels use
+(`tests/upstream/avx2_probe.c`) and skips the AVX2 variant when it fails, or
+fails the run with `LLAMACPP_REQUIRE_X86=1` (set in CI). Rosetta 2 reports no
+AVX2 through CPUID, so a llama.cpp build with `GGML_CPU_ALL_VARIANTS` would
+not pick the AVX2 variant there; the harness compiles the AVX2 path
+statically instead. The Ubuntu CI job runs the AVX2 path natively; until its
+logs exist, the AVX2 evidence here comes from Rosetta 2 only.
 
 ### Commands
 
@@ -168,7 +202,9 @@ fails.
 ### Results on 2026-09-23 (Apple M4, macOS 26.7, Apple clang 21.0.0)
 
 All eight runs passed: `test` and `real` for `arm64-dotprod`, `arm64-int16`,
-`x86_64-avx2` (Rosetta 2) and `x86_64-generic` (Rosetta 2).
+`x86_64-avx2` (Rosetta 2) and `x86_64-generic` (Rosetta 2). Each log names
+the kernel path it ran (`arm64 NEON+DOTPROD`, `arm64 NEON int16 path (no
+DOTPROD)`, `x86_64 AVX2`, `x86_64 without AVX2 (generic fallback)`).
 
 - T1: 0 mismatches; 13 of 256 qs byte values (1, 20, 40, 60, 79, 99, 119, 138,
   158, 178, 197, 217, 237) are never emitted by `quantize_row_tq1_0_ref`.
@@ -184,7 +220,7 @@ All eight runs passed: `test` and `real` for `arm64-dotprod`, `arm64-int16`,
   block scale to fp16.
 - T6: at most 1.38e-7 (NEON, generic) and 2.95e-7 (AVX2) of the sum of
   absolute block terms.
-- T5, why a float model fails: TQ1_0 leaves 86.5% (Gaussian), 94.4% (Laplace)
+- T5, synthetic float rows (not Qwen3 weights): TQ1_0 leaves 86.5% (Gaussian), 94.4% (Laplace)
   and 96.3% (Student-t, 4 degrees of freedom) of the trits zero; the relative
   RMSE of the weights is 0.81-0.85 and the relative error of the matrix-vector
   product through the kernel is 0.75-0.81. Q4_0 on the same rows gives
@@ -204,8 +240,9 @@ All eight runs passed: `test` and `real` for `arm64-dotprod`, `arm64-int16`,
   3.9%). This is a not-representable cell for the compatibility matrix (#32),
   not a defect of TQ1_0.
 
-The Ubuntu x86_64 CI job runs the AVX2 and generic builds natively; its
-logs are the native AVX2 confirmation.
+No native x86 result is recorded here. The Ubuntu x86_64 CI job builds and
+runs the AVX2 and generic variants natively; its logs (artifact
+`upstream-15193-ubuntu-latest`) will be the first native AVX2 result.
 
 ## What an end-to-end confirmation would need
 
@@ -225,8 +262,9 @@ approved for this work.
 ## Consequences for this repository
 
 - Epic #27 described this issue as a report of garbage from TQ1_0/TQ2_0 on
-  CPU. It is closed upstream, and the cause is the input model, not TQ storage
-  or kernels.
+  CPU. It is closed upstream. No TQ storage or kernel defect was found at the
+  pin; the upstream maintainer attributes the output to the input model, and
+  this repository did not reproduce that end to end.
 - For the negative tests (#34), upstream silently accepts three classes:
   TQ2_0 code 3 (decoded as +2), non-canonical TQ1_0 bytes (aliases), and NaN
   or Inf scales (rejected only with `--check-tensors`; negative scales never).
