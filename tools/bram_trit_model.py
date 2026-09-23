@@ -150,10 +150,11 @@ def words_of_trits(fmt: int, trits) -> list[tuple[int, int]]:
     return out
 
 
-def rom_results(fmt: int, trits, verify: bool = True) -> dict:
+def rom_results(fmt: int, trits, verify: bool = True, pipe: int = 0) -> dict:
     """What the read-only store (t27/rtl/bram_trit_rom.t27) must report for a fixed
     trit sequence: the engine's fields with no write phase, plus lanes_check, the
-    rotate-xor checksum of the decoded lanes the store compares itself with."""
+    rotate-xor checksum of the decoded lanes the store compares itself with. With
+    pipe = 1 (two more register stages) a run takes two ticks more."""
     k = LANES[fmt]
     pos = neg = dot = chk = lchk = 0
     words = words_of_trits(fmt, trits)
@@ -173,8 +174,8 @@ def rom_results(fmt: int, trits, verify: bool = True) -> dict:
         chk = rotl1(chk) ^ word
         lchk = rotl1(lchk) ^ lanes
     return {"format": fmt, "name": FORMAT_NAMES[fmt], "lanes": k, "words": len(words), "trits": len(trits),
-            "write_ticks": 0, "read_ticks": len(words) + 1, "bad_words": 0, "invalid_groups": 0,
-            "pos": pos, "neg": neg, "dot": dot, "chk": chk, "lanes_check": lchk}
+            "write_ticks": 0, "read_ticks": len(words) + (3 if pipe else 1), "bad_words": 0, "invalid_groups": 0,
+            "pos": pos, "neg": neg, "dot": dot, "chk": chk, "lanes_check": lchk, "pipe": pipe}
 
 
 def stream_trits(count: int, seed: int = DEFAULT_SEED) -> list[int]:

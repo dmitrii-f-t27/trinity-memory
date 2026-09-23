@@ -167,6 +167,12 @@ class BramTritPacking(unittest.TestCase):
             body = re.search(r"var mem_b0: \[B0_WORDS\]u64 = \[B0_WORDS\]u64\{(.*?)\};", text, re.S).group(1)
             self.assertEqual([int(x) for x in body.replace("\n", " ").split(",")], words)
             self.assertIn("var mem_b1: [B1_WORDS]u64 = [B1_WORDS]u64{\n    0\n};", text)
+            self.assertIn("const PIPE: u32 = 0;", text)
+            self.assertIn("const PIPE: u32 = 1;", generator.specialize_rom(fmt, words, check, 1))
+            piped = model.rom_results(fmt, trits, pipe=1)
+            self.assertEqual(piped["read_ticks"], 1980 // k + 3)
+            self.assertEqual({key: piped[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")},
+                             {key: model.rom_results(fmt, trits)[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")})
 
     def test_rom_functions_match_the_model(self):
         with tempfile.TemporaryDirectory(prefix="trinity-bram-rom-") as work:
