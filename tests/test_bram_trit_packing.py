@@ -139,6 +139,49 @@ class BramTritPacking(unittest.TestCase):
                          {(reference.count(1), reference.count(-1),
                            sum(t * model.activation(i) for i, t in enumerate(reference)))})
 
+    def test_rom_model_agrees_with_the_engine_model(self):
+        # The same trits as a fixed tensor: the read-only store must report what the
+        # engine reports after writing the stream, with no write phase.
+        trits = model.stream_trits(1980 * 2)
+        for fmt, k in model.LANES.items():
+            engine = model.engine_results(fmt, len(trits) // k)
+            rom = model.rom_results(fmt, trits)
+            for key in ("words", "pos", "neg", "dot", "chk", "read_ticks"):
+                self.assertEqual(rom[key], engine[key], (fmt, key))
+            self.assertEqual(rom["write_ticks"], 0)
+            lanes_check = 0
+            for lanes, _ in model.words_of_trits(fmt, trits):
+                lanes_check = model.rotl1(lanes_check) ^ lanes
+            self.assertEqual(rom["lanes_check"], lanes_check)
+
+    def test_rom_generator_writes_the_words_and_the_check(self):
+        generator = load_generator()
+        rng = random.Random(32)
+        trits = [rng.choice((-1, 0, 1)) for _ in range(1980)]
+        for fmt, k in model.LANES.items():
+            words = [word for _, word in model.words_of_trits(fmt, trits)]
+            check = model.rom_results(fmt, trits)["lanes_check"]
+            text = generator.specialize_rom(fmt, words, check)
+            self.assertIn(f"const LANES_CHECK: u64 = {check};", text)
+            self.assertIn(f"const WORDS: u32 = {1980 // k};", text)
+            body = re.search(r"var mem_b0: \[B0_WORDS\]u64 = \[B0_WORDS\]u64\{(.*?)\};", text, re.S).group(1)
+            self.assertEqual([int(x) for x in body.replace("\n", " ").split(",")], words)
+            self.assertIn("var mem_b1: [B1_WORDS]u64 = [B1_WORDS]u64{\n    0\n};", text)
+
+    def test_rom_functions_match_the_model(self):
+        with tempfile.TemporaryDirectory(prefix="trinity-bram-rom-") as work:
+            rom = build_library(ROOT / "t27/rtl/bram_trit_rom.t27", Path(work))
+            rom.count_code.argtypes, rom.count_code.restype = (ctypes.c_uint64, ctypes.c_uint64), ctypes.c_uint32
+            rom.weighted.argtypes, rom.weighted.restype = (ctypes.c_uint64, ctypes.c_uint32), ctypes.c_int64
+            rng = random.Random(33)
+            for _ in range(2000):
+                value = random_lanes(rng, 22)
+                base = rng.randrange(8)
+                trits = [model.trit_of_lane((value >> (2 * j)) & 3) for j in range(22)]
+                self.assertEqual(rom.count_code(value, 1), trits.count(1))
+                self.assertEqual(rom.count_code(value, 2), trits.count(-1))
+                self.assertEqual(rom.weighted(value, base), sum(t * (((base + j) & 7) + 1) for j, t in enumerate(trits)))
+
 
 if __name__ == "__main__":
     unittest.main()
