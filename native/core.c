@@ -23,6 +23,7 @@
 #include "client.h"
 #include "random.h"
 #include "matvec.h"
+#include "matrix.h"
 #include "rtl_driver.h"
 #include "experiments.h"
 #include "reports.h"
