@@ -77,7 +77,11 @@ AVX2 TQ kernels. This is inferred, not observed.
 Single llama.cpp pin for this repository: `ggml-org/llama.cpp`
 `e6ab7c1a41054a888ada952eab4c886444c2f5ad` (2026-09-22), the revision
 `tests/native_formats.c` follows. `tests/upstream/llama.cpp.lock.json` holds
-the sha256 and git blob SHA of each file below.
+the sha256 and git blob SHA of the five files the harness fetches
+(`ggml-common.h`, `ggml-quants.c`, `ggml-cpu/quants.c` and the x86 and ARM
+`quants.c`). The other files cited below (`ggml-cpu/ggml-cpu.c`,
+`src/llama-quant.cpp`, `src/llama-model-loader.cpp`) were read at the pin
+but are not in the lock.
 
 | What | File:lines at `e6ab7c1a` |
 | --- | --- |
@@ -88,7 +92,7 @@ the sha256 and git blob SHA of each file below.
 | `quantize_tq1_0`, `quantize_tq2_0` ignore `quant_weights` | `ggml/src/ggml-quants.c:2415, 2422` |
 | `dequantize_row_tq1_0`, `dequantize_row_tq2_0` | `ggml/src/ggml-quants.c:2428-2465, 2467-2484` |
 | `quantize_row_q8_K_ref` (activations) | `ggml/src/ggml-quants.c:2768-2805` |
-| TQ scale checks (NaN and Inf only; only with `--check-tensors`) | `ggml/src/ggml-quants.c:5323-5335, 5346-5352, 5570-5577`; `src/llama-model-loader.cpp:1486` |
+| TQ scale checks (NaN and Inf only): `llama-quantize` always checks its input and every chunk it writes; the inference loader checks only with `--check-tensors` (default off) | `ggml/src/ggml-quants.c:5323-5335, 5346-5352, 5570-5577`; `src/llama-quant.cpp:762-763, 799, 813` (output) and `:938` (input loaded with `check_tensors` on); `src/llama-model-loader.cpp:1486, 1650, 1678, 1743` |
 | generic `vec_dot` tq1_0, tq2_0 | `ggml/src/ggml-cpu/quants.c:481-531, 533-563` |
 | x86 tq1_0 (AVX2 from 1388), tq2_0 (AVX2 from 1520; comment "should not be 3" at 1534) | `ggml/src/ggml-cpu/arch/x86/quants.c:1376-1506, 1508-1572` |
 | ARM tq1_0 (NEON from 1409, DOTPROD from 1417), tq2_0 | `ggml/src/ggml-cpu/arch/arm/quants.c:1397-1572, 1574-1683` |
@@ -98,7 +102,7 @@ the sha256 and git blob SHA of each file below.
 matrix product for TQ always goes through `vec_dot`.
 
 The same ranges are byte-identical at b6122 (at other line numbers:
-`ggml-quants.c` 2103-2277, `ggml-cpu/quants.c` 335-440, x86 1079-1275, ARM
+`ggml-quants.c` 2103-2271, `ggml-cpu/quants.c` 335-417, x86 1079-1275, ARM
 1130-1416), and on 2026-09-23 master (`4e416ee7`) all five files have the
 blob SHAs of the pin. The code the reporter ran is the code tested here.
 
@@ -163,10 +167,14 @@ Rosetta 2 translates AVX2, FMA and F16C only from macOS 15 on; on macOS 14
 and earlier the AVX2 binaries stop at their first VEX instruction. The driver
 first runs a small probe with the instructions the kernels use
 (`tests/upstream/avx2_probe.c`) and skips the AVX2 variant when it fails, or
-fails the run with `LLAMACPP_REQUIRE_X86=1` (set in CI). Rosetta 2 reports no
-AVX2 through CPUID, so a llama.cpp build with `GGML_CPU_ALL_VARIANTS` would
-not pick the AVX2 variant there; the harness compiles the AVX2 path
-statically instead. The Ubuntu CI job runs the AVX2 path natively; until its
+fails the run with `LLAMACPP_REQUIRE_X86=1` (set in CI). By default Rosetta 2
+reports no AVX, AVX2, FMA or F16C through CPUID, so a llama.cpp build with
+`GGML_CPU_ALL_VARIANTS` would not pick the AVX2 variant there. With
+`ROSETTA_ADVERTISE_AVX=1` in the environment it reports them (checked on
+macOS 26.7 with the CPUID score function of `ggml-cpu/arch/x86/cpu-feats.cpp`
+at the pin: score 0 by default, 64 for the AVX2 "haswell" variant with the
+variable set), and such a build would select that variant. The harness does
+not depend on either: it compiles the AVX2 path statically. The Ubuntu CI job runs the AVX2 path natively; until its
 logs exist, the AVX2 evidence here comes from Rosetta 2 only.
 
 ### Commands
@@ -265,8 +273,11 @@ approved for this work.
   CPU. It is closed upstream. No TQ storage or kernel defect was found at the
   pin; the upstream maintainer attributes the output to the input model, and
   this repository did not reproduce that end to end.
-- For the negative tests (#34), upstream silently accepts three classes:
-  TQ2_0 code 3 (decoded as +2), non-canonical TQ1_0 bytes (aliases), and NaN
-  or Inf scales (rejected only with `--check-tensors`; negative scales never).
+- For the negative tests (#34), the upstream decoder accepts three classes
+  without complaint: TQ2_0 code 3 (decoded as +2), non-canonical TQ1_0 bytes
+  (aliases), and NaN or Inf scales. `llama-quantize` never writes NaN or Inf
+  scales (it validates every chunk) and rejects them in its input; the
+  inference loader rejects them only with `--check-tensors`, which is off by
+  default. Negative scales are never rejected.
 - For the release (#36): the extracted upstream dequantizer is a third-party
   decoder that the vectors can be checked against.
