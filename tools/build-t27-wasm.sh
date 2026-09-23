@@ -1,7 +1,9 @@
 #!/bin/sh
 # Compile the same generated codec algorithms for the standalone browser UI,
-# and the external format readers and writers (formats.wasm) for JavaScript
-# consumers and tests/spec_formats_wasm_replay.mjs.
+# and the external format readers and writers with the real-layer product of
+# t27/matvec.t27 and the matrix cells of t27/matrix.t27 (formats.wasm) for
+# JavaScript consumers, tests/spec_formats_wasm_replay.mjs,
+# tests/matvec_wasm.mjs and tests/matrix_wasm.mjs.
 set -eu
 cd "$(dirname "$0")/.."
 out=build/t27
@@ -43,7 +45,14 @@ for name in tf_block_elements tf_block_bytes tf_scale_offset tf_scale_class tf_s
     tf_affine_check tf_affine_not_ternary tf_decode_onnx2 tf_encode_onnx2 tf_onnx2_padding_nonzero \
     tf_format_of_gguf tf_gguf_find tf_gguf_nth tf_gguf_check tf_gguf_tensor_bytes tf_wasm_info_size tf_wasm_info_field \
     tf_block_value tf_b3_padding_nonzero tf_safetensors_find tf_safetensors_check tf_wasm_json_token_size \
-    tf_wasm_safe_info_size tf_wasm_safe_info_field; do
+    tf_wasm_safe_info_size tf_wasm_safe_info_field tf_scale_value \
+    tm_dot_i64 tmv_activations tmv_outside_ternary tmv_matvec tmv_max_abs tmv_mismatches_i64 tmv_mismatches_f64 \
+    tmv_difference tmv_rows_nonzero tmv_residual tmv_scale_tensor tmv_scale_groups tmv_f16_scaled \
+    tmv_exact_groups_f16 tmv_exact_mismatches \
+    tmx_float_bits tmx_bf16_round tmx_scale_count tmx_scale_kind tmx_scale_group tmx_representable \
+    tmx_convert_scales tmx_encode tmx_decode tmx_compare tmx_explain_ties tmx_round_trip tmx_bytes_differ \
+    tmx_reencode tmx_locate tmx_mismatch_indices tmx_word_indices tmx_bits_per_weight tmx_gguf_metadata_bytes \
+    tf_absmean_bf16; do
     formats_exports="$formats_exports --export=$name"
 done
 # shellcheck disable=SC2086
