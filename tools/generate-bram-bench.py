@@ -76,13 +76,14 @@ def initializer(bank: int, words: list[int]) -> str:
             + ",\n    ".join(rows) + "\n};")
 
 
-def specialize_rom(fmt: int, words: list[int], lanes_check: int) -> str:
+def specialize_rom(fmt: int, words: list[int], lanes_check: int, pipe: int = 0) -> str:
     text = ROM_TEMPLATE.read_text(encoding="utf-8")
     text = substitute(text, r"^module TrinityBramTritRomT27;$", f"module {MODULES[fmt]};")
     text = substitute(text, r"^const FORMAT: u32 = \d+;$", f"const FORMAT: u32 = {fmt};")
     text = substitute(text, r"^const LANES: u32 = \d+;$", f"const LANES: u32 = {model.LANES[fmt]};")
     text = substitute(text, r"^const WORDS: u32 = \d+;$", f"const WORDS: u32 = {len(words)};")
     text = substitute(text, r"^const LANES_CHECK: u64 = \d+;$", f"const LANES_CHECK: u64 = {lanes_check};")
+    text = substitute(text, r"^const PIPE: u32 = \d+;$", f"const PIPE: u32 = {pipe};")
     for bank, size in enumerate(bank_sizes(len(words))):
         text = substitute(text, rf"^const B{bank}_WORDS: u32 = \d+;$", f"const B{bank}_WORDS: u32 = {max(1, size)};")
         chunk = words[bank * BANK_WORDS: bank * BANK_WORDS + size] or [0]
@@ -121,6 +122,8 @@ def main() -> None:
                              "default 1013760, or the whole --rom-trits file")
     parser.add_argument("--rom-trits", type=Path, default=None,
                         help="store this fixed tensor (one signed byte per trit) as array initializers")
+    parser.add_argument("--pipe", type=int, choices=(0, 1), default=0,
+                        help="with --rom-trits: 1 adds a register after the decoder and after the per-word sums")
     parser.add_argument("--seed", type=lambda v: int(v, 0), default=model.DEFAULT_SEED)
     parser.add_argument("--output-dir", default=str(ROOT / "build" / "fpga" / "bram"))
     args = parser.parse_args()
@@ -142,9 +145,9 @@ def main() -> None:
             path.write_text(specialize(fmt, words, args.seed), encoding="utf-8")
             result = model.engine_results(fmt, words, args.seed, verify=False)
         else:
-            result = model.rom_results(fmt, trits)
+            result = model.rom_results(fmt, trits, pipe=args.pipe)
             stored = [word for _, word in model.words_of_trits(fmt, trits)]
-            path.write_text(specialize_rom(fmt, stored, result["lanes_check"]), encoding="utf-8")
+            path.write_text(specialize_rom(fmt, stored, result["lanes_check"], args.pipe), encoding="utf-8")
         result.update({
             "module": MODULES[fmt], "source": path.name,
             "used_bits_per_word": 36 if fmt != model.FMT_D5 else 32,

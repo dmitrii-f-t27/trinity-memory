@@ -31,7 +31,7 @@ LINE = re.compile(r"^([HPQSMINUZD])([0-9a-f]{8})([0-9a-f]{10})$")
 FIELDS = {"P": "words", "Q": "write_ticks", "S": "read_ticks", "M": "bad_words", "I": "invalid_groups",
           "N": "counts", "U": "dot", "Z": "chk40"}
 B40 = (1 << 40) - 1
-CLOCK_HZ = 25_000_000   # one enabled tick per 40 ns in both clock variants
+CLOCK_HZ = 25_000_000   # CLOCK_MODE 1 and 0: one enabled tick per 40 ns; --clock-hz for modes 2 and 3
 
 
 def parse(data: bytes):
@@ -69,7 +69,7 @@ def parse(data: bytes):
     return runs, bad
 
 
-def compare(run, manifest, expect_formats=None):
+def compare(run, manifest, expect_formats=None, clock_hz=CLOCK_HZ):
     """Compare every engine the run reports (matched by format) with the manifest.
 
     A bitstream may carry all three layouts or one (ONLY in tms_bram_bench.v); the
@@ -101,7 +101,7 @@ def compare(run, manifest, expect_formats=None):
                      "trits": expect["trits"], "physical_bits_per_trit": expect["physical_bits_per_trit"],
                      "ramb36_at_1k_x_36": expect["ramb36_at_1k_x_36"],
                      "trits_per_read_tick": (expect["trits"] / got["read_ticks"]) if got.get("read_ticks") else None,
-                     "read_microseconds": (got["read_ticks"] / CLOCK_HZ * 1e6) if got.get("read_ticks") else None})
+                     "read_microseconds": (got["read_ticks"] / clock_hz * 1e6) if got.get("read_ticks") else None})
     same = {(r["device"].get("pos"), r["device"].get("neg"), r["device"].get("dot")) for r in rows}
     # With one engine there is nothing to agree with; its counts are checked against the model above.
     agree = (len(same) == 1) if len(rows) > 1 else None
@@ -124,6 +124,7 @@ def main():
     parser.add_argument("--output")
     parser.add_argument("--raw")
     parser.add_argument("--label", default="")
+    parser.add_argument("--clock-hz", type=float, default=CLOCK_HZ, help="bench clock of the run (25e6, 50e6, 100e6)")
     parser.add_argument("--expect-formats", type=lambda v: [int(x) for x in v.split(",") if x != ""],
                         help="comma-separated layouts the run must report, e.g. 0,1,2 or 2 (0 b2, 1 d5, 2 d5d2)")
     args = parser.parse_args()
@@ -146,11 +147,11 @@ def main():
         print(f"no complete run in the capture ({len(runs)} headers, {len(bad)} unparsed lines)", file=sys.stderr)
         sys.exit(1)
     run = complete[0]
-    ok, rows, agree = compare(run, manifest, args.expect_formats)
+    ok, rows, agree = compare(run, manifest, args.expect_formats, args.clock_hz)
     summary = {
         "schema": "trinity.fpga-bram-capture.v1",
         "captured_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "source": source, "label": args.label, "run": run["run"], "runs_in_capture": len(runs),
+        "source": source, "label": args.label, "run": run["run"], "runs_in_capture": len(runs), "clock_hz": args.clock_hz,
         "unparsed_lines": len(bad), "manifest": {"trits": manifest["trits"], "seed": manifest["seed"],
                                                   "sources": manifest["sources"], "mode": manifest.get("mode", "lfsr"),
                                                   "rom": manifest.get("rom")},

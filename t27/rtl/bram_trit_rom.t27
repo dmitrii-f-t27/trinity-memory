@@ -20,6 +20,11 @@ module TrinityBramTritRomT27;
 //
 // The store is the engine's: four banks of up to 16384 words (see
 // bram_trit_engine.t27 for why), each read straight into a read register.
+// PIPE 0 decodes, sums and accumulates a word in the tick after its read, as the
+// engine does (read_ticks = WORDS + 1). PIPE 1 splits that into three ticks, a
+// register after the decoder (d_*) and one after the per-word sums (s_*), so the
+// longest path is the decoder or one accumulator add instead of all of them
+// (read_ticks = WORDS + 3). Both report the same fields and values.
 // Every statement of on_clock reads a variable before the same tick writes it.
 const FORMAT: u32 = 2;
 const LANES: u32 = 22;
@@ -31,6 +36,7 @@ const B1_WORDS: u32 = 1;
 const B2_WORDS: u32 = 1;
 const B3_WORDS: u32 = 1;
 const LANES_CHECK: u64 = 0;
+const PIPE: u32 = 0;
 const WORD_MASK: u64 = 68719476735;
 const PH_IDLE: u32 = 0;
 const PH_READ: u32 = 2;
@@ -60,6 +66,19 @@ var dot: i64 = 0;
 var chk: u64 = 0;
 var lchk: u64 = 0;
 var done: bool = false;
+var accumulated: u32 = 0;
+var d_valid: bool = false;
+var d_lanes: u64 = 0;
+var d_word: u64 = 0;
+var d_inv: u32 = 0;
+var d_base: u32 = 0;
+var s_valid: bool = false;
+var s_pos: u32 = 0;
+var s_neg: u32 = 0;
+var s_dot: i64 = 0;
+var s_word: u64 = 0;
+var s_lanes: u64 = 0;
+var s_inv: u32 = 0;
 
 fn lane_mask(lanes: u32) -> u64 {
     var one: u64 = 1;
@@ -99,6 +118,11 @@ fn rotl1(x: u64) -> u64 {
     return (x << 1) | (x >> 63);
 }
 
+fn pick_lanes(pipe: u32, staged: u64, direct: u64) -> u64 {
+    if (pipe == 1) { return staged; }
+    return direct;
+}
+
 fn select_bank(bank: u32, w0: u64, w1: u64, w2: u64, w3: u64) -> u64 {
     if (bank == 0) { return w0; }
     if (bank == 1) { return w1; }
@@ -117,7 +141,7 @@ var format_out: u32;
 var lanes_out: u32;
 rdata = select_bank(r_bank, rdata_b0, rdata_b1, rdata_b2, rdata_b3);
 got = dec_out & lane_mask(LANES);
-lchk_next = rotl1(lchk) ^ got;
+lchk_next = rotl1(lchk) ^ pick_lanes(PIPE, s_lanes, got);
 enc_lanes = 0;
 write_ticks = 0;
 words_out = WORDS;
@@ -144,6 +168,52 @@ fn on_clock(start: bool, enc_word: u64, dec_out: u64) {
             chk = 0;
             lchk = 0;
             done = false;
+            accumulated = 0;
+            d_valid = false;
+            s_valid = false;
+        }
+    } else if (phase == PH_READ && PIPE == 1) {
+        read_ticks = read_ticks + 1;
+        // Accumulate the sums that the previous tick registered.
+        if (s_valid) {
+            invalid_groups = invalid_groups + s_inv;
+            pos = pos + s_pos;
+            neg = neg + s_neg;
+            dot = dot + s_dot;
+            chk = rotl1(chk) ^ s_word;
+            lchk = lchk_next;
+            if (accumulated == WORDS - 1) {
+                if (lchk_next != LANES_CHECK) { bad_words = 1; }
+                phase = PH_DONE;
+                done = true;
+            }
+            accumulated = accumulated + 1;
+        }
+        // Per-word sums of the lanes that the decoder stage registered.
+        s_valid = d_valid;
+        s_inv = d_inv;
+        s_pos = count_code(d_lanes, 1);
+        s_neg = count_code(d_lanes, 2);
+        s_dot = weighted(d_lanes, d_base);
+        s_word = d_word;
+        s_lanes = d_lanes;
+        // Decoder stage: the word read in the previous tick.
+        d_valid = r_valid;
+        d_inv = ((dec_out >> 48) & 255) as u32;
+        d_lanes = got;
+        d_word = rdata & WORD_MASK;
+        d_base = act_base;
+        if (r_valid) { act_base = (act_base + LANES) & 7; }
+        if (r_issue) {
+            rdata_b0 = mem_b0[r_addr & BANK_MASK];
+            rdata_b1 = mem_b1[r_addr & BANK_MASK];
+            rdata_b2 = mem_b2[r_addr & BANK_MASK];
+            rdata_b3 = mem_b3[r_addr & BANK_MASK];
+            r_bank = r_addr >> BANK_BITS;
+            r_valid = true;
+            if (r_addr == WORDS - 1) { r_issue = false; } else { r_addr = r_addr + 1; }
+        } else {
+            r_valid = false;
         }
     } else if (phase == PH_READ) {
         read_ticks = read_ticks + 1;
@@ -183,5 +253,6 @@ test counts_and_weights {
     assert_eq(weighted(1, 7), 8);
 }
 test rotate_left { assert_eq(rotl1(9223372036854775808), 1); }
+test pick_lanes_by_pipe { assert_eq(pick_lanes(1, 5, 6), 5); assert_eq(pick_lanes(0, 5, 6), 6); }
 test bank_select { assert_eq(select_bank(0, 5, 6, 7, 8), 5); assert_eq(select_bank(3, 5, 6, 7, 8), 8); }
 endmodule
