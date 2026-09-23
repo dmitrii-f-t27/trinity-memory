@@ -8,6 +8,28 @@ minor version may change interfaces). Most entries name the pull requests
 that made them; 0.2.0 was made by direct commits, and the README and Release
 entries of 0.4.0 come from the release pull request itself.
 
+## [Unreleased]
+
+Ternary Check Live ([epic #57](https://github.com/dmitrii-f-t27/trinity-memory/issues/57)):
+public ternary models on the Hugging Face Hub, checked from their headers.
+
+### Ternary Check Live
+
+- `trinity_memory/live.py` (issue #48): discovery of public ternary GGUF
+  repositories through the Hub API and header reads by HTTP range requests,
+  anonymous and throttled, every observation pinned to a commit;
+  byte-identical files read once; headers cached in `build/live/headers`;
+  `--recheck` makes the verdicts of an earlier report again offline;
+  `make live-scan`; workflow `ternary-check-live.yml` (weekly and on demand,
+  the report is an artifact).
+- `t27/live.t27`: `tlv_hadamard`, the PrismML fork's rules for the
+  `prism.hadamard.*` keys (issue #49); `tlv_record_check`, one tensor record as
+  `gguf.cpp` reads it, with the fork-only ids 142 and 143 read as PQ2_0 and
+  PTQ1_0 without a `prism.` key and the contiguous-offset rule (`offsets`);
+  `tlv_layout_fit`, the layout a record rejected on its extent really holds
+  (issue #50: type 42 declared, 128-weight groups stored). Status classes -63 to
+  -72 in `specs/formats/OWNERS.md`; native harness `tests/native_live.c`.
+
 ## [0.4.0] - 2026-09-23
 
 Stage 1 of the roadmap ([epic #27](https://github.com/dmitrii-f-t27/trinity-memory/issues/27)):

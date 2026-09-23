@@ -63,12 +63,28 @@ these classes has `"kind": "reject"`, and `reader` names the reader it exercises
 | `layout_unsupported` | -60 | a GGUF type id that names TL1 or TL2 | bitnet.cpp decodes with its generated kernels |
 | `misaligned` | -61 | a GGUF tensor offset not a multiple of `general.alignment` | `gguf.cpp` rejects (offsets must equal the padded end of the previous tensor) |
 | `extent` | -62 | GGUF: a tensor's bytes reach the offset of another record at or above its own, the tensor begins inside a record of known size below it (a shifted or overlapping record), or its bytes run past the end of the file (a truncated file); only records that hold at least one weight count, so a record may share the offset of a zero-weight record before it. safetensors: `end - begin` is not numel × dtype width, the bytes run past the end of the file, the tensor does not tile with its neighbours (it must begin where the nonzero-size tensor below it ends, or at the start of the data section when none is below, and end where the next one begins, or at the end of the file when none follows: this rejects overlap, gaps next to it and bytes after the last tensor), or `8 + header + data_offsets` does not fit in 64 bits for any entry (then `tf_safetensors_find` returns it) | `gguf.cpp` rejects offsets that are not the padded end of the previous tensor, the model loader data past the end of the file; safetensors rejects all of these (`InvalidOffset`, `TensorInvalidInfo`, `MetadataIncompleteBuffer`) |
+| `hadamard_type` | -63 | a `prism.hadamard.*` key whose GGUF type is not the one the PrismML fork reads: `version` and `block_size` u32; `transform`, `axis` and `sign_mode` strings; `weight_names` string array; `sign_widths` and `sign_values` int32 or uint32 arrays; `gdn_v_grouped` bool; `inverse_weight_names`, when it is an array, of strings (`tlv_hadamard`, `t27/live.t27`) | the fork's loader throws (`GKV::get_kv`, `get_arr`, `src/llama-model-loader.cpp:310-352`) and the model does not load |
+| `hadamard_missing` | -64 | `prism.hadamard.version` is present but `block_size`, `transform`, `axis`, `sign_mode` or `weight_names` is absent, or, in explicit sign mode, `sign_widths` or `sign_values`; an array key that is not an array counts as absent | throws ("key not found", "array key not found") |
+| `hadamard_version` | -65 | a version other than 1 | throws (`src/llama-model.cpp:1197-1200`) |
+| `hadamard_block` | -66 | block size 0 or not a power of two | throws (`:1214-1216`) |
+| `hadamard_transform` | -67 | a transform other than `normalized-sylvester-walsh-hadamard`, an axis other than `input-last-dimension`, a sign mode other than `identity` or `explicit` | throws (`:1217-1225`) |
+| `hadamard_signs` | -68 | explicit signs: no widths, a width that is not a positive multiple of the block size or runs past the values, a value other than ±1, values left over | throws (`:1230-1257`) |
+| `hadamard_arch` | -69 | `general.architecture` is not one the fork verified: `llama`, `qwen3`, `qwen3moe`, `qwen35`, `qwen35moe`, `qwen3next`, `dspark` | throws (`:1264-1277`) |
+| `hadamard_name` | -70 | an empty weight list, a weight that is neither `output.weight` nor `blk.N.<kind>.weight` for a listed kind (`dspark`: `output.weight` only), a duplicate, an inverse name other than `token_embd.weight` or also listed as a weight | throws (`:1226-1228`, `:1279-1335`) |
+| `hadamard_tensor` | -71 | a listed weight or inverse table that is not a tensor of the file, whose `ne[0]` the block size does not divide, or that has no sign vector of width `ne[0]` in explicit mode | throws while loading tensors (`:1971-2050`) |
+| `offsets` | -72 | a ternary GGUF record followed by another record whose data do not begin exactly where its own padded data end, a gap (`extent` catches overlap), read as `gguf.cpp` reads it (`tlv_record_check`) | `gguf.cpp` rejects: every offset must equal the padded sizes before it (ggml-org `ggml/src/gguf.cpp:787-801`, PrismML fork `:781-801`) |
 
 The strict readers are the functions that return these statuses: `tf_decode_blocks`,
 `tf_decode_i2s`, `tf_decode_hf_packed`, `tf_decode_mlx2`, `tf_decode_onnx2` and the
 encoders, with `tf_scales_check` or `tf_affine_check` for scales kept outside the codes,
 `tf_gguf_check(info, file_size)` after `tf_gguf_find`, and
-`tf_safetensors_check(info, file_size)` after `tf_safetensors_find`. Both checks look at
+`tf_safetensors_check(info, file_size)` after `tf_safetensors_find`. The scan of public
+files (issue #48, `t27/live.t27`) adds `tlv_record_check`, which reads the fork-only ids
+142 and 143 as PQ2_0 and PTQ1_0 even without a `prism.` key and applies `gguf.cpp`'s
+contiguity rule to ternary records, and `tlv_hadamard` for the `prism.hadamard.*` keys; a
+file without `prism.hadamard.version` passes it, because the fork then applies no
+rotation at all (PrismML-Eng/llama.cpp#242: such a file loads and generates garbage when
+its weights were rotated). Both checks look at
 the tensor being read and its neighbours, not at the whole file, and the GGUF rules are
 weaker than upstream in two more ways. A gap between GGUF tensors is accepted: `gguf.cpp`
 requires each offset to be the padded end of the tensor before it, and that size depends
@@ -101,7 +117,7 @@ Silent cases (neither class can see them; the vectors record the silent output):
 
 | Token | Case | Why the reader cannot tell |
 |---|---|---|
-| `group_size_mismatch` | group-128 bytes (PQ2_0) read as group-64 Q2_0 | 306 bytes are 9 PQ2_0 blocks and 17 Q2_0 blocks; every byte is a valid code. This is a synthetic case: the published Q2_0 file holds valid group-64 blocks. In a GGUF file the `extent` check catches it when the Q2_0 reading's extra n/64 bytes pass the alignment padding after the tensor, which holds for every tensor of 2048 weights or more at alignment 32: the reading then runs into the next tensor or past the end of the file. |
+| `group_size_mismatch` | group-128 bytes (PQ2_0) read as group-64 Q2_0 | 306 bytes are 9 PQ2_0 blocks and 17 Q2_0 blocks; every byte is a valid code. The fixture's Q2_0 file holds valid group-64 blocks, but the legacy `*-Q2_0.gguf` files of the earlier Bonsai releases, and third-party copies of them, declare type 42 over group-128 bytes (PrismML-Eng/llama.cpp#167); `tlv_layout_fit` names that layout (issue #50). In a GGUF file the `extent` check catches it when the Q2_0 reading's extra n/64 bytes pass the alignment padding after the tensor, which holds for every tensor of 2048 weights or more at alignment 32: the reading then runs into the next tensor or past the end of the file. |
 | `i2s_layout_arm` | bytes in the ARM layout of bitnet.cpp's `src/ggml-bitnet-mad.cpp` (`:151-194`; the pinned build does not compile that file, see below) read as ACT_PARALLEL | the same n/4 + 32 bytes, other weight positions |
 | `i2s_layout_1x4` | bytes in that file's x86 layout without ACT_PARALLEL (`:97-149`, four rows per byte) read as ACT_PARALLEL | as above |
 | `i2s_layout_consecutive` | bytes written by the `quantize_i2_s` of bitnet.cpp's llama.cpp submodule (`ggml/src/ggml-cpu/quants.c:1358-1387`: four consecutive weights per byte) read as ACT_PARALLEL | as above |

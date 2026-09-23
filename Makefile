@@ -47,3 +47,11 @@ ternary-check:
 
 ternary-check-verify:
 	PYTHON=$(PYTHON) OFFLINE=$(OFFLINE) sh tools/ternary-check.sh --check
+
+# Ternary Check Live (issue #48): every public ternary GGUF on the Hugging Face
+# Hub, checked from its header with the t27 verdicts (anonymous, throttled;
+# headers cached in build/live/headers). MIN_DOWNLOADS bounds the discovery.
+.PHONY: live-scan
+MIN_DOWNLOADS ?= 100
+live-scan:
+	$(PYTHON) -m trinity_memory.live --min-downloads $(MIN_DOWNLOADS)
