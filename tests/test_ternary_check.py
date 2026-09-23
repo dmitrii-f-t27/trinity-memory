@@ -508,6 +508,10 @@ class NumbersInTheDocsTest(unittest.TestCase):
         self.assertIn(f"None of these {provenance['t27_round_trip'] + provenance['not_written']} is", section)
         self.assertIn(f"recomputes all {summary['cells']} cells and the {words[summary['derived_cells']]} "
                       f"derived", section)
+        # The tensor count, each place the section states it.
+        tensors = words[summary["tensors"]]
+        for phrase in (f"The {tensors} tensors above", f"holds all {tensors} tensors", f"Limits: {tensors} tensors"):
+            self.assertIn(phrase, section)
         # The 50 zero-scale blocks of llama.cpp's q_proj output, each place the section names them.
         zero_blocks = {cells[f"bitnet-q_proj--{ext}_llamacpp"]["flags"]["scale_zero"] for ext in ("tq1_0", "tq2_0")}
         self.assertEqual(len(zero_blocks), 1)
@@ -523,7 +527,8 @@ class NumbersInTheDocsTest(unittest.TestCase):
                       section)
         # Group sizes the section names.
         for phrase in (f"Q2_0, group {group['q2_0']}", f"MLX 2-bit, group {group['mlx_2bit']}",
-                       f"block {group['onnx_2bit']}", f"one scale per {group['tq1_0']} weights",
+                       f"bits=2, block {group['onnx_2bit']} |", f"(block {group['onnx_2bit']}, fp16",
+                       f"one scale per {group['tq1_0']} weights",
                        f"its {group['ptq1_0']}-weight groups", f"Q2_0 (group {group['q2_0']})"):
             self.assertIn(phrase, section)
 
