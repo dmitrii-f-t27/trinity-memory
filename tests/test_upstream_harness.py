@@ -1,8 +1,9 @@
 """Offline checks of the llama.cpp issue 15193 harness plumbing.
 
 The harness itself (tests/upstream/run-llamacpp-15193.sh) needs the network
-and the generated t27 headers; these tests only check the lock file and that
-the extractor refuses sources that differ from it.
+and the generated t27 headers; these tests only check the lock file, that
+the extractor refuses sources that differ from it, and that the driver states
+each variant's kernel path and checks build provenance and Rosetta AVX2.
 """
 import hashlib
 import importlib.util
@@ -41,6 +42,29 @@ class LockFile(unittest.TestCase):
     def test_no_llamacpp_source_is_committed(self):
         for path in (p for p in (ROOT / "tests" / "upstream").iterdir() if p.is_file()):
             self.assertNotRegex(path.read_text(errors="replace"), re.compile(r"^void ggml_vec_dot_tq1_0_q8_K\(", re.M), path.name)
+
+
+class Driver(unittest.TestCase):
+    def setUp(self):
+        self.script = (ROOT / "tests" / "upstream" / "run-llamacpp-15193.sh").read_text()
+
+    def test_every_named_kernel_variant_states_its_expectation(self):
+        variants = re.findall(r"^\s*(?:variants=\")?((?:arm64|x86_64)-(?:dotprod|int16|avx2|generic))\|([^|]*)\|", self.script, re.M)
+        self.assertEqual(sorted({name for name, _ in variants}),
+                         ["arm64-dotprod", "arm64-int16", "x86_64-avx2", "x86_64-generic"])
+        expected = {"arm64-dotprod": "-DHARNESS_EXPECT_DOTPROD=1", "arm64-int16": "-DHARNESS_EXPECT_DOTPROD=0",
+                    "x86_64-avx2": "-DHARNESS_EXPECT_AVX2=1", "x86_64-generic": "-DHARNESS_EXPECT_AVX2=0"}
+        for name, flags in variants:
+            self.assertIn(expected[name], flags.split(), name)
+        header = (ROOT / "tests" / "upstream" / "llamacpp_harness.h").read_text()
+        self.assertIn("#if defined(HARNESS_EXPECT_DOTPROD)", header)
+        self.assertIn("#if defined(HARNESS_EXPECT_AVX2)", header)
+
+    def test_checks_build_provenance_and_rosetta_avx2(self):
+        self.assertIn("build/t27/SHA256SUMS", self.script)
+        self.assertIn("tests/upstream/avx2_probe.c", self.script)
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+        self.assertNotIn("macos-14", workflow)
 
 
 class Extractor(unittest.TestCase):

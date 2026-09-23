@@ -23,6 +23,24 @@ static void ggml_vec_dot_tq2_0_q8_K(int n, float *s, size_t bs, const void *vx, 
 }
 #endif
 
+/* run-llamacpp-15193.sh names each variant after the kernel path it tests and
+ * passes the expectation; a compiler that picks another path fails the build
+ * instead of passing under the wrong name. */
+#if defined(HARNESS_EXPECT_DOTPROD)
+#if HARNESS_EXPECT_DOTPROD && !(defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD))
+#error "variant expects the NEON DOTPROD kernels, but __ARM_FEATURE_DOTPROD is not defined"
+#elif !HARNESS_EXPECT_DOTPROD && !(defined(__ARM_NEON) && !defined(__ARM_FEATURE_DOTPROD))
+#error "variant expects the NEON int16 kernels, but __ARM_FEATURE_DOTPROD is defined (or no NEON)"
+#endif
+#endif
+#if defined(HARNESS_EXPECT_AVX2)
+#if HARNESS_EXPECT_AVX2 && !(defined(__x86_64__) && defined(__AVX2__))
+#error "variant expects the x86 AVX2 kernels, but __AVX2__ is not defined"
+#elif !HARNESS_EXPECT_AVX2 && !(defined(__x86_64__) && !defined(__AVX2__))
+#error "variant expects the x86 generic fallback, but __AVX2__ is defined (or not x86_64)"
+#endif
+#endif
+
 static inline const char *arch_name(void) {
 #if defined(__ARM_NEON) && defined(__ARM_FEATURE_DOTPROD)
     return "arm64 NEON+DOTPROD";
