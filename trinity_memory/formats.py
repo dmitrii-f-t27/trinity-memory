@@ -41,7 +41,8 @@ class TensorInfo(C.Structure):
     _fields_ = [("tensor_type", C.c_uint32), ("dims", C.c_uint32), ("d0", U64), ("d1", U64),
                 ("d2", U64), ("d3", U64), ("data_start", U64), ("offset", U64), ("alignment", U64),
                 ("needed", U64), ("prism", C.c_bool), ("name_at", U64), ("name_size", U64),
-                ("tensors", U64), ("bitnet", C.c_bool), ("next_offset", U64), ("has_next", C.c_bool)]
+                ("tensors", U64), ("bitnet", C.c_bool), ("next_offset", U64), ("has_next", C.c_bool),
+                ("prev_end", U64), ("has_prev", C.c_bool)]
 
     @property
     def shape(self):
@@ -52,7 +53,8 @@ class TensorInfo(C.Structure):
 class SafeInfo(C.Structure):
     _fields_ = [("dtype", n.U8), ("dtype_size", n.SZ), ("dims", n.SZ), ("d0", U64), ("d1", U64),
                 ("d2", U64), ("d3", U64), ("begin", U64), ("end", U64), ("needed", U64),
-                ("dtype_bits", U64), ("next_begin", U64), ("has_next", C.c_bool)]
+                ("dtype_bits", U64), ("next_begin", U64), ("has_next", C.c_bool),
+                ("prev_end", U64), ("has_prev", C.c_bool)]
 
     @property
     def shape(self):

@@ -49,6 +49,7 @@
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per byte) read as ACT_PARALLEL",
       "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
       "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
       "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
@@ -386,6 +387,16 @@
       "values_hex": "00000000ff00fffe0000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          6,
+          8
+        ]
+      ],
       "description": "A packed U8 [2, 3] weight followed by its BF16 weight_scale; the file ends after the scale",
       "expect": {
         "begin": 228,
@@ -395,7 +406,9 @@
         "end": 234,
         "find": 0,
         "has_next": true,
+        "has_prev": false,
         "next_begin": 234,
+        "prev_end": 0,
         "shape": [
           2,
           3
@@ -408,6 +421,16 @@
       "tensor": "model.layers.0.self_attn.q_proj.weight"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          6,
+          8
+        ]
+      ],
       "description": "The BF16 [1] weight_scale ends the file",
       "expect": {
         "begin": 234,
@@ -417,7 +440,9 @@
         "end": 236,
         "find": 0,
         "has_next": false,
+        "has_prev": true,
         "next_begin": 0,
+        "prev_end": 234,
         "shape": [
           1
         ]
@@ -429,6 +454,20 @@
       "tensor": "model.layers.0.self_attn.q_proj.weight_scale"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          6,
+          8
+        ]
+      ],
       "description": "A zero-size tensor at the same begin holds no bytes and bounds nothing",
       "expect": {
         "begin": 285,
@@ -438,7 +477,9 @@
         "end": 291,
         "find": 0,
         "has_next": true,
+        "has_prev": false,
         "next_begin": 291,
+        "prev_end": 0,
         "shape": [
           2,
           3
@@ -451,6 +492,16 @@
       "tensor": "model.layers.0.self_attn.q_proj.weight"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          5
+        ],
+        [
+          5,
+          7
+        ]
+      ],
       "description": "U8 [2, 3] needs 6 bytes; data_offsets give 5",
       "error_class": "extent",
       "expect": {
@@ -461,7 +512,9 @@
         "end": 153,
         "find": 0,
         "has_next": true,
+        "has_prev": false,
         "next_begin": 153,
+        "prev_end": 0,
         "shape": [
           2,
           3
@@ -485,6 +538,16 @@
       "tensor": "w"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          4,
+          6
+        ]
+      ],
       "description": "s begins at 4, inside w's 6 bytes",
       "error_class": "extent",
       "expect": {
@@ -495,7 +558,9 @@
         "end": 154,
         "find": 0,
         "has_next": true,
+        "has_prev": false,
         "next_begin": 152,
+        "prev_end": 0,
         "shape": [
           2,
           3
@@ -519,6 +584,147 @@
       "tensor": "w"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          4,
+          6
+        ]
+      ],
+      "description": "The overlapping tensor itself: s at [4, 6) begins inside w at [0, 6)",
+      "error_class": "extent",
+      "expect": {
+        "begin": 152,
+        "check": -62,
+        "dtype": "BF16",
+        "dtype_bits": 16,
+        "end": 154,
+        "find": 0,
+        "has_next": false,
+        "has_prev": true,
+        "next_begin": 0,
+        "prev_end": 154,
+        "shape": [
+          1
+        ]
+      },
+      "file_size": 154,
+      "id": "st_overlapping_tensor_read_itself",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "8c000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c2273223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b342c365d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:632-638"
+          ],
+          "note": "InvalidOffset: each tensor must begin where the previous one ended",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "s"
+    },
+    {
+      "data_offsets": [
+        [
+          18446744073709551600,
+          18446744073709551602
+        ]
+      ],
+      "description": "data_offsets near 2^64: 8 + header + offset wraps to bytes inside the JSON header",
+      "error_class": "extent",
+      "expect": {
+        "begin": 0,
+        "check": -62,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 0,
+        "find": -62,
+        "has_next": false,
+        "has_prev": false,
+        "next_begin": 0,
+        "prev_end": 0,
+        "shape": [
+          2
+        ]
+      },
+      "file_size": 138,
+      "id": "st_offsets_wrap_around",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "7a000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2261223a7b226474797065223a225538222c227368617065223a5b325d2c22646174615f6f666673657473223a5b31383434363734343037333730393535313630302c31383434363734343037333730393535313630325d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:632-638"
+          ],
+          "note": "InvalidOffset: each tensor must begin where the previous one ended",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "a"
+    },
+    {
+      "data_offsets": [
+        [
+          0,
+          4
+        ],
+        [
+          18446744073709551600,
+          18446744073709551602
+        ]
+      ],
+      "description": "Another entry's data_offsets wrap around; the header is refused whichever tensor is read",
+      "error_class": "extent",
+      "expect": {
+        "begin": 0,
+        "check": -62,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 0,
+        "find": -62,
+        "has_next": false,
+        "has_prev": false,
+        "next_begin": 0,
+        "prev_end": 0,
+        "shape": [
+          4
+        ]
+      },
+      "file_size": 190,
+      "id": "st_other_offsets_wrap_around",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "ae000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2261223a7b226474797065223a225538222c227368617065223a5b345d2c22646174615f6f666673657473223a5b302c345d7d2c2262223a7b226474797065223a225538222c227368617065223a5b325d2c22646174615f6f666673657473223a5b31383434363734343037333730393535313630302c31383434363734343037333730393535313630325d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:632-638"
+          ],
+          "note": "InvalidOffset: each tensor must begin where the previous one ended",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "a"
+    },
+    {
+      "data_offsets": [
+        [
+          0,
+          6
+        ],
+        [
+          6,
+          8
+        ]
+      ],
       "description": "A truncated file: weight_scale needs bytes 6..8 of the data section, 7 remain",
       "error_class": "extent",
       "expect": {
@@ -529,7 +735,9 @@
         "end": 236,
         "find": 0,
         "has_next": false,
+        "has_prev": true,
         "next_begin": 0,
+        "prev_end": 234,
         "shape": [
           1
         ]
@@ -552,6 +760,12 @@
       "tensor": "model.layers.0.self_attn.q_proj.weight_scale"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          6
+        ]
+      ],
       "description": "Q2 is not a safetensors dtype",
       "error_class": "container",
       "expect": {
@@ -562,7 +776,9 @@
         "end": 100,
         "find": 0,
         "has_next": false,
+        "has_prev": false,
         "next_begin": 0,
+        "prev_end": 0,
         "shape": [
           2,
           3
@@ -587,17 +803,25 @@
       "tensor": "w"
     },
     {
-      "description": "2^64 elements: the byte count does not fit in 64 bits",
-      "error_class": "extent",
+      "data_offsets": [
+        [
+          0,
+          8
+        ]
+      ],
+      "description": "2^64 elements: the bit count does not fit in 64 bits (length, as a GGUF weight count that gguf.cpp refuses)",
+      "error_class": "length",
       "expect": {
         "begin": 112,
-        "check": -62,
+        "check": -51,
         "dtype": "U8",
         "dtype_bits": 8,
         "end": 120,
         "find": 0,
         "has_next": false,
+        "has_prev": false,
         "next_begin": 0,
+        "prev_end": 0,
         "shape": [
           4294967296,
           4294967296
@@ -621,6 +845,12 @@
       "tensor": "w"
     },
     {
+      "data_offsets": [
+        [
+          0,
+          2
+        ]
+      ],
       "description": "Three F4 elements are 12 bits, not whole bytes",
       "error_class": "length",
       "expect": {
@@ -631,7 +861,9 @@
         "end": 94,
         "find": 0,
         "has_next": false,
+        "has_prev": false,
         "next_begin": 0,
+        "prev_end": 0,
         "shape": [
           3
         ]

@@ -57,12 +57,17 @@
       "arm": {
         "block_weights": 64,
         "group_bytes": 16
+      },
+      "consecutive": {
+        "byte": "e/4",
+        "shift": "6 - 2(e%4)"
       }
     },
     "silent": {
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per byte) read as ACT_PARALLEL",
       "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
       "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
       "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
@@ -74,7 +79,7 @@
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
-  "description": "I2_S in the x86 ACT_PARALLEL layout with real BitNet bytes, flags, rejections, and the ARM and four-row layouts read as ACT_PARALLEL. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
+  "description": "I2_S in the x86 ACT_PARALLEL layout with real BitNet bytes, flags, rejections, and the ARM, four-row and four-consecutive layouts read as ACT_PARALLEL. Expectations come from the upstream loops transcribed in tools/generate-spec-vectors.py (a test oracle), not from the native implementation.",
   "format_family": "Conformance",
   "generator": "tools/generate-spec-vectors.py",
   "invariants": [
@@ -96,6 +101,7 @@
       "files": [
         ".gitmodules",
         "include/gemm-config.h",
+        "src/CMakeLists.txt",
         "src/ggml-bitnet-mad.cpp",
         "utils/convert-hf-to-gguf-bitnet.py"
       ],
@@ -105,6 +111,11 @@
       "commit": "390c307752ab78fd8189f359d6954c9ba1be74af",
       "files": [
         "ggml/include/ggml.h",
+        "ggml/src/ggml-cpu/CMakeLists.txt",
+        "ggml/src/ggml-cpu/ggml-cpu-i2s.c",
+        "ggml/src/ggml-cpu/ggml-cpu.c",
+        "ggml/src/ggml-cpu/ops.cpp",
+        "ggml/src/ggml-cpu/quants.c",
         "ggml/src/ggml.c",
         "ggml/src/gguf.cpp",
         "src/llama-arch.cpp",
@@ -214,7 +225,7 @@
     {
       "count": 128,
       "data_hex": "e990455a961654182a488aa86a021919908865a2292aa9819629a192a45564ffcdcc4c3d00000000000000000000000000000000000000000000000000000000",
-      "description": "Code 3 is never written and no dequantizer defines it; reported as +2 and flagged",
+      "description": "Code 3 is never written; bitnet.cpp reads it as 0 through dequantize_row_i2_s and as +2 through mul_mat; reported as +2 and flagged",
       "expect": {
         "flags": {
           "affine_not_ternary": 0,
@@ -234,22 +245,28 @@
       "kind": "i2s",
       "silent_output": [
         {
-          "behaviour": "unknown",
+          "behaviour": "decodes",
           "cite": [
-            "UNKNOWN",
-            "ggml/src/ggml.c:931-937"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml.c:936",
+            "ggml/src/ggml-cpu/ops.cpp:4783-4829"
           ],
-          "note": "the I2_S type traits name dequantize_row_i2_s as to_float; its definition was not found at the pins",
-          "upstream": "bitnet.cpp-llama.cpp"
+          "code3_value": 0,
+          "note": "dequantize_row_i2_s maps codes through {-1, 0, +1, 0}: code 3 is 0",
+          "upstream": "bitnet.cpp-llama.cpp",
+          "values_hex": "0001000001ff00ffff00010100ffffff01010001ffff010101ff0101010000000100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff0000000000ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff00"
         },
         {
-          "behaviour": "unknown",
+          "behaviour": "decodes",
           "cite": [
-            "UNKNOWN",
-            "src/ggml-bitnet-mad.cpp:198-295"
+            "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252",
+            "ggml/src/ggml-cpu/ggml-cpu.c:1491-1545",
+            "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"
           ],
-          "note": "the x86 dot kernel multiplies the raw 2-bit code, 3 included; how the code offset is removed afterwards was not traced",
-          "upstream": "bitnet.cpp"
+          "code3_value": 2,
+          "note": "mul_mat multiplies the raw codes 0..3 and subtracts the activation sum: code 3 is +2",
+          "upstream": "bitnet.cpp-llama.cpp",
+          "values_hex": "0201000001ff00ffff00010100ffffff01010001ffff010101ff0101010000020100ff000000000001ffff0101ff000000ff0101010101ff000101000100010201ff0001000000010101010101ff0101ff0100ff010101ff0001ffff0000000200ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff02"
         }
       ]
     },
@@ -277,13 +294,24 @@
       "kind": "i2s",
       "silent_output": [
         {
-          "behaviour": "unknown",
+          "behaviour": "decodes",
           "cite": [
-            "UNKNOWN",
-            "src/ggml-bitnet-mad.cpp:198-295"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml.c:936",
+            "ggml/src/ggml-cpu/ops.cpp:4783-4829"
           ],
-          "note": "the dot kernels multiply the raw 2-bit codes; where the f32 scale is applied was not found at the pins",
-          "upstream": "bitnet.cpp"
+          "note": "y = scale * trit with no check of the scale: it flips the sign of every weight",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252",
+            "ggml/src/ggml-cpu/ggml-cpu.c:1491-1545",
+            "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"
+          ],
+          "note": "the dot product is multiplied by the scale with no check: it flips the sign of every weight",
+          "upstream": "bitnet.cpp-llama.cpp"
         }
       ]
     },
@@ -311,13 +339,24 @@
       "kind": "i2s",
       "silent_output": [
         {
-          "behaviour": "unknown",
+          "behaviour": "decodes",
           "cite": [
-            "UNKNOWN",
-            "src/ggml-bitnet-mad.cpp:198-295"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml.c:936",
+            "ggml/src/ggml-cpu/ops.cpp:4783-4829"
           ],
-          "note": "the dot kernels multiply the raw 2-bit codes; where the f32 scale is applied was not found at the pins",
-          "upstream": "bitnet.cpp"
+          "note": "y = scale * trit with no check of the scale: it makes every weight 0",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252",
+            "ggml/src/ggml-cpu/ggml-cpu.c:1491-1545",
+            "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"
+          ],
+          "note": "the dot product is multiplied by the scale with no check: it makes every weight 0",
+          "upstream": "bitnet.cpp-llama.cpp"
         }
       ]
     },
@@ -334,15 +373,26 @@
       "reader": "i2s",
       "silent_output": [
         {
-          "behaviour": "unknown",
+          "behaviour": "decodes",
           "cite": [
-            "UNKNOWN",
-            "src/ggml-bitnet-mad.cpp:198-295"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml.c:936",
+            "ggml/src/ggml-cpu/ops.cpp:4783-4829"
           ],
-          "note": "no pinned code checks the scale; the codes read as these trits",
+          "note": "no check of the scale; these trits times the scale: every weight is NaN",
           "scale_word": 2143289344,
-          "upstream": "bitnet.cpp",
+          "upstream": "bitnet.cpp-llama.cpp",
           "values_hex": "0001000001ff00ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"
+        },
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252",
+            "ggml/src/ggml-cpu/ggml-cpu.c:1491-1545",
+            "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"
+          ],
+          "note": "no check of the scale; every dot product is multiplied by it",
+          "upstream": "bitnet.cpp-llama.cpp"
         }
       ]
     },
@@ -359,15 +409,26 @@
       "reader": "i2s",
       "silent_output": [
         {
-          "behaviour": "unknown",
+          "behaviour": "decodes",
           "cite": [
-            "UNKNOWN",
-            "src/ggml-bitnet-mad.cpp:198-295"
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml.c:936",
+            "ggml/src/ggml-cpu/ops.cpp:4783-4829"
           ],
-          "note": "no pinned code checks the scale; the codes read as these trits",
+          "note": "no check of the scale; these trits times the scale: +1 and -1 become +inf and -inf, 0 becomes NaN (0 * inf)",
           "scale_word": 2139095040,
-          "upstream": "bitnet.cpp",
+          "upstream": "bitnet.cpp-llama.cpp",
           "values_hex": "0001000001ff00ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"
+        },
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-cpu/ggml-cpu.c:1217-1252",
+            "ggml/src/ggml-cpu/ggml-cpu.c:1491-1545",
+            "ggml/src/ggml-cpu/ggml-cpu-i2s.c:38-120"
+          ],
+          "note": "no check of the scale; every dot product is multiplied by it",
+          "upstream": "bitnet.cpp-llama.cpp"
         }
       ]
     },
@@ -407,12 +468,12 @@
       "reader": "i2s",
       "silent_output": [
         {
-          "behaviour": "unknown",
+          "behaviour": "decodes",
           "cite": [
-            "UNKNOWN",
-            "ggml/src/ggml.c:931-937"
+            "ggml/src/ggml.c:931-937",
+            "ggml/src/ggml-cpu/quants.c:1335-1356"
           ],
-          "note": "I2_S has block size 1, so gguf.cpp accepts any row length; how the x86 kernels read a tensor that is not whole 128-weight blocks was not traced",
+          "note": "I2_S has block size 1, so gguf.cpp accepts any row length; dequantize_row_i2_s reads a 32-byte group for 64 weights, so bytes 16..31 (the scale and trailer at n/4) decode as weights 16..31 and 48..63",
           "upstream": "bitnet.cpp-llama.cpp"
         }
       ]
@@ -492,6 +553,46 @@
           ],
           "note": "a build with the default ACT_PARALLEL layout (:51-96) reads bytes that the 1x4 writer produced as other weights",
           "upstream": "bitnet.cpp"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "999466a9844685645a90080a90a6a480104425a08285126612911a64020914641546a400519061489695a4128546850126a2a44928465405985421604a50a9520000803f00000000000000000000000000000000000000000000000000000000",
+      "description": "bitnet.cpp's consecutive layout writes the same codes to other bytes; read as ACT_PARALLEL they decode without error to other weights",
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_word": 1065353216,
+        "status": 0,
+        "values_hex": "01010001010001000001ffff01010101ff00ff010101ff00ff01ff00ffffff0000000101ffffff010000ffff000101ff00ff0101ffff000100000001ffff0001010000010000000001ff0101ff0000ffff0000ffff00ff00ffff0100ff01000000ff0100ff0100ff01ffff01ff01ffffffff00ff01000101010001ff0100ffffff0001ff00010000010101ff010001ffff010100ff0000ff0100ff000000010000ff01ff000001ff00000100ffffffff010101ff01ff00ff00000101ff000100000000ffffffff01000000ff000000ff00ff0001010000000100ffff01ff01ff0001ffff00ff00ff0100ff01000100000101ff00ff01ff00ffff00ff01ff0001"
+      },
+      "id": "i2s_consecutive_bytes_read_as_act_parallel",
+      "intended": {
+        "cols": 128,
+        "layout": "consecutive",
+        "rows": 2,
+        "values_hex": "01000100010000ff000100010101010001ff00ff00ff000101ff0000000100ff000001010100ffffffff01ffffff01010100ffff01010001010100ff01ffffffff00ffff00ff00ffff0100000101ffff01ffff0101ff0000ff00ff0100010001ff00ff010100ff00ff000101000100ffffffff01ffff0100ff0000ff000100ffff00000000ff0001010100ffffffffff0000ff000100ffff0001ff0000ff01ff0100000101000000010100ffff00ff0101ff000000ff000101ff0000ffffff00ff0100010101ff01010100ff00ff0100ff0101ff00ff0001000000ffffff0000010001ff000000ffff01ff000001ffff00ff01010000ffff010101000000ff01"
+      },
+      "kind": "i2s",
+      "silent_class": "i2s_layout_consecutive",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-cpu/quants.c:1358-1387",
+            "ggml/src/ggml-cpu/quants.c:1335-1356",
+            "ggml/src/ggml.c:7787"
+          ],
+          "note": "the submodule's own quantize_i2_s writes these bytes and its own dequantize_row_i2_s reads them as other weights",
+          "upstream": "bitnet.cpp-llama.cpp"
         }
       ]
     },

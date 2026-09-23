@@ -50,6 +50,8 @@ uint64_t tf_wasm_info_field(TFTensorInfo *info, uint32_t field) {
     case 12: return info->next_offset;
     case 13: return info->tensors;
     case 14: return info->has_next;
+    case 15: return info->prev_end;
+    case 16: return info->has_prev;
     default: return UINT64_MAX;
     }
 }
@@ -73,6 +75,8 @@ uint64_t tf_wasm_safe_info_field(TFSafeInfo *info, uint32_t field) {
     case 10: return info->dtype_bits;
     case 11: return info->next_begin;
     case 12: return info->has_next;
+    case 13: return info->prev_end;
+    case 14: return info->has_prev;
     default: return UINT64_MAX;
     }
 }

@@ -117,6 +117,7 @@
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
+      "i2s_layout_consecutive": "I2_S bytes of the llama.cpp submodule's quantize_i2_s (four consecutive weights per byte) read as ACT_PARALLEL",
       "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
       "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
       "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
@@ -164,6 +165,11 @@
       "commit": "390c307752ab78fd8189f359d6954c9ba1be74af",
       "files": [
         "ggml/include/ggml.h",
+        "ggml/src/ggml-cpu/CMakeLists.txt",
+        "ggml/src/ggml-cpu/ggml-cpu-i2s.c",
+        "ggml/src/ggml-cpu/ggml-cpu.c",
+        "ggml/src/ggml-cpu/ops.cpp",
+        "ggml/src/ggml-cpu/quants.c",
         "ggml/src/ggml.c",
         "ggml/src/gguf.cpp",
         "src/llama-arch.cpp",
@@ -1816,8 +1822,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": true,
+        "has_prev": false,
         "next_offset": 160,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 144
       },
@@ -1837,8 +1845,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": true,
         "tensor_bytes": 144
       },
@@ -1858,8 +1868,10 @@
         "find": 0,
         "ggml_type": 142,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": true,
         "tensor_bytes": 136
       },
@@ -1879,8 +1891,10 @@
         "find": 0,
         "ggml_type": 143,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": true,
         "tensor_bytes": 112
       },
@@ -1900,8 +1914,10 @@
         "find": 0,
         "ggml_type": 143,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false
       },
       "file_size": 1152,
@@ -1920,8 +1936,10 @@
         "find": 0,
         "ggml_type": 36,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 160
       },
@@ -1942,8 +1960,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false
       },
       "file_size": 1152,
@@ -1984,8 +2004,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": true,
+        "has_prev": false,
         "next_offset": 160,
         "offset": 0,
+        "prev_end": 0,
         "prism": false
       },
       "file_size": 1344,
@@ -2026,8 +2048,10 @@
         "find": 0,
         "ggml_type": 38,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false
       },
       "file_size": 1152,
@@ -2068,8 +2092,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": true
       },
       "file_size": 1216,
@@ -2110,8 +2136,10 @@
         "find": 0,
         "ggml_type": 143,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": true
       },
       "file_size": 1216,
@@ -2150,8 +2178,10 @@
         "find": 0,
         "ggml_type": 35,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": true,
         "tensor_bytes": 132
       },
@@ -2172,8 +2202,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": true,
         "next_offset": 0,
         "offset": 161,
+        "prev_end": 144,
         "prism": false
       },
       "file_size": 1345,
@@ -2204,8 +2236,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": true,
         "next_offset": 0,
         "offset": 160,
+        "prev_end": 144,
         "prism": false
       },
       "file_size": 1376,
@@ -2236,8 +2270,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": true,
+        "has_prev": false,
         "next_offset": 320,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 324
       },
@@ -2269,8 +2305,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": true,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 144
       },
@@ -2302,8 +2340,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": true,
+        "has_prev": false,
         "next_offset": 96,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 144
       },
@@ -2325,6 +2365,213 @@
       "tensor": "a.weight"
     },
     {
+      "description": "The shifted record itself: b.weight at 96 begins inside a.weight's 144 bytes, and no record follows it",
+      "error_class": "extent",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -62,
+        "data_start": 160,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "has_prev": true,
+        "next_offset": 0,
+        "offset": 96,
+        "prev_end": 144,
+        "prism": false,
+        "tensor_bytes": 72
+      },
+      "file_size": 1280,
+      "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e7765696768740100000000010000000000002a0000006000000000000000",
+      "id": "gguf_shifted_record_read_itself",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "b.weight"
+    },
+    {
+      "description": "a.weight at 128 begins inside the 256 bytes of the F32 record at 0",
+      "error_class": "extent",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -62,
+        "data_start": 160,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "has_prev": true,
+        "next_offset": 0,
+        "offset": 128,
+        "prev_end": 256,
+        "prism": false,
+        "tensor_bytes": 144
+      },
+      "file_size": 1312,
+      "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610b000000000000006e6f726d2e7765696768740100000040000000000000000000000000000000000000000800000000000000612e77656967687402000000000100000000000002000000000000002a0000008000000000000000",
+      "id": "gguf_begins_inside_f32_record",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "a.weight"
+    },
+    {
+      "description": "A zero-weight record holds no bytes (ggml_nbytes is 0), so the next record starts at the same offset, as gguf.cpp's writer places it",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": 3,
+        "data_start": 160,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "has_prev": false,
+        "next_offset": 0,
+        "offset": 0,
+        "prev_end": 0,
+        "prism": false,
+        "tensor_bytes": 144
+      },
+      "file_size": 1184,
+      "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d6108000000000000007a2e7765696768740100000000000000000000000000000000000000000000000800000000000000612e77656967687402000000000100000000000002000000000000002a0000000000000000000000",
+      "id": "gguf_zero_weight_record_shares_offset",
+      "kind": "gguf",
+      "tensor": "a.weight"
+    },
+    {
+      "description": "a.weight is bounded by b.weight at 160, not by the zero-weight record there",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": 3,
+        "data_start": 224,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": true,
+        "has_prev": false,
+        "next_offset": 160,
+        "offset": 0,
+        "prev_end": 0,
+        "prism": false,
+        "tensor_bytes": 144
+      },
+      "file_size": 1408,
+      "gguf_hex": "474755460300000003000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a000000000000000000000008000000000000007a2e77656967687402000000000000000000000004000000000000002a000000a0000000000000000800000000000000622e77656967687402000000000100000000000002000000000000002a000000a000000000000000",
+      "id": "gguf_zero_weight_record_between",
+      "kind": "gguf",
+      "tensor": "a.weight"
+    },
+    {
+      "description": "b.weight shares its offset with a zero-weight record and follows a.weight's padded end",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": 3,
+        "data_start": 224,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "has_prev": true,
+        "next_offset": 0,
+        "offset": 160,
+        "prev_end": 144,
+        "prism": false,
+        "tensor_bytes": 144
+      },
+      "file_size": 1408,
+      "gguf_hex": "474755460300000003000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a000000000000000000000008000000000000007a2e77656967687402000000000000000000000004000000000000002a000000a0000000000000000800000000000000622e77656967687402000000000100000000000002000000000000002a000000a000000000000000",
+      "id": "gguf_zero_weight_record_before",
+      "kind": "gguf",
+      "tensor": "b.weight"
+    },
+    {
+      "description": "64 x (2^58 + 1) x 64 weights: the product does not fit in 64 bits and wraps to 4096 (1152 bytes, which the file holds)",
+      "error_class": "length",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -51,
+        "data_start": 128,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "has_prev": false,
+        "next_offset": 0,
+        "offset": 0,
+        "prev_end": 0,
+        "prism": false
+      },
+      "file_size": 1280,
+      "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e776569676874030000004000000000000000010000000000000440000000000000002a0000000000000000000000",
+      "id": "gguf_weight_count_not_representable",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:699-711"
+          ],
+          "note": "the total number of elements must be representable (below INT64_MAX)",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "a.weight"
+    },
+    {
+      "description": "64 x 2^57 = 2^63 weights fit in a u64 but not below INT64_MAX",
+      "error_class": "length",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -51,
+        "data_start": 128,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "has_prev": false,
+        "next_offset": 0,
+        "offset": 0,
+        "prev_end": 0,
+        "prism": false
+      },
+      "file_size": 1280,
+      "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000400000000000000000000000000000022a0000000000000000000000",
+      "id": "gguf_weight_count_at_int64_max",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:699-711"
+          ],
+          "note": "INT64_MAX / ne[1] <= ne[0]: the count is not representable",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "a.weight"
+    },
+    {
       "description": "The last tensor ends exactly at the end of the file",
       "expect": {
         "alignment": 32,
@@ -2334,8 +2581,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 324
       },
@@ -2356,8 +2605,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 324
       },
@@ -2389,8 +2640,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": true,
         "next_offset": 0,
         "offset": 192,
+        "prev_end": 144,
         "prism": false,
         "tensor_bytes": 144
       },
@@ -2430,8 +2683,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": false,
+        "has_prev": false,
         "next_offset": 0,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 0
       },
@@ -2462,8 +2717,10 @@
         "find": 0,
         "ggml_type": 42,
         "has_next": true,
+        "has_prev": false,
         "next_offset": 144,
         "offset": 0,
+        "prev_end": 0,
         "prism": false,
         "tensor_bytes": 144
       },

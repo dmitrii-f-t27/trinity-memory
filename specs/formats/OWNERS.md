@@ -12,7 +12,7 @@ t27 Ternary Check reads and writes. Roadmap: [epic #27](https://github.com/dmitr
 |---|---|---|---|
 | `llama_cpp.t27` | `TrinityFormatsLlamaCppSpec` | TQ1_0, TQ2_0, Q2_0 (group 64), Q1_0; GGUF tensor rules and the type-id rule | ggml-org/llama.cpp `e6ab7c1a` |
 | `prismml.t27` | `TrinityFormatsPrismmlSpec` | PQ2_0, PTQ1_0, the fork's Q2_0 (still group 64) | PrismML-Eng/llama.cpp `bdc23b56` (branch `prism`) |
-| `bitnet_cpp.t27` | `TrinityFormatsBitnetCppSpec` | I2_S (x86 ACT_PARALLEL), ARM and four-row layouts as negative cases | microsoft/BitNet `0b341e58`, submodule isHuangXin/llama.cpp `390c3077` |
+| `bitnet_cpp.t27` | `TrinityFormatsBitnetCppSpec` | I2_S (x86 ACT_PARALLEL); ARM, four-row and four-consecutive layouts as negative cases | microsoft/BitNet `0b341e58`, submodule isHuangXin/llama.cpp `390c3077` |
 | `hf_bitnet.t27` | `TrinityFormatsHfBitnetSpec` | packed uint8 weights and `weight_scale`; the safetensors extent rule | huggingface/transformers `2c4914fb`, huggingface/safetensors `e246a256` |
 | `mlx.t27` | `TrinityFormatsMlxSpec` | 2-bit affine codes, scales, biases | ml-explore/mlx `59d600b5` |
 | `onnx.t27` | `TrinityFormatsOnnxSpec` | `com.microsoft.MatMulNBits`, `bits=2`, packed zero points | microsoft/onnxruntime `2ecddca3` |
@@ -51,7 +51,7 @@ these classes has `"kind": "reject"`, and `reader` names the reader it exercises
 | Token | Status | Raised when | Upstream behaviour |
 |---|---|---|---|
 | `format` | -50 | unknown format id | — |
-| `length` | -51 | weight count not whole blocks, byte size not the count's size (a truncated tensor), a shape the format cannot store (HF rows % 4, MLX group, ONNX block size), GGUF row not whole blocks or a weight count that overflows, safetensors elements that are not whole bytes | llama.cpp (`gguf.cpp`, `ggml_validate_row_data`), MLX (`affine_quantize`, `affine_dequantize`), ONNX Runtime (`MatMulNBits` shape checks) and safetensors (`MisalignedSlice`) reject |
+| `length` | -51 | weight count not whole blocks, byte size not the count's size (a truncated tensor), a shape the format cannot store (HF rows % 4, MLX group, ONNX block size), GGUF row not whole blocks or a weight count that `gguf.cpp` refuses (an `ne` above INT64_MAX, or a nonzero product not below INT64_MAX), safetensors elements whose bits do not fit in 64 bits or are not whole bytes | llama.cpp (`gguf.cpp`, `ggml_validate_row_data`), MLX (`affine_quantize`, `affine_dequantize`), ONNX Runtime (`MatMulNBits` shape checks) and safetensors (`ValidationOverflow`, `MisalignedSlice`) reject |
 | `capacity` | -52 | caller's output buffer too small | — |
 | `code` | -53 | an encoder is given a value outside the format's code table | the upstream quantizers derive codes from float weights and cannot be given such a value |
 | `padding` | -54 | a TQ1_0 or PTQ1_0 `qh` byte whose fifth base-3 digit is not 0 (170 of the 256 byte values) | the quantizers always write 0 there; the dequantizers read digits 0..3 and ignore it |
@@ -62,25 +62,31 @@ these classes has `"kind": "reject"`, and `reader` names the reader it exercises
 | `type_ambiguous` | -59 | a GGUF type id whose meaning differs between two namespaces marked in the same file | — |
 | `layout_unsupported` | -60 | a GGUF type id that names TL1 or TL2 | bitnet.cpp decodes with its generated kernels |
 | `misaligned` | -61 | a GGUF tensor offset not a multiple of `general.alignment` | `gguf.cpp` rejects (offsets must equal the padded end of the previous tensor) |
-| `extent` | -62 | GGUF: a tensor's bytes reach another record's offset at or above its own (a shifted or overlapping record) or run past the end of the file (a truncated file); safetensors: `end - begin` is not numel × dtype width, the bytes reach another tensor's begin, run past the end of the file, or the byte count overflows | `gguf.cpp` rejects offsets that are not the padded end of the previous tensor, the model loader data past the end of the file; safetensors rejects all four |
+| `extent` | -62 | GGUF: a tensor's bytes reach the offset of another record at or above its own, the tensor begins inside a record of known size below it (a shifted or overlapping record), or its bytes run past the end of the file (a truncated file); only records that hold at least one weight count, so a record may share the offset of a zero-weight record before it. safetensors: `end - begin` is not numel × dtype width, the bytes reach the begin of another nonzero-size tensor at or above this one, the tensor begins inside another nonzero-size tensor, the bytes run past the end of the file, or `8 + header + data_offsets` does not fit in 64 bits for any entry (then `tf_safetensors_find` returns it) | `gguf.cpp` rejects offsets that are not the padded end of the previous tensor, the model loader data past the end of the file; safetensors rejects all of these (`InvalidOffset`, `TensorInvalidInfo`, `MetadataIncompleteBuffer`) |
 
 The strict readers are the functions that return these statuses: `tf_decode_blocks`,
 `tf_decode_i2s`, `tf_decode_hf_packed`, `tf_decode_mlx2`, `tf_decode_onnx2` and the
 encoders, with `tf_scales_check` or `tf_affine_check` for scales kept outside the codes,
 `tf_gguf_check(info, file_size)` after `tf_gguf_find`, and
 `tf_safetensors_check(info, file_size)` after `tf_safetensors_find`. The GGUF and
-safetensors rules are weaker than upstream in one direction: a gap between tensors is
-accepted, since the readers do not know the byte size of every ggml type or dtype in a
-file.
+safetensors rules are weaker than upstream in two ways. A gap between tensors is accepted,
+since the readers do not know the byte size of every ggml type or dtype in a file. And a
+GGUF tensor that begins inside a record whose byte size the reader does not know is
+accepted: `tf_gguf_record_bytes` knows the ternary layouts under the file's namespace
+markers, F32, F16 and BF16, and nothing else. A GGUF record with zero weights holds no
+bytes (`ggml_nbytes` is 0, `ggml.c:1298-1302`) and bounds nothing, as in `gguf.cpp`.
+The same condition gets the same token in both containers: a shape whose size cannot be
+represented is `length`, a byte range that does not fit the file or its neighbours is
+`extent`.
 
 Flag classes (decoding succeeds, values are unchanged, the count is reported):
 
 | Token | Slot | Counts | Upstream behaviour |
 |---|---|---|---|
-| `outside_ternary` | 0 | weights whose value is outside {-1, 0, +1}: 2-bit code 3 (+2) where a ternary model is stored in TQ2_0, Q2_0, PQ2_0, I2_S, HF packed, MLX; ONNX code minus zero point outside ±1 (code 0 under the default zero point 2 is -2) | decoded as ±2 (I2_S: unknown, see below) |
+| `outside_ternary` | 0 | weights whose value is outside {-1, 0, +1}: 2-bit code 3 (+2) where a ternary model is stored in TQ2_0, Q2_0, PQ2_0, I2_S, HF packed, MLX; ONNX code minus zero point outside ±1 (code 0 under the default zero point 2 is -2) | decoded as ±2; I2_S code 3 is 0 through bitnet.cpp's `dequantize_row_i2_s` and +2 through its `mul_mat` (see below) |
 | `noncanonical_base3` | 1 | TQ1_0/PTQ1_0 bytes the quantizer never writes but whose padding digit is 0: 13 of 256 `qs` values and 5 of 256 `qh` values (1, 20, 99, 178, 197) | decoded like a canonical byte |
 | `scale_negative` | 2 | finite scales with the sign bit set (per block, per tensor or per group) | decoded with flipped signs |
-| `scale_zero` | 3 | scales equal to ±0 | every weight of the group decodes to 0 |
+| `scale_zero` | 3 | scales equal to ±0 | every weight of the block decodes to 0; an MLX group decodes to its bias (0 only when the bias is ±0 as well; otherwise `affine_not_ternary` counts the group too) |
 | `trailer_nonzero` | 4 | nonzero bytes among the 28 I2_S trailer bytes after the scale | never read |
 | `padding_nonzero` | 5 | nonzero ONNX codes at k ≥ K in a row's last block | never read; ONNX Runtime's own quantizer leaves the previous codes of its buffer in a partial last byte (`q4_dq.cpp:494`, `:551-567`), so a reject would refuse its output |
 | `affine_not_ternary` | 6 | MLX groups whose bias is not -scale | decoded as affine values |
@@ -92,6 +98,7 @@ Silent cases (neither class can see them; the vectors record the silent output):
 | `group_size_mismatch` | group-128 bytes (PQ2_0) read as group-64 Q2_0 | 306 bytes are 9 PQ2_0 blocks and 17 Q2_0 blocks; every byte is a valid code. This is a synthetic case: the published Q2_0 file holds valid group-64 blocks. In a GGUF file the `extent` check catches it when the Q2_0 reading's extra n/64 bytes pass the alignment padding after the tensor, which holds for every tensor of 2048 weights or more at alignment 32: the reading then runs into the next tensor or past the end of the file. |
 | `i2s_layout_arm` | bytes written by bitnet.cpp's ARM build read as ACT_PARALLEL | the same n/4 + 32 bytes, other weight positions |
 | `i2s_layout_1x4` | bytes written by bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL | as above |
+| `i2s_layout_consecutive` | bytes written by the `quantize_i2_s` of bitnet.cpp's llama.cpp submodule (`ggml/src/ggml-cpu/quants.c:1358-1387`: four consecutive weights per byte) read as ACT_PARALLEL | as above |
 | `q1_0_payload` | a corrupted Q1_0 byte | Q1_0 has no invalid bit pattern: every byte is eight valid ±1 values |
 | `payload_corrupted` | a corrupted code byte that still holds valid codes (real Bonsai Q2_0 bytes, one code changed) | the changed byte is a valid code pattern in every format |
 | `scale_corrupted` | a corrupted scale that stays finite and positive (real Bonsai Q2_0 bytes, one scale bit flipped) | any finite positive fp16 is a valid scale |
@@ -102,9 +109,13 @@ digits, bad shapes and extents); it is flagged when an upstream writer or reader
 and real files may carry it (code 3 in 2-bit layouts that define +2, base-3 bytes that
 decode like canonical ones, negative and zero scales, the I2_S trailer that llama-quantize
 fills from a reused buffer, ONNX padding that the ONNX quantizer leaves nonzero, MLX
-affine groups). A zero scale is a flag, not a reject: it is finite, every upstream reader
-decodes it (to all-zero weights), and a block of zero weights is a legal quantizer output
-(`d = amax = 0`).
+affine groups). A zero scale is a flag, not a reject: it is finite and every upstream
+reader decodes it. In the block formats, I2_S, HF packed and ONNX it gives all-zero
+weights, and a block of zero weights is a legal quantizer output (`d = amax = 0`). MLX
+computes `w = q * scale + bias` (`mlx/ops.cpp:5297-5298`), so a zero scale gives every
+weight of the group the group's bias; MLX's reference quantizer (the fallback of
+`affine_quantize`) floors the scale magnitude at `eps = 1e-7` (`:5029`, `:5039-5040`) and
+does not write a zero scale.
 
 ### Silent output view
 
@@ -115,10 +126,31 @@ for example codes an encoder never receives, or `unknown`), `cite` (`path:line` 
 `path:first-last` in a file pinned for that upstream; `UNKNOWN` marks what was not found at
 the pin) and `note`. Where the upstream decodes and the output can be stated exactly,
 `values_hex` (and `scale_words` or `scale_word`) give it before scaling; the harnesses
-reproduce it from the implementation and the spec. Two I2_S questions stay `unknown`: the
-type traits of bitnet.cpp's llama.cpp name `dequantize_row_i2_s` as `to_float`
-(`ggml/src/ggml.c:936`), but its definition was not found at the pins, and the pinned
-dot kernels multiply raw 2-bit codes without showing where the f32 scale is applied.
+reproduce it from the implementation and the spec. For flag vectors, a view's `values_hex`
+is the implementation's output with code 3 read as `code3_value`; the harnesses check it.
+
+bitnet.cpp's I2_S readers, at the submodule commit `390c3077` pinned with microsoft/BitNet
+`0b341e58`. The build compiles the submodule's `ggml/src/ggml-cpu/quants.c`,
+`ggml-cpu.c`, `ggml-cpu-i2s.c` and `ops.cpp` (`ggml/src/ggml-cpu/CMakeLists.txt:30-57`);
+BitNet's `src/ggml-bitnet-mad.cpp` is only named in a variable that
+`src/CMakeLists.txt:2-3` overwrites, so the vectors cite it for the layouts it documents,
+not as running code.
+
+- `dequantize_row_i2_s` (`quants.c:1335-1356`), the `to_float` of `ggml.c:936` and the
+  reader of `get_rows` (`ops.cpp:4783-4829`), reads the ACT_PARALLEL positions and computes
+  `scale * {-1, 0, +1, 0}[code]`: code 3 decodes to 0.
+- `mul_mat` (`ggml-cpu.c:1217-1252`, and the GEMM/GEMV path at `:1491-1545` with the
+  kernels of `ggml-cpu-i2s.c`) multiplies the raw codes 0..3 with the activations,
+  subtracts the activation sum and multiplies by `scale / activation scale`: code 3 acts
+  as +2. bitnet.cpp therefore disagrees with itself on code 3; the reader here reports +2
+  and flags it.
+- Neither path checks the f32 scale: a negative scale flips every weight, a zero scale
+  zeroes it, NaN gives NaN, and an infinite scale gives ±inf for ±1 and NaN for 0.
+- The same `quants.c` defines the `quantize_i2_s` that `ggml.c:7787` calls
+  (`:1358-1387`). It packs four consecutive weights per byte (bit `6 - 2(i % 4)`), takes the
+  first nonzero magnitude as the scale and writes it at byte n/4. That is a fourth layout
+  (`i2s_layout_consecutive`); its bytes read as ACT_PARALLEL decode to other weights,
+  including through the submodule's own `dequantize_row_i2_s`.
 
 ## GGUF type ids
 

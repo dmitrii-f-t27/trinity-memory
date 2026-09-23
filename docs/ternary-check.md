@@ -116,17 +116,21 @@ that are not whole blocks (truncated tensors), NaN or infinite scales, nonzero
 padding digits in TQ1_0/PTQ1_0 `qh` bytes, GGUF type ids that are ambiguous
 between the ggml-org, PrismML and bitnet.cpp namespaces, TL1/TL2 ids,
 misaligned offsets, GGUF and safetensors tensors that overlap another tensor or
-run past the end of the file, and safetensors byte ranges that do not match
+run past the end of the file (a GGUF tensor that begins inside a record of a
+type whose size the reader does not know is not caught), GGUF weight counts
+and safetensors sizes that do not fit, safetensors offsets that wrap around
+64 bits, and safetensors byte ranges that do not match
 the shape and dtype. They decode, and flag, what upstream accepts silently and
 real files may carry: 2-bit code 3 (+2), base-3 bytes that decode like
 canonical ones, negative or zero scales, nonzero I2_S trailer bytes, nonzero
 ONNX padding and MLX groups whose bias is not -scale. Group-128 bytes read as
 group-64 Q2_0 (a synthetic case), I2_S bytes from bitnet.cpp's ARM or four-row
-builds, a Q1_0 byte (Q1_0 has no invalid bit pattern), and any corrupted code
-byte or scale that stays valid decode without any signal. Every negative vector
-records what each upstream reader does with the same bytes, with the pinned
-`file:line`, or `UNKNOWN` where that code was not found at the pin (bitnet.cpp's
-`dequantize_row_i2_s`). The full
+builds or from the `quantize_i2_s` of its llama.cpp submodule (four consecutive
+weights per byte), a Q1_0 byte (Q1_0 has no invalid bit pattern), and any
+corrupted code byte or scale that stays valid decode without any signal. Every
+negative vector records what each upstream reader does with the same bytes,
+with the pinned `file:line`. For I2_S code 3 bitnet.cpp disagrees with itself:
+`dequantize_row_i2_s` reads it as 0, `mul_mat` as +2. The full
 table of status classes is in [`specs/formats/OWNERS.md`](../specs/formats/OWNERS.md).
 STQ1_0 has no contract yet (the llama.cpp pull request is open), and TL1/TL2
 byte order depends on build-time tile sizes that the file does not record.

@@ -138,6 +138,13 @@ static int64_t spec_block_encode(int32_t format, bool prism, int32_t *values, si
     return tfs_llama_encode(format, values, count, scales, scale_count, out, capacity);
 }
 
+/* A TQ1_0/PTQ1_0 qh byte whose fifth base-3 digit, as the dequantizers
+ * compute digits ((uint8_t)(q * 3^n) * 3 >> 8), is not 0. */
+static bool qh_padded(uint8_t byte) {
+    uint8_t q = (uint8_t)(byte * 81);
+    return ((q * 3) >> 8) != 0;
+}
+
 static void random_blocks(void) {
     static const struct { int32_t format; bool prism; } cases[] = {
         {TF_TQ1_0, false}, {TF_TQ2_0, false}, {TF_Q2_0, false}, {TF_Q1_0, false},
@@ -146,13 +153,24 @@ static void random_blocks(void) {
         int32_t format = cases[c].format;
         bool prism = cases[c].prism;
         size_t per = tf_block_elements(format), bytes = tf_block_bytes(format), blocks = 5;
+        int decoded = 0;
         for (int round = 0; round < 300; ++round) {
             for (size_t i = 0; i < blocks * bytes; ++i) data[i] = (uint8_t)next_random();
+            /* Uniform qh bytes nearly always carry padding (170 of 256 values):
+             * in 7 of 8 rounds redraw them until the padding digit is 0, so the
+             * values are compared, and keep the eighth for the status. */
+            if ((format == TF_TQ1_0 || format == TF_PTQ1_0) && round % 8 != 0) {
+                size_t qs = format == TF_TQ1_0 ? 48 : 24, qh = format == TF_TQ1_0 ? 4 : 2;
+                for (size_t k = 0; k < blocks; ++k)
+                    for (size_t j = 0; j < qh; ++j)
+                        while (qh_padded(data[k * bytes + qs + j])) data[k * bytes + qs + j] = (uint8_t)next_random();
+            }
             size_t count = blocks * per;
             int64_t a = tf_decode_blocks(format, data, blocks * bytes, count, got, MAX_WEIGHTS, scales_a, MAX_WORDS);
             int64_t b = spec_block_decode(format, prism, data, blocks * bytes, count, want, MAX_WEIGHTS, scales_b, MAX_WORDS);
             assert(a == b);
             if (a >= 0) {
+                ++decoded;
                 assert(memcmp(got, want, count * sizeof got[0]) == 0);
                 assert(memcmp(scales_a, scales_b, blocks * sizeof scales_a[0]) == 0);
             }
@@ -182,6 +200,8 @@ static void random_blocks(void) {
             assert(tf_encode_blocks(format, got, count, scales_a, blocks, out_a, blocks * bytes - 1)
                    == spec_block_encode(format, prism, got, count, scales_a, blocks, out_b, blocks * bytes - 1));
         }
+        /* Values, scales and flags were compared on most rounds of every format. */
+        assert(decoded >= 150);
     }
 }
 
@@ -290,18 +310,33 @@ static void gguf_type_rule(void) {
     for (uint64_t offset = 0; offset < 300; offset += 7)
         for (uint64_t next = 0; next < 400; next += 33)
             for (int has_next = 0; has_next < 2; ++has_next)
-                for (uint64_t file = 200; file < 800; file += 150) {
-                    uint64_t rows = 1 + offset % 5, bytes = 18 * rows;
-                    TFTensorInfo info;
-                    memset(&info, 0, sizeof info);
-                    info.tensor_type = 42; info.dims = 2; info.d0 = 64; info.d1 = rows; info.d2 = 1; info.d3 = 1;
-                    info.alignment = 32; info.data_start = 96; info.offset = offset;
-                    info.has_next = has_next && next >= offset; info.next_offset = info.has_next ? next : 0;
-                    int32_t spec = tfs_llama_gguf_offset_status(offset, 32, bytes, info.has_next, info.next_offset);
-                    if (spec == 0) spec = tfs_llama_gguf_file_status(96, offset, bytes, file);
-                    if (spec == 0) spec = TF_Q2_0;
-                    assert(tf_gguf_check(&info, file) == spec);
-                }
+                for (uint64_t prev = 0; prev < 300; prev += 41)
+                    for (uint64_t file = 200; file < 800; file += 150) {
+                        uint64_t rows = 1 + offset % 5, bytes = 18 * rows;
+                        TFTensorInfo info;
+                        memset(&info, 0, sizeof info);
+                        info.tensor_type = 42; info.dims = 2; info.d0 = 64; info.d1 = rows; info.d2 = 1; info.d3 = 1;
+                        info.alignment = 32; info.data_start = 96; info.offset = offset;
+                        info.has_next = has_next && next >= offset; info.next_offset = info.has_next ? next : 0;
+                        info.has_prev = prev > 0 && prev % 3 != 0; info.prev_end = info.has_prev ? prev : 0;
+                        int32_t spec = tfs_llama_gguf_offset_status(offset, 32, bytes, info.has_next, info.next_offset,
+                                                                    info.has_prev, info.prev_end);
+                        if (spec == 0) spec = tfs_llama_gguf_file_status(96, offset, bytes, file);
+                        if (spec == 0) spec = TF_Q2_0;
+                        assert(tf_gguf_check(&info, file) == spec);
+                    }
+    /* Weight counts: the implementation and the spec state gguf.cpp's rule. */
+    static const uint64_t dims[] = {0, 1, 2, 63, 64, 65, 1ull << 30, (1ull << 57) - 1, 1ull << 57, (1ull << 58) + 1,
+                                    INT64_MAX, (uint64_t)INT64_MAX + 1, UINT64_MAX};
+    enum { D = sizeof dims / sizeof dims[0] };
+    for (size_t a = 0; a < D; ++a)
+        for (size_t b = 0; b < D; ++b)
+            for (size_t c = 0; c < D; ++c) {
+                TFTensorInfo info;
+                memset(&info, 0, sizeof info);
+                info.d0 = dims[a]; info.d1 = dims[b]; info.d2 = dims[c]; info.d3 = dims[(a + b + c) % D];
+                assert(tf_tensor_elements(&info) == tfs_llama_gguf_elements(info.d0, info.d1, info.d2, info.d3));
+            }
 }
 
 /* ---- JSON vectors ---------------------------------------------------------- */
@@ -539,18 +574,21 @@ static void gguf_vector(int64_t vector) {
     assert(info.prism == boolean(expect, "prism") && info.bitnet == boolean(expect, "bitnet"));
     assert(info.alignment == (uint64_t)integer(expect, "alignment") && info.next_offset == (uint64_t)integer(expect, "next_offset"));
     assert(info.has_next == boolean(expect, "has_next") && info.data_start == (uint64_t)integer(expect, "data_start"));
+    assert(info.has_prev == boolean(expect, "has_prev") && info.prev_end == (uint64_t)integer(expect, "prev_end"));
     uint64_t file_size = (uint64_t)integer(vector, "file_size");
     int64_t check = integer(expect, "check");
     assert(tf_gguf_check(&info, file_size) == check);
     /* The same decision from the spec's rules. */
     int32_t spec = tfs_llama_gguf_format(info.tensor_type, info.prism, info.bitnet);
     if (spec >= 0) {
-        int32_t aligned = tfs_llama_gguf_offset_status(info.offset, info.alignment, 0, false, 0);
-        uint64_t bytes = spec > 0 ? spec_tensor_bytes(spec, info.d0, info.d0 * info.d1 * info.d2 * info.d3) : 0;
+        int32_t aligned = tfs_llama_gguf_offset_status(info.offset, info.alignment, 0, false, 0, false, 0);
+        uint64_t count = tfs_llama_gguf_elements(info.d0, info.d1, info.d2, info.d3);
+        uint64_t bytes = spec > 0 && count != UINT64_MAX ? spec_tensor_bytes(spec, info.d0, count) : 0;
         if (aligned) spec = aligned;
         else if (spec > 0 && bytes == 0) spec = TFS_LLAMA_ERR_LENGTH;
         else if (spec > 0) {
-            int32_t extent = tfs_llama_gguf_offset_status(info.offset, info.alignment, bytes, info.has_next, info.next_offset);
+            int32_t extent = tfs_llama_gguf_offset_status(info.offset, info.alignment, bytes, info.has_next, info.next_offset,
+                                                          info.has_prev, info.prev_end);
             if (!extent) extent = tfs_llama_gguf_file_status(info.data_start, info.offset, bytes, file_size);
             if (extent) spec = extent;
             if (member(expect, "tensor_bytes") >= 0) assert(bytes == (uint64_t)integer(expect, "tensor_bytes"));
@@ -591,6 +629,16 @@ static void i2s_vector(int64_t vector) {
     assert(memcmp(got, want, count * sizeof got[0]) == 0 && sa == sb);
     assert(sa == (uint32_t)integer(expect, "scale_word"));
     check_flags(expect, flags_a);
+    /* A flagged vector's upstream view: the same trits with code 3 (+2 here)
+     * read as that reader's code3_value. */
+    int64_t views = member(vector, "silent_output");
+    for (int64_t entry = views >= 0 ? tokens[views].first : -1; entry >= 0; entry = tokens[entry].next) {
+        if (member(entry, "values_hex") < 0) continue;
+        int32_t code3 = (int32_t)integer(entry, "code3_value");
+        static int32_t mapped[MAX_WEIGHTS];
+        for (size_t e = 0; e < count; ++e) mapped[e] = got[e] == 2 ? code3 : got[e];
+        check_values(entry, mapped, count);
+    }
     if (boolean(vector, "encode")) {
         assert(tf_encode_i2s(got, count, sa, out_a, sizeof out_a) == (int64_t)size && memcmp(out_a, data, size) == 0);
         assert(tfs_bitnet_encode(0, got, 1, count, sa, out_b, sizeof out_b) == (int64_t)size && memcmp(out_b, data, size) == 0);
@@ -598,7 +646,7 @@ static void i2s_vector(int64_t vector) {
     int64_t intended = member(vector, "intended");
     if (intended >= 0) {
         int64_t layout_at = need(intended, "layout");
-        uint32_t layout = text_is(layout_at, "arm") ? 1 : 2;
+        uint32_t layout = text_is(layout_at, "arm") ? 1 : text_is(layout_at, "1x4") ? 2 : 3;
         size_t rows = (size_t)integer(intended, "rows"), cols = (size_t)integer(intended, "cols");
         size_t n = values_hex(intended, "values_hex", expected);
         static int32_t intent[MAX_WEIGHTS];
@@ -752,8 +800,29 @@ static void safetensors_vector(int64_t vector) {
     int64_t expect = need(vector, "expect");
     uint64_t file_size = (uint64_t)integer(vector, "file_size");
     TFSafeInfo info;
+    int64_t find = integer(expect, "find");
     assert(tf_safetensors_find(header, size, tokens[name].text, tokens[name].text_size, st_tokens, 512, st_arena,
-                               sizeof st_arena, &info) == integer(expect, "find"));
+                               sizeof st_arena, &info) == find);
+    /* The spec's offset rule over every entry's data_offsets: the header is
+     * refused (EXTENT) exactly when one of them does not fit. */
+    uint64_t header_size = 0;
+    for (int i = 7; i >= 0; --i) header_size = header_size << 8 | header[i];
+    int32_t offset_status = 0;
+    for (int64_t pair = tokens[need(vector, "data_offsets")].first; pair >= 0; pair = tokens[pair].next) {
+        int32_t one = tfs_hf_safetensors_offset_status(header_size, tokens[tokens[tokens[pair].first].next].uinteger);
+        if (one) offset_status = one;
+    }
+    if (find == 0 || find == TF_ERR_EXTENT) assert(offset_status == (find == 0 ? 0 : TF_ERR_EXTENT));
+    int64_t check = integer(expect, "check");
+    assert(info.begin == (uint64_t)integer(expect, "begin") && info.end == (uint64_t)integer(expect, "end"));
+    assert(info.has_next == boolean(expect, "has_next") && info.next_begin == (uint64_t)integer(expect, "next_begin"));
+    assert(info.has_prev == boolean(expect, "has_prev") && info.prev_end == (uint64_t)integer(expect, "prev_end"));
+    if (find != 0) {
+        /* A refused header: the check is the find status. */
+        assert(check == find);
+        if (error_status(vector)) assert(check == error_status(vector));
+        return;
+    }
     int64_t dtype = need(expect, "dtype");
     assert(info.dtype_size == tokens[dtype].text_size && memcmp(info.dtype, tokens[dtype].text, info.dtype_size) == 0);
     uint64_t dims[4] = {info.d0, info.d1, info.d2, info.d3}, numel = 1;
@@ -763,16 +832,13 @@ static void safetensors_vector(int64_t vector) {
         numel = dims[n] && numel > UINT64_MAX / dims[n] ? UINT64_MAX : numel * dims[n]; /* saturating */
     }
     assert(n == info.dims);
-    assert(info.begin == (uint64_t)integer(expect, "begin") && info.end == (uint64_t)integer(expect, "end"));
-    assert(info.dtype_bits == (uint64_t)integer(expect, "dtype_bits") && info.has_next == boolean(expect, "has_next"));
-    assert(info.next_begin == (uint64_t)integer(expect, "next_begin"));
-    int64_t check = integer(expect, "check");
+    assert(info.dtype_bits == (uint64_t)integer(expect, "dtype_bits"));
     assert(tf_safetensors_check(&info, file_size) == check);
     /* The spec states the widths of the checkpoints' dtypes and the extent rule. */
     uint64_t spec_bits = tfs_hf_dtype_bits(info.dtype, info.dtype_size);
     if (spec_bits) assert(spec_bits == info.dtype_bits);
     assert(tfs_hf_safetensors_status(info.dtype_bits, numel, info.begin, info.end, info.has_next, info.next_begin,
-                                     file_size) == check);
+                                     info.has_prev, info.prev_end, file_size) == check);
     if (error_status(vector)) assert(check == error_status(vector));
 }
 
