@@ -129,6 +129,23 @@ static void ref_b3_encode(const int32_t *t, size_t wide, uint8_t *qs, uint8_t *q
 /* ---- tests --------------------------------------------------------------- */
 static const int block_formats[] = {TF_TQ1_0, TF_TQ2_0, TF_Q2_0, TF_Q1_0, TF_PQ2_0, TF_PTQ1_0};
 
+/* The fifth digit of a qh byte, which the quantizers leave 0 and the
+ * dequantizers never read (ggml-quants.c: q *= 3 before the ceiling rule;
+ * the qh loop runs n < 4). A nonzero digit is TF_ERR_PADDING. */
+static bool ref_qh_padded(uint8_t byte) {
+    uint8_t q = (uint8_t)(byte * 81);
+    return ((q * 3) >> 8) != 0;
+}
+
+static bool ref_blocks_padded(int format, const uint8_t *data, size_t blocks) {
+    if (format != TF_TQ1_0 && format != TF_PTQ1_0) return false;
+    size_t bytes = tf_block_bytes(format), qs = format == TF_TQ1_0 ? 48 : 24, qh = format == TF_TQ1_0 ? 4 : 2;
+    for (size_t b = 0; b < blocks; ++b)
+        for (size_t j = 0; j < qh; ++j)
+            if (ref_qh_padded(data[b * bytes + qs + j])) return true;
+    return false;
+}
+
 static void differential_random_blocks(void) {
     enum { BLOCKS = 7 };
     static uint8_t data[BLOCKS * 66], again[BLOCKS * 66];
@@ -145,6 +162,7 @@ static void differential_random_blocks(void) {
             for (size_t b = 0; b < BLOCKS; ++b)
                 nonfinite |= (ref_block(format, data + b * bytes, want) & 0x7c00) == 0x7c00;
             if (nonfinite) { assert(outside == TF_ERR_SCALE_NONFINITE); continue; }
+            if (ref_blocks_padded(format, data, BLOCKS)) { assert(outside == TF_ERR_PADDING); continue; }
             assert(outside >= 0);
             int64_t expected_outside = 0;
             for (size_t b = 0; b < BLOCKS; ++b) {
@@ -423,8 +441,7 @@ static void gguf(void) {
 }
 
 
-/* A two-tensor GGUF with a chosen architecture, types and second offset
- * (0: the aligned end of the first tensor). */
+/* A two-tensor GGUF with a chosen architecture, types and second offset. */
 static size_t build_gguf_pair(uint8_t *g, const char *arch, bool prism, uint32_t first_type,
                               uint64_t first_ne0, uint32_t second_type, uint64_t second_offset) {
     size_t at = 0;
@@ -454,13 +471,20 @@ static size_t build_gguf_pair(uint8_t *g, const char *arch, bool prism, uint32_t
     return at;
 }
 
-static int32_t gguf_check_of(const char *arch, bool prism, uint32_t first_type, uint64_t first_ne0,
-                             uint32_t second_type, uint64_t second_offset, const char *which) {
+/* The file holds `data_bytes` bytes after the data section starts (0: 4096). */
+static int32_t gguf_check_sized(const char *arch, bool prism, uint32_t first_type, uint64_t first_ne0,
+                                uint32_t second_type, uint64_t second_offset, const char *which, uint64_t data_bytes) {
     static uint8_t g[1024];
     TFTensorInfo info;
     size_t end = build_gguf_pair(g, arch, prism, first_type, first_ne0, second_type, second_offset);
     assert(tf_gguf_find(g, end, (uint8_t *)which, strlen(which), &info) == 0);
-    return tf_gguf_check(&info);
+    assert(info.data_start == (end + 31) / 32 * 32);
+    return tf_gguf_check(&info, info.data_start + (data_bytes ? data_bytes : 4096));
+}
+
+static int32_t gguf_check_of(const char *arch, bool prism, uint32_t first_type, uint64_t first_ne0,
+                             uint32_t second_type, uint64_t second_offset, const char *which) {
+    return gguf_check_sized(arch, prism, first_type, first_ne0, second_type, second_offset, which, 0);
 }
 
 static void gguf_checks(void) {
@@ -484,7 +508,18 @@ static void gguf_checks(void) {
     assert(gguf_check_of("llama", false, 42, 256, 0, 144, "a.weight") == TF_Q2_0); /* exact fit */
     assert(gguf_check_of("llama", false, 42, 100, 0, 160, "a.weight") == TF_ERR_LENGTH);
     assert(gguf_check_of("llama", false, 0, 256, 42, 160, "b.weight") == TF_Q2_0);
-    assert(gguf_check_of("llama", false, 42, 256, 0, 0, "a.weight") == TF_Q2_0);
+    /* Two records at offset 0 overlap, whichever is checked. */
+    assert(gguf_check_of("llama", false, 42, 256, 0, 0, "a.weight") == TF_ERR_EXTENT);
+    assert(gguf_check_of("llama", false, 0, 256, 42, 0, "b.weight") == TF_ERR_EXTENT);
+    /* The last tensor against the end of the file: b.weight (Q2_0, 72 bytes) at 160. */
+    assert(gguf_check_sized("llama", false, 0, 256, 42, 160, "b.weight", 232) == TF_Q2_0);
+    assert(gguf_check_sized("llama", false, 0, 256, 42, 160, "b.weight", 231) == TF_ERR_EXTENT);
+    assert(gguf_check_sized("llama", false, 0, 256, 42, 160, "b.weight", 100) == TF_ERR_EXTENT);
+    TFTensorInfo info;
+    memset(&info, 0, sizeof info);
+    info.tensor_type = 42; info.dims = 4; info.d0 = 64; info.d1 = 1u << 30; info.d2 = 1u << 30; info.d3 = 1u << 30;
+    info.alignment = 32;
+    assert(tf_gguf_check(&info, UINT64_MAX) == TF_ERR_LENGTH); /* 2^96 weights */
 }
 
 static void scale_classes_and_flags(void) {
@@ -513,6 +548,14 @@ static void scale_classes_and_flags(void) {
         qs_count += qs_image[b]; qh_count += qh_image[b];
     }
     assert(qs_count == 243 && qh_count == 81);
+    /* qh bytes: 81 canonical, 170 with a nonzero padding digit, 5 flagged. */
+    int padded_count = 0, flagged_count = 0;
+    for (unsigned b = 0; b < 256; ++b) {
+        assert(tf_b3_padding_nonzero(b) == ref_qh_padded((uint8_t)b));
+        padded_count += ref_qh_padded((uint8_t)b);
+        flagged_count += !ref_qh_padded((uint8_t)b) && !qh_image[b];
+    }
+    assert(padded_count == 170 && flagged_count == 5);
 
     /* Block flags against an independent count on random blocks. */
     static uint8_t data[4 * 66];
@@ -543,6 +586,25 @@ static void scale_classes_and_flags(void) {
                 assert(decoded == TF_ERR_SCALE_NONFINITE && status == TF_ERR_SCALE_NONFINITE);
                 for (size_t i = 0; i < TF_FLAG_COUNT; ++i) assert(flags[i] == 0);
                 continue;
+            }
+            if (ref_blocks_padded(format, data, 4)) {
+                assert(decoded == TF_ERR_PADDING && status == TF_ERR_PADDING);
+                for (size_t i = 0; i < TF_FLAG_COUNT; ++i) assert(flags[i] == 0);
+                /* Clear every padding digit (keep the first four) and count again. */
+                size_t five = format == TF_TQ1_0 ? 48 : 24, four = format == TF_TQ1_0 ? 4 : 2;
+                want_noncanonical = 0;
+                for (size_t b = 0; b < 4; ++b) {
+                    for (size_t j = 0; j < five; ++j) want_noncanonical += !qs_image[data[b * bytes + j]];
+                    for (size_t j = 0; j < four; ++j) {
+                        uint8_t *qh = &data[b * bytes + five + j];
+                        unsigned digits = 0;
+                        for (int n = 0; n < 4; ++n) digits = digits * 3 + (unsigned)(tf_b3_value(*qh, (size_t)n) + 1);
+                        *qh = (uint8_t)((3 * digits * 256 + 242) / 243);
+                        assert(!ref_qh_padded(*qh) && qh_image[*qh]);
+                    }
+                }
+                decoded = tf_decode_blocks(format, data, 4 * bytes, 4 * per, y, 4 * per, sc, 4);
+                status = tf_block_flags(format, data, 4 * bytes, 4 * per, flags);
             }
             assert(status == 0 && decoded == flags[TF_FLAG_OUTSIDE_TERNARY]);
             assert(flags[TF_FLAG_SCALE_ZERO] == want_zero && flags[TF_FLAG_SCALE_NEGATIVE] == want_negative);
@@ -644,13 +706,44 @@ static void safetensors(void) {
     assert(info.dims == 2 && info.d0 == 4 && info.d1 == 8 && info.begin == 8 + n && info.end == 8 + n + 32);
     assert(tf_safetensors_find(file, 8 + n, scale, sizeof scale - 1, tokens, 256, arena, sizeof arena, &info) == 0);
     assert(info.dtype_size == 4 && info.dims == 1 && info.d0 == 1 && info.begin == 8 + n + 32);
+    assert(info.dtype_bits == 16 && !info.has_next && tf_safetensors_check(&info, 8 + n + 34) == 0);
+    assert(tf_safetensors_check(&info, 8 + n + 33) == TF_ERR_EXTENT);
     assert(tf_safetensors_find(file, 8 + n, missing, sizeof missing - 1, tokens, 256, arena, sizeof arena, &info)
            == TF_ERR_NOT_FOUND);
     assert(tf_safetensors_find(file, 8 + n - 1, weight, sizeof weight - 1, tokens, 256, arena, sizeof arena, &info)
            == TF_ERR_TRUNCATED && info.needed == 8 + n);
+    assert(tf_safetensors_find(file, 8 + n, weight, sizeof weight - 1, tokens, 256, arena, sizeof arena, &info) == 0);
+    assert(info.dtype_bits == 8 && info.has_next && info.next_begin == 8 + n + 32);
+    assert(tf_safetensors_check(&info, 8 + n + 34) == 0);
     file[8] = '[';
     assert(tf_safetensors_find(file, 8 + n, weight, sizeof weight - 1, tokens, 256, arena, sizeof arena, &info)
            == TF_ERR_CONTAINER);
+    /* Extent rules: size != numel * width, overlap, sub-byte, unknown dtype. */
+    static const struct { const char *json; int32_t check; } cases[] = {
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,31]}}", TF_ERR_EXTENT},
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,32]},"
+         "\"s\":{\"dtype\":\"BF16\",\"shape\":[1],\"data_offsets\":[30,32]}}", TF_ERR_EXTENT},
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4,8],\"data_offsets\":[0,32]},"
+         "\"e\":{\"dtype\":\"F32\",\"shape\":[0],\"data_offsets\":[0,0]}}", 0},
+        {"{\"w\":{\"dtype\":\"F4\",\"shape\":[3],\"data_offsets\":[0,2]}}", TF_ERR_LENGTH},
+        {"{\"w\":{\"dtype\":\"F4\",\"shape\":[4],\"data_offsets\":[0,2]}}", 0},
+        {"{\"w\":{\"dtype\":\"Q2\",\"shape\":[4],\"data_offsets\":[0,1]}}", TF_ERR_CONTAINER},
+        {"{\"w\":{\"dtype\":\"U8\",\"shape\":[4294967296,4294967296],\"data_offsets\":[0,0]}}", TF_ERR_EXTENT},
+    };
+    uint8_t w[] = "w";
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i) {
+        n = strlen(cases[i].json);
+        put_u64(file, 0, n);
+        memcpy(file + 8, cases[i].json, n);
+        assert(tf_safetensors_find(file, 8 + n, w, 1, tokens, 256, arena, sizeof arena, &info) == 0);
+        assert(tf_safetensors_check(&info, 8 + n + 64) == cases[i].check);
+    }
+    /* Another entry without data_offsets makes the header malformed. */
+    const char *broken = "{\"w\":{\"dtype\":\"U8\",\"shape\":[1],\"data_offsets\":[0,1]},\"x\":{\"dtype\":\"U8\"}}";
+    n = strlen(broken);
+    put_u64(file, 0, n);
+    memcpy(file + 8, broken, n);
+    assert(tf_safetensors_find(file, 8 + n, w, 1, tokens, 256, arena, sizeof arena, &info) == TF_ERR_CONTAINER);
 }
 
 static void absmean(void) {
@@ -693,6 +786,31 @@ static void scale_layouts(void) {
     assert(tf_words(words, 6, 4, out, 1) == TF_ERR_LENGTH);
 }
 
+/* Nonzero padding digits are rejected: TF_ERR_PADDING is real for the qh
+ * bytes of TQ1_0 and PTQ1_0 (the only padding every upstream writer zeroes). */
+static void padding(void) {
+    int32_t t[256] = {0}, y[256];
+    uint32_t scale = 0x3c00, s[1];
+    uint8_t block[54];
+    int64_t flags[TF_FLAG_COUNT];
+    for (int wide = 16; wide <= 32; wide += 16) {
+        int format = wide == 32 ? TF_TQ1_0 : TF_PTQ1_0;
+        size_t per = tf_block_elements(format), bytes = tf_block_bytes(format), qs = wide == 32 ? 48 : 24;
+        assert(tf_encode_blocks(format, t, per, &scale, 1, block, sizeof block) == (int64_t)bytes);
+        for (unsigned b = 0; b < 256; ++b) {
+            block[qs + 1] = (uint8_t)b;
+            int64_t want = ref_qh_padded((uint8_t)b) ? TF_ERR_PADDING : 0;
+            int64_t got = tf_decode_blocks(format, block, bytes, per, y, per, s, 1);
+            assert(want ? got == want : got >= 0);
+            assert(tf_block_flags(format, block, bytes, per, flags) == (want ? want : 0));
+        }
+        /* A non-finite scale is reported before the padding. */
+        block[qs + 1] = 2;
+        block[bytes - 1] = 0x7c;
+        assert(tf_decode_blocks(format, block, bytes, per, y, per, s, 1) == TF_ERR_SCALE_NONFINITE);
+    }
+}
+
 static void rejections(void) {
     int32_t codes[256] = {0};
     uint32_t scale = 0x3c00;
@@ -726,7 +844,9 @@ int main(void) {
     safetensors();
     absmean();
     scale_layouts();
+    padding();
     rejections();
-    puts("PASS formats: TQ1_0, TQ2_0, Q2_0, Q1_0, PQ2_0, PTQ1_0, I2_S, HF packed, MLX 2-bit, ONNX 2-bit, flags, GGUF checks, safetensors");
+    puts("PASS formats: TQ1_0, TQ2_0, Q2_0, Q1_0, PQ2_0, PTQ1_0, I2_S, HF packed, MLX 2-bit, ONNX 2-bit, flags, padding, "
+         "GGUF and safetensors checks");
     return 0;
 }

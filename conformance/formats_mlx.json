@@ -57,7 +57,9 @@
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
-      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+      "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
+      "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
@@ -248,6 +250,16 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "mlx/ops.cpp:5297-5298"
+          ],
+          "note": "w = q * scale + bias per group, without checks",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -286,6 +298,16 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "mlx/ops.cpp:5297-5298"
+          ],
+          "note": "w = q * scale + bias per group, without checks",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -324,6 +346,16 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "mlx/ops.cpp:5297-5298"
+          ],
+          "note": "w = q * scale + bias per group, without checks",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -353,7 +385,8 @@
       },
       "group": 64,
       "id": "mlx_scale_nan",
-      "kind": "mlx",
+      "kind": "reject",
+      "reader": "mlx",
       "rows": 2,
       "scale_kind": "F16",
       "scale_words": [
@@ -361,6 +394,16 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "mlx/ops.cpp:5297-5298"
+          ],
+          "note": "w = q * scale + bias per group, without checks",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -390,7 +433,8 @@
       },
       "group": 64,
       "id": "mlx_bias_inf",
-      "kind": "mlx",
+      "kind": "reject",
+      "reader": "mlx",
       "rows": 2,
       "scale_kind": "F16",
       "scale_words": [
@@ -398,6 +442,16 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "mlx/ops.cpp:5297-5298"
+          ],
+          "note": "w = q * scale + bias per group, without checks",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -416,7 +470,8 @@
       },
       "group": 48,
       "id": "mlx_group_48",
-      "kind": "mlx",
+      "kind": "reject",
+      "reader": "mlx",
       "rows": 2,
       "scale_kind": "F16",
       "scale_words": [
@@ -424,6 +479,17 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "mlx/ops.cpp:5007-5012",
+            "mlx/ops.cpp:5249-5256"
+          ],
+          "note": "the quantizer offers groups of 32, 64 and 128 only; the dequantizer refuses scales that do not cover the row in groups of 48",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -442,7 +508,8 @@
       },
       "group": 64,
       "id": "mlx_cols_not_divisible",
-      "kind": "mlx",
+      "kind": "reject",
+      "reader": "mlx",
       "rows": 2,
       "scale_kind": "F16",
       "scale_words": [
@@ -450,6 +517,17 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "mlx/ops.cpp:5207-5214",
+            "mlx/ops.cpp:5249-5256"
+          ],
+          "note": "the last dimension must be whole groups",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -468,7 +546,8 @@
       },
       "group": 64,
       "id": "mlx_size_mismatch",
-      "kind": "mlx",
+      "kind": "reject",
+      "reader": "mlx",
       "rows": 2,
       "scale_kind": "F16",
       "scale_words": [
@@ -476,6 +555,16 @@
         10752,
         12288,
         11264
+      ],
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "mlx/ops.cpp:5249-5256"
+          ],
+          "note": "affine_dequantize refuses words, scales and biases whose shapes disagree for the group size",
+          "upstream": "mlx"
+        }
       ]
     },
     {
@@ -487,8 +576,19 @@
       },
       "group": 64,
       "id": "mlx_encode_rejects_value_3",
-      "kind": "mlx_encode",
+      "kind": "reject",
+      "reader": "mlx_encode",
       "rows": 2,
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "mlx/ops.cpp:4957-5002"
+          ],
+          "note": "pack_and_quantize clips codes to 0..3 from float weights",
+          "upstream": "mlx"
+        }
+      ],
       "values_hex": "00ff00030100ff010100ff01010001ffff010000010101010100ff010101ffffff01010001ff0100ff000100ffff010000000001000000010001ff000101010100ffff00010001ff00010100ff00ffff010101ff01010000ff01000000010100ff000101ff010000ff000001ffff01000000ff01ff010101ff0100010000ffff000001ff0101ffffff00000000ff01ff000000000100000100ff00010001ff0000000000000001ffff0100ff010100ffffff01ff00000101ffff010101ff000100ff00000000ff0101ff01000000ffff0000ffff000100ff00ff0001010101000000010001ff00ffff00ffff01ff00ff00ff0100010000ffffffff01ff010100"
     }
   ]

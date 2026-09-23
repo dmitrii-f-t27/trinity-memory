@@ -2,6 +2,14 @@
   "constants": {
     "base3": {
       "qh_canonical": 81,
+      "qh_noncanonical_flagged": [
+        1,
+        20,
+        99,
+        178,
+        197
+      ],
+      "qh_padding_nonzero": 170,
       "qs_canonical": 243,
       "qs_noncanonical": [
         1,
@@ -109,7 +117,9 @@
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
-      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+      "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
+      "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
@@ -155,7 +165,9 @@
       "files": [
         "ggml/include/ggml.h",
         "ggml/src/ggml.c",
-        "src/llama-arch.cpp"
+        "ggml/src/gguf.cpp",
+        "src/llama-arch.cpp",
+        "src/llama-model-loader.h"
       ],
       "repo": "isHuangXin/llama.cpp"
     },
@@ -166,11 +178,24 @@
         "ggml/include/gguf.h",
         "ggml/src/ggml-common.h",
         "ggml/src/ggml-quants.c",
+        "ggml/src/ggml.c",
         "ggml/src/gguf.cpp",
         "src/llama-arch.cpp",
-        "src/llama-model-loader.cpp"
+        "src/llama-model-loader.cpp",
+        "src/llama-model-loader.h"
       ],
       "repo": "ggml-org/llama.cpp"
+    },
+    "prismml": {
+      "commit": "bdc23b56b4458b9f1655aec5287f3ab56ee8daaa",
+      "files": [
+        "ggml/include/ggml.h",
+        "ggml/src/ggml-common.h",
+        "ggml/src/ggml-quants.c",
+        "ggml/src/gguf.cpp",
+        "src/llama-model-loader.h"
+      ],
+      "repo": "PrismML-Eng/llama.cpp"
     }
   },
   "vector_name": "llama.cpp ternary blocks and GGUF rules",
@@ -234,7 +259,7 @@
     {
       "count": 256,
       "data_hex": "01ed80808080808080808080808080808080808080808080808080808080808080808080808080808080808080808080017f7f7f003c",
-      "description": "Bytes the ceiling rule never writes (qs 1 and 237, qh 1) decode silently and are flagged",
+      "description": "Bytes the ceiling rule never writes (qs 1 and 237, qh 1, whose padding digit is 0) decode silently and are flagged",
       "encode": false,
       "expect": {
         "flags": {
@@ -255,7 +280,46 @@
       "flag_class": "noncanonical_base3",
       "format": "TQ1_0",
       "id": "tq1_0_noncanonical_bytes",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2428-2465"
+          ],
+          "note": "decoded like the canonical byte of the same digits",
+          "upstream": "llama.cpp"
+        }
+      ]
+    },
+    {
+      "count": 256,
+      "data_hex": "239a2e56b1dd5871e4ff1ed3dca11d0d7305d490e854bb9ae8fc224d7f6e177c2d4e7fcda06518ee8e6ad424b80ab1073a62fd43003c",
+      "description": "qh byte 0 carries a nonzero fifth digit, which the quantizer always writes as 0 and the dequantizer never reads",
+      "encode": false,
+      "error_class": "padding",
+      "expect": {
+        "status": -54
+      },
+      "format": "TQ1_0",
+      "id": "tq1_0_qh_padding_digit",
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2457-2462",
+            "ggml/src/ggml-quants.c:2372-2373"
+          ],
+          "note": "digits 0..3 decode; the padding digit is ignored",
+          "scale_words": [
+            15360
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ffff0100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff"
+        }
+      ]
     },
     {
       "count": 256,
@@ -281,7 +345,17 @@
       "flag_class": "scale_negative",
       "format": "TQ1_0",
       "id": "tq1_0_negative_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2428-2465"
+          ],
+          "note": "every weight is its trit times the negative d",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -307,7 +381,17 @@
       "flag_class": "scale_zero",
       "format": "TQ1_0",
       "id": "tq1_0_zero_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2428-2465"
+          ],
+          "note": "every weight is its trit times 0",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -320,15 +404,32 @@
       },
       "format": "TQ1_0",
       "id": "tq1_0_scale_nan",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          32256
-        ],
-        "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ffff0100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff01000000ff00000100ff00ffff01010001ff0100000000010101ffff00010100ff0100ff00ff0001010101ffff01ffff0100ff010001ff01ffff01ff0001000100ff0000ff0001ffff00000001ff000100ff01ff00ff01ff0100ffff0100ff00ffffff00ffff01ff01ff000000000101ff00ff01000000010100ff00ffffff010100ff00ff00ffff00ffffff01ffffffff000001000100010000ffff00000000ffff0000ffffffffff01ff00ffff010000ffffff00010100ffff0000010001ffff010001ff0001000000ff0000ff0001ff00ffffff00ff0000ff0000ff01ff010000000100010000ffff00ff00ffff01ff01ffffff00ff0000ffff000000ffff"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2428-2465"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            32256
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ffff0100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff01000000ff00000100ff00ffff01010001ff0100000000010101ffff00010100ff0100ff00ff0001010101ffff01ffff0100ff010001ff01ffff01ff0001000100ff0000ff0001ffff00000001ff000100ff01ff00ff01ff0100ffff0100ff00ffffff00ffff01ff01ff000000000101ff00ff01000000010100ff00ffffff010100ff00ff00ffff00ffffff01ffffffff000001000100010000ffff00000000ffff0000ffffffffff01ff00ffff010000ffffff00010100ffff0000010001ffff010001ff0001000000ff0000ff0001ff00ffffff00ff0000ff0000ff01ff010000000100010000ffff00ff00ffff01ff01ffffff00ff0000ffff000000ffff"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5570-5573",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -341,15 +442,32 @@
       },
       "format": "TQ1_0",
       "id": "tq1_0_scale_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          31744
-        ],
-        "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ffff0100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff01000000ff00000100ff00ffff01010001ff0100000000010101ffff00010100ff0100ff00ff0001010101ffff01ffff0100ff010001ff01ffff01ff0001000100ff0000ff0001ffff00000001ff000100ff01ff00ff01ff0100ffff0100ff00ffffff00ffff01ff01ff000000000101ff00ff01000000010100ff00ffffff010100ff00ff00ffff00ffffff01ffffffff000001000100010000ffff00000000ffff0000ffffffffff01ff00ffff010000ffffff00010100ffff0000010001ffff010001ff0001000000ff0000ff0001ff00ffffff00ff0000ff0000ff01ff010000000100010000ffff00ff00ffff01ff01ffffff00ff0000ffff000000ffff"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2428-2465"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            31744
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ffff0100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff01000000ff00000100ff00ffff01010001ff0100000000010101ffff00010100ff0100ff00ff0001010101ffff01ffff0100ff010001ff01ffff01ff0001000100ff0000ff0001ffff00000001ff000100ff01ff00ff01ff0100ffff0100ff00ffffff00ffff01ff01ff000000000101ff00ff01000000010100ff00ffffff010100ff00ff00ffff00ffffff01ffffffff000001000100010000ffff00000000ffff0000ffffffffff01ff00ffff010000ffffff00010100ffff0000010001ffff010001ff0001000000ff0000ff0001ff00ffffff00ff0000ff0000ff01ff010000000100010000ffff00ff00ffff01ff01ffffff00ff0000ffff000000ffff"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5570-5573",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -362,15 +480,32 @@
       },
       "format": "TQ1_0",
       "id": "tq1_0_scale_negative_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          64512
-        ],
-        "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ffff0100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff01000000ff00000100ff00ffff01010001ff0100000000010101ffff00010100ff0100ff00ff0001010101ffff01ffff0100ff010001ff01ffff01ff0001000100ff0000ff0001ffff00000001ff000100ff01ff00ff01ff0100ffff0100ff00ffffff00ffff01ff01ff000000000101ff00ff01000000010100ff00ffffff010100ff00ff00ffff00ffffff01ffffffff000001000100010000ffff00000000ffff0000ffffffffff01ff00ffff010000ffffff00010100ffff0000010001ffff010001ff0001000000ff0000ff0001ff00ffffff00ff0000ff0000ff01ff010000000100010000ffff00ff00ffff01ff01ffffff00ff0000ffff000000ffff"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2428-2465"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            64512
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ffff0100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff01000000ff00000100ff00ffff01010001ff0100000000010101ffff00010100ff0100ff00ff0001010101ffff01ffff0100ff010001ff01ffff01ff0001000100ff0000ff0001ffff00000001ff000100ff01ff00ff01ff0100ffff0100ff00ffffff00ffff01ff01ff000000000101ff00ff01000000010100ff00ffffff010100ff00ff00ffff00ffffff01ffffffff000001000100010000ffff00000000ffff0000ffffffffff01ff00ffff010000ffffff00010100ffff0000010001ffff010001ff0001000000ff0000ff0001ff00ffffff00ff0000ff0000ff01ff010000000100010000ffff00ff00ffff01ff01ffffff00ff0000ffff000000ffff"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5570-5573",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -383,7 +518,18 @@
       },
       "format": "TQ1_0",
       "id": "tq1_0_truncated",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "a tensor whose bytes pass the end of the file is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 511,
@@ -396,7 +542,18 @@
       },
       "format": "TQ1_0",
       "id": "tq1_0_partial_block",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:732-738"
+          ],
+          "note": "a row that is not whole blocks is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -407,9 +564,20 @@
       },
       "format": "TQ1_0",
       "id": "tq1_0_encode_rejects_value_2",
-      "kind": "block_encode",
+      "kind": "reject",
+      "reader": "block_encode",
       "scale_words": [
         15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "ggml/src/ggml-quants.c:2316-2380"
+          ],
+          "note": "the quantizer derives codes from float weights and never produces this value",
+          "upstream": "llama.cpp"
+        }
       ],
       "values_hex": "ff00ff00010100000101ff010100ffff00ff010001ff01000101ffff0000ff00000100ffff00ffff01010000000100ff00ff00010101ff010101000100ffff00ff0000ffff01ff01ff01ff000100ff00ffff00ffff010000ff01ff010001010001ff01ff01ffff01ff01ffffff01ff00ff0000ff000101ff000000ff000000ff020100ffff010101ff0100010001ffff0000ff000000ff0100010100ff01ffffffff00010000ff01000001ff01ff01ff0001000001ffff0100ff0000ffffffff000100ff00000100010100ff0000ffff01ff0000010000ff01ff000100ff0101ff01ff01000100ff0100ff00ffffffffff0001ff01ff0101ff000100ff0001ff"
     },
@@ -463,7 +631,17 @@
       "flag_class": "outside_ternary",
       "format": "TQ2_0",
       "id": "tq2_0_code3_is_plus2",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2467-2484"
+          ],
+          "note": "code 3 is (3 - 1) * d = +2d",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -489,7 +667,17 @@
       "flag_class": "scale_negative",
       "format": "TQ2_0",
       "id": "tq2_0_negative_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2467-2484"
+          ],
+          "note": "every weight is its trit times the negative d",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -515,7 +703,17 @@
       "flag_class": "scale_zero",
       "format": "TQ2_0",
       "id": "tq2_0_zero_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2467-2484"
+          ],
+          "note": "every weight is its trit times 0",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -528,15 +726,32 @@
       },
       "format": "TQ2_0",
       "id": "tq2_0_scale_nan",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          32256
-        ],
-        "values_hex": "01ff000001ff01ff0000ffff00ff000101ff010100010000000001ff010100ff01ffff0101ff0001010001ffffff00ffffff01ff01ff0101ff00ff01ff00ff01ff010001000100ff010000ff00000101ffff0001ff0100ff00010100ff00000001ff0101000100ff01ffff00010101ff00010101000101ffff01ffffff01ff00000000000001ffffff0000ff01000101ff00ffff000001000101ff000000010101ffffff0001ff0001000000000000ff000001ff01ff01000101000100000000ff0000000101010101000100000001ff01ff00000100ffff0001ff0001ff0001ffffffff010001ff01ffff0000000001000100000000ffffff00ffff00010101000100ff00ff0000ff0001010000000100ff0001ff00ff0101ff00ff0100000000000000ff0001ff00ffff010000ff00ff00ff00ffff00ffffff000100ffff00ff01ff0000ffff00000101ff01ffff0101ff0100ff01ffff00000001ffffffff00ff00ffff000100ff01ff01010101ff01ff00010000ff01ff000000ff01ffffff0101ff01000100ffff0000ffff01010101ff0100010000ffffff010000ffffffffff00ffff01ffff010101ffff00000001ff010000ff0001ff0000ffff01010101ffff00ff01ff01ffff01000100ffff0000010100ff01ffff0101000000ffff00ff0100ff00ffff0001ff000001ffff00ff0001ffff0001ff000100000001"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2467-2484"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            32256
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "01ff000001ff01ff0000ffff00ff000101ff010100010000000001ff010100ff01ffff0101ff0001010001ffffff00ffffff01ff01ff0101ff00ff01ff00ff01ff010001000100ff010000ff00000101ffff0001ff0100ff00010100ff00000001ff0101000100ff01ffff00010101ff00010101000101ffff01ffffff01ff00000000000001ffffff0000ff01000101ff00ffff000001000101ff000000010101ffffff0001ff0001000000000000ff000001ff01ff01000101000100000000ff0000000101010101000100000001ff01ff00000100ffff0001ff0001ff0001ffffffff010001ff01ffff0000000001000100000000ffffff00ffff00010101000100ff00ff0000ff0001010000000100ff0001ff00ff0101ff00ff0100000000000000ff0001ff00ffff010000ff00ff00ff00ffff00ffffff000100ffff00ff01ff0000ffff00000101ff01ffff0101ff0100ff01ffff00000001ffffffff00ff00ffff000100ff01ff01010101ff01ff00010000ff01ff000000ff01ffffff0101ff01000100ffff0000ffff01010101ff0100010000ffffff010000ffffffffff00ffff01ffff010101ffff00000001ff010000ff0001ff0000ffff01010101ffff00ff01ff01ffff01000100ffff0000010100ff01ffff0101000000ffff00ff0100ff00ffff0001ff000001ffff00ff0001ffff0001ff000100000001"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5574-5577",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -549,15 +764,32 @@
       },
       "format": "TQ2_0",
       "id": "tq2_0_scale_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          31744
-        ],
-        "values_hex": "01ff000001ff01ff0000ffff00ff000101ff010100010000000001ff010100ff01ffff0101ff0001010001ffffff00ffffff01ff01ff0101ff00ff01ff00ff01ff010001000100ff010000ff00000101ffff0001ff0100ff00010100ff00000001ff0101000100ff01ffff00010101ff00010101000101ffff01ffffff01ff00000000000001ffffff0000ff01000101ff00ffff000001000101ff000000010101ffffff0001ff0001000000000000ff000001ff01ff01000101000100000000ff0000000101010101000100000001ff01ff00000100ffff0001ff0001ff0001ffffffff010001ff01ffff0000000001000100000000ffffff00ffff00010101000100ff00ff0000ff0001010000000100ff0001ff00ff0101ff00ff0100000000000000ff0001ff00ffff010000ff00ff00ff00ffff00ffffff000100ffff00ff01ff0000ffff00000101ff01ffff0101ff0100ff01ffff00000001ffffffff00ff00ffff000100ff01ff01010101ff01ff00010000ff01ff000000ff01ffffff0101ff01000100ffff0000ffff01010101ff0100010000ffffff010000ffffffffff00ffff01ffff010101ffff00000001ff010000ff0001ff0000ffff01010101ffff00ff01ff01ffff01000100ffff0000010100ff01ffff0101000000ffff00ff0100ff00ffff0001ff000001ffff00ff0001ffff0001ff000100000001"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2467-2484"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            31744
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "01ff000001ff01ff0000ffff00ff000101ff010100010000000001ff010100ff01ffff0101ff0001010001ffffff00ffffff01ff01ff0101ff00ff01ff00ff01ff010001000100ff010000ff00000101ffff0001ff0100ff00010100ff00000001ff0101000100ff01ffff00010101ff00010101000101ffff01ffffff01ff00000000000001ffffff0000ff01000101ff00ffff000001000101ff000000010101ffffff0001ff0001000000000000ff000001ff01ff01000101000100000000ff0000000101010101000100000001ff01ff00000100ffff0001ff0001ff0001ffffffff010001ff01ffff0000000001000100000000ffffff00ffff00010101000100ff00ff0000ff0001010000000100ff0001ff00ff0101ff00ff0100000000000000ff0001ff00ffff010000ff00ff00ff00ffff00ffffff000100ffff00ff01ff0000ffff00000101ff01ffff0101ff0100ff01ffff00000001ffffffff00ff00ffff000100ff01ff01010101ff01ff00010000ff01ff000000ff01ffffff0101ff01000100ffff0000ffff01010101ff0100010000ffffff010000ffffffffff00ffff01ffff010101ffff00000001ff010000ff0001ff0000ffff01010101ffff00ff01ff01ffff01000100ffff0000010100ff01ffff0101000000ffff00ff0100ff00ffff0001ff000001ffff00ff0001ffff0001ff000100000001"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5574-5577",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -570,15 +802,32 @@
       },
       "format": "TQ2_0",
       "id": "tq2_0_scale_negative_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          64512
-        ],
-        "values_hex": "01ff000001ff01ff0000ffff00ff000101ff010100010000000001ff010100ff01ffff0101ff0001010001ffffff00ffffff01ff01ff0101ff00ff01ff00ff01ff010001000100ff010000ff00000101ffff0001ff0100ff00010100ff00000001ff0101000100ff01ffff00010101ff00010101000101ffff01ffffff01ff00000000000001ffffff0000ff01000101ff00ffff000001000101ff000000010101ffffff0001ff0001000000000000ff000001ff01ff01000101000100000000ff0000000101010101000100000001ff01ff00000100ffff0001ff0001ff0001ffffffff010001ff01ffff0000000001000100000000ffffff00ffff00010101000100ff00ff0000ff0001010000000100ff0001ff00ff0101ff00ff0100000000000000ff0001ff00ffff010000ff00ff00ff00ffff00ffffff000100ffff00ff01ff0000ffff00000101ff01ffff0101ff0100ff01ffff00000001ffffffff00ff00ffff000100ff01ff01010101ff01ff00010000ff01ff000000ff01ffffff0101ff01000100ffff0000ffff01010101ff0100010000ffffff010000ffffffffff00ffff01ffff010101ffff00000001ff010000ff0001ff0000ffff01010101ffff00ff01ff01ffff01000100ffff0000010100ff01ffff0101000000ffff00ff0100ff00ffff0001ff000001ffff00ff0001ffff0001ff000100000001"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:2467-2484"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            64512
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "01ff000001ff01ff0000ffff00ff000101ff010100010000000001ff010100ff01ffff0101ff0001010001ffffff00ffffff01ff01ff0101ff00ff01ff00ff01ff010001000100ff010000ff00000101ffff0001ff0100ff00010100ff00000001ff0101000100ff01ffff00010101ff00010101000101ffff01ffffff01ff00000000000001ffffff0000ff01000101ff00ffff000001000101ff000000010101ffffff0001ff0001000000000000ff000001ff01ff01000101000100000000ff0000000101010101000100000001ff01ff00000100ffff0001ff0001ff0001ffffffff010001ff01ffff0000000001000100000000ffffff00ffff00010101000100ff00ff0000ff0001010000000100ff0001ff00ff0101ff00ff0100000000000000ff0001ff00ffff010000ff00ff00ff00ffff00ffffff000100ffff00ff01ff0000ffff00000101ff01ffff0101ff0100ff01ffff00000001ffffffff00ff00ffff000100ff01ff01010101ff01ff00010000ff01ff000000ff01ffffff0101ff01000100ffff0000ffff01010101ff0100010000ffffff010000ffffffffff00ffff01ffff010101ffff00000001ff010000ff0001ff0000ffff01010101ffff00ff01ff01ffff01000100ffff0000010100ff01ffff0101000000ffff00ff0100ff00ffff0001ff000001ffff00ff0001ffff0001ff000100000001"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5574-5577",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 512,
@@ -591,7 +840,18 @@
       },
       "format": "TQ2_0",
       "id": "tq2_0_truncated",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "a tensor whose bytes pass the end of the file is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 511,
@@ -604,7 +864,18 @@
       },
       "format": "TQ2_0",
       "id": "tq2_0_partial_block",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:732-738"
+          ],
+          "note": "a row that is not whole blocks is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -615,9 +886,20 @@
       },
       "format": "TQ2_0",
       "id": "tq2_0_encode_rejects_value_3",
-      "kind": "block_encode",
+      "kind": "reject",
+      "reader": "block_encode",
       "scale_words": [
         15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "ggml/src/ggml-quants.c:2382-2412"
+          ],
+          "note": "the quantizer derives codes from float weights and never produces this value",
+          "upstream": "llama.cpp"
+        }
       ],
       "values_hex": "01ff000001ff01ff0000ffff00ff000101ff010100010000000001ff010100ff01ffff0101ff0001010001ffffff00ffffff01ff01ff0101ff00ff01ff00ff01ff010001000100ff010000ff00000101ffff0001ff0100ff00010100ff00000001ff0101000100ff01ffff00010101ff00010101000101ffff01ffffff01ff00030000000001ffffff0000ff01000101ff00ffff000001000101ff000000010101ffffff0001ff0001000000000000ff000001ff01ff01000101000100000000ff0000000101010101000100000001ff01ff00000100ffff0001ff0001ff0001ffffffff010001ff01ffff0000000001000100000000ffffff00ffff00010101"
     },
@@ -671,7 +953,17 @@
       "flag_class": "outside_ternary",
       "format": "Q2_0",
       "id": "q2_0_code3_is_plus2",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "code 3 is (3 - 1) * d = +2d",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 64,
@@ -697,7 +989,17 @@
       "flag_class": "scale_negative",
       "format": "Q2_0",
       "id": "q2_0_negative_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "every weight is its trit times the negative d",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 64,
@@ -723,7 +1025,17 @@
       "flag_class": "scale_zero",
       "format": "Q2_0",
       "id": "q2_0_zero_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "every weight is its trit times 0",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -736,15 +1048,32 @@
       },
       "format": "Q2_0",
       "id": "q2_0_scale_nan",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          32256
-        ],
-        "values_hex": "00ff0001010000ffff000101000100010100ff010101010101010101000100ff01ff0000010001ff01ffff01010101ffffffff01ff0101000101010101000001ff010101ffffff000001010000000101ff000100ff00ffffffff0100ff01ff0000ffff0101ff0101000100000101ff01ffff01000100000100ffff00ffff0101"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            32256
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "00ff0001010000ffff000101000100010100ff010101010101010101000100ff01ff0000010001ff01ffff01010101ffffffff01ff0101000101010101000001ff010101ffffff000001010000000101ff000100ff00ffffffff0100ff01ff0000ffff0101ff0101000100000101ff01ffff01000100000100ffff00ffff0101"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5507-5510",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -757,15 +1086,32 @@
       },
       "format": "Q2_0",
       "id": "q2_0_scale_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          31744
-        ],
-        "values_hex": "00ff0001010000ffff000101000100010100ff010101010101010101000100ff01ff0000010001ff01ffff01010101ffffffff01ff0101000101010101000001ff010101ffffff000001010000000101ff000100ff00ffffffff0100ff01ff0000ffff0101ff0101000100000101ff01ffff01000100000100ffff00ffff0101"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            31744
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "00ff0001010000ffff000101000100010100ff010101010101010101000100ff01ff0000010001ff01ffff01010101ffffffff01ff0101000101010101000001ff010101ffffff000001010000000101ff000100ff00ffffffff0100ff01ff0000ffff0101ff0101000100000101ff01ffff01000100000100ffff00ffff0101"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5507-5510",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -778,15 +1124,32 @@
       },
       "format": "Q2_0",
       "id": "q2_0_scale_negative_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          64512
-        ],
-        "values_hex": "00ff0001010000ffff000101000100010100ff010101010101010101000100ff01ff0000010001ff01ffff01010101ffffffff01ff0101000101010101000001ff010101ffffff000001010000000101ff000100ff00ffffffff0100ff01ff0000ffff0101ff0101000100000101ff01ffff01000100000100ffff00ffff0101"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            64512
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "00ff0001010000ffff000101000100010100ff010101010101010101000100ff01ff0000010001ff01ffff01010101ffffffff01ff0101000101010101000001ff010101ffffff000001010000000101ff000100ff00ffffffff0100ff01ff0000ffff0101ff0101000100000101ff01ffff01000100000100ffff00ffff0101"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5507-5510",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -799,7 +1162,18 @@
       },
       "format": "Q2_0",
       "id": "q2_0_truncated",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "a tensor whose bytes pass the end of the file is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 127,
@@ -812,7 +1186,18 @@
       },
       "format": "Q2_0",
       "id": "q2_0_partial_block",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:732-738"
+          ],
+          "note": "a row that is not whole blocks is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 64,
@@ -823,9 +1208,20 @@
       },
       "format": "Q2_0",
       "id": "q2_0_encode_rejects_value_3",
-      "kind": "block_encode",
+      "kind": "reject",
+      "reader": "block_encode",
       "scale_words": [
         15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "ggml/src/ggml-quants.c:74-110"
+          ],
+          "note": "the quantizer derives codes from float weights and never produces this value",
+          "upstream": "llama.cpp"
+        }
       ],
       "values_hex": "00ff0001010000ffff000101000100010100ff010101010101010101000100ff03ff0000010001ff01ffff01010101ffffffff01ff0101000101010101000001"
     },
@@ -879,7 +1275,17 @@
       "flag_class": "scale_negative",
       "format": "Q1_0",
       "id": "q1_0_negative_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:419-437"
+          ],
+          "note": "every weight is its trit times the negative d",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -905,7 +1311,17 @@
       "flag_class": "scale_zero",
       "format": "Q1_0",
       "id": "q1_0_zero_scale",
-      "kind": "block"
+      "kind": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:419-437"
+          ],
+          "note": "every weight is its trit times 0",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -918,15 +1334,32 @@
       },
       "format": "Q1_0",
       "id": "q1_0_scale_nan",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          32256
-        ],
-        "values_hex": "ffff0101ff01ff0101ffff01ff01ffff010101010101ff010101ff01ff01ff0101ff01010101010101ffff010101010101010101ff0101ff010101ff01ffffff01ff0101ffff01ffff0101ff01ffff01ffff01ff01ff01ff01ff01ff0101010101010101010101010101010101ff0101010101ff01ff0101010101010101010101ff01ffff01010101010101ff01ff0101010101ffff0101010101ff0101ffff0101ffffff0101ff010101ff0101ff0101ff0101ffff0101010101ff0101ff010101ff01010101ff01ffffff01ff0101010101ff01ff01010101ff01ffff01ffff01010101ffff010101ffff0101010101010101010101010101ff0101010101"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:419-437"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            32256
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "ffff0101ff01ff0101ffff01ff01ffff010101010101ff010101ff01ff01ff0101ff01010101010101ffff010101010101010101ff0101ff010101ff01ffffff01ff0101ffff01ffff0101ff01ffff01ffff01ff01ff01ff01ff01ff0101010101010101010101010101010101ff0101010101ff01ff0101010101010101010101ff01ffff01010101010101ff01ff0101010101ffff0101010101ff0101ffff0101ffffff0101ff010101ff0101ff0101ff0101ffff0101010101ff0101ff010101ff01010101ff01ffffff01ff0101010101ff01ff01010101ff01ffff01ffff01010101ffff010101ffff0101010101010101010101010101ff0101010101"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5503-5506",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -939,15 +1372,32 @@
       },
       "format": "Q1_0",
       "id": "q1_0_scale_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          31744
-        ],
-        "values_hex": "ffff0101ff01ff0101ffff01ff01ffff010101010101ff010101ff01ff01ff0101ff01010101010101ffff010101010101010101ff0101ff010101ff01ffffff01ff0101ffff01ffff0101ff01ffff01ffff01ff01ff01ff01ff01ff0101010101010101010101010101010101ff0101010101ff01ff0101010101010101010101ff01ffff01010101010101ff01ff0101010101ffff0101010101ff0101ffff0101ffffff0101ff010101ff0101ff0101ff0101ffff0101010101ff0101ff010101ff01010101ff01ffffff01ff0101010101ff01ff01010101ff01ffff01ffff01010101ffff010101ffff0101010101010101010101010101ff0101010101"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:419-437"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            31744
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "ffff0101ff01ff0101ffff01ff01ffff010101010101ff010101ff01ff01ff0101ff01010101010101ffff010101010101010101ff0101ff010101ff01ffffff01ff0101ffff01ffff0101ff01ffff01ffff01ff01ff01ff01ff01ff0101010101010101010101010101010101ff0101010101ff01ff0101010101010101010101ff01ffff01010101010101ff01ff0101010101ffff0101010101ff0101ffff0101ffffff0101ff010101ff0101ff0101ff0101ffff0101010101ff0101ff010101ff01010101ff01ffffff01ff0101010101ff01ff01010101ff01ffff01ffff01010101ffff010101ffff0101010101010101010101010101ff0101010101"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5503-5506",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -960,15 +1410,32 @@
       },
       "format": "Q1_0",
       "id": "q1_0_scale_negative_inf",
-      "kind": "block",
-      "silent": {
-        "note": "values with any finite scale, e.g. 0x3c00",
-        "scale_words": [
-          15360,
-          64512
-        ],
-        "values_hex": "ffff0101ff01ff0101ffff01ff01ffff010101010101ff010101ff01ff01ff0101ff01010101010101ffff010101010101010101ff0101ff010101ff01ffffff01ff0101ffff01ffff0101ff01ffff01ffff01ff01ff01ff01ff01ff0101010101010101010101010101010101ff0101010101ff01ff0101010101010101010101ff01ffff01010101010101ff01ff0101010101ffff0101010101ff0101ffff0101ffffff0101ff010101ff0101ff0101ff0101ffff0101010101ff0101ff010101ff01010101ff01ffffff01ff0101010101ff01ff01010101ff01ffff01ffff01010101ffff010101ffff0101010101010101010101010101ff0101010101"
-      }
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:419-437"
+          ],
+          "note": "the default load path multiplies the trits by the non-finite d",
+          "scale_words": [
+            15360,
+            64512
+          ],
+          "upstream": "llama.cpp",
+          "values_hex": "ffff0101ff01ff0101ffff01ff01ffff010101010101ff010101ff01ff01ff0101ff01010101010101ffff010101010101010101ff0101ff010101ff01ffffff01ff0101ffff01ffff0101ff01ffff01ffff01ff01ff01ff01ff01ff0101010101010101010101010101010101ff0101010101ff01ff0101010101010101010101ff01ffff01010101010101ff01ff0101010101ffff0101010101ff0101ffff0101ffffff0101ff010101ff0101ff0101ff0101ffff0101010101ff0101ff010101ff01010101ff01ffffff01ff0101010101ff01ff01010101ff01ffff01ffff01010101ffff010101ffff0101010101010101010101010101ff0101010101"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml-quants.c:5503-5506",
+            "src/llama-model-loader.cpp:1486-1488"
+          ],
+          "note": "only when the model is loaded with --check-tensors",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -981,7 +1448,18 @@
       },
       "format": "Q1_0",
       "id": "q1_0_truncated",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "a tensor whose bytes pass the end of the file is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 255,
@@ -994,7 +1472,18 @@
       },
       "format": "Q1_0",
       "id": "q1_0_partial_block",
-      "kind": "block"
+      "kind": "reject",
+      "reader": "block",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:732-738"
+          ],
+          "note": "a row that is not whole blocks is refused",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -1005,9 +1494,20 @@
       },
       "format": "Q1_0",
       "id": "q1_0_encode_rejects_zero",
-      "kind": "block_encode",
+      "kind": "reject",
+      "reader": "block_encode",
       "scale_words": [
         15360
+      ],
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "ggml/src/ggml-quants.c:40-72"
+          ],
+          "note": "the quantizer derives codes from float weights and never produces this value",
+          "upstream": "llama.cpp"
+        }
       ],
       "values_hex": "ffff0101ff01ff0101ffff01ff01ffff010101010101ff010101ff01ff01ff0101ff01010101010101ffff010101010101010101ff0101ff010101ff01ffffff00ff0101ffff01ffff0101ff01ffff01ffff01ff01ff01ff01ff01ff0101010101010101010101010101010101ff0101010101ff01ff01010101010101010101"
     },
@@ -1174,11 +1674,137 @@
       "id": "q1_0_corrupted_payload_decodes",
       "intended": {
         "count": 128,
+        "data_hex": "0034a5030000000000000000000000000000",
         "format": "Q1_0",
+        "scale_words": [
+          13312
+        ],
         "values_hex": "01ff01ffff01ff010101ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
       },
       "kind": "block",
-      "silent_class": "q1_0_payload"
+      "silent_class": "q1_0_payload",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:419-437"
+          ],
+          "note": "every bit is a sign; there is no invalid pattern",
+          "upstream": "llama.cpp"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "data_hex": "e521505069454a1a06061486260248a01016e5218a092240a25951a48a98054545502902",
+      "description": "Real Bonsai Q2_0 bytes with the first code changed to another ternary code: weight 0 decodes to another trit and nothing can detect it",
+      "encode": false,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          8677,
+          8677
+        ],
+        "status": 0,
+        "values_hex": "ffff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff"
+      },
+      "format": "Q2_0",
+      "id": "q2_0_real_corrupted_code_byte",
+      "intended": {
+        "count": 128,
+        "data_hex": "e521525069454a1a06061486260248a01016e5218a092240a25951a48a98054545502902",
+        "format": "Q2_0",
+        "scale_words": [
+          8677,
+          8677
+        ],
+        "source": {
+          "begin": 749916512,
+          "end": 749916548,
+          "file": "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf",
+          "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf-dev",
+          "revision": "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
+          "sha256": "9c00345da7e42d5d62aeef451a583640ebd5afb19be5820e8887c34a67e50b62",
+          "tensor": "blk.0.ffn_down.weight"
+        },
+        "values_hex": "01ff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff"
+      },
+      "kind": "block",
+      "silent_class": "payload_corrupted",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "decodes the changed code",
+          "upstream": "llama.cpp"
+        }
+      ]
+    },
+    {
+      "count": 128,
+      "data_hex": "e531525069454a1a06061486260248a01016e5218a092240a25951a48a98054545502902",
+      "description": "Real Bonsai Q2_0 bytes with bit 12 of block 0's fp16 scale flipped: the scale stays finite and positive, the trits are unchanged, block 0 is rescaled by 2^4 and nothing can detect it",
+      "encode": false,
+      "expect": {
+        "flags": {
+          "affine_not_ternary": 0,
+          "noncanonical_base3": 0,
+          "outside_ternary": 0,
+          "padding_nonzero": 0,
+          "scale_negative": 0,
+          "scale_zero": 0,
+          "trailer_nonzero": 0
+        },
+        "scale_words": [
+          12773,
+          8677
+        ],
+        "status": 0,
+        "values_hex": "01ff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff"
+      },
+      "format": "Q2_0",
+      "id": "q2_0_real_corrupted_scale",
+      "intended": {
+        "count": 128,
+        "data_hex": "e521525069454a1a06061486260248a01016e5218a092240a25951a48a98054545502902",
+        "format": "Q2_0",
+        "scale_words": [
+          8677,
+          8677
+        ],
+        "source": {
+          "begin": 749916512,
+          "end": 749916548,
+          "file": "Ternary-Bonsai-2-27B-Q2_0-prism-fork-required.gguf",
+          "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf-dev",
+          "revision": "2a263ef827a2e215f3ddd14c9871a5bd1800fcbc",
+          "sha256": "9c00345da7e42d5d62aeef451a583640ebd5afb19be5820e8887c34a67e50b62",
+          "tensor": "blk.0.ffn_down.weight"
+        },
+        "values_hex": "01ff0000ffff0000000101000000ff000101ff00010100ff0100ffff0100ffffff0000ff0100ff01010001ff01ffffffff01ff00ffff0101ffff00ff010000ff0101ff010001ffff01ff01ffffffff0001ff01010001000000ff0000ff0001010101ff01ff0100010000ffff0000ff000000ff00ffff0000000101ff01ffffff"
+      },
+      "kind": "block",
+      "silent_class": "scale_corrupted",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "multiplies the trits by the changed d",
+          "upstream": "llama.cpp"
+        }
+      ]
     },
     {
       "description": "Id 42 without namespace markers is ggml-org Q2_0 (group 64)",
@@ -1186,13 +1812,16 @@
         "alignment": 32,
         "bitnet": false,
         "check": 3,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 42,
+        "has_next": true,
         "next_offset": 160,
         "offset": 0,
         "prism": false,
         "tensor_bytes": 144
       },
+      "file_size": 1344,
       "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e77656967687401000000000100000000000000000000a000000000000000",
       "id": "gguf_q2_0_plain",
       "kind": "gguf",
@@ -1204,13 +1833,16 @@
         "alignment": 32,
         "bitnet": false,
         "check": 3,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 42,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": true,
         "tensor_bytes": 144
       },
+      "file_size": 1184,
       "gguf_hex": "474755460300000001000000000000000200000000000000140000000000000067656e6572616c2e6172636869746563747572650800000006000000000000007177656e33351900000000000000707269736d2e686164616d6172642e626c6f636b5f73697a6504000000000400000800000000000000612e77656967687402000000000100000000000002000000000000002a0000000000000000000000",
       "id": "gguf_prism_q2_0_stays_group_64",
       "kind": "gguf",
@@ -1222,13 +1854,16 @@
         "alignment": 32,
         "bitnet": false,
         "check": 5,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 142,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": true,
         "tensor_bytes": 136
       },
+      "file_size": 1184,
       "gguf_hex": "474755460300000001000000000000000200000000000000140000000000000067656e6572616c2e6172636869746563747572650800000006000000000000007177656e33351900000000000000707269736d2e686164616d6172642e626c6f636b5f73697a6504000000000400000800000000000000612e77656967687402000000000100000000000002000000000000008e0000000000000000000000",
       "id": "gguf_prism_pq2_0",
       "kind": "gguf",
@@ -1240,13 +1875,16 @@
         "alignment": 32,
         "bitnet": false,
         "check": 6,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 143,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": true,
         "tensor_bytes": 112
       },
+      "file_size": 1184,
       "gguf_hex": "474755460300000001000000000000000200000000000000140000000000000067656e6572616c2e6172636869746563747572650800000006000000000000007177656e33351900000000000000707269736d2e686164616d6172642e626c6f636b5f73697a6504000000000400000800000000000000612e77656967687402000000000100000000000002000000000000008f0000000000000000000000",
       "id": "gguf_prism_ptq1_0",
       "kind": "gguf",
@@ -1258,12 +1896,15 @@
         "alignment": 32,
         "bitnet": false,
         "check": 0,
+        "data_start": 128,
         "find": 0,
         "ggml_type": 143,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": false
       },
+      "file_size": 1152,
       "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000008f0000000000000000000000",
       "id": "gguf_143_without_prism_keys",
       "kind": "gguf",
@@ -1275,13 +1916,16 @@
         "alignment": 32,
         "bitnet": true,
         "check": 7,
+        "data_start": 128,
         "find": 0,
         "ggml_type": 36,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": false,
         "tensor_bytes": 160
       },
+      "file_size": 1152,
       "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e617263686974656374757265080000000c000000000000006269746e65742d62312e35380800000000000000612e7765696768740200000000010000000000000200000000000000240000000000000000000000",
       "id": "gguf_bitnet_i2_s",
       "kind": "gguf",
@@ -1294,15 +1938,39 @@
         "alignment": 32,
         "bitnet": true,
         "check": -60,
+        "data_start": 128,
         "find": 0,
         "ggml_type": 42,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": false
       },
+      "file_size": 1152,
       "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e617263686974656374757265080000000c000000000000006269746e65742d62312e35380800000000000000612e77656967687402000000000100000000000002000000000000002a0000000000000000000000",
       "id": "gguf_bitnet_42_is_tl2",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/include/ggml.h:433",
+            "ggml/src/ggml.c:1314-1321"
+          ],
+          "note": "bitnet.cpp reads id 42 as TL2, a lookup-table layout of other size",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/include/ggml.h:432",
+            "ggml/src/ggml-quants.c:439-457"
+          ],
+          "note": "ggml-org reads id 42 as group-64 Q2_0",
+          "upstream": "llama.cpp"
+        }
+      ],
       "tensor": "a.weight"
     },
     {
@@ -1312,15 +1980,39 @@
         "alignment": 32,
         "bitnet": true,
         "check": -60,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 42,
+        "has_next": true,
         "next_offset": 160,
         "offset": 0,
         "prism": false
       },
+      "file_size": 1344,
       "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e77656967687401000000000100000000000024000000a000000000000000",
       "id": "gguf_42_marked_by_an_i2_s_tensor",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/include/ggml.h:433",
+            "ggml/src/ggml.c:1314-1321"
+          ],
+          "note": "bitnet.cpp reads id 42 as TL2, a lookup-table layout of other size",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:732-738",
+            "ggml/src/ggml.c:928-945"
+          ],
+          "note": "ids 36 to 38 are removed in ggml-org (block size 0), so the file is refused",
+          "upstream": "llama.cpp"
+        }
+      ],
       "tensor": "a.weight"
     },
     {
@@ -1330,15 +2022,39 @@
         "alignment": 32,
         "bitnet": true,
         "check": -60,
+        "data_start": 128,
         "find": 0,
         "ggml_type": 38,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": false
       },
+      "file_size": 1152,
       "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e617263686974656374757265080000000c000000000000006269746e65742d62312e35380800000000000000612e7765696768740200000000010000000000000200000000000000260000000000000000000000",
       "id": "gguf_tl1",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/include/ggml.h:428",
+            "ggml/src/ggml.c:1314-1321"
+          ],
+          "note": "bitnet.cpp reads id 38 as TL1 with its generated kernels",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:732-738",
+            "ggml/src/ggml.c:928-945"
+          ],
+          "note": "a removed id of block size 0 is refused",
+          "upstream": "llama.cpp"
+        }
+      ],
       "tensor": "a.weight"
     },
     {
@@ -1348,15 +2064,39 @@
         "alignment": 32,
         "bitnet": true,
         "check": -59,
+        "data_start": 192,
         "find": 0,
         "ggml_type": 42,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": true
       },
+      "file_size": 1216,
       "gguf_hex": "474755460300000001000000000000000200000000000000140000000000000067656e6572616c2e617263686974656374757265080000000c000000000000006269746e65742d62312e35381900000000000000707269736d2e686164616d6172642e626c6f636b5f73697a6504000000000400000800000000000000612e77656967687402000000000100000000000002000000000000002a0000000000000000000000",
       "id": "gguf_42_with_both_markers",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/include/ggml.h:433",
+            "ggml/src/ggml.c:1314-1321"
+          ],
+          "note": "bitnet.cpp reads id 42 as TL2, a lookup-table layout of other size",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/include/ggml.h:432",
+            "ggml/src/ggml-quants.c:474-492"
+          ],
+          "note": "the PrismML fork reads id 42 as group-64 Q2_0",
+          "upstream": "prismml"
+        }
+      ],
       "tensor": "a.weight"
     },
     {
@@ -1366,15 +2106,38 @@
         "alignment": 32,
         "bitnet": true,
         "check": -59,
+        "data_start": 192,
         "find": 0,
         "ggml_type": 143,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": true
       },
+      "file_size": 1216,
       "gguf_hex": "474755460300000001000000000000000200000000000000140000000000000067656e6572616c2e617263686974656374757265080000000c000000000000006269746e65742d62312e35381900000000000000707269736d2e686164616d6172642e626c6f636b5f73697a6504000000000400000800000000000000612e77656967687402000000000100000000000002000000000000008f0000000000000000000000",
       "id": "gguf_143_with_both_markers",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "ggml/include/ggml.h:436",
+            "ggml/src/ggml-quants.c:2255-2285"
+          ],
+          "note": "the PrismML fork reads id 143 as PTQ1_0",
+          "upstream": "prismml"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:701-706"
+          ],
+          "note": "ids from 43 up are outside its type range",
+          "upstream": "bitnet.cpp-llama.cpp"
+        }
+      ],
       "tensor": "a.weight"
     },
     {
@@ -1383,13 +2146,16 @@
         "alignment": 32,
         "bitnet": true,
         "check": 2,
+        "data_start": 192,
         "find": 0,
         "ggml_type": 35,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": true,
         "tensor_bytes": 132
       },
+      "file_size": 1216,
       "gguf_hex": "474755460300000001000000000000000200000000000000140000000000000067656e6572616c2e617263686974656374757265080000000c000000000000006269746e65742d62312e35381900000000000000707269736d2e686164616d6172642e626c6f636b5f73697a6504000000000400000800000000000000612e7765696768740200000000010000000000000200000000000000230000000000000000000000",
       "id": "gguf_tq2_0_in_any_namespace",
       "kind": "gguf",
@@ -1402,15 +2168,29 @@
         "alignment": 32,
         "bitnet": false,
         "check": -61,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 42,
+        "has_next": false,
         "next_offset": 0,
         "offset": 161,
         "prism": false
       },
+      "file_size": 1345,
       "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e7765696768740100000000010000000000002a000000a100000000000000",
       "id": "gguf_offset_shifted_by_one",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        }
+      ],
       "tensor": "b.weight"
     },
     {
@@ -1420,15 +2200,29 @@
         "alignment": 64,
         "bitnet": false,
         "check": -61,
+        "data_start": 192,
         "find": 0,
         "ggml_type": 42,
+        "has_next": false,
         "next_offset": 0,
         "offset": 160,
         "prism": false
       },
+      "file_size": 1376,
       "gguf_hex": "474755460300000002000000000000000200000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d61110000000000000067656e6572616c2e616c69676e6d656e7404000000400000000800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e7765696768740100000000010000000000002a000000a000000000000000",
       "id": "gguf_offset_alignment_64",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        }
+      ],
       "tensor": "b.weight"
     },
     {
@@ -1438,35 +2232,192 @@
         "alignment": 32,
         "bitnet": false,
         "check": -62,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 42,
+        "has_next": true,
         "next_offset": 320,
         "offset": 0,
         "prism": false,
         "tensor_bytes": 324
       },
+      "file_size": 1504,
       "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e7765696768740100000080040000000000002a00000000000000000000000800000000000000622e776569676874010000000001000000000000000000004001000000000000",
       "id": "gguf_group_128_bytes_labelled_42",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        }
+      ],
       "tensor": "a.weight"
     },
     {
-      "description": "The last tensor's extent is bounded by the file size, which a prefix does not show",
+      "description": "Two tensor records share offset 0: the tensors overlap",
+      "error_class": "extent",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -62,
+        "data_start": 192,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": true,
+        "next_offset": 0,
+        "offset": 0,
+        "prism": false,
+        "tensor_bytes": 144
+      },
+      "file_size": 1216,
+      "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e77656967687402000000000100000000000002000000000000002a0000000000000000000000",
+      "id": "gguf_overlapping_offsets",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "b.weight"
+    },
+    {
+      "description": "b.weight starts at 96, inside a.weight's 144 bytes",
+      "error_class": "extent",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -62,
+        "data_start": 160,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": true,
+        "next_offset": 96,
+        "offset": 0,
+        "prism": false,
+        "tensor_bytes": 144
+      },
+      "file_size": 1280,
+      "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e7765696768740100000000010000000000002a0000006000000000000000",
+      "id": "gguf_offset_shifted_back_into_previous",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "a.weight"
+    },
+    {
+      "description": "The last tensor ends exactly at the end of the file",
       "expect": {
         "alignment": 32,
         "bitnet": false,
         "check": 3,
+        "data_start": 128,
         "find": 0,
         "ggml_type": 42,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": false,
         "tensor_bytes": 324
       },
+      "file_size": 452,
       "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e7765696768740100000080040000000000002a0000000000000000000000",
-      "id": "gguf_last_tensor_has_no_extent_bound",
+      "id": "gguf_last_tensor_within_file",
       "kind": "gguf",
       "tensor": "a.weight"
+    },
+    {
+      "description": "A truncated file: the last tensor needs 324 bytes, 323 remain",
+      "error_class": "extent",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -62,
+        "data_start": 128,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "next_offset": 0,
+        "offset": 0,
+        "prism": false,
+        "tensor_bytes": 324
+      },
+      "file_size": 451,
+      "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e7765696768740100000080040000000000002a0000000000000000000000",
+      "id": "gguf_last_tensor_past_end_of_file",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "tensor data not within the file bounds",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "a.weight"
+    },
+    {
+      "description": "b.weight shifted by one alignment unit (160 to 192) in a file that ends at its intended end",
+      "error_class": "extent",
+      "expect": {
+        "alignment": 32,
+        "bitnet": false,
+        "check": -62,
+        "data_start": 192,
+        "find": 0,
+        "ggml_type": 42,
+        "has_next": false,
+        "next_offset": 0,
+        "offset": 192,
+        "prism": false,
+        "tensor_bytes": 144
+      },
+      "file_size": 496,
+      "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e77656967687402000000000100000000000002000000000000002a000000c000000000000000",
+      "id": "gguf_last_tensor_shifted_by_alignment",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:787-793"
+          ],
+          "note": "every offset must equal the padded end of the previous tensor",
+          "upstream": "llama.cpp"
+        },
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "tensor data not within the file bounds",
+          "upstream": "llama.cpp"
+        }
+      ],
+      "tensor": "b.weight"
     },
     {
       "description": "ne[0] = 100 is not a whole number of 64-weight blocks",
@@ -1475,16 +2426,30 @@
         "alignment": 32,
         "bitnet": false,
         "check": -51,
+        "data_start": 128,
         "find": 0,
         "ggml_type": 42,
+        "has_next": false,
         "next_offset": 0,
         "offset": 0,
         "prism": false,
         "tensor_bytes": 0
       },
+      "file_size": 1152,
       "gguf_hex": "474755460300000001000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000640000000000000002000000000000002a0000000000000000000000",
       "id": "gguf_row_not_whole_blocks",
-      "kind": "gguf",
+      "kind": "reject",
+      "reader": "gguf",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/gguf.cpp:732-738"
+          ],
+          "note": "a row that is not whole blocks is refused",
+          "upstream": "llama.cpp"
+        }
+      ],
       "tensor": "a.weight"
     },
     {
@@ -1493,13 +2458,16 @@
         "alignment": 32,
         "bitnet": false,
         "check": 3,
+        "data_start": 160,
         "find": 0,
         "ggml_type": 42,
+        "has_next": true,
         "next_offset": 144,
         "offset": 0,
         "prism": false,
         "tensor_bytes": 144
       },
+      "file_size": 1328,
       "gguf_hex": "474755460300000002000000000000000100000000000000140000000000000067656e6572616c2e6172636869746563747572650800000005000000000000006c6c616d610800000000000000612e77656967687402000000000100000000000002000000000000002a00000000000000000000000800000000000000622e776569676874010000000001000000000000000000009000000000000000",
       "id": "gguf_exact_fit",
       "kind": "gguf",

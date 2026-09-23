@@ -49,7 +49,9 @@
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
-      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+      "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
+      "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
     }
   },
   "created_at": "2026-09-23T00:00:00Z",
@@ -66,6 +68,13 @@
   "schema_version": 2,
   "spec_path": "specs/formats/hf_bitnet.t27",
   "upstream": {
+    "safetensors": {
+      "commit": "e246a2560645b7525f5775669ed816eb57c5bcc8",
+      "files": [
+        "safetensors/src/tensor.rs"
+      ],
+      "repo": "huggingface/safetensors"
+    },
     "transformers": {
       "commit": "2c4914fb939fe9de0d8e7a798af4684d552f18b4",
       "files": [
@@ -183,7 +192,17 @@
       "kind": "hf_packed",
       "rows": 12,
       "scale_kind": "BF16",
-      "scale_word": 16284
+      "scale_word": 16284,
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "src/transformers/integrations/bitnet.py:114-121"
+          ],
+          "note": "unpack_weights returns code - 1: +2",
+          "upstream": "transformers"
+        }
+      ]
     },
     {
       "cols": 5,
@@ -209,7 +228,17 @@
       "kind": "hf_packed",
       "rows": 12,
       "scale_kind": "BF16",
-      "scale_word": 49052
+      "scale_word": 49052,
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "src/transformers/integrations/bitnet.py:291-292"
+          ],
+          "note": "AutoBitLinear (offline) multiplies the output by weight_scale",
+          "upstream": "transformers"
+        }
+      ]
     },
     {
       "cols": 5,
@@ -231,10 +260,21 @@
         "values_hex": "00000000ff00ff010000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
       },
       "id": "hf_scale_nan",
-      "kind": "hf_packed",
+      "kind": "reject",
+      "reader": "hf_packed",
       "rows": 12,
       "scale_kind": "BF16",
-      "scale_word": 32704
+      "scale_word": 32704,
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "src/transformers/integrations/bitnet.py:291-292"
+          ],
+          "note": "AutoBitLinear (offline) multiplies the output by weight_scale",
+          "upstream": "transformers"
+        }
+      ]
     },
     {
       "cols": 5,
@@ -256,10 +296,21 @@
         "values_hex": "00000000ff00ff010000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
       },
       "id": "hf_scale_inf",
-      "kind": "hf_packed",
+      "kind": "reject",
+      "reader": "hf_packed",
       "rows": 12,
       "scale_kind": "BF16",
-      "scale_word": 65408
+      "scale_word": 65408,
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "src/transformers/integrations/bitnet.py:291-292"
+          ],
+          "note": "AutoBitLinear (offline) multiplies the output by weight_scale",
+          "upstream": "transformers"
+        }
+      ]
     },
     {
       "cols": 5,
@@ -270,10 +321,21 @@
         "status": -51
       },
       "id": "hf_rows_not_multiple_of_4",
-      "kind": "hf_packed",
+      "kind": "reject",
+      "reader": "hf_packed",
       "rows": 10,
       "scale_kind": "BF16",
-      "scale_word": 16284
+      "scale_word": 16284,
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "src/transformers/integrations/bitnet.py:104-111"
+          ],
+          "note": "a packed [rows/4, cols] tensor cannot state rows % 4; unpack_weights returns 4 * packed rows",
+          "upstream": "transformers"
+        }
+      ]
     },
     {
       "cols": 5,
@@ -284,10 +346,21 @@
         "status": -51
       },
       "id": "hf_size_mismatch",
-      "kind": "hf_packed",
+      "kind": "reject",
+      "reader": "hf_packed",
       "rows": 12,
       "scale_kind": "BF16",
-      "scale_word": 16284
+      "scale_word": 16284,
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:642-661"
+          ],
+          "note": "a byte range that is not numel * dtype width is refused",
+          "upstream": "safetensors"
+        }
+      ]
     },
     {
       "cols": 5,
@@ -297,9 +370,288 @@
         "status": -53
       },
       "id": "hf_encode_rejects_minus_2",
-      "kind": "hf_encode",
+      "kind": "reject",
+      "reader": "hf_encode",
       "rows": 12,
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "src/transformers/integrations/bitnet.py:17-53"
+          ],
+          "note": "pack_weights expects values in {-1, 0, 1} and does not check them",
+          "upstream": "transformers"
+        }
+      ],
       "values_hex": "00000000ff00fffe0000000000000101ff00ff01ff0000ffff000100ffffff01ff0001000101ffffffff01ff000001ff0001ff01ff000001ff000100"
+    },
+    {
+      "description": "A packed U8 [2, 3] weight followed by its BF16 weight_scale; the file ends after the scale",
+      "expect": {
+        "begin": 228,
+        "check": 0,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 234,
+        "find": 0,
+        "has_next": true,
+        "next_begin": 234,
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "file_size": 236,
+      "id": "st_packed_weight_and_scale",
+      "kind": "safetensors",
+      "safetensors_hex": "dc000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e776569676874223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e7765696768745f7363616c65223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b362c385d7d7d",
+      "tensor": "model.layers.0.self_attn.q_proj.weight"
+    },
+    {
+      "description": "The BF16 [1] weight_scale ends the file",
+      "expect": {
+        "begin": 234,
+        "check": 0,
+        "dtype": "BF16",
+        "dtype_bits": 16,
+        "end": 236,
+        "find": 0,
+        "has_next": false,
+        "next_begin": 0,
+        "shape": [
+          1
+        ]
+      },
+      "file_size": 236,
+      "id": "st_scale_last",
+      "kind": "safetensors",
+      "safetensors_hex": "dc000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e776569676874223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e7765696768745f7363616c65223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b362c385d7d7d",
+      "tensor": "model.layers.0.self_attn.q_proj.weight_scale"
+    },
+    {
+      "description": "A zero-size tensor at the same begin holds no bytes and bounds nothing",
+      "expect": {
+        "begin": 285,
+        "check": 0,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 291,
+        "find": 0,
+        "has_next": true,
+        "next_begin": 291,
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "file_size": 293,
+      "id": "st_zero_size_neighbour",
+      "kind": "safetensors",
+      "safetensors_hex": "15010000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e776569676874223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c22656d707479223a7b226474797065223a22463332222c227368617065223a5b305d2c22646174615f6f666673657473223a5b302c305d7d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e7765696768745f7363616c65223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b362c385d7d7d",
+      "tensor": "model.layers.0.self_attn.q_proj.weight"
+    },
+    {
+      "description": "U8 [2, 3] needs 6 bytes; data_offsets give 5",
+      "error_class": "extent",
+      "expect": {
+        "begin": 148,
+        "check": -62,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 153,
+        "find": 0,
+        "has_next": true,
+        "next_begin": 153,
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "file_size": 155,
+      "id": "st_extent_not_numel_times_width",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "8c000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c355d7d2c2273223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b352c375d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:659-661"
+          ],
+          "note": "TensorInvalidInfo: end - begin != numel * width",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "w"
+    },
+    {
+      "description": "s begins at 4, inside w's 6 bytes",
+      "error_class": "extent",
+      "expect": {
+        "begin": 148,
+        "check": -62,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 154,
+        "find": 0,
+        "has_next": true,
+        "next_begin": 152,
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "file_size": 154,
+      "id": "st_overlapping_tensors",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "8c000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c2273223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b342c365d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:632-638"
+          ],
+          "note": "InvalidOffset: each tensor must begin where the previous one ended",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "w"
+    },
+    {
+      "description": "A truncated file: weight_scale needs bytes 6..8 of the data section, 7 remain",
+      "error_class": "extent",
+      "expect": {
+        "begin": 234,
+        "check": -62,
+        "dtype": "BF16",
+        "dtype_bits": 16,
+        "end": 236,
+        "find": 0,
+        "has_next": false,
+        "next_begin": 0,
+        "shape": [
+          1
+        ]
+      },
+      "file_size": 235,
+      "id": "st_past_end_of_file",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "dc000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e776569676874223a7b226474797065223a225538222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d2c226d6f64656c2e6c61796572732e302e73656c665f6174746e2e715f70726f6a2e7765696768745f7363616c65223a7b226474797065223a2242463136222c227368617065223a5b315d2c22646174615f6f666673657473223a5b362c385d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:420-422"
+          ],
+          "note": "MetadataIncompleteBuffer: the data section must end at the end of the file",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "model.layers.0.self_attn.q_proj.weight_scale"
+    },
+    {
+      "description": "Q2 is not a safetensors dtype",
+      "error_class": "container",
+      "expect": {
+        "begin": 94,
+        "check": -56,
+        "dtype": "Q2",
+        "dtype_bits": 0,
+        "end": 100,
+        "find": 0,
+        "has_next": false,
+        "next_begin": 0,
+        "shape": [
+          2,
+          3
+        ]
+      },
+      "file_size": 100,
+      "id": "st_unknown_dtype",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "56000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225132222c227368617065223a5b322c335d2c22646174615f6f666673657473223a5b302c365d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:416-418",
+            "safetensors/src/tensor.rs:867-891"
+          ],
+          "note": "the header does not deserialize: Q2 is no Dtype",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "w"
+    },
+    {
+      "description": "2^64 elements: the byte count does not fit in 64 bits",
+      "error_class": "extent",
+      "expect": {
+        "begin": 112,
+        "check": -62,
+        "dtype": "U8",
+        "dtype_bits": 8,
+        "end": 120,
+        "find": 0,
+        "has_next": false,
+        "next_begin": 0,
+        "shape": [
+          4294967296,
+          4294967296
+        ]
+      },
+      "file_size": 120,
+      "id": "st_shape_overflows",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "68000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a225538222c227368617065223a5b343239343936373239362c343239343936373239365d2c22646174615f6f666673657473223a5b302c385d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:642-650"
+          ],
+          "note": "ValidationOverflow: numel * bitsize does not fit",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "w"
+    },
+    {
+      "description": "Three F4 elements are 12 bits, not whole bytes",
+      "error_class": "length",
+      "expect": {
+        "begin": 92,
+        "check": -51,
+        "dtype": "F4",
+        "dtype_bits": 4,
+        "end": 94,
+        "find": 0,
+        "has_next": false,
+        "next_begin": 0,
+        "shape": [
+          3
+        ]
+      },
+      "file_size": 94,
+      "id": "st_sub_byte_not_whole_bytes",
+      "kind": "reject",
+      "reader": "safetensors",
+      "safetensors_hex": "54000000000000007b225f5f6d657461646174615f5f223a7b22666f726d6174223a227074227d2c2277223a7b226474797065223a224634222c227368617065223a5b335d2c22646174615f6f666673657473223a5b302c325d7d7d",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "safetensors/src/tensor.rs:652-654"
+          ],
+          "note": "MisalignedSlice",
+          "upstream": "safetensors"
+        }
+      ],
+      "tensor": "w"
     }
   ]
 }

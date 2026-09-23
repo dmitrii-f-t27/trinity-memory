@@ -113,6 +113,7 @@ def gguf_tensor(remote: Remote, name: str):
     status, info, _ = remote.header_walk(lambda p: f.gguf_find(p, name))
     if status != 0:
         raise f.FormatError(status)
+    f.gguf_check(info, remote.size)
     size = f.gguf_tensor_bytes(info)
     if size == 0:
         raise FixtureError(f"{remote.key}: {name} has ggml type {info.tensor_type}, not a ternary layout")
@@ -133,6 +134,7 @@ def safetensors_tensor(remote: Remote, name: str):
     if status != 0:
         raise f.FormatError(status)
     _, info, dtype = f.safetensors_find(prefix, name)
+    f.safetensors_check(info, remote.size)
     return info, dtype, remote.read(info.begin, info.end)
 
 

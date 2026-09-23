@@ -49,7 +49,8 @@ static void status_classes_and_geometry(void) {
     assert(TF_ERR_MISALIGNED == TFS_LLAMA_ERR_MISALIGNED && TF_ERR_EXTENT == TFS_LLAMA_ERR_EXTENT);
     assert(TF_ERR_FORMAT == TFS_PRISM_ERR_FORMAT && TF_ERR_LENGTH == TFS_PRISM_ERR_LENGTH);
     assert(TF_ERR_CAPACITY == TFS_PRISM_ERR_CAPACITY && TF_ERR_CODE == TFS_PRISM_ERR_CODE);
-    assert(TF_ERR_SCALE_NONFINITE == TFS_PRISM_ERR_SCALE_NONFINITE);
+    assert(TF_ERR_SCALE_NONFINITE == TFS_PRISM_ERR_SCALE_NONFINITE && TF_ERR_PADDING == TFS_PRISM_ERR_PADDING);
+    assert(TF_ERR_CONTAINER == TFS_HF_ERR_CONTAINER && TF_ERR_EXTENT == TFS_HF_ERR_EXTENT);
     assert(TF_ERR_LENGTH == TFS_BITNET_ERR_LENGTH && TF_ERR_CAPACITY == TFS_BITNET_ERR_CAPACITY);
     assert(TF_ERR_CODE == TFS_BITNET_ERR_CODE && TF_ERR_SCALE_NONFINITE == TFS_BITNET_ERR_SCALE_NONFINITE);
     assert(TF_ERR_LENGTH == TFS_HF_ERR_LENGTH && TF_ERR_CAPACITY == TFS_HF_ERR_CAPACITY);
@@ -113,6 +114,9 @@ static void scale_classes_and_base3(void) {
         }
         for (uint32_t n = 0; n < 5; ++n)
             assert(tf_b3_value(b, n) == tfs_llama_b3_trit(b, n) && tf_b3_value(b, n) == tfs_prism_b3_trit(b, n));
+        bool padded = tf_b3_padding_nonzero(b);
+        assert(padded == tfs_llama_b3_padded(b) && padded == tfs_prism_b3_padded(b));
+        if (tf_b3_canonical(b, 4)) assert(!padded);
     }
 }
 
@@ -281,13 +285,23 @@ static void gguf_type_rule(void) {
             bool prism = m & 1, bitnet = m & 2;
             assert(tf_format_of_gguf(t, prism, bitnet) == tfs_llama_gguf_format(t, prism, bitnet));
         }
+    /* tf_gguf_check's offset and extent rules on synthetic records: a Q2_0
+     * tensor of `rows` rows of 64 weights (18 bytes each). */
     for (uint64_t offset = 0; offset < 300; offset += 7)
-        for (uint64_t next = 0; next < 400; next += 33) {
-            uint64_t bytes = offset % 97;
-            int32_t spec = tfs_llama_gguf_offset_status(offset, 32, bytes, next);
-            int32_t impl = offset % 32 ? TF_ERR_MISALIGNED : (next && offset + bytes > next ? TF_ERR_EXTENT : 0);
-            assert(spec == impl);
-        }
+        for (uint64_t next = 0; next < 400; next += 33)
+            for (int has_next = 0; has_next < 2; ++has_next)
+                for (uint64_t file = 200; file < 800; file += 150) {
+                    uint64_t rows = 1 + offset % 5, bytes = 18 * rows;
+                    TFTensorInfo info;
+                    memset(&info, 0, sizeof info);
+                    info.tensor_type = 42; info.dims = 2; info.d0 = 64; info.d1 = rows; info.d2 = 1; info.d3 = 1;
+                    info.alignment = 32; info.data_start = 96; info.offset = offset;
+                    info.has_next = has_next && next >= offset; info.next_offset = info.has_next ? next : 0;
+                    int32_t spec = tfs_llama_gguf_offset_status(offset, 32, bytes, info.has_next, info.next_offset);
+                    if (spec == 0) spec = tfs_llama_gguf_file_status(96, offset, bytes, file);
+                    if (spec == 0) spec = TF_Q2_0;
+                    assert(tf_gguf_check(&info, file) == spec);
+                }
 }
 
 /* ---- JSON vectors ---------------------------------------------------------- */
@@ -398,7 +412,9 @@ static void document_constants(int64_t root) {
 /* The status class a vector declares must be the status it expects. */
 static int32_t error_status(int64_t vector) {
     static const struct { const char *token; int32_t status; } table[] = {
-        {"length", TF_ERR_LENGTH}, {"code", TF_ERR_CODE}, {"scale_nonfinite", TF_ERR_SCALE_NONFINITE},
+        {"format", TF_ERR_FORMAT}, {"length", TF_ERR_LENGTH}, {"capacity", TF_ERR_CAPACITY}, {"code", TF_ERR_CODE},
+        {"padding", TF_ERR_PADDING}, {"truncated", TF_ERR_TRUNCATED}, {"container", TF_ERR_CONTAINER},
+        {"not_found", TF_ERR_NOT_FOUND}, {"scale_nonfinite", TF_ERR_SCALE_NONFINITE},
         {"type_ambiguous", TF_ERR_TYPE_AMBIGUOUS}, {"layout_unsupported", TF_ERR_LAYOUT_UNSUPPORTED},
         {"misaligned", TF_ERR_MISALIGNED}, {"extent", TF_ERR_EXTENT}};
     int64_t at = member(vector, "error_class");
@@ -423,19 +439,22 @@ static void block_vector(int64_t vector, bool prism) {
     assert(fa == fb && memcmp(flags_a, flags_b, sizeof flags_a) == 0);
     if (status < 0) {
         assert(fa == status);
-        int64_t silent = member(vector, "silent");
-        if (silent >= 0) {
-            /* The trits do not depend on the scale: patch every scale to 1.0. */
+        /* Silent output: the trits of the upstream loop, which reads neither
+         * the scale nor a padding digit, from both the implementation and the
+         * spec, and the raw scale words. */
+        for (int64_t entry = tokens[need(vector, "silent_output")].first; entry >= 0; entry = tokens[entry].next) {
+            if (member(entry, "values_hex") < 0) continue;
             size_t per = tf_block_elements(format), bytes = tf_block_bytes(format);
-            static uint8_t patched[MAX_BYTES];
-            memcpy(patched, data, size);
-            for (size_t blk = 0; blk < count / per; ++blk) {
-                patched[blk * bytes + tf_scale_offset(format)] = 0x00;
-                patched[blk * bytes + tf_scale_offset(format) + 1] = 0x3c;
+            assert(size == count / per * bytes);
+            for (size_t e = 0; e < count; ++e) {
+                got[e] = tf_block_value(format, data, e / per * bytes, e % per);
+                want[e] = prism ? tfs_prism_weight(format, data, e / per * bytes, e % per)
+                                : tfs_llama_weight(format, data, e / per * bytes, e % per);
             }
-            assert(tf_decode_blocks(format, patched, size, count, got, MAX_WEIGHTS, scales_a, MAX_WORDS) >= 0);
-            check_values(silent, got, count);
-            size_t n = words(silent, "scale_words", scales_b);
+            check_values(entry, got, count);
+            assert(memcmp(got, want, count * sizeof got[0]) == 0);
+            size_t n = words(entry, "scale_words", scales_b);
+            assert(n == count / per);
             for (size_t blk = 0; blk < n; ++blk)
                 assert(scales_b[blk] == ((uint32_t)data[blk * bytes + tf_scale_offset(format)]
                                          | (uint32_t)data[blk * bytes + tf_scale_offset(format) + 1] << 8));
@@ -457,23 +476,32 @@ static void block_vector(int64_t vector, bool prism) {
     }
     int64_t intended = member(vector, "intended");
     if (intended >= 0) {
-        /* Silent cases: the declared reading succeeds; the intended layout
-         * reproduces the same bytes from other values. */
-        int64_t fmt_at = need(intended, "format");
-        int32_t intended_format = text_is(fmt_at, "PQ2_0") ? TF_PQ2_0 : TF_Q1_0;
+        int32_t intended_format = format_id(intended);
         size_t intended_count = (size_t)integer(intended, "count");
         size_t n = values_hex(intended, "values_hex", expected);
         assert(n == intended_count);
         static int32_t intent[MAX_WEIGHTS];
+        static uint32_t intent_scales[MAX_WORDS];
         memcpy(intent, expected, n * sizeof intent[0]);
         size_t per = tf_block_elements(intended_format);
-        if (member(intended, "scale_words") >= 0) {
-            size_t sw = words(intended, "scale_words", scales_b);
-            assert(sw == n / per);
-            assert(tf_encode_blocks(intended_format, intent, n, scales_b, sw, out_a, sizeof out_a) == (int64_t)size);
+        size_t sw = words(intended, "scale_words", intent_scales);
+        assert(sw == n / per);
+        if (member(intended, "data_hex") >= 0) {
+            /* Corruption: the original bytes decode to the intended values; the
+             * corrupted bytes decode without error to other values or scales. */
+            static uint8_t original[MAX_BYTES];
+            size_t original_size = hex(intended, "data_hex", original, sizeof original);
+            assert(original_size == size && memcmp(original, data, size) != 0);
+            assert(tf_decode_blocks(intended_format, original, size, n, want, MAX_WEIGHTS, scales_b, MAX_WORDS) >= 0);
+            assert(memcmp(want, intent, n * sizeof want[0]) == 0 && memcmp(scales_b, intent_scales, sw * sizeof scales_b[0]) == 0);
+            assert(memcmp(intent, got, n * sizeof got[0]) != 0 || memcmp(intent_scales, scales_a, sw * sizeof scales_a[0]) != 0);
+        } else {
+            /* Layout confusion: the intended layout reproduces the same bytes
+             * from other values. */
+            assert(tf_encode_blocks(intended_format, intent, n, intent_scales, sw, out_a, sizeof out_a) == (int64_t)size);
             assert(memcmp(out_a, data, size) == 0);
+            assert(memcmp(intent, got, (n < count ? n : count) * sizeof got[0]) != 0);
         }
-        assert(memcmp(intent, got, (n < count ? n : count) * sizeof got[0]) != 0);
     }
 }
 
@@ -510,17 +538,20 @@ static void gguf_vector(int64_t vector) {
     assert(info.tensor_type == (uint32_t)integer(expect, "ggml_type") && info.offset == (uint64_t)integer(expect, "offset"));
     assert(info.prism == boolean(expect, "prism") && info.bitnet == boolean(expect, "bitnet"));
     assert(info.alignment == (uint64_t)integer(expect, "alignment") && info.next_offset == (uint64_t)integer(expect, "next_offset"));
+    assert(info.has_next == boolean(expect, "has_next") && info.data_start == (uint64_t)integer(expect, "data_start"));
+    uint64_t file_size = (uint64_t)integer(vector, "file_size");
     int64_t check = integer(expect, "check");
-    assert(tf_gguf_check(&info) == check);
+    assert(tf_gguf_check(&info, file_size) == check);
     /* The same decision from the spec's rules. */
     int32_t spec = tfs_llama_gguf_format(info.tensor_type, info.prism, info.bitnet);
     if (spec >= 0) {
-        int32_t aligned = tfs_llama_gguf_offset_status(info.offset, info.alignment, 0, 0);
+        int32_t aligned = tfs_llama_gguf_offset_status(info.offset, info.alignment, 0, false, 0);
         uint64_t bytes = spec > 0 ? spec_tensor_bytes(spec, info.d0, info.d0 * info.d1 * info.d2 * info.d3) : 0;
         if (aligned) spec = aligned;
         else if (spec > 0 && bytes == 0) spec = TFS_LLAMA_ERR_LENGTH;
         else if (spec > 0) {
-            int32_t extent = tfs_llama_gguf_offset_status(info.offset, info.alignment, bytes, info.next_offset);
+            int32_t extent = tfs_llama_gguf_offset_status(info.offset, info.alignment, bytes, info.has_next, info.next_offset);
+            if (!extent) extent = tfs_llama_gguf_file_status(info.data_start, info.offset, bytes, file_size);
             if (extent) spec = extent;
             if (member(expect, "tensor_bytes") >= 0) assert(bytes == (uint64_t)integer(expect, "tensor_bytes"));
         }
@@ -541,13 +572,18 @@ static void i2s_vector(int64_t vector) {
     assert(fa == fb && memcmp(flags_a, flags_b, sizeof flags_a) == 0);
     if (error_status(vector)) assert(status == error_status(vector));
     if (status < 0) {
-        int64_t silent = member(vector, "silent");
-        if (silent >= 0) {
+        for (int64_t entry = tokens[need(vector, "silent_output")].first; entry >= 0; entry = tokens[entry].next) {
+            if (member(entry, "values_hex") < 0) continue;
+            /* The codes do not depend on the scale: read them with a scale of 1.0. */
+            assert(status == TF_ERR_SCALE_NONFINITE);
             static uint8_t patched[MAX_BYTES];
             memcpy(patched, data, size);
             patched[count / 4] = 0; patched[count / 4 + 1] = 0; patched[count / 4 + 2] = 0x80; patched[count / 4 + 3] = 0x3f;
             assert(tf_decode_i2s(patched, size, count, got, MAX_WEIGHTS, &sa) >= 0);
-            check_values(silent, got, count);
+            check_values(entry, got, count);
+            uint32_t word = (uint32_t)data[count / 4] | (uint32_t)data[count / 4 + 1] << 8
+                            | (uint32_t)data[count / 4 + 2] << 16 | (uint32_t)data[count / 4 + 3] << 24;
+            assert(word == (uint32_t)integer(entry, "scale_word"));
         }
         return;
     }
@@ -708,6 +744,83 @@ static void onnx_encode_vector(int64_t vector) {
     for (size_t i = 0; i < sizeof out_a; ++i) assert(out_a[i] == 0x77 && out_b[i] == 0x77);
 }
 
+static void safetensors_vector(int64_t vector) {
+    static uint8_t header[4096], st_arena[4096];
+    static TMJsonToken st_tokens[512];
+    size_t size = hex(vector, "safetensors_hex", header, sizeof header);
+    int64_t name = need(vector, "tensor");
+    int64_t expect = need(vector, "expect");
+    uint64_t file_size = (uint64_t)integer(vector, "file_size");
+    TFSafeInfo info;
+    assert(tf_safetensors_find(header, size, tokens[name].text, tokens[name].text_size, st_tokens, 512, st_arena,
+                               sizeof st_arena, &info) == integer(expect, "find"));
+    int64_t dtype = need(expect, "dtype");
+    assert(info.dtype_size == tokens[dtype].text_size && memcmp(info.dtype, tokens[dtype].text, info.dtype_size) == 0);
+    uint64_t dims[4] = {info.d0, info.d1, info.d2, info.d3}, numel = 1;
+    size_t n = 0;
+    for (int64_t at = tokens[need(expect, "shape")].first; at >= 0; at = tokens[at].next, ++n) {
+        assert(n < 4 && dims[n] == tokens[at].uinteger);
+        numel = dims[n] && numel > UINT64_MAX / dims[n] ? UINT64_MAX : numel * dims[n]; /* saturating */
+    }
+    assert(n == info.dims);
+    assert(info.begin == (uint64_t)integer(expect, "begin") && info.end == (uint64_t)integer(expect, "end"));
+    assert(info.dtype_bits == (uint64_t)integer(expect, "dtype_bits") && info.has_next == boolean(expect, "has_next"));
+    assert(info.next_begin == (uint64_t)integer(expect, "next_begin"));
+    int64_t check = integer(expect, "check");
+    assert(tf_safetensors_check(&info, file_size) == check);
+    /* The spec states the widths of the checkpoints' dtypes and the extent rule. */
+    uint64_t spec_bits = tfs_hf_dtype_bits(info.dtype, info.dtype_size);
+    if (spec_bits) assert(spec_bits == info.dtype_bits);
+    assert(tfs_hf_safetensors_status(info.dtype_bits, numel, info.begin, info.end, info.has_next, info.next_begin,
+                                     file_size) == check);
+    if (error_status(vector)) assert(check == error_status(vector));
+}
+
+/* Negative vectors: a declared reject class needs kind "reject"; every
+ * reject, flag or silent vector carries its upstream readers' view, each
+ * citing lines of a file pinned for that upstream in the document. */
+static bool known_cite(int64_t upstreams, int64_t key, const TMJsonToken *cite) {
+    int64_t up = tm_json_field(tokens, token_count, upstreams, tokens[key].text, tokens[key].text_size);
+    assert(up >= 0);
+    size_t colon = 0;
+    while (colon < cite->text_size && cite->text[colon] != ':') ++colon;
+    if (colon == 0 || colon + 1 >= cite->text_size) return false;
+    size_t dash = 0;
+    for (size_t i = colon + 1; i < cite->text_size; ++i) {
+        if (cite->text[i] == '-' && !dash && i > colon + 1) { dash = i; continue; }
+        if (cite->text[i] < '0' || cite->text[i] > '9') return false;
+    }
+    if (dash + 1 == cite->text_size) return false;
+    for (int64_t f = tokens[need(up, "files")].first; f >= 0; f = tokens[f].next)
+        if (tokens[f].text_size == colon && memcmp(tokens[f].text, cite->text, colon) == 0) return true;
+    return false;
+}
+
+static void negative_shape(int64_t root, int64_t vector) {
+    bool reject = text_is(need(vector, "kind"), "reject");
+    assert(reject == (member(vector, "error_class") >= 0));
+    bool negative = reject || member(vector, "flag_class") >= 0 || member(vector, "silent_class") >= 0;
+    int64_t views = member(vector, "silent_output");
+    assert(negative == (views >= 0));
+    if (!negative) return;
+    int64_t upstreams = need(root, "upstream");
+    size_t entries = 0;
+    for (int64_t entry = tokens[views].first; entry >= 0; entry = tokens[entry].next, ++entries) {
+        int64_t behaviour = need(entry, "behaviour");
+        bool unknown = text_is(behaviour, "unknown");
+        assert(unknown || text_is(behaviour, "decodes") || text_is(behaviour, "rejects")
+               || text_is(behaviour, "not_applicable"));
+        bool marked = false;
+        size_t cites = 0;
+        for (int64_t cite = tokens[need(entry, "cite")].first; cite >= 0; cite = tokens[cite].next, ++cites) {
+            if (text_is(cite, "UNKNOWN")) { marked = true; continue; }
+            assert(known_cite(upstreams, need(entry, "upstream"), &tokens[cite]));
+        }
+        assert(cites > 0 && marked == unknown && tokens[need(entry, "note")].text_size > 0);
+    }
+    assert(entries > 0);
+}
+
 static size_t replay(const char *family) {
     char path[128];
     snprintf(path, sizeof path, "conformance/formats_%s.json", family);
@@ -727,7 +840,9 @@ static size_t replay(const char *family) {
     bool prism = strcmp(family, "prismml") == 0;
     size_t vectors = 0;
     for (int64_t v = tokens[need(root, "vectors")].first; v >= 0; v = tokens[v].next, ++vectors) {
+        negative_shape(root, v);
         int64_t kind = need(v, "kind");
+        if (text_is(kind, "reject")) kind = need(v, "reader");
         if (text_is(kind, "block")) block_vector(v, prism);
         else if (text_is(kind, "block_encode")) block_encode_vector(v, prism);
         else if (text_is(kind, "gguf")) gguf_vector(v);
@@ -739,6 +854,7 @@ static size_t replay(const char *family) {
         else if (text_is(kind, "mlx_encode")) mlx_encode_vector(v);
         else if (text_is(kind, "onnx")) onnx_vector(v);
         else if (text_is(kind, "onnx_encode")) onnx_encode_vector(v);
+        else if (text_is(kind, "safetensors")) safetensors_vector(v);
         else { fprintf(stderr, "%s: unknown vector kind\n", path); abort(); }
     }
     assert(vectors > 0);
@@ -756,7 +872,7 @@ int main(void) {
     size_t total = 0;
     for (size_t i = 0; i < sizeof families / sizeof families[0]; ++i) total += replay(families[i]);
     printf("PASS spec/formats differential harness: status classes, geometry, 65536 f16/bf16 scale words, "
-           "256 base-3 bytes, random blocks and tensors in all formats, GGUF type ids, %zu vectors in 6 files "
-           "(spec and implementation)\n", total);
+           "256 base-3 bytes, random blocks and tensors in all formats, GGUF type ids and extents, %zu vectors in "
+           "6 files with their reject classes and upstream views (spec and implementation)\n", total);
     return 0;
 }

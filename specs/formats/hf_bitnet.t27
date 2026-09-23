@@ -13,12 +13,22 @@
 // rows is out_features (dimension 0). pack_weights pads rows to a multiple of
 // 4 but unpack_weights returns 4 * (rows / 4) rows and the BitLinear buffer
 // floors, so rows % 4 != 0 has no storage here.
+// The checkpoints are safetensors files, read as upstream
+// huggingface/safetensors@e246a2560645b7525f5775669ed816eb57c5bcc8
+// safetensors/src/tensor.rs reads them: :420-422 (read_metadata: the data
+// section ends exactly at the end of the file), :627-663 (Metadata::validate:
+// :632-638 each tensor begins where the previous one ended, :648-661 end -
+// begin == numel * bitsize / 8, whole bytes), :867-891 (Dtype::bitsize).
+// This spec states the extent rule for one tensor and the widths of the
+// dtypes that the checkpoints read here use (U8, U32, F16, BF16, F32).
 // phi^2 + 1/phi^2 = 3 | TRINITY
 module TrinityFormatsHfBitnetSpec {
     pub const TFS_HF_ERR_LENGTH: i32 = -51;
     pub const TFS_HF_ERR_CAPACITY: i32 = -52;
     pub const TFS_HF_ERR_CODE: i32 = -53;
+    pub const TFS_HF_ERR_CONTAINER: i32 = -56;
     pub const TFS_HF_ERR_SCALE_NONFINITE: i32 = -58;
+    pub const TFS_HF_ERR_EXTENT: i32 = -62;
     pub const TFS_HF_FLAG_OUTSIDE_TERNARY: u32 = 0;
     pub const TFS_HF_FLAG_SCALE_NEGATIVE: u32 = 2;
     pub const TFS_HF_FLAG_SCALE_ZERO: u32 = 3;
@@ -96,6 +106,36 @@ module TrinityFormatsHfBitnetSpec {
         return 0;
     }
 
+    // Bits per element of the dtypes used by the checkpoints read here
+    // (tensor.rs Dtype::bitsize); 0 for any other name.
+    pub fn tfs_hf_dtype_bits(dtype: []u8, size: usize) -> u64 {
+        // "U8", "U32", "F16", "F32", "BF16" as ASCII codes.
+        if (size == 2 && dtype[0] == 85 && dtype[1] == 56) { return 8; }
+        if (size == 3 && dtype[0] == 85 && dtype[1] == 51 && dtype[2] == 50) { return 32; }
+        if (size == 3 && dtype[0] == 70 && dtype[1] == 49 && dtype[2] == 54) { return 16; }
+        if (size == 3 && dtype[0] == 70 && dtype[1] == 51 && dtype[2] == 50) { return 32; }
+        if (size == 4 && dtype[0] == 66 && dtype[1] == 70 && dtype[2] == 49 && dtype[3] == 54) { return 16; }
+        return 0;
+    }
+
+    // Extent of one safetensors tensor with absolute [begin, end) in a file of
+    // file_size bytes: CONTAINER for an unknown dtype (bits 0), EXTENT when
+    // numel * bits overflows, LENGTH when it is not whole bytes, EXTENT when
+    // end - begin differs from it, when the bytes reach next_begin (the least
+    // begin of another nonzero-size tensor at or above begin; has_next false:
+    // none) or when they run past the end of the file.
+    pub fn tfs_hf_safetensors_status(bits: u64, numel: u64, begin: u64, end: u64, has_next: bool,
+                                     next_begin: u64, file_size: u64) -> i32 {
+        if (bits == 0) { return TFS_HF_ERR_CONTAINER; }
+        var top: u64 = 0xffffffffffffffff;
+        if (numel != 0 && bits > top / numel) { return TFS_HF_ERR_EXTENT; }
+        if ((bits * numel) % 8 != 0) { return TFS_HF_ERR_LENGTH; }
+        if (end - begin != (bits * numel) / 8) { return TFS_HF_ERR_EXTENT; }
+        if (has_next && end > next_begin) { return TFS_HF_ERR_EXTENT; }
+        if (end > file_size) { return TFS_HF_ERR_EXTENT; }
+        return 0;
+    }
+
     invariant hf_four_codes_per_byte { assert TFS_HF_VALUES_PER_ITEM * TFS_HF_CODE_BITS == 8; }
     invariant hf_scale_is_one_word_per_tensor { assert TFS_HF_SCALE_BITS_BF16 == 16; }
 
@@ -123,5 +163,20 @@ module TrinityFormatsHfBitnetSpec {
         assert tfs_hf_bf16_class(16284) == 0 && tfs_hf_bf16_class(16394) == 0;
         assert tfs_hf_bf16_class(32704) == TFS_HF_ERR_SCALE_NONFINITE && tfs_hf_bf16_class(65408) == TFS_HF_ERR_SCALE_NONFINITE;
         assert tfs_hf_bf16_class(32768) == 1 && tfs_hf_bf16_class(49024) == 2;
+    }
+    test "hf safetensors extents" {
+        var u8name: [2]u8 = [85, 56];
+        var bf16name: [4]u8 = [66, 70, 49, 54];
+        var other: [3]u8 = [73, 54, 52];
+        assert tfs_hf_dtype_bits(u8name, 2) == 8 && tfs_hf_dtype_bits(bf16name, 4) == 16 && tfs_hf_dtype_bits(other, 3) == 0;
+        // BitNet b1.58 2B4T model.layers.0.self_attn.q_proj.weight: U8 [640, 2560]
+        // at file bytes 672931828..674570228 of the 1178623988-byte model.safetensors at 04c3b9ad.
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, false, 0, 1178623988) == 0;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570227, false, 0, 1178623988) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570000, 1178623988) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, true, 674570228, 1178623988) == 0;
+        assert tfs_hf_safetensors_status(8, 1638400, 672931828, 674570228, false, 0, 674570227) == TFS_HF_ERR_EXTENT;
+        assert tfs_hf_safetensors_status(4, 3, 100, 102, false, 0, 200) == TFS_HF_ERR_LENGTH;
+        assert tfs_hf_safetensors_status(0, 3, 100, 103, false, 0, 200) == TFS_HF_ERR_CONTAINER;
     }
 }

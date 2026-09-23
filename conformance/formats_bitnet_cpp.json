@@ -63,7 +63,9 @@
       "group_size_mismatch": "group-128 bytes read as group-64 Q2_0 (synthetic); every byte is a valid code",
       "i2s_layout_1x4": "I2_S bytes of bitnet.cpp's x86 build without ACT_PARALLEL read as ACT_PARALLEL",
       "i2s_layout_arm": "I2_S bytes of bitnet.cpp's ARM build read as the x86 ACT_PARALLEL layout",
-      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values"
+      "payload_corrupted": "a corrupted code byte that still holds valid codes decodes to other weights",
+      "q1_0_payload": "a corrupted Q1_0 byte; every bit pattern is a valid pair of +-1 values",
+      "scale_corrupted": "a corrupted scale that stays finite and positive rescales its block"
     },
     "type_ids": {
       "I2_S": 36,
@@ -104,7 +106,9 @@
       "files": [
         "ggml/include/ggml.h",
         "ggml/src/ggml.c",
-        "src/llama-arch.cpp"
+        "ggml/src/gguf.cpp",
+        "src/llama-arch.cpp",
+        "src/llama-model-loader.h"
       ],
       "repo": "isHuangXin/llama.cpp"
     }
@@ -176,6 +180,16 @@
       "flag_class": "trailer_nonzero",
       "id": "i2s_real_block_scale_and_trailer",
       "kind": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "src/ggml-bitnet-mad.cpp:51-96"
+          ],
+          "note": "quantize_i2_s writes the n/4 code bytes and the scale; the 28 bytes after the scale keep what the output buffer held, and no pinned code reads them",
+          "upstream": "bitnet.cpp"
+        }
+      ],
       "source": {
         "block": {
           "begin": 665032320,
@@ -217,7 +231,27 @@
       },
       "flag_class": "outside_ternary",
       "id": "i2s_code3",
-      "kind": "i2s"
+      "kind": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "unknown",
+          "cite": [
+            "UNKNOWN",
+            "ggml/src/ggml.c:931-937"
+          ],
+          "note": "the I2_S type traits name dequantize_row_i2_s as to_float; its definition was not found at the pins",
+          "upstream": "bitnet.cpp-llama.cpp"
+        },
+        {
+          "behaviour": "unknown",
+          "cite": [
+            "UNKNOWN",
+            "src/ggml-bitnet-mad.cpp:198-295"
+          ],
+          "note": "the x86 dot kernel multiplies the raw 2-bit code, 3 included; how the code offset is removed afterwards was not traced",
+          "upstream": "bitnet.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -240,7 +274,18 @@
       },
       "flag_class": "scale_negative",
       "id": "i2s_negative_scale",
-      "kind": "i2s"
+      "kind": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "unknown",
+          "cite": [
+            "UNKNOWN",
+            "src/ggml-bitnet-mad.cpp:198-295"
+          ],
+          "note": "the dot kernels multiply the raw 2-bit codes; where the f32 scale is applied was not found at the pins",
+          "upstream": "bitnet.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -263,7 +308,18 @@
       },
       "flag_class": "scale_zero",
       "id": "i2s_zero_scale",
-      "kind": "i2s"
+      "kind": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "unknown",
+          "cite": [
+            "UNKNOWN",
+            "src/ggml-bitnet-mad.cpp:198-295"
+          ],
+          "note": "the dot kernels multiply the raw 2-bit codes; where the f32 scale is applied was not found at the pins",
+          "upstream": "bitnet.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -274,11 +330,21 @@
         "status": -58
       },
       "id": "i2s_scale_nan",
-      "kind": "i2s",
-      "silent": {
-        "scale_word": 2143289344,
-        "values_hex": "0001000001ff00ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"
-      }
+      "kind": "reject",
+      "reader": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "unknown",
+          "cite": [
+            "UNKNOWN",
+            "src/ggml-bitnet-mad.cpp:198-295"
+          ],
+          "note": "no pinned code checks the scale; the codes read as these trits",
+          "scale_word": 2143289344,
+          "upstream": "bitnet.cpp",
+          "values_hex": "0001000001ff00ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"
+        }
+      ]
     },
     {
       "count": 128,
@@ -289,11 +355,21 @@
         "status": -58
       },
       "id": "i2s_scale_inf",
-      "kind": "i2s",
-      "silent": {
-        "scale_word": 2139095040,
-        "values_hex": "0001000001ff00ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"
-      }
+      "kind": "reject",
+      "reader": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "unknown",
+          "cite": [
+            "UNKNOWN",
+            "src/ggml-bitnet-mad.cpp:198-295"
+          ],
+          "note": "no pinned code checks the scale; the codes read as these trits",
+          "scale_word": 2139095040,
+          "upstream": "bitnet.cpp",
+          "values_hex": "0001000001ff00ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"
+        }
+      ]
     },
     {
       "count": 128,
@@ -304,7 +380,19 @@
         "status": -51
       },
       "id": "i2s_trailer_missing",
-      "kind": "i2s"
+      "kind": "reject",
+      "reader": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "rejects",
+          "cite": [
+            "ggml/src/ggml.c:1314-1321",
+            "src/llama-model-loader.h:46-48"
+          ],
+          "note": "the tensor is n/4 + 32 bytes; data past the end of the file is refused",
+          "upstream": "bitnet.cpp-llama.cpp"
+        }
+      ]
     },
     {
       "count": 64,
@@ -315,7 +403,19 @@
         "status": -51
       },
       "id": "i2s_count_not_whole_blocks",
-      "kind": "i2s"
+      "kind": "reject",
+      "reader": "i2s",
+      "silent_output": [
+        {
+          "behaviour": "unknown",
+          "cite": [
+            "UNKNOWN",
+            "ggml/src/ggml.c:931-937"
+          ],
+          "note": "I2_S has block size 1, so gguf.cpp accepts any row length; how the x86 kernels read a tensor that is not whole 128-weight blocks was not traced",
+          "upstream": "bitnet.cpp-llama.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -343,7 +443,18 @@
         "values_hex": "01000100010000ff000100010101010001ff00ff00ff000101ff0000000100ff000001010100ffffffff01ffffff01010100ffff01010001010100ff01ffffffff00ffff00ff00ffff0100000101ffff01ffff0101ff0000ff00ff0100010001ff00ff010100ff00ff000101000100ffffffff01ffff0100ff0000ff000100ffff00000000ff0001010100ffffffffff0000ff000100ffff0001ff0000ff01ff0100000101000000010100ffff00ff0101ff000000ff000101ff0000ffffff00ff0100010101ff01010100ff00ff0100ff0101ff00ff0001000000ffffff0000010001ff000000ffff01ff000001ffff00ff01010000ffff010101000000ff01"
       },
       "kind": "i2s",
-      "silent_class": "i2s_layout_arm"
+      "silent_class": "i2s_layout_arm",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "src/ggml-bitnet-mad.cpp:51-96",
+            "src/ggml-bitnet-mad.cpp:151-194"
+          ],
+          "note": "a build with the default ACT_PARALLEL layout (:51-96) reads bytes that the arm writer produced as other weights",
+          "upstream": "bitnet.cpp"
+        }
+      ]
     },
     {
       "count": 256,
@@ -371,7 +482,18 @@
         "values_hex": "01000100010000ff000100010101010001ff00ff00ff000101ff0000000100ff000001010100ffffffff01ffffff01010100ffff01010001010100ff01ffffffff00ffff00ff00ffff0100000101ffff01ffff0101ff0000ff00ff0100010001ff00ff010100ff00ff000101000100ffffffff01ffff0100ff0000ff000100ffff00000000ff0001010100ffffffffff0000ff000100ffff0001ff0000ff01ff0100000101000000010100ffff00ff0101ff000000ff000101ff0000ffffff00ff0100010101ff01010100ff00ff0100ff0101ff00ff0001000000ffffff0000010001ff000000ffff01ff000001ffff00ff01010000ffff010101000000ff01"
       },
       "kind": "i2s",
-      "silent_class": "i2s_layout_1x4"
+      "silent_class": "i2s_layout_1x4",
+      "silent_output": [
+        {
+          "behaviour": "decodes",
+          "cite": [
+            "src/ggml-bitnet-mad.cpp:51-96",
+            "src/ggml-bitnet-mad.cpp:97-149"
+          ],
+          "note": "a build with the default ACT_PARALLEL layout (:51-96) reads bytes that the 1x4 writer produced as other weights",
+          "upstream": "bitnet.cpp"
+        }
+      ]
     },
     {
       "count": 128,
@@ -381,8 +503,19 @@
         "status": -53
       },
       "id": "i2s_encode_rejects_value_2",
-      "kind": "i2s_encode",
+      "kind": "reject",
+      "reader": "i2s_encode",
       "scale_word": 1065353216,
+      "silent_output": [
+        {
+          "behaviour": "not_applicable",
+          "cite": [
+            "src/ggml-bitnet-mad.cpp:65-72"
+          ],
+          "note": "quantize_i2_s writes code 0, 1 or 2 from the sign of each weight only",
+          "upstream": "bitnet.cpp"
+        }
+      ],
       "values_hex": "00010000010200ffff00010100ffffff01010001ffff010101ff0101010000010100ff000000000001ffff0101ff000000ff0101010101ff000101000100010001ff0001000000010101010101ff0101ff0100ff010101ff0001ffff000000ff00ff00010101ffff01ff01ff01010000ffff00010001000001000001ff00ff01"
     }
   ]
