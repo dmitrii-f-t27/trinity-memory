@@ -1,4 +1,4 @@
-include README.ru.md
+include README.ru.md CHANGELOG.md LICENSE NOTICE
 recursive-include rtl *.v *.sv *.tcl
 recursive-include docs *.md
 recursive-include examples *.json
@@ -10,8 +10,16 @@ include setup.py
 recursive-include t27 *.t27 *.md
 recursive-include native *.c *.cpp *.h *.lock
 recursive-include tools *.sh *.py
-recursive-include tests *.c *.sv *.v *.tcl *.json *.md *.mjs
+recursive-include tests *.c *.h *.sh *.sv *.v *.tcl *.json *.md *.mjs
 recursive-include specs *.t27 *.md *.json
 recursive-include conformance *.json *.md
 recursive-include .trinity *.json
 recursive-include fixtures *.json
+recursive-include schemas *.json
+# Ternary Check: the committed reports and the composite Action (ternary-check/).
+include reports/ternary-check.json reports/ternary-check.html
+recursive-include reports/ternary-check *.json
+recursive-include ternary-check *.yml *.md *.sh
+# Files the test suite reads: the workflows it checks and the committed Edge report.
+recursive-include .github/workflows *.yml
+include reports/t27/edge.json
