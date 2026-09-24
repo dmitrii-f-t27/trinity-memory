@@ -6,7 +6,9 @@
 // (t27/rtl/fpga_uart_loader.t27) and the block-RAM store behind its write and
 // read ports (t27/rtl/fpga_loader_store.t27). This file only instantiates and
 // connects them and the two Xilinx clock primitives. Synthesize with
-// `read_verilog -nomem2reg` (fpga/ax7203/Makefile, target loader-synth).
+// `read_verilog -nomem2reg` and the 1K x 36 block RAM library, as the block-RAM
+// benches (fpga/ax7203/Makefile, target loader-synth): every memory of the design
+// is then in the RAMB36 configuration those benches verified on the board.
 //
 // Protocol: docs/uart-loader.md. Clocking as in the block-RAM bench
 // (fpga/ax7203/tms_bram_bench.v): CLOCK_MODE 1 is 25 MHz from the tick
@@ -92,8 +94,7 @@ module tms_uart_loader_ax7203 #(
 
     // ---- store: the write and read ports of the loader ----
     wire        wr_valid, wr_last, wr_ready, wr_idle, rd_req, rd_ready, rd_valid;
-    wire [31:0] wr_addr, wr_data, rd_addr, store_log2;
-    wire [7:0]  rd_byte;
+    wire [31:0] wr_addr, wr_data, rd_addr, rd_byte, store_log2;
     TrinityFpgaLoaderStoreT27 store (
         .clk(clk), .rst_n(!rst), .en(tick), .ready(),
         .wr_valid(wr_valid), .wr_addr(wr_addr), .wr_data(wr_data), .rd_req(rd_req), .rd_addr(rd_addr),
@@ -108,7 +109,7 @@ module tms_uart_loader_ax7203 #(
         .rx_valid(rx_valid), .rx_data(rx_data), .rx_ferr(rx_ferr),
         .rx_bytes(rx_bytes), .rx_ferrs(rx_ferrs), .rx_false(rx_false),
         .line_idle(line_idle), .tx_busy(tx_busy), .wr_ready(wr_ready), .wr_idle(wr_idle),
-        .rd_ready(rd_ready), .rd_valid(rd_valid), .rd_data({24'd0, rd_byte}),
+        .rd_ready(rd_ready), .rd_valid(rd_valid), .rd_data(rd_byte),
         .store_log2(store_log2), .default_div(BAUD_DIV), .timeout_clocks(TIMEOUT_CLOCKS),
         .probation_clocks(PROBATION_CLOCKS), .build_id(BUILD_ID),
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),

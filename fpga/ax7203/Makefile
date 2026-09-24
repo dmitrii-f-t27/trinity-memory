@@ -291,14 +291,12 @@ LOADER_BUILD     ?= $(BUILD)/loader-clk$(CLOCK_MODE)-div$(BAUD_DIV)
 LOADER_REPORT    ?= $(ROOT)/reports/fpga/loader-build-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)
 LOADER_SOURCES   := $(foreach c,$(LOADER_CORES),$(RTL)/$(c).v) $(CURDIR)/tms_uart_loader.v
 LOADER_STAMP     := $(LOADER_BUILD)/params-$(CLOCK_MODE)-$(BAUD_DIV)-$(LOADER_TIMEOUT)-$(LOADER_PROBATION)-$(BUILD_ID).stamp
-# synth_xilinx with yosys' own block RAM library minus the cascaded 64K-deep mode: left
-# to itself yosys builds the 256 KiB store from RAMB36 pairs joined by CASCADEOUT/IN,
-# and nextpnr-xilinx placed the two halves of a pair in different columns and failed
-# to route the cascade ("Failed to route arc 0 of net store.mem...CAS_B", 2026-09-24).
-loader_synth     = $(YOSYS_SYNTH) -top $(1) -run :map_memory; \
-                   memory_libmap -lib +/xilinx/lutrams_xc5v.txt -lib +/xilinx/brams_xc4v.txt -D HAS_SIZE_36; \
-                   techmap -map +/xilinx/lutrams_xc5v_map.v -map +/xilinx/brams_xc6v_map.v; \
-                   $(YOSYS_SYNTH) -top $(1) -run map_ffram:
+# Synthesis as the block-RAM benches (bram_synth: the RAMB36E1 1K x 36 configuration
+# only, brams_x36.txt), the one configuration verified on this board. Left to itself
+# yosys built the 256 KiB store from cascaded RAMB36 pairs, which nextpnr-xilinx did not
+# route ("Failed to route arc 0 of net store.mem...CAS_B"); without the cascade it chose
+# 32K x 1, and that build (6bc63ca4) read back every even byte as its odd neighbour on
+# the board (docs/uart-loader.md).
 
 loader-gen: $(LOADER_SOURCES)
 
@@ -309,8 +307,8 @@ $(LOADER_STAMP):
 	mkdir -p $(dir $@); rm -f $(dir $@)params-*.stamp; touch $@
 
 loader-synth: $(LOADER_BUILD)/$(LOADER_TOP).json
-$(LOADER_BUILD)/$(LOADER_TOP).json: $(LOADER_SOURCES) $(LOADER_STAMP)
-	$(YOSYS) -q -l $(call REL,$(LOADER_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(LOADER_SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set BAUD_DIV $(BAUD_DIV) -set TIMEOUT_CLOCKS $(LOADER_TIMEOUT) -set PROBATION_CLOCKS $(LOADER_PROBATION) $(LOADER_TOP); $(call loader_synth,$(LOADER_TOP)); setundef -zero -params; tee -o $(call REL,$(LOADER_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(LOADER_BUILD))/$(LOADER_TOP).json"
+$(LOADER_BUILD)/$(LOADER_TOP).json: $(LOADER_SOURCES) $(CURDIR)/brams_x36.txt $(LOADER_STAMP)
+	$(YOSYS) -q -l $(call REL,$(LOADER_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(LOADER_SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set BAUD_DIV $(BAUD_DIV) -set TIMEOUT_CLOCKS $(LOADER_TIMEOUT) -set PROBATION_CLOCKS $(LOADER_PROBATION) $(LOADER_TOP); $(call bram_synth,$(LOADER_TOP)); setundef -zero -params; tee -o $(call REL,$(LOADER_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(LOADER_BUILD))/$(LOADER_TOP).json"
 
 loader-pnr: $(LOADER_BUILD)/$(LOADER_TOP).fasm
 $(LOADER_BUILD)/$(LOADER_TOP).fasm: $(LOADER_BUILD)/$(LOADER_TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc
@@ -337,7 +335,7 @@ loader-flash:
 loader-report:
 	python3 $(ROOT)/tools/fpga-build-report.py --artifact-dir $(LOADER_BUILD) --commit $(BUILD_ID) --source local \
 	  --top $(LOADER_TOP) --output $(LOADER_REPORT) \
-	  --flow "make -C fpga/ax7203 loader-bit CLOCK_MODE=$(CLOCK_MODE) BAUD_DIV=$(BAUD_DIV) LOADER_TIMEOUT=$(LOADER_TIMEOUT) LOADER_PROBATION=$(LOADER_PROBATION) FREQ_MHZ=$(FREQ_MHZ); yosys $(YOSYS_SYNTH) split around memory_libmap with brams_xc4v.txt -D HAS_SIZE_36 (no cascade), read_verilog -nomem2reg; nextpnr-xilinx placers $(BRAM_PLACERS) seeds $(SEEDS) --router $(BRAM_ROUTER) --timing-allow-fail; prjxray fasm2frames + xc7frames2bit ($(IMAGE))"
+	  --flow "make -C fpga/ax7203 loader-bit CLOCK_MODE=$(CLOCK_MODE) BAUD_DIV=$(BAUD_DIV) LOADER_TIMEOUT=$(LOADER_TIMEOUT) LOADER_PROBATION=$(LOADER_PROBATION) FREQ_MHZ=$(FREQ_MHZ); yosys $(YOSYS_SYNTH) split around memory_libmap with fpga/ax7203/brams_x36.txt, read_verilog -nomem2reg; nextpnr-xilinx placers $(BRAM_PLACERS) seeds $(SEEDS) --router $(BRAM_ROUTER) --timing-allow-fail; prjxray fasm2frames + xc7frames2bit ($(IMAGE))"
 
 loader-clean:
 	rm -rf $(BUILD)/loader-clk*
