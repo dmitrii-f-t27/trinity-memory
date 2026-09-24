@@ -6,12 +6,17 @@ module TrinityFpgaUartRxT27;
 // the synchroniser of the benches); the receiver reads rx2, rx3 is its previous
 // value.
 //
-// Idle: a low rx2 starts a character. The start bit is sampled once more half a
-// bit later (baud_div >> 1 clocks): still low, the character goes on; high again,
-// it was a glitch shorter than half a bit (false_starts + 1) and the receiver
-// is idle again. The data bits and the stop bit are sampled baud_div clocks apart,
-// so every sample sits in the middle of its bit; with 9.5 bits from the start
-// edge to the stop sample the host's bit period may differ by a few per cent.
+// Idle: a low rx2 starts a character. The start bit is sampled again
+// (baud_div >> 1) clocks after the line fell, plus the 0..1 clock between the fall
+// and the clock edge that saw it: count starts at (baud_div >> 1) - 1 because IDLE
+// and the last step of START take one clock each, and every sample reads rx2, so
+// the synchroniser delay cancels. That puts the sample 0..1 clock after the middle
+// of the bit for an even baud_div, -0.5..+0.5 clock for an odd one. Still low
+// there, the character goes on; high again, it was a glitch of about half a bit or
+// less (false_starts + 1) and the receiver is idle again. The data bits and the
+// stop bit are sampled baud_div clocks apart, each as close to the middle of its bit;
+// the host's bit period may then be off by about 5 % either way at 217 clocks per
+// bit (arithmetic in docs/uart-loader.md, "Receiver").
 // At the stop sample `valid` is high for one clock with `data`, and `ferr` says
 // the stop bit was low (a framing error, framing_errors + 1). After a framing
 // error the receiver waits for the line to go high before it looks for the next
@@ -51,7 +56,7 @@ fn on_clock(uart_rx: bool, baud_div: u32) {
     valid = false;
     if (state == R_IDLE) {
         if (!rx2) {
-            count = baud_div >> 1;
+            count = (baud_div >> 1) - 1;
             state = R_START;
         }
     } else if (state == R_START) {
