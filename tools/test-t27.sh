@@ -57,6 +57,6 @@ node tests/matrix_wasm.mjs
 "${PYTHON:-python3}" tests/t27_storage.py --compiler "$T27_ROOT/target/release/t27c"
 "${PYTHON:-python3}" -m unittest tests.test_bram_trit_packing -v
 "${PYTHON:-python3}" -m unittest tests.test_ddr3_pattern tests.test_ddr3_uart_debug tests.test_ddr3_reader tests.test_uart_loader -v
-"${PYTHON:-python3}" -m unittest tests.test_bridge_link tests.test_bridge_fpga -v
+"${PYTHON:-python3}" -m unittest tests.test_ddr3_matvec tests.test_bridge_link tests.test_bridge_fpga -v
 sh tools/check-specs.sh
 echo "PASS native C regeneration and reference/CLI parity"
