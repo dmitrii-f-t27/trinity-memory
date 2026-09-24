@@ -52,6 +52,11 @@ fn select_bank(b: u32, w0: u32, w1: u32, w2: u32, w3: u32) -> u32 {
     return w3;
 }
 
+fn pick(sel: bool, x: u32, y: u32) -> u32 {
+    if (sel) { return x; }
+    return y;
+}
+
 // The word with byte `ln` replaced by `v`.
 fn merge(word: u32, v: u32, ln: u32) -> u32 {
     var sh: u32 = ln << 3;
@@ -65,33 +70,35 @@ var merged: u32;
 var wr_ready: bool;
 var wr_idle: bool;
 var rd_ready: bool;
+var a_byte: u32;
+var a_word: u32;
 word_now = select_bank(bank, rd_b0, rd_b1, rd_b2, rd_b3);
 rdata = (word_now >> (lane << 3)) & 255;
 merged = merge(word_now, w_byte, lane);
 wr_ready = sstate == S_IDLE;
 wr_idle = sstate == S_IDLE;
 rd_ready = sstate == S_IDLE;
+a_byte = pick(wr_valid, wr_addr, rd_addr);
+a_word = (a_byte >> 2) & WORD_MASK;
 
 fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, rd_req: bool, rd_addr: u32) {
     rd_valid = false;
     if (sstate == S_IDLE) {
+        // One read address for both requests: two addresses would ask yosys for a
+        // third memory port, and it then builds the banks from LUT RAM.
+        if (wr_valid || rd_req) {
+            rd_b0 = mem_b0[a_word];
+            rd_b1 = mem_b1[a_word];
+            rd_b2 = mem_b2[a_word];
+            rd_b3 = mem_b3[a_word];
+            bank = (a_byte >> 16) & 3;
+            lane = a_byte & 3;
+        }
         if (wr_valid) {
-            rd_b0 = mem_b0[(wr_addr >> 2) & WORD_MASK];
-            rd_b1 = mem_b1[(wr_addr >> 2) & WORD_MASK];
-            rd_b2 = mem_b2[(wr_addr >> 2) & WORD_MASK];
-            rd_b3 = mem_b3[(wr_addr >> 2) & WORD_MASK];
-            bank = (wr_addr >> 16) & 3;
-            lane = wr_addr & 3;
-            w_word = (wr_addr >> 2) & WORD_MASK;
+            w_word = a_word;
             w_byte = wr_data & 255;
             sstate = S_MERGE;
         } else if (rd_req) {
-            rd_b0 = mem_b0[(rd_addr >> 2) & WORD_MASK];
-            rd_b1 = mem_b1[(rd_addr >> 2) & WORD_MASK];
-            rd_b2 = mem_b2[(rd_addr >> 2) & WORD_MASK];
-            rd_b3 = mem_b3[(rd_addr >> 2) & WORD_MASK];
-            bank = (rd_addr >> 16) & 3;
-            lane = rd_addr & 3;
             rd_valid = true;
         }
     } else {
