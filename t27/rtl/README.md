@@ -93,6 +93,20 @@ with original commit and byte hashes recorded in
   against the behavioural Wishbone memory with injected faults. See `docs/hardware.md`,
   "DDR3 read path (#62)".
 
+- UART loader (`fpga_uart_rx.t27`, `fpga_uart_loader.t27`, `fpga_loader_store.t27`,
+  wired by `fpga/ax7203/tms_uart_loader.v`, issue #63): an 8N1 receiver with
+  start-bit validation and framing-error count, a receive FIFO in block RAM, a
+  frame parser (`A5 5A`, command, sequence, address, length, payload, CRC-32 one
+  byte per clock), a 4096-byte staging buffer committed through a write port
+  (valid/ready/last/idle) only after the CRC matched, duplicate detection, an
+  inter-byte timeout, ack/nak and status lines with a check byte through the line
+  emitter, read-back as CRC frames through a read port, a baud change with a
+  fallback, and a 256 KiB block-RAM store behind the two ports.
+  `tests/test_uart_loader.py` checks the functions in C against
+  `tools/uart_loader_protocol.py` and runs the board top and the cores behind a
+  stalling memory in Icarus, every device byte against the model. See
+  `docs/uart-loader.md`.
+
 ## Current compiler boundaries
 
 - `trinity_dot_stream_t27` supports `ACC_WIDTH=2..32`; the native accumulator is
@@ -156,6 +170,10 @@ with original commit and byte hashes recorded in
   `fpga_ddr3_pattern.t27` the round stop is such a compare; it is unreachable
   below 2^31 rounds, and the Makefile accepts only `DDR3_PATTERN_ROUNDS` below
   2^31 (rewriting it would change the netlist of the builds that ran).
+- A module-level assignment of constants only (`ready = true;`) becomes an
+  `always @(*)` with an empty sensitivity list, which never runs in Icarus (the
+  output stays X); `fpga_loader_store.t27` uses registers with an initial value
+  for such outputs instead.
 
 Evidence from these tests is RTL simulation. Board runs, block RAM mapping and
 place-and-route of the FPGA designs built from these modules are recorded in

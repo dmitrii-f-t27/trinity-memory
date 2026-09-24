@@ -622,6 +622,26 @@ about 1 300 LUTs more than the pipelined store that only counts (2 750 LUTs). ne
 worst path for the estimate is the reset net spread across the die (11.7 of its 12.4 ns are
 routing), not the multiply-accumulate datapath.
 
+**Loading data over the UART (issue #63, 2026-09-24).** The benches above take their
+data from the bitstream; [uart-loader.md](uart-loader.md) adds a t27 receiver and a
+loader with per-chunk acknowledgement (CRC-32 frames, ack/nak with a reason,
+retransmission, read-back through CRC frames) into a 256 KiB block-RAM store. On the
+AX7203 (build 1d474000) the TMEM dense5 container of q_proj rows 0-319 (163 864 bytes)
+loaded in 41 chunks and read back identical at 115200 baud (11 374.5 B/s load, 99 % of
+the line rate for 4110-byte frames; 11 322.3 B/s read-back; ack 359.8 ms after the start
+of each 4096-byte chunk's write, median). In run 2 the corrupt and dropped chunks and an
+aborted half frame were each refused with a nak (`crc`, `timeout`) and acknowledged on
+the next attempt, the 64 garbage bytes before one frame were ignored without a nak, and a
+chunk sent again after its ack was answered `duplicate` and not committed. Baud trials
+at 230400 to 1500000 (16 384 bytes XOR a per-trial key at each rate, then the whole
+payload XOR a key twice at each of 921600, 1000000 and 1500000) changed every byte they loaded and read them back identical; that
+is not a reliability study
+([`reports/fpga/uart-loader-2026-09-24-1d474000/`](../reports/fpga/README.md)). Its
+first build put the store into RAMB36 32K x 1 and the staging buffer into 4K x 9 and
+read back every even byte as its odd neighbour; with every memory in the 1K x 36
+configuration of the benches it reads back identical. Narrower RAMB36 configurations in
+this flow are therefore unverified.
+
 **What this track does not measure, and why.** DDR and power. DDR3 on the
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open
 flow's support for those primitives is partial (gHashTag/trinity-fpga records an
