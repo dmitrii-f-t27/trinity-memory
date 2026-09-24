@@ -302,6 +302,7 @@
    }
   ],
   "unparsed_lines": [],
+  "joined_lines": [],
   "final": {
    "tag": "S",
    "calib_complete": 1,
@@ -316,13 +317,26 @@
    "lines": 14,
    "span_s": 10.491,
    "measured_hz": 83418709.3,
+   "standard_error_hz": 58881.8,
    "ppm_from_nominal": 1024.5,
    "note": "fit of the S lines' clock count over the host arrival times; the arrival jitter of the USB serial bridge (milliseconds) bounds its precision"
   },
   "reset": {
    "wraps_of_the_40_bit_count": null,
+   "wraps_within_capture": 0,
    "last_line_since_reset_s_if_no_wrap": 6390.543,
-   "note": "no load in this run: the time since reset is this value plus an unknown multiple of 2^40 clocks (3.665 h at 83.33 MHz)"
+   "note": "no load in this run: the time since reset is this value plus an unknown multiple of 2^40 clocks (3.665 h at 83.33 MHz) before the first line"
+  },
+  "calibration": {
+   "state_timeline": [
+    {
+     "state": 23,
+     "first_seen_clocks": 532216680387,
+     "first_seen_s": 6380.0637
+    }
+   ],
+   "last_line_before_calib_complete_clocks": null,
+   "first_line_with_calib_complete_clocks": 532216680387
   },
   "checks": {
    "header_line": null,
@@ -333,9 +347,40 @@
    "done_calibrate": true,
    "no_return_to_idle": true,
    "no_unparsed_lines_after_header": true,
-   "reset_at_load": null
+   "reset_at_load": null,
+   "clock_near_nominal": true,
+   "pattern_present": null,
+   "pattern_header": null,
+   "pattern_lanes": null,
+   "pattern_well_formed": null,
+   "pattern_no_wrong_bits": null,
+   "pattern_round_complete": null
   },
   "pass": true
  },
- "exit_status": 0
+ "exit_status": 0,
+ "redecoded": [
+  {
+   "utc": "2026-09-24T13:41:34.095Z",
+   "reason": "decoder of 1bc0673: 40-bit count unwrapped before the fit, clock_near_nominal, cut-off pass counts, pass continuity, MB/s and seconds at the nominal clock (review of #61)",
+   "tool_revision": {
+    "head": "1bc06739d1b768556b6271939de31b99a4cc8d6b",
+    "tracked_changes": true,
+    "tool_changed": false
+   },
+   "checks_before": {
+    "header_line": null,
+    "build_id": null,
+    "byte_lanes": null,
+    "ddr3_period_ps": null,
+    "calib_complete": true,
+    "done_calibrate": true,
+    "no_return_to_idle": true,
+    "no_unparsed_lines_after_header": true,
+    "reset_at_load": null
+   },
+   "pass_before": true,
+   "exit_status_before": 0
+  }
+ ]
 }

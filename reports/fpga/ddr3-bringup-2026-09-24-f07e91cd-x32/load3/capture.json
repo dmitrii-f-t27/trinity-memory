@@ -566,6 +566,7 @@
   },
   "reset": {
    "wraps_of_the_40_bit_count": 0,
+   "wraps_within_capture": 0,
    "reset_s": 14.652,
    "reset_minus_load_end_s": 0.005,
    "last_line_since_reset_s": 19.83
@@ -625,6 +626,7 @@
    "no_return_to_idle": true,
    "no_unparsed_lines_after_header": true,
    "reset_at_load": true,
+   "clock_near_nominal": true,
    "pattern_present": true,
    "pattern_header": null,
    "pattern_lanes": null,
@@ -634,5 +636,35 @@
   },
   "pass": true
  },
- "exit_status": 0
+ "exit_status": 0,
+ "redecoded": [
+  {
+   "utc": "2026-09-24T13:41:34.501Z",
+   "reason": "decoder of 1bc0673: 40-bit count unwrapped before the fit, clock_near_nominal, cut-off pass counts, pass continuity, MB/s and seconds at the nominal clock (review of #61)",
+   "tool_revision": {
+    "head": "1bc06739d1b768556b6271939de31b99a4cc8d6b",
+    "tracked_changes": true,
+    "tool_changed": false
+   },
+   "checks_before": {
+    "header_line": true,
+    "build_id": true,
+    "byte_lanes": true,
+    "ddr3_period_ps": true,
+    "calib_complete": true,
+    "done_calibrate": true,
+    "no_return_to_idle": true,
+    "no_unparsed_lines_after_header": true,
+    "reset_at_load": true,
+    "pattern_present": true,
+    "pattern_header": null,
+    "pattern_lanes": null,
+    "pattern_well_formed": null,
+    "pattern_no_wrong_bits": null,
+    "pattern_round_complete": null
+   },
+   "pass_before": true,
+   "exit_status_before": 0
+  }
+ ]
 }
