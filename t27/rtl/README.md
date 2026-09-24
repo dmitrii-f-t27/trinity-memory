@@ -128,6 +128,15 @@ with original commit and byte hashes recorded in
   adds, digit arithmetic is 16 bits wide. A heavy function called inside a
   branch of another function makes yosys spend minutes in `proc`; such values
   are computed into locals first and selected afterwards.
+- An ordering compare (`>=`, `>`, `<`) with arithmetic on a literal on one side
+  (`round + 1 >= rounds`, `a - 1 >= b`) is lowered by gen-verilog to a signed
+  compare (`$signed((round + 1)) >= $signed({1'b0, rounds})`) while gen-c keeps
+  it unsigned, so the two differ from 2^31 on (and `a - 1` at `a` = 0). `==`,
+  `a >= b` and `a + c >= b` stay unsigned; assigning the sum to a typed local
+  first (`var n: u32 = a + 1; ... n >= b`) gives an unsigned compare. In
+  `fpga_ddr3_pattern.t27` the round stop is such a compare; it is unreachable
+  below 2^31 rounds, and the Makefile accepts only `DDR3_PATTERN_ROUNDS` below
+  2^31 (rewriting it would change the netlist of the builds that ran).
 
 Evidence from these tests is RTL simulation. Board runs, block RAM mapping and
 place-and-route of the FPGA designs built from these modules are recorded in
