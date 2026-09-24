@@ -1,0 +1,1021 @@
+{
+ "schema": "trinity.ddr3-capture.v1",
+ "label": "x32 pattern test, seed 5, load 1",
+ "tool": "tools/fpga-ddr3-capture.py",
+ "board": {
+  "dna": "0x00389c0c2d85e85c",
+  "idcode": "0x3636093",
+  "uart": "/dev/cu.usbserial-110 115200 8N1"
+ },
+ "bitstream": {
+  "file": "build/fpga/ddr3-x32-pattern-seed5/tms_ddr3_ax7203.bit",
+  "report": "reports/fpga/ddr3-build-2026-09-24-7deeef16-x32-seed5/build.json",
+  "report_sha256": "a2239ad1fbe4a90261a07a2c7e0a9b5beeae461ccc793d94e25fb3fbf0ba88f8",
+  "report_sha256_from_sync": "ce1c7cba50bfa8ceebf33a3b0c2d11bacce3b3012c16649a0fe6280874dcd7eb",
+  "reproducible_identity": {
+   "bitstream_sha256_from_sync": "ce1c7cba50bfa8ceebf33a3b0c2d11bacce3b3012c16649a0fe6280874dcd7eb",
+   "fasm_sha256": "8d80e9f498cf8317db321128a72fd82f897e5635da151772cd2cabefffdfac69",
+   "frames_sha256": "9ca49a77dcd3c4023f1e86cb8ca3dbf190cb91212dfc22b48bdad81241cf799e",
+   "note": "a rebuild with the same inputs and tools reproduces these; bitstream.sha256 covers the .bit header with xc7frames2bit's date and time and identifies only this one file (the one to flash)"
+  },
+  "load_check": [
+   "ddr3-flash: build/fpga/ddr3-x32-pattern-seed5/tms_ddr3_ax7203.bit sha256 a2239ad1fbe4a90261a07a2c7e0a9b5beeae461ccc793d94e25fb3fbf0ba88f8 as in reports/fpga/ddr3-build-2026-09-24-7deeef16-x32-seed5/build.json (whole file)"
+  ]
+ },
+ "expect": {
+  "build_id": "7deeef16",
+  "lanes": 4,
+  "pattern": true,
+  "uart_debug_bist": false,
+  "period_ps": 3000,
+  "nominal_hz": 83333333.3
+ },
+ "run": {
+  "t0_utc": "2026-09-24T12:18:08.983Z",
+  "t0_note": "every *_s value is host seconds after t0 on one monotonic clock",
+  "steps": {
+   "idcode": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--detect"
+    ],
+    "started_utc": "2026-09-24T12:18:08.984Z",
+    "ended_utc": "2026-09-24T12:18:09.006Z",
+    "start_s": 0.0002,
+    "end_s": 0.0226,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "index 0:",
+     "\tidcode 0x3636093",
+     "\tmanufacturer xilinx",
+     "\tfamily artix a7 200t",
+     "\tmodel  xc7a200",
+     "\tirlength 6"
+    ]
+   },
+   "dna": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-dna"
+    ],
+    "started_utc": "2026-09-24T12:18:09.006Z",
+    "ended_utc": "2026-09-24T12:18:09.028Z",
+    "start_s": 0.0226,
+    "end_s": 0.0446,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"dna\": \"0x00389c0c2d85e85c\"}"
+    ]
+   },
+   "xadc_before": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-24T12:18:09.028Z",
+    "ended_utc": "2026-09-24T12:18:09.131Z",
+    "start_s": 0.0447,
+    "end_s": 0.148,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 54.8056, ",
+     "    \"maxtemp\": 55.4458, ",
+     "    \"mintemp\": 52.5466, ",
+     "\"raw\":  {\"0\": 42639, \"1\": 21704, \"2\": 39091, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21716, \"7\": 0},",
+     "\"vccint\": 0.993896, ",
+     "   \"maxvccint\": 0.995361, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.78931, ",
+     "   \"maxvccaux\": 1.7915, ",
+     "   \"minvccaux\": 1.78711, ",
+     "}"
+    ]
+   },
+   "load": {
+    "cmd": [
+     "make",
+     "-s",
+     "-C",
+     "fpga/ax7203",
+     "ddr3-flash",
+     "DDR3_BUILD=build/fpga/ddr3-x32-pattern-seed5",
+     "DDR3_FLASH_REPORT=reports/fpga/ddr3-build-2026-09-24-7deeef16-x32-seed5/build.json",
+     "OPENFPGALOADER=openFPGALoader",
+     "DDR3_CABLE=digilent_hs2"
+    ],
+    "started_utc": "2026-09-24T12:18:10.147Z",
+    "ended_utc": "2026-09-24T12:18:23.746Z",
+    "start_s": 1.1635,
+    "end_s": 14.762,
+    "returncode": 0,
+    "output": [
+     "ddr3-flash: build/fpga/ddr3-x32-pattern-seed5/tms_ddr3_ax7203.bit sha256 a2239ad1fbe4a90261a07a2c7e0a9b5beeae461ccc793d94e25fb3fbf0ba88f8 as in reports/fpga/ddr3-build-2026-09-24-7deeef16-x32-seed5/build.json (whole file)",
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "Open file DONE",
+     "Parse file DONE",
+     "load program",
+     "",
+     "Load SRAM: [====                                              ] 7.00%",
+     "",
+     "Load SRAM: [========                                          ] 15.00%",
+     "",
+     "Load SRAM: [============                                      ] 23.00%",
+     "",
+     "Load SRAM: [================                                  ] 31.00%",
+     "",
+     "Load SRAM: [====================                              ] 39.00%",
+     "",
+     "Load SRAM: [========================                          ] 47.00%",
+     "",
+     "Load SRAM: [============================                      ] 55.00%",
+     "",
+     "Load SRAM: [================================                  ] 63.00%",
+     "",
+     "Load SRAM: [====================================              ] 71.00%",
+     "",
+     "Load SRAM: [========================================          ] 79.00%",
+     "",
+     "Load SRAM: [============================================      ] 87.00%",
+     "",
+     "Load SRAM: [================================================  ] 95.00%",
+     "",
+     "Load SRAM: [==================================================] 100.00%",
+     "",
+     "Done",
+     "Shift IR 35",
+     "ir: 1 isc_done 1 isc_ena 0 init 1 done 1"
+    ]
+   },
+   "xadc_after": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-24T12:18:43.948Z",
+    "ended_utc": "2026-09-24T12:18:44.066Z",
+    "start_s": 34.9638,
+    "end_s": 35.0824,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 53.4867, ",
+     "    \"maxtemp\": 55.2227, ",
+     "    \"mintemp\": 52.3467, ",
+     "\"raw\":  {\"0\": 42474, \"1\": 21712, \"2\": 39071, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21711, \"7\": 0},",
+     "\"vccint\": 0.993164, ",
+     "   \"maxvccint\": 0.995361, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.78857, ",
+     "   \"maxvccaux\": 1.7915, ",
+     "   \"minvccaux\": 1.78711, ",
+     "}"
+    ]
+   }
+  },
+  "idcode": "0x3636093",
+  "dna": "0x00389c0c2d85e85c",
+  "xadc_before": {
+   "temp": 54.8056,
+   "maxtemp": 55.4458,
+   "mintemp": 52.5466,
+   "raw": {
+    "0": 42639,
+    "1": 21704,
+    "2": 39091,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21716,
+    "7": 0
+   },
+   "vccint": 0.993896,
+   "maxvccint": 0.995361,
+   "minvccint": 0.992432,
+   "vccaux": 1.78931,
+   "maxvccaux": 1.7915,
+   "minvccaux": 1.78711
+  },
+  "uart_error": null,
+  "xadc_after": {
+   "temp": 53.4867,
+   "maxtemp": 55.2227,
+   "mintemp": 52.3467,
+   "raw": {
+    "0": 42474,
+    "1": 21712,
+    "2": 39071,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21711,
+    "7": 0
+   },
+   "vccint": 0.993164,
+   "maxvccint": 0.995361,
+   "minvccint": 0.992432,
+   "vccaux": 1.78857,
+   "maxvccaux": 1.7915,
+   "minvccaux": 1.78711
+  },
+  "load_end_s": 14.762
+ },
+ "uart_transcript": {
+  "file": "uart.tsv",
+  "sha256": "5e64e3a9f41fa35aa36728d18d4235a246176e4bd6adbe7a4774bafbfe162bb7",
+  "lines": 80,
+  "raw_file": "uart-raw.txt",
+  "raw_sha256": "2a057e8f3735507c25687a4a3a0e1d06417577eac083d1607013d5f6b90f7485",
+  "raw_bytes": 1600
+ },
+ "decoded": {
+  "header": [
+   {
+    "tag": "H",
+    "build_id": "7deeef16",
+    "format": 1,
+    "byte_lanes": 4,
+    "ddr3_period_ps": 3000,
+    "t_s": 14.7608
+   }
+  ],
+  "status_lines": [
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 255,
+    "clocks_low40": 1746918288,
+    "t_s": 0.5584
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 255,
+    "clocks_low40": 1814027156,
+    "t_s": 1.3557
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 0,
+    "returns_to_idle": 0,
+    "clocks_low40": 4,
+    "t_s": 14.7608
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 14,
+    "returns_to_idle": 2,
+    "clocks_low40": 192281,
+    "t_s": 14.7608
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 4,
+    "clocks_low40": 282057,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 14,
+    "returns_to_idle": 6,
+    "clocks_low40": 463541,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 8,
+    "clocks_low40": 571337,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 14,
+    "returns_to_idle": 10,
+    "clocks_low40": 732786,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 12,
+    "clocks_low40": 860617,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 4,
+    "highest": 14,
+    "returns_to_idle": 14,
+    "clocks_low40": 1005257,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 17,
+    "clocks_low40": 1149897,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 14,
+    "returns_to_idle": 19,
+    "clocks_low40": 1338016,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 21,
+    "clocks_low40": 1439177,
+    "t_s": 14.7818
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 14,
+    "returns_to_idle": 23,
+    "clocks_low40": 1606098,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 25,
+    "clocks_low40": 1728457,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 14,
+    "returns_to_idle": 27,
+    "clocks_low40": 1875433,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 2,
+    "highest": 14,
+    "returns_to_idle": 29,
+    "clocks_low40": 2017737,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 32,
+    "clocks_low40": 2162377,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 14,
+    "returns_to_idle": 34,
+    "clocks_low40": 2350585,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 14,
+    "returns_to_idle": 36,
+    "clocks_low40": 2451657,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 17,
+    "returns_to_idle": 37,
+    "clocks_low40": 2596297,
+    "t_s": 14.8038
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 17,
+    "returns_to_idle": 37,
+    "clocks_low40": 69849801,
+    "t_s": 15.6028
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 17,
+    "returns_to_idle": 37,
+    "clocks_low40": 136958669,
+    "t_s": 16.4076
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 17,
+    "returns_to_idle": 37,
+    "clocks_low40": 204067537,
+    "t_s": 17.2122
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 17,
+    "returns_to_idle": 37,
+    "clocks_low40": 271176405,
+    "t_s": 18.0161
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 18,
+    "highest": 18,
+    "returns_to_idle": 37,
+    "clocks_low40": 286678926,
+    "t_s": 18.2072
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 38,
+    "clocks_low40": 286678944,
+    "t_s": 18.2072
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 39,
+    "clocks_low40": 286816343,
+    "t_s": 18.2072
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 39,
+    "clocks_low40": 354069847,
+    "t_s": 19.0076
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 39,
+    "clocks_low40": 421178715,
+    "t_s": 19.8288
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 39,
+    "clocks_low40": 488287583,
+    "t_s": 20.6337
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 39,
+    "clocks_low40": 555396451,
+    "t_s": 21.4291
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 18,
+    "highest": 18,
+    "returns_to_idle": 39,
+    "clocks_low40": 570931307,
+    "t_s": 21.6164
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 40,
+    "clocks_low40": 570931325,
+    "t_s": 21.6164
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 18,
+    "returns_to_idle": 42,
+    "clocks_low40": 571124309,
+    "t_s": 21.6164
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 44,
+    "clocks_low40": 571213364,
+    "t_s": 21.64
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 18,
+    "returns_to_idle": 46,
+    "clocks_low40": 571393312,
+    "t_s": 21.64
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 47,
+    "clocks_low40": 571502644,
+    "t_s": 21.64
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 47,
+    "clocks_low40": 638756148,
+    "t_s": 22.4438
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 47,
+    "clocks_low40": 705865016,
+    "t_s": 23.2417
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 47,
+    "clocks_low40": 772973884,
+    "t_s": 24.05
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 47,
+    "clocks_low40": 840082752,
+    "t_s": 24.8447
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 18,
+    "highest": 18,
+    "returns_to_idle": 47,
+    "clocks_low40": 855587174,
+    "t_s": 25.0356
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 48,
+    "clocks_low40": 855587195,
+    "t_s": 25.0356
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 18,
+    "returns_to_idle": 50,
+    "clocks_low40": 855780255,
+    "t_s": 25.0356
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 52,
+    "clocks_low40": 855869231,
+    "t_s": 25.0356
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 18,
+    "returns_to_idle": 54,
+    "clocks_low40": 856049293,
+    "t_s": 25.0356
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 56,
+    "clocks_low40": 856158511,
+    "t_s": 25.0356
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 57,
+    "clocks_low40": 856303151,
+    "t_s": 25.0606
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 57,
+    "clocks_low40": 923556655,
+    "t_s": 25.8424
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 57,
+    "clocks_low40": 990665523,
+    "t_s": 26.6492
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 57,
+    "clocks_low40": 1057774391,
+    "t_s": 27.4571
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 57,
+    "clocks_low40": 1124883259,
+    "t_s": 28.2597
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 18,
+    "highest": 18,
+    "returns_to_idle": 57,
+    "clocks_low40": 1140377683,
+    "t_s": 28.4453
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 58,
+    "clocks_low40": 1140377701,
+    "t_s": 28.4453
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 18,
+    "returns_to_idle": 60,
+    "clocks_low40": 1140570613,
+    "t_s": 28.4453
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 60,
+    "clocks_low40": 1140659740,
+    "t_s": 28.4659
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 60,
+    "clocks_low40": 1207913244,
+    "t_s": 29.2715
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 60,
+    "clocks_low40": 1275022112,
+    "t_s": 30.0762
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 60,
+    "clocks_low40": 1342130980,
+    "t_s": 30.8858
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 60,
+    "clocks_low40": 1409239848,
+    "t_s": 31.6853
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 18,
+    "highest": 18,
+    "returns_to_idle": 60,
+    "clocks_low40": 1424697141,
+    "t_s": 31.8767
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 61,
+    "clocks_low40": 1424697159,
+    "t_s": 31.8767
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 1,
+    "highest": 18,
+    "returns_to_idle": 63,
+    "clocks_low40": 1424890318,
+    "t_s": 31.8767
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 0,
+    "highest": 18,
+    "returns_to_idle": 65,
+    "clocks_low40": 1424979198,
+    "t_s": 31.8767
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 66,
+    "clocks_low40": 1425123838,
+    "t_s": 31.8767
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 66,
+    "clocks_low40": 1492377342,
+    "t_s": 32.6852
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 66,
+    "clocks_low40": 1559486210,
+    "t_s": 33.4756
+   },
+   {
+    "tag": "S",
+    "calib_complete": 0,
+    "state": 17,
+    "highest": 18,
+    "returns_to_idle": 66,
+    "clocks_low40": 1626595078,
+    "t_s": 34.2833
+   }
+  ],
+  "unparsed_lines": [],
+  "joined_lines": [],
+  "final": {
+   "tag": "S",
+   "calib_complete": 0,
+   "state": 17,
+   "highest": 18,
+   "returns_to_idle": 66,
+   "clocks_low40": 1626595078,
+   "t_s": 34.2833
+  },
+  "clock": {
+   "nominal_hz": 83333333.3,
+   "lines": 67,
+   "span_s": 19.522,
+   "measured_hz": 83335532.7,
+   "standard_error_hz": 12717.0,
+   "ppm_from_nominal": 26.4,
+   "note": "fit of the S lines' clock count over the host arrival times; the arrival jitter of the USB serial bridge (milliseconds) bounds its precision"
+  },
+  "reset": {
+   "wraps_of_the_40_bit_count": 0,
+   "wraps_within_capture": 0,
+   "reset_s": 14.77,
+   "reset_minus_load_end_s": 0.008,
+   "last_line_since_reset_s": 19.514
+  },
+  "calibration": {
+   "state_timeline": [
+    {
+     "state": 0,
+     "first_seen_clocks": 4,
+     "first_seen_s": 0.0
+    },
+    {
+     "state": 1,
+     "first_seen_clocks": 192281,
+     "first_seen_s": 0.0023
+    },
+    {
+     "state": 4,
+     "first_seen_clocks": 1005257,
+     "first_seen_s": 0.0121
+    },
+    {
+     "state": 2,
+     "first_seen_clocks": 2017737,
+     "first_seen_s": 0.0242
+    },
+    {
+     "state": 17,
+     "first_seen_clocks": 2596297,
+     "first_seen_s": 0.0312
+    },
+    {
+     "state": 18,
+     "first_seen_clocks": 286678926,
+     "first_seen_s": 3.4401
+    }
+   ],
+   "last_line_before_calib_complete_clocks": 1626595078,
+   "first_line_with_calib_complete_clocks": null
+  },
+  "checks": {
+   "header_line": true,
+   "build_id": true,
+   "byte_lanes": true,
+   "ddr3_period_ps": true,
+   "calib_complete": false,
+   "done_calibrate": false,
+   "no_return_to_idle": false,
+   "no_unparsed_lines_after_header": true,
+   "reset_at_load": true,
+   "clock_near_nominal": true,
+   "pattern_present": false,
+   "pattern_header": false,
+   "pattern_lanes": null,
+   "pattern_well_formed": true,
+   "pattern_no_wrong_bits": true,
+   "pattern_round_complete": false
+  },
+  "pass": false,
+  "pattern": {
+   "header": {},
+   "bytes_per_burst": 32,
+   "region_bytes": null,
+   "passes": [],
+   "partial_pass_at_end": null,
+   "problems": [],
+   "timeout": null,
+   "done": null,
+   "totals": {
+    "passes": 0,
+    "clean_passes": 0,
+    "rounds_complete": 0,
+    "bad_bursts": 0,
+    "bit_errors": 0,
+    "bytes_written_and_read_back": null
+   },
+   "min_write_to_read_clocks": null,
+   "min_write_to_read_s": null,
+   "clock_hz_used": 83333333.3,
+   "notes": [
+    "pattern_test_*_MBps: region bytes over the phase's controller clocks (first request presented to last ack), with the in-order single-master access of this test, refresh and row changes included; it is not the stage-2 throughput measurement",
+    "*_s, pattern_test_*_MBps and min_write_to_read_s convert clocks at clock_hz_used, the nominal controller clock when the report gives one (the PLL output; the fit in `clock` is limited by the host's arrival jitter)",
+    "min_write_to_read: a bound from the design, not a measurement: every burst's read request is accepted at least hold + bursts - 1 controller clocks after its write request (all writes are acknowledged before the first read, at most one request per clock); no longer retention is claimed",
+    "a pass covers the burst addresses 0 .. bursts-1 once for write and once for read-back; the counts are per pass, bursts and 64-bit words counted once however many bits are wrong"
+   ]
+  }
+ },
+ "exit_status": 1,
+ "redecoded": [
+  {
+   "utc": "2026-09-24T13:41:32.938Z",
+   "reason": "decoder of 1bc0673: 40-bit count unwrapped before the fit, clock_near_nominal, cut-off pass counts, pass continuity, MB/s and seconds at the nominal clock (review of #61)",
+   "tool_revision": {
+    "head": "1bc06739d1b768556b6271939de31b99a4cc8d6b",
+    "tracked_changes": true,
+    "tool_changed": false
+   },
+   "checks_before": {
+    "header_line": true,
+    "build_id": true,
+    "byte_lanes": true,
+    "ddr3_period_ps": true,
+    "calib_complete": false,
+    "done_calibrate": false,
+    "no_return_to_idle": false,
+    "no_unparsed_lines_after_header": true,
+    "reset_at_load": true,
+    "pattern_present": false,
+    "pattern_header": false,
+    "pattern_lanes": null,
+    "pattern_well_formed": true,
+    "pattern_no_wrong_bits": true,
+    "pattern_round_complete": false
+   },
+   "pass_before": false,
+   "exit_status_before": 1
+  }
+ ]
+}

@@ -1,0 +1,96 @@
+{
+ "schema": "trinity.ddr3-rebuild-identity.v1",
+ "written_utc": "2026-09-24T13:38:09Z",
+ "purpose": "Which committed builds a given source tree reproduces: FASM, frames and .bit from the sync word (the whole-file .bit sha256 differs in every build: xc7frames2bit writes its date and time into the header)",
+ "tools": "native yosys 0.69 (143eb14f), native nextpnr-xilinx 0.9.7 (0eae9fbb) with build/fpga/chipdb-nextpnr-0.9.7, prjxray fasm2frames + xc7frames2bit of regymm/openxc7@sha256:eced1cdd..., prjxray-db a90f27c1",
+ "builds": [
+  {
+   "build": "7deeef16 x16 pattern test, seed 3 (DDR3_SEEDS=3)",
+   "report": "reports/fpga/ddr3-build-2026-09-24-7deeef16-x16/build.json",
+   "source_tree_head": "c7d5db4a72afcbcbd30621a7117d240e4bb6bbff",
+   "tracked_changes": null,
+   "nextpnr_choice": "heap_seed3 timing met; tried placers 'heap' seeds '3' in this order, stopping at the first that met timing",
+   "routed_fmax_clk_ctrl": "83.74 MHz (PASS at 83.33 MHz)",
+   "rebuilt": {
+    "fasm_sha256": "4e837c96b762653c39389a37c36d214f501117a6e0520d32538eb6c9c3f87645",
+    "frames_sha256": "b6edba61f98978b10f8ec0db4fecd0abd6426e644198545b07850b90f6a3be51",
+    "bitstream_sha256_from_sync": "f59a7743f9a9ec81005b2b84918364b00f655c355a8019bc39849763c3624563",
+    "bitstream_sha256_whole_file": "a9bc7927c7098529520f0c7d936cb768b8403d743432890795b88957d4755576"
+   },
+   "report_sha256_whole_file": "5715d9f7736c4cfa1dd0b8228b31723cf6f94f8b8174c831499674b4505016a6",
+   "equal_to_report": {
+    "fasm_sha256": true,
+    "frames_sha256": true,
+    "bitstream_sha256_from_sync": true
+   },
+   "whole_file_equal_to_report": false
+  },
+  {
+   "build": "7deeef16 x32 pattern test, seed 19 (DDR3_SEEDS=19)",
+   "report": "reports/fpga/ddr3-build-2026-09-24-7deeef16-x32-seed19/build.json",
+   "source_tree_head": "c7d5db4a72afcbcbd30621a7117d240e4bb6bbff",
+   "tracked_changes": null,
+   "nextpnr_choice": "heap_seed19 timing met; tried placers 'heap' seeds '19' in this order, stopping at the first that met timing",
+   "routed_fmax_clk_ctrl": "83.72 MHz (PASS at 83.33 MHz)",
+   "rebuilt": {
+    "fasm_sha256": "1aebac33ff30fd7399d2b4ce7dbaeaf3d86d17d2d104f1e1b43c637bbf65c05c",
+    "frames_sha256": "088136bec8816e00f0f206de1a10420c7ca73d0ca3b37c59d1e93efcb61d4d26",
+    "bitstream_sha256_from_sync": "dbcfc8ba30e452970911bbc2ad6bcacabe49be35bd470a49d2d1851538075413",
+    "bitstream_sha256_whole_file": "53df5df80906daf67d8505815f22520f8fd865ec4afbfddb6b5b0bb6d84c274c"
+   },
+   "report_sha256_whole_file": "1a6336fb1799dbeb3ee49a9450d03d8d4e449b29eae64e5fef882b1b55c981c6",
+   "equal_to_report": {
+    "fasm_sha256": true,
+    "frames_sha256": true,
+    "bitstream_sha256_from_sync": true
+   },
+   "whole_file_equal_to_report": false
+  },
+  {
+   "build": "0e94ee86 x16 UART_DEBUG_BIST, seed 9 (DDR3_SEEDS=9, DDR3_PATTERN=0 DDR3_UART_DEBUG_BIST=1)",
+   "report": "reports/fpga/ddr3-build-2026-09-24-0e94ee86-x16-uart-debug-bist/build.json",
+   "source_tree_head": "c7d5db4a72afcbcbd30621a7117d240e4bb6bbff",
+   "tracked_changes": null,
+   "nextpnr_choice": "heap_seed9 timing met; tried placers 'heap' seeds '9' in this order, stopping at the first that met timing",
+   "routed_fmax_clk_ctrl": "83.55 MHz (PASS at 83.33 MHz)",
+   "rebuilt": {
+    "fasm_sha256": "aa48db51c02662f640abc7e850f1491fe9788208357612cf1771f1e917bb35ba",
+    "frames_sha256": "bcd16e4358c82e0d54849e53859faba75ac920a817ffca981411d81402c402a6",
+    "bitstream_sha256_from_sync": "e6f0e565096d2f3ec5261cc8a3d17f4bf4f9eb82c5957cae48e3e219818326df",
+    "bitstream_sha256_whole_file": "9f2745c7ee3caea59b0ab9da83a85292648b586718eef5d106d8b3504c232b1f"
+   },
+   "report_sha256_whole_file": "1c59401fd5512fe9448e96ccde4fb9944c84d10958f04675f8f0ab22c87933df",
+   "equal_to_report": {
+    "fasm_sha256": true,
+    "frames_sha256": true,
+    "bitstream_sha256_from_sync": true
+   },
+   "whole_file_equal_to_report": false
+  },
+  {
+   "build": "#60 f07e91cd x32, seed 1, rebuilt from an export of master 00262ff (the rebuild loaded in ddr3-bringup-2026-09-24-f07e91cd-x32)",
+   "report": "reports/fpga/ddr3-build-2026-09-24-f07e91cd-x32/build.json",
+   "source_tree_head": "ecab5fc76cb23e0d8f804484397e65a9d73537d8",
+   "tracked_changes": null,
+   "nextpnr_choice": "heap_seed1 timing met; tried placers 'heap' seeds '1' in this order, stopping at the first that met timing",
+   "routed_fmax_clk_ctrl": "86.51 MHz (PASS at 83.33 MHz)",
+   "rebuilt": {
+    "fasm_sha256": "e18284b089e863d48bae16feb4e3522e272ec2cc2cc089f0cfa6e2aba5e2de5e",
+    "frames_sha256": "b95fc020c74249a7e74a8861b602c1218cd652fda06ec83554bdbad12ba83e21",
+    "bitstream_sha256_from_sync": "f409b7bb57341be55db0a054e02e9ea7a9f31eff6b53256827166999785f9291",
+    "bitstream_sha256_whole_file": "c9da358abd8b125cf21fda9c3e10a77a0b0a156bdd94822cedce46a37c5de1a6"
+   },
+   "report_sha256_whole_file": "b9c89cc9d54eb21182b97bddff9a50fdd59cc7051cda2c568f90b8c9ffa4edae",
+   "equal_to_report": {
+    "fasm_sha256": true,
+    "frames_sha256": true,
+    "bitstream_sha256_from_sync": true
+   },
+   "whole_file_equal_to_report": false
+  }
+ ],
+ "notes": [
+  "The first three were built at c7d5db4 (clean tracked tree) with BUILD_ID set to the id of the build of record: the top declares the UART_DEBUG_BIST nets only under `ifdef UART_DEBUG_BIST` again, so the other builds read the 7deeef1 text. At 01f44eb the same commands gave another placement (review builds, not committed: x16 seed 3 FASM cebca343..., 82.26 MHz; x32 seed 19 FASM d92dd70b...), because of two extra public wire names alone.",
+  "The f07e91cd x32 rebuild was built on 2026-09-24 from an export of 00262ff (source tree ecab5fc7, the tree of 00262ff); its frames were regenerated afterwards from its FASM (the build directory had kept only the FASM and the .bit), with the same prjxray and prjxray-db. Its .bit header time is 12:01:34, the report's 00:55:09."
+ ]
+}
