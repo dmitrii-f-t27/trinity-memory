@@ -1145,7 +1145,7 @@ of the #60 builds). How it meets the list above:
   the comparator behind `rst`: in a
   trial place and route of the x16 top with the test on the reset net directly,
   the routed critical path of seeds 1 and 3 of four ran from that comparator to
-  a flip-flop's SR pin, and no seed met the controller clock.
+  a flip-flop's SR pin, and none of the four met the controller clock.
 - *Counting.* A four-stage compare pipeline counts, per pass, the bursts and the
   64-bit words with a wrong bit, the wrong bits, the DQ bits ever wrong (bit j of
   the mask = DQ j: byte b of a word is byte lane `b % BYTE_LANES`) and the first
@@ -1190,6 +1190,50 @@ inputs. Address bits 12-24 are not simulated (the region would be too long for
 Icarus); the board run's region of 2^25 bursts has aliasing pairs for every one
 of the 25 bits. The model is not UberDDR3: its stall and ack timing are
 invented, and nothing here simulates the PHY or the memory chips.
+
+*Builds with the test (commit `7deeef16`, not flashed).* Same flow and tools as
+the 0.9.7 builds above (native yosys 0.69, native nextpnr-xilinx 0.9.7 with the
+seed search, prjxray of the image), `DDR3_PATTERN=1` with the defaults: 2^25
+bursts, hold 0, rounds 0 (until reset), watchdog 2^24 clocks; clean source tree
+at 7deeef16. Built into `build/fpga/ddr3-x16-pattern/` and `-x32-pattern/` (so
+the #60 x16 file that the board runs used is kept); reports in
+[`reports/fpga/ddr3-build-2026-09-24-7deeef16-x16/`](../reports/fpga/ddr3-build-2026-09-24-7deeef16-x16/)
+and `-x32/` (their `variant` names `PATTERN_TEST 1`, which the capture tool reads
+to expect the test's lines). An earlier build of both widths at d5f3423f was
+discarded before any use: in it the status reporter's `H` line could not reach
+the UART (the reset fix of 7deeef16, found in Icarus).
+
+| Variant | yosys LUT / FF / CARRY4 | nextpnr SLICE_LUTX / SLICE_FFX | Routed Fmax, controller clock (83.33 MHz) | Seed search | PLL tables | FASM sha256 |
+| --- | --- | --- | --- | --- | --- | --- |
+| x16, 0.9.7, test on | 6,907 / 4,135 / 317 | 9,434 / 4,135 | 83.74 MHz | seed 3 (1: 79.88, 2: 82.02 MHz) | PASS (MULT 5) | `4e837c96b762653c39389a37c36d214f501117a6e0520d32538eb6c9c3f87645` |
+| x32, 0.9.7, test on | 9,987 / 5,850 / 325 | 12,605 / 5,850 | 86.16 MHz | seed 1 | PASS (MULT 5) | `3e4ad24659aec2e8d247abfc8e666171b65125a24fce4d5876beef93a100316d` |
+
+| Variant | frames sha256 | `.bit` sha256 from the sync word | `.bit` sha256, whole file (local file of the report) |
+| --- | --- | --- | --- |
+| x16, test on | `b6edba61f98978b10f8ec0db4fecd0abd6426e644198545b07850b90f6a3be51` | `f59a7743f9a9ec81005b2b84918364b00f655c355a8019bc39849763c3624563` | `5715d9f7736c4cfa1dd0b8228b31723cf6f94f8b8174c831499674b4505016a6` |
+| x32, test on | `3ac103a8e26097156f07a9c1a8ed1919249deee6b4f4eb71c5139d5dc29d346a` | `c48eb9668b661cfb57f306c56a997cc640aebfb7a80cde8e06c1e0354160fa13` | `52bd1734b1ee159ca1db663d0137656f48860dc8b9ce93deefbd555e8900f2b7` |
+
+The test costs about 2,480 yosys LUTs and 1,510 flip-flops in x16 (3,170 and
+1,760 in x32) over the #60 netlists. The x16 build meets the controller clock by
+0.41 MHz, with the third seed. Where the routed critical path starts: x16 seeds 1
+and 2 at UberDDR3's calibration `lane` counter, seed 3 at its `stage2_pending`;
+x32 seed 1 at the `o_debug1` net (the calibration state, read by UberDDR3 and by
+the status reporter; the test does not read it). Before the commits, trial x16
+runs (logs not committed) with the test's reset taken straight from `rst` gave
+80.68 / 77.02 / 83.02 / 82.53 MHz for seeds 1-4 (stopped during seed 5), seeds 1
+and 3 with the critical path from the `rst` comparator to an SR pin and seed 2
+from an unnamed flip-flop through 13 LUT levels (not traced); after the reset
+change the critical paths of the trial and committed runs started in UberDDR3 or
+at `o_debug1`. No seed sweep of these netlists was run. The same limits as above
+apply: Fmax covers fabric register-to-register paths on the controller clock
+only. The fabric-clock LUT moved (x16 `SLICE_X162Y152/C6LUT`, x32
+`SLICE_X162Y188/A6LUT`). Buffer to pin through it: x16 DQS OSERDES 3.58-3.60 ns,
+CK 3.25-3.29 ns, inside the 2.47-4.63 ns of the x16 0.9.7 sweep; x32 DQS OSERDES
+2.41-3.24 ns but CK 4.74-4.78 ns, above the 2.26-3.94 ns of the x32 0.9.7 sweep
+(and below the 5.61 ns seen with 45a986b8). To run on the board (#61, with the
+board and approval): `tools/fpga-ddr3-capture.py --bit
+build/fpga/ddr3-x16-pattern/tms_ddr3_ax7203.bit --report
+reports/fpga/ddr3-build-2026-09-24-7deeef16-x16/build.json ...`.
 
 **Limits.** One board result: the x16 0.9.7 build calibrates and passes the
 self-test, which reads back 3/4 of U6 and cannot see some address faults (above);
