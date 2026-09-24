@@ -41,6 +41,13 @@
 // first read of a pass. The test's line requests and the status reporter's share
 // the emitter through the arbiter in the t27 module. PATTERN_TEST 0 leaves the
 // user port idle as in the #60 builds (cyc 1, stb 0, sel all ones).
+//
+// Read path (issue #62, x16 only): read with `define DDR3_READER (make ... DDR3_APP=reader),
+// the top takes the READER_* parameters and tms_ddr3_reader.v (t27/rtl/fpga_ddr3_reader.t27)
+// replaces the pattern test on the user port: after calibration it fills a region with
+// baseline2 or dense5 bytes of a trit stream the board generates, reads it back at up to one
+// 128-bit word per controller clock through consumer (A) and reports the counters of every
+// run. Without the define nothing of it is declared.
 `timescale 1ns/1ps
 `default_nettype none
 module tms_ddr3_ax7203 #(
@@ -58,6 +65,16 @@ module tms_ddr3_ax7203 #(
     parameter integer UART_DIV = 0,             // clocks per UART bit; 0 = 115200 baud from the controller clock
     parameter integer UBER_UART = 0             // 1: N15 carries ddr3_top's own debug UART (9600 baud) instead of
                                                 // our H/S lines; read only when UART_DEBUG_BIST is defined
+`ifdef DDR3_READER
+    ,
+    // The read path of #62 (tms_ddr3_reader.v, t27/rtl/fpga_ddr3_reader.t27), x16 only: declared
+    // only under the define, so the netlists of the other builds keep every name they had.
+    parameter [31:0] READER_TRITS = 32'd17694720, // logical trits per run (one 2560 x 6912 matrix)
+    parameter [31:0] READER_SEED = 32'h00000062,
+    parameter [31:0] READER_CAP = 32'd64,        // Wishbone requests outstanding at most
+    parameter [31:0] READER_RUNS = 32'd0,        // runs (baseline2, dense5, baseline2, ...), 0 = until reset
+    parameter [31:0] READER_WATCHDOG = 32'd16777216
+`endif
 ) (
     input  wire                      clk200_p,
     input  wire                      clk200_n,
@@ -205,13 +222,33 @@ module tms_ddr3_ax7203 #(
         .clk(clk_ctrl), .rst_n(1'b1), .en(1'b1), .ready(), .button_n(!rst),
         .stage1(), .stage2(staged_rst_n), .hold(), .blink(), .reset(), .heartbeat()
     );
+`ifdef DDR3_READER
+    assign report_rst_n = staged_rst_n;
+`else
     assign report_rst_n = PATTERN_TEST != 0 ? staged_rst_n : !rst;
+`endif
     TrinityFpgaDdr3StatusT27 status (
         .clk(clk_ctrl), .rst_n(report_rst_n), .en(1'b1), .ready(),
         .state(debug1), .calib(calib_complete), .line_idle(s_idle), .build_id(BUILD_ID),
         .lanes(BYTE_LANES), .period_ps(DDR3_PS), .period(REPORT_PERIOD),
         .line_go(s_go), .line_tag(s_tag), .line_a(s_a), .line_b(s_b), .recalibrated(recalibrated)
     );
+`ifdef DDR3_READER
+    // The reader drives the user port and owns the report line (the status lines pass
+    // through its arbiter), as the pattern test does; words 2 and 3 of the data are unused.
+    wire [127:0] reader_wdata;
+    tms_ddr3_reader #(
+        .TRITS(READER_TRITS), .SEED(READER_SEED), .CAP(READER_CAP), .RUNS(READER_RUNS),
+        .WATCHDOG(READER_WATCHDOG), .LANES_BUS(BYTE_LANES)
+    ) reader (
+        .clk(clk_ctrl), .rst_n(report_rst_n), .calib(calib_complete), .stall(wb_stall), .ack(wb_ack),
+        .rdata(wb_rdata_words[127:0]),
+        .s_go(s_go), .s_tag(s_tag), .s_a(s_a), .s_b(s_b), .line_idle(line_idle),
+        .wb_cyc(wb_cyc), .wb_stb(wb_stb), .wb_we(wb_we), .wb_addr(wb_addr), .wb_sel(wb_sel), .wb_wdata(reader_wdata),
+        .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b), .status_idle(s_idle)
+    );
+    assign {wb_wd3, wb_wd2, wb_wd1, wb_wd0} = {128'd0, reader_wdata};
+`else
     generate
         if (PATTERN_TEST != 0) begin : pattern
             TrinityFpgaDdr3PatternT27 test (
@@ -240,6 +277,7 @@ module tms_ddr3_ax7203 #(
             assign s_idle = line_idle;
         end
     endgenerate
+`endif
     TrinityFpgaLineEmitterT27 emitter (
         .clk(clk_ctrl), .rst_n(!rst), .en(1'b1), .ready(),
         .go(line_go), .tag(line_tag), .a(line_a), .b(line_b), .tx_busy(tx_busy),
