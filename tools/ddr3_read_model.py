@@ -29,8 +29,9 @@ The trits of a region end at `trits`; every lane after them (the rest of the las
 word) is a logical zero.
 
 Layouts (docs/format.md). One Wishbone word of the x16 build is 128 bits, 16 bytes,
-byte n at bits [8n, 8n+7]; in DDR3 the region's byte k is byte k mod 16 of burst
-k / 16, so the payload bytes lie in memory in stream order.
+byte n at bits [8n, 8n+7]; the region's byte k is byte k mod 16 of the word at burst
+address k / 16, so the payload bytes follow the stream across Wishbone words (where
+UberDDR3 puts a word's bytes on the DDR3 beats and lanes is its own, not modelled here).
   baseline2 (format 0): four lane codes per byte, earliest lane lowest: 64 trits
     per word, word w = trits 64w .. 64w+63, lane j of the word at bits [2j, 2j+1].
   dense5 (format 1): byte n = sum over i < 5 of (t_i + 1) * 3^i for trits 5n .. 5n+4
@@ -39,7 +40,8 @@ k / 16, so the payload bytes lie in memory in stream order.
 Payload bytes are ceil(trits / 4) and ceil(trits / 5); the bus moves whole words, and
 the difference is padding. No scale or metadata is stored (0 bytes).
 
-Consumer (A), per word read back, with the definitions of tools/bram_trit_model.py:
+Consumer (A), per word read back, with the definitions of tools/bram_trit_model.py (restated
+here; tests/test_ddr3_reader.py recomputes the results with that module's own functions):
 lanes decoded (the codec of t27/rtl/bram_trit_codec.t27: baseline2 lanes with 11
 cleared and counted invalid, dense5 bytes >= 243 counted invalid), compared with the
 regenerated lanes (a word that differs anywhere is one bad word), +1 and -1 counts,

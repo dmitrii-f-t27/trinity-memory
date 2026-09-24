@@ -5,12 +5,17 @@
 // Instantiated by tms_ddr3_ax7203.v when it is read with `define DDR3_READER
 // (make -C fpga/ax7203 ... DDR3_APP=reader); x16 only.
 //
-// Bit order (checked in Icarus by tests/test_ddr3_reader.py against the memory
-// model's stored bursts and the host model's encodings):
-//   Wishbone data, 128 bits: byte n (n = 0..15) at bits [8n+7:8n]; UberDDR3 puts it
-//     on beat n / 2, byte lane n % 2, so the region's byte k is byte k % 16 of burst k / 16.
+// Wishbone byte order (checked in Icarus by tests/test_ddr3_reader.py against the memory
+// model's stored 128-bit words and the host model's encodings):
+//   Wishbone data, 128 bits: byte n (n = 0..15) at bits [8n+7:8n]; the region's byte k is
+//     byte k % 16 of Wishbone word (burst address) k / 16.
 //   rdata_lo = rdata[63:0] (bytes 0-7), rdata_hi = rdata[127:64] (bytes 8-15);
 //     the write data is {c_hi, c_lo} likewise.
+// Where the bytes then sit on the DDR3 bus is UberDDR3's: by its source at 79d8fd3e
+// (ddr3_controller.v, stage2_data[(DQ_BITS*LANES)*beat + 8*lane +: 8]; ddr3_phy.v, the OSERDES
+// D inputs) byte n goes on beat n / 2, byte lane n % 2. That is read from the source only:
+// the Icarus memory model stores whole words (no beats or lanes), and a write-read round trip
+// on the board cannot see a permutation applied the same way in both directions.
 `timescale 1ns/1ps
 `default_nettype none
 module tms_ddr3_reader #(

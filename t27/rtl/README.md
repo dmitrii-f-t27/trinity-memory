@@ -79,11 +79,14 @@ with original commit and byte hashes recorded in
   (`make ... DDR3_APP=reader`), issue #62, x16): after calibration it fills a region of
   UberDDR3's memory with the baseline2 or dense5 device-code bytes of a trit stream the board
   generates (no UART), reads it back through a Wishbone burst reader that keeps at most `cap`
-  requests outstanding, and consumer (A) takes one 128-bit word per controller clock through an
-  eight-stage pipeline: decode (80 dense5 or 64 baseline2 lanes), lane check against the
-  regenerated stream, +1/-1 counts, dot product with the activations `(i mod 8) + 1` and the
-  rotate-xor checksum; per run it reports cycles, words, bus, payload, padding and
-  scale/metadata bytes, logical trits, command, wait and consumer stalls. The dense5 decoder
+  requests outstanding, and consumer (A) takes one 128-bit word per controller clock through a
+  nine-stage pipeline (S1, D, S2-S8): decode (80 dense5 or 64 baseline2 lanes), lane check
+  against the regenerated stream, +1/-1 counts, dot product with the activations `(i mod 8) + 1`
+  and the rotate-xor checksum; per run it reports cycles, words, bus, payload, padding and
+  scale/metadata bytes, logical trits, command, wait and consumer stalls, and the acks since
+  calibration (all, and those outside the fill and read phases). Several of these counters are
+  fixed by the design (words = W, padding = bus - payload, consumer stalls 0): `docs/hardware.md`
+  says which. The dense5 decoder
   and encoder are constant tables (a division would become carry chains in the DDR3 flow's
   synthesis), checked on every code against `bram_trit_codec.t27`. `tests/test_ddr3_reader.py`
   checks its functions in C against `tools/ddr3_read_model.py` and runs the whole top in Icarus

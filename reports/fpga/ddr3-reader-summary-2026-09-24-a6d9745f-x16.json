@@ -1,9 +1,26 @@
 {
- "schema": "trinity.ddr3-reader-summary.v1",
- "written_utc": "2026-09-24T15:31:40Z",
- "netlist": "a6d9745f x16, DDR3_APP=reader (READER trits 17694720, seed 98, cap 64, runs 0); yosys netlist sha256 identical for both builds below",
- "skew_note": "nextpnr-xilinx 0.9.7's delay model (reports/fpga/ddr3-seed-sweep-2026-09-24-a6d9745f-x16-reader.json): clock buffer -> fabric inverter LUT -> CK OBUFDS input (ck_ps, the later of P and N) and -> each lane's DQS OSERDES CLK, as in ddr3-x32-skew-outcome-2026-09-24.json. Not measured on silicon.",
- "seed_choice": "The seed search's first seed that met the controller clock (1) had CK - DQS -964 / -740 ps and never calibrated on the board (two loads below, highest state 14, 255 returns to IDLE). Seed 6 was then chosen from the sweep as the seed meeting 83.33 MHz with the smallest |CK - DQS| (-177 / +120 ps), before it was loaded; x16 builds that calibrated in #61 had -290/-310, -680/-370 and +740/+1090 ps.",
+ "schema": "trinity.ddr3-reader-summary.v2",
+ "written_utc": "2026-09-24T16:33:11Z",
+ "written_by": {
+  "tool": "tools/ddr3-reader-summary.py",
+  "repository_head": "42b6f5a9c026527066269532c1553250c562ad9c"
+ },
+ "netlist": "a6d9745f x16, DDR3_APP=reader (READER trits 17694720, seed 98, cap 64, runs 0), READER_FORMAT 1 (no x line); one yosys netlist (sha256 eda962bd..., the sweep's netlist_sha256) for both builds",
+ "sweep": "reports/fpga/ddr3-seed-sweep-2026-09-24-a6d9745f-x16-reader.json",
+ "skew_note": "nextpnr-xilinx 0.9.7's delay model (the sweep's luts_on_clock_nets): clock buffer -> fabric inverter LUT -> CK OBUFDS input (ck_ps, the later of its P and N inputs) and -> each lane's DQS OSERDES CLK. Not measured on silicon.",
+ "seed_rank_metric": "largest |CK - DQS| over the byte lanes (largest_abs_ck_minus_dqs_ps), among the seeds whose controller clock meets 83.33 MHz; smaller first",
+ "seed_rank": [
+  6,
+  5,
+  4,
+  3,
+  2,
+  11,
+  1,
+  12,
+  9
+ ],
+ "seed_choice": "In time order (load_order below; build.json written_at, the sweep's written_at): the seed search's build, seed 1 (build.json 15:10:05 UTC; CK - DQS -964 / -740 ps), did not calibrate on its first load (15:11 UTC, die 38.8 C before the load). The sweep of seeds 1-12 was then written (15:18:58 UTC) and seed 6 chosen from it as the first of seed_rank: among the seeds meeting 83.33 MHz, the smallest largest |CK - DQS| over the two lanes (177 ps; seed 5 next at 424 ps, although one of its lanes is at -24 ps). Seed 6 was built (build.json 15:22:44 UTC) and loaded three times (15:23-15:28 UTC, die 48.9-50.6 C), calibrating each time. Seed 1 was loaded a second time after those, as a control at the seed-6 temperature (15:31:50 UTC, die 51.0 C before the load, 10 s capture): it did not calibrate either. x16 builds that calibrated in #61 had CK - DQS -290/-310, -680/-370 and +740/+1090 ps. Ranking by this skew is a rule taken from #61's correlation, not a timing analysis.",
  "seeds": [
   {
    "seed": 1,
@@ -20,7 +37,8 @@
    "ck_minus_dqs_ps_by_lane": [
     -964,
     -740
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 964
   },
   {
    "seed": 2,
@@ -37,7 +55,8 @@
    "ck_minus_dqs_ps_by_lane": [
     460,
     615
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 615
   },
   {
    "seed": 3,
@@ -54,7 +73,8 @@
    "ck_minus_dqs_ps_by_lane": [
     -556,
     -270
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 556
   },
   {
    "seed": 4,
@@ -71,7 +91,8 @@
    "ck_minus_dqs_ps_by_lane": [
     -548,
     -237
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 548
   },
   {
    "seed": 5,
@@ -88,7 +109,8 @@
    "ck_minus_dqs_ps_by_lane": [
     -424,
     -24
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 424
   },
   {
    "seed": 6,
@@ -105,7 +127,8 @@
    "ck_minus_dqs_ps_by_lane": [
     -177,
     120
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 177
   },
   {
    "seed": 7,
@@ -122,7 +145,8 @@
    "ck_minus_dqs_ps_by_lane": [
     -556,
     -245
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 556
   },
   {
    "seed": 8,
@@ -146,7 +170,8 @@
    "ck_minus_dqs_ps_by_lane": [
     2187,
     2044
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 2187
   },
   {
    "seed": 10,
@@ -163,7 +188,8 @@
    "ck_minus_dqs_ps_by_lane": [
     -300,
     -291
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 300
   },
   {
    "seed": 11,
@@ -180,7 +206,8 @@
    "ck_minus_dqs_ps_by_lane": [
     550,
     937
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 937
   },
   {
    "seed": 12,
@@ -197,24 +224,44 @@
    "ck_minus_dqs_ps_by_lane": [
     1965,
     1458
-   ]
+   ],
+   "largest_abs_ck_minus_dqs_ps": 1965
   }
  ],
  "builds": {
-  "seed1": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader/",
-  "seed6": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6/"
+  "seed1": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader",
+  "seed6": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6"
  },
  "board": {
   "seed1": [
    {
     "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load1",
+    "label": "x16 read path (#62), load 1",
+    "bitstream_sha256": "5efd0ef66d6f5b08596494c65993fc262742138529a1712fccd1a11128ba7020",
+    "t0_utc": "2026-09-24T15:11:01.711Z",
     "load_end_utc": "2026-09-24T15:11:16.550Z",
+    "seconds_captured": 20.0,
     "exit_status": 1,
     "calib_complete": 0,
     "state": 0,
     "highest_state": 14,
     "returns_to_idle": 255,
     "seconds_after_reset": 20.017,
+    "s_lines_since_reset": 11536,
+    "s_lines_before_calib_complete": 11536,
+    "s_lines_after_calib_complete": 0,
+    "after_calib_all_done_calibrate": false,
+    "after_calib_span_s": null,
+    "calib_complete_s_after_reset": null,
+    "clock_ppm_from_nominal": 83.4,
+    "die_c": [
+     38.8237,
+     40.8347
+    ],
+    "vccint_v": [
+     0.994629,
+     0.994629
+    ],
     "runs": 0,
     "passing_runs": 0,
     "model_checked_runs": 0,
@@ -223,20 +270,40 @@
     "consumer_stalls": 0,
     "complete_pairs": 0,
     "per_format": {},
-    "die_c": [
-     38.8237,
-     40.8347
-    ]
+    "first_report_s_after_load_end": null,
+    "checks_failed": [],
+    "dot_values": 0,
+    "count_pairs": 0,
+    "checksum_values": {}
    },
    {
     "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load2",
+    "label": "x16 read path (#62), seed 1, load 2",
+    "bitstream_sha256": "5efd0ef66d6f5b08596494c65993fc262742138529a1712fccd1a11128ba7020",
+    "t0_utc": "2026-09-24T15:31:50.835Z",
     "load_end_utc": "2026-09-24T15:32:05.463Z",
+    "seconds_captured": 10.0,
     "exit_status": 1,
     "calib_complete": 0,
     "state": 0,
     "highest_state": 14,
     "returns_to_idle": 255,
     "seconds_after_reset": 10.174,
+    "s_lines_since_reset": 5867,
+    "s_lines_before_calib_complete": 5867,
+    "s_lines_after_calib_complete": 0,
+    "after_calib_all_done_calibrate": false,
+    "after_calib_span_s": null,
+    "calib_complete_s_after_reset": null,
+    "clock_ppm_from_nominal": -20.1,
+    "die_c": [
+     50.9586,
+     50.1473
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
     "runs": 0,
     "passing_runs": 0,
     "model_checked_runs": 0,
@@ -245,22 +312,45 @@
     "consumer_stalls": 0,
     "complete_pairs": 0,
     "per_format": {},
-    "die_c": [
-     50.9586,
-     50.1473
-    ]
+    "first_report_s_after_load_end": null,
+    "checks_failed": [],
+    "dot_values": 0,
+    "count_pairs": 0,
+    "checksum_values": {}
    }
   ],
   "seed6": [
    {
     "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load1",
+    "label": "x16 read path (#62), seed 6, load 1",
+    "bitstream_sha256": "7259adac7fe5e4e925522f6e73790b00dd0d6d443569a4d59fb7f62116711945",
+    "t0_utc": "2026-09-24T15:23:01.201Z",
     "load_end_utc": "2026-09-24T15:23:15.866Z",
+    "seconds_captured": 20.0,
     "exit_status": 0,
     "calib_complete": 1,
     "state": 23,
     "highest_state": 23,
     "returns_to_idle": 0,
     "seconds_after_reset": 19.723,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.525,
+    "calib_complete_s_after_reset": [
+     5.1975,
+     5.1975
+    ],
+    "clock_ppm_from_nominal": -345.6,
+    "die_c": [
+     49.3937,
+     48.9188
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
     "runs": 549,
     "passing_runs": 549,
     "model_checked_runs": 549,
@@ -302,20 +392,46 @@
       "fill_cycles_max": 234120
      }
     },
-    "die_c": [
-     49.3937,
-     48.9188
-    ]
+    "first_report_s_after_load_end": 5.243,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 133,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 274
+    }
    },
    {
     "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load2",
+    "label": "x16 read path (#62), seed 6, load 2",
+    "bitstream_sha256": "7259adac7fe5e4e925522f6e73790b00dd0d6d443569a4d59fb7f62116711945",
+    "t0_utc": "2026-09-24T15:26:06.689Z",
     "load_end_utc": "2026-09-24T15:26:21.362Z",
+    "seconds_captured": 20.0,
     "exit_status": 0,
     "calib_complete": 1,
     "state": 23,
     "highest_state": 23,
     "returns_to_idle": 0,
     "seconds_after_reset": 19.714,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.515,
+    "calib_complete_s_after_reset": [
+     5.1954,
+     5.1954
+    ],
+    "clock_ppm_from_nominal": 53.2,
+    "die_c": [
+     50.3088,
+     49.9358
+    ],
+    "vccint_v": [
+     0.993164,
+     0.993896
+    ],
     "runs": 553,
     "passing_runs": 553,
     "model_checked_runs": 553,
@@ -357,20 +473,46 @@
       "fill_cycles_max": 234120
      }
     },
-    "die_c": [
-     50.3088,
-     49.9358
-    ]
+    "first_report_s_after_load_end": 5.229,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 134,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 276
+    }
    },
    {
     "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load3",
-    "load_end_utc": "2026-09-24T15:28:32.658Z",
+    "label": "x16 read path (#62), seed 6, load 3",
+    "bitstream_sha256": "7259adac7fe5e4e925522f6e73790b00dd0d6d443569a4d59fb7f62116711945",
+    "t0_utc": "2026-09-24T15:28:17.995Z",
+    "load_end_utc": "2026-09-24T15:28:32.659Z",
+    "seconds_captured": 20.0,
     "exit_status": 0,
     "calib_complete": 1,
     "state": 23,
     "highest_state": 23,
     "returns_to_idle": 0,
     "seconds_after_reset": 19.718,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.527,
+    "calib_complete_s_after_reset": [
+     5.1971,
+     5.1971
+    ],
+    "clock_ppm_from_nominal": -277.7,
+    "die_c": [
+     50.5856,
+     49.9916
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
     "runs": 551,
     "passing_runs": 551,
     "model_checked_runs": 551,
@@ -412,11 +554,60 @@
       "fill_cycles_max": 234120
      }
     },
-    "die_c": [
-     50.5856,
-     49.9916
-    ]
+    "first_report_s_after_load_end": 5.238,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 133,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 275
+    }
    }
   ]
- }
+ },
+ "load_order": [
+  {
+   "build": "seed1",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load1",
+   "t0_utc": "2026-09-24T15:11:01.711Z",
+   "load_end_utc": "2026-09-24T15:11:16.550Z",
+   "die_c_before": 38.8237,
+   "calibrated": false
+  },
+  {
+   "build": "seed6",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load1",
+   "t0_utc": "2026-09-24T15:23:01.201Z",
+   "load_end_utc": "2026-09-24T15:23:15.866Z",
+   "die_c_before": 49.3937,
+   "calibrated": true
+  },
+  {
+   "build": "seed6",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load2",
+   "t0_utc": "2026-09-24T15:26:06.689Z",
+   "load_end_utc": "2026-09-24T15:26:21.362Z",
+   "die_c_before": 50.3088,
+   "calibrated": true
+  },
+  {
+   "build": "seed6",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load3",
+   "t0_utc": "2026-09-24T15:28:17.995Z",
+   "load_end_utc": "2026-09-24T15:28:32.659Z",
+   "die_c_before": 50.5856,
+   "calibrated": true
+  },
+  {
+   "build": "seed1",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load2",
+   "t0_utc": "2026-09-24T15:31:50.835Z",
+   "load_end_utc": "2026-09-24T15:32:05.463Z",
+   "die_c_before": 50.9586,
+   "calibrated": false
+  }
+ ],
+ "notes": [
+  "Regenerated by tools/ddr3-reader-summary.py in the review fix of #62; the hand-written first version (schema v1, written_utc 2026-09-24T15:31:40Z although it already held seed 1's second load, which started 15:31:50.8Z) told the seed choice as if both seed-1 failures came before it."
+ ]
 }
