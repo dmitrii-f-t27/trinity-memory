@@ -1,0 +1,322 @@
+{
+ "bitstream": {
+  "bytes": 9730803,
+  "file": "tms_uart_loader_ax7203.bit",
+  "header": {
+   "a": "build/fpga/loader-clk1-div217/tms_uart_loader_ax7203.frames;Generator=xc7frames2bit",
+   "b": "xc7a200tfbg484-2",
+   "c": "2026/09/24",
+   "d": "14:38:57"
+  },
+  "sha256": "feff3e7a138d7fd2e7bf8eb7c034bfb37011e1c4e43b5d4fd43ce5182e3c648e",
+  "sha256_from_sync": "d35dc79dca3e610b0b12ad3f1f742eedac91e3b7bf17429f62889d4e8b0aab71",
+  "sync_offset": 199
+ },
+ "commit": "6bc63ca4",
+ "fasm": {
+  "lines": 125624,
+  "sha256": "62745c4fd3e3616a0835fed12d17f7947fd0c983260c16e9f200c974fa06644d"
+ },
+ "files": {
+  "nextpnr.log": "09794b924cdfc9c75c374b883585d320958822da67f4a31273bb092c28ab4c06",
+  "yosys.log": "83da694fa6257a101265b91d075f7ec76a218e6001b165027be5d8ae8defcef4",
+  "yosys_stat.txt": "fa48660202f3e23409ee17973dd6cec57f6fcd5a2300df2d3a9a71e6f54cfeee"
+ },
+ "flow": "make -C fpga/ax7203 loader-bit CLOCK_MODE=1 BAUD_DIV=217 LOADER_TIMEOUT=1250000 LOADER_PROBATION=75000000 FREQ_MHZ=25; yosys synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -family xc7 split around memory_libmap with brams_xc4v.txt -D HAS_SIZE_36 (no cascade), read_verilog -nomem2reg; nextpnr-xilinx placers heap sa seeds 1 2 3 4 5 6 --router router2 --timing-allow-fail; prjxray fasm2frames + xc7frames2bit (regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c)",
+ "frames": {
+  "lines": 20230,
+  "sha256": "b0ab361619d26246d5e1170c4c53d0695ce4f3f0aed19551f9668774cbc9ee76"
+ },
+ "nextpnr": {
+  "clocks": [
+   {
+    "clock": "clk",
+    "fmax_mhz": 84.08,
+    "target_mhz": 25.0,
+    "verdict": "PASS"
+   },
+   {
+    "clock": "clk200",
+    "fmax_mhz": 1121.08,
+    "target_mhz": 25.0,
+    "verdict": "PASS"
+   },
+   {
+    "clock": "clk",
+    "fmax_mhz": 90.7,
+    "target_mhz": 25.0,
+    "verdict": "PASS"
+   },
+   {
+    "clock": "clk200",
+    "fmax_mhz": 1218.03,
+    "target_mhz": 25.0,
+    "verdict": "PASS"
+   }
+  ],
+  "routed": true,
+  "seed": null,
+  "utilisation": {
+   "BSCAN": {
+    "available": 4,
+    "used": 0
+   },
+   "BUFFER": {
+    "available": 82,
+    "used": 0
+   },
+   "BUFG": {
+    "available": 32,
+    "used": 0
+   },
+   "BUFGCTRL": {
+    "available": 32,
+    "used": 2
+   },
+   "BUFHCE": {
+    "available": 120,
+    "used": 0
+   },
+   "BUFIO": {
+    "available": 40,
+    "used": 0
+   },
+   "BUFR": {
+    "available": 40,
+    "used": 0
+   },
+   "CARRY4": {
+    "available": 33650,
+    "used": 0
+   },
+   "DCIRESET": {
+    "available": 1,
+    "used": 0
+   },
+   "DNA_PORT": {
+    "available": 1,
+    "used": 0
+   },
+   "DSP48E1": {
+    "available": 740,
+    "used": 0
+   },
+   "EFUSE_USR": {
+    "available": 1,
+    "used": 0
+   },
+   "FIFO18E1": {
+    "available": 365,
+    "used": 0
+   },
+   "FRAME_ECC": {
+    "available": 1,
+    "used": 0
+   },
+   "GTPE2_CHANNEL": {
+    "available": 16,
+    "used": 0
+   },
+   "GTPE2_COMMON": {
+    "available": 4,
+    "used": 0
+   },
+   "HARD0": {
+    "available": 3960,
+    "used": 0
+   },
+   "IBUFDS_GTE2": {
+    "available": 8,
+    "used": 0
+   },
+   "ICAP": {
+    "available": 2,
+    "used": 0
+   },
+   "IDELAYCTRL": {
+    "available": 10,
+    "used": 0
+   },
+   "IDELAYE2": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE2_IFF": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE3_IFF": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE3_ZHOLD_DELAY": {
+    "available": 500,
+    "used": 0
+   },
+   "INVERTER": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33M_INBUF_EN": {
+    "available": 240,
+    "used": 1
+   },
+   "IOB33M_OUTBUF": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33M_TERM_OVERRIDE": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_INBUF_EN": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_OUTBUF": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_TERM_OVERRIDE": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33_INBUF_EN": {
+    "available": 500,
+    "used": 2
+   },
+   "IOB33_OUTBUF": {
+    "available": 500,
+    "used": 5
+   },
+   "IOB33_TERM_OVERRIDE": {
+    "available": 500,
+    "used": 0
+   },
+   "ISERDESE2": {
+    "available": 500,
+    "used": 0
+   },
+   "MMCME2_ADV": {
+    "available": 10,
+    "used": 0
+   },
+   "OLOGICE2_MISR": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE2_OUTFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE2_TFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_MISR": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_OUTFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_TFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OSERDESE2": {
+    "available": 500,
+    "used": 0
+   },
+   "PAD": {
+    "available": 1062,
+    "used": 9
+   },
+   "PCIE_2_1": {
+    "available": 1,
+    "used": 0
+   },
+   "PLLE2_ADV": {
+    "available": 10,
+    "used": 0
+   },
+   "PSEUDO_GND": {
+    "available": 69165,
+    "used": 1
+   },
+   "PSEUDO_VCC": {
+    "available": 69165,
+    "used": 1
+   },
+   "PULL_OR_KEEP1": {
+    "available": 980,
+    "used": 0
+   },
+   "RAMB18E1": {
+    "available": 730,
+    "used": 1
+   },
+   "RAMB36E1": {
+    "available": 365,
+    "used": 65
+   },
+   "RAMBFIFO36E1": {
+    "available": 365,
+    "used": 0
+   },
+   "SELMUX2_1": {
+    "available": 102950,
+    "used": 0
+   },
+   "SLICE_FFX": {
+    "available": 269200,
+    "used": 1719
+   },
+   "SLICE_LUTX": {
+    "available": 269200,
+    "used": 3510
+   },
+   "STARTUP": {
+    "available": 1,
+    "used": 0
+   },
+   "USR_ACCESS": {
+    "available": 1,
+    "used": 0
+   }
+  },
+  "version": null
+ },
+ "part": "xc7a200tfbg484-2",
+ "reproducible_identity": {
+  "bitstream_sha256_from_sync": "d35dc79dca3e610b0b12ad3f1f742eedac91e3b7bf17429f62889d4e8b0aab71",
+  "fasm_sha256": "62745c4fd3e3616a0835fed12d17f7947fd0c983260c16e9f200c974fa06644d",
+  "frames_sha256": "b0ab361619d26246d5e1170c4c53d0695ce4f3f0aed19551f9668774cbc9ee76",
+  "note": "a rebuild with the same inputs and tools reproduces these; bitstream.sha256 covers the .bit header with xc7frames2bit's date and time and identifies only this one file (the one to flash)"
+ },
+ "schema": "trinity.fpga-build.v1",
+ "source": "local",
+ "top": "tms_uart_loader_ax7203",
+ "written_at": "2026-09-24T14:43:08+00:00",
+ "yosys": {
+  "by_type": {
+   "BUFG": 2,
+   "FDCE": 1644,
+   "FDPE": 11,
+   "FDRE": 64,
+   "IBUF": 2,
+   "IBUFDS": 1,
+   "INV": 3,
+   "LUT2": 833,
+   "LUT3": 455,
+   "LUT4": 625,
+   "LUT5": 906,
+   "LUT6": 688,
+   "OBUF": 5,
+   "RAMB18E1": 1,
+   "RAMB36E1": 65
+  },
+  "total": null
+ }
+}

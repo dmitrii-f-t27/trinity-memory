@@ -272,6 +272,76 @@ bram-capture:
 	python3 $(ROOT)/tools/fpga-bram-capture.py --port $(PORT) --manifest $(BRAM_BUILD)/bram_bench_manifest.json --expect-formats $(BRAM_EXPECT) \
 	  --output $(BRAM_BUILD)/capture.json --raw $(BRAM_BUILD)/capture.txt --label "$(LABEL)"
 
+# ---- UART loader into block RAM (tms_uart_loader.v), issue #63 part 1 ----
+# The t27 receiver, frame parser with CRC-32, staging buffer, 256 KiB block-RAM store,
+# ack/nak lines and read-back (docs/uart-loader.md). Same clocking as the block-RAM
+# benches (CLOCK_MODE 1: 25 MHz); BAUD_DIV is the divisor after reset (217: 115200 at
+# 25 MHz), LOADER_TIMEOUT the inter-byte timeout and LOADER_PROBATION the time a new
+# baud rate has to be confirmed in, both in design clocks. Its own build directory,
+# variables and targets: nothing here changes the other designs' commands.
+#   make -C fpga/ax7203 loader-sim                        Icarus scenarios (tests/test_uart_loader.py)
+#   make -C fpga/ax7203 loader-bit loader-flash FREQ_MHZ=25 SEEDS=3 BRAM_PLACERS=heap   (the build of record 1d474000: heap seed 3)
+#   python3 tools/fpga-uart-loader.py --port /dev/cu.usbserial-110 ...   (host side)
+.PHONY: loader-gen loader-sim loader-synth loader-pnr loader-bit loader-flash loader-report loader-clean
+LOADER_TOP       := tms_uart_loader_ax7203
+LOADER_CORES     := fpga_tick fpga_reset fpga_uart_tx fpga_uart_rx fpga_line_emitter fpga_uart_loader fpga_loader_store
+LOADER_TIMEOUT   ?= 1250000
+LOADER_PROBATION ?= 75000000
+LOADER_BUILD     ?= $(BUILD)/loader-clk$(CLOCK_MODE)-div$(BAUD_DIV)
+LOADER_REPORT    ?= $(ROOT)/reports/fpga/loader-build-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)
+LOADER_SOURCES   := $(foreach c,$(LOADER_CORES),$(RTL)/$(c).v) $(CURDIR)/tms_uart_loader.v
+LOADER_IDENTITY_NOTE := nextpnr-xilinx 45a986b8 did not reproduce this design's FASM bit for bit: a second placement of the same netlist with the same seed differed in about 960 of 194 000 FASM lines (placements.json next to the build record); the FASM and frames hashes identify this build, bitstream.sha256 the file that was flashed
+LOADER_STAMP     := $(LOADER_BUILD)/params-$(CLOCK_MODE)-$(BAUD_DIV)-$(LOADER_TIMEOUT)-$(LOADER_PROBATION)-$(BUILD_ID).stamp
+# Synthesis as the block-RAM benches (bram_synth: the RAMB36E1 1K x 36 configuration
+# only, brams_x36.txt), the one configuration verified on this board. Left to itself
+# yosys built the 256 KiB store from cascaded RAMB36 pairs, which nextpnr-xilinx did not
+# route ("Failed to route arc 0 of net store.mem...CAS_B"); without the cascade it chose
+# 32K x 1, and that build (6bc63ca4) read back every even byte as its odd neighbour on
+# the board (docs/uart-loader.md).
+
+loader-gen: $(LOADER_SOURCES)
+
+loader-sim:
+	cd $(ROOT) && python3 -m unittest tests.test_uart_loader -v
+
+$(LOADER_STAMP):
+	mkdir -p $(dir $@); rm -f $(dir $@)params-*.stamp; touch $@
+
+loader-synth: $(LOADER_BUILD)/$(LOADER_TOP).json
+$(LOADER_BUILD)/$(LOADER_TOP).json: $(LOADER_SOURCES) $(CURDIR)/brams_x36.txt $(LOADER_STAMP)
+	$(YOSYS) -q -l $(call REL,$(LOADER_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(LOADER_SOURCES),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set BAUD_DIV $(BAUD_DIV) -set TIMEOUT_CLOCKS $(LOADER_TIMEOUT) -set PROBATION_CLOCKS $(LOADER_PROBATION) $(LOADER_TOP); $(call bram_synth,$(LOADER_TOP)); setundef -zero -params; tee -o $(call REL,$(LOADER_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(LOADER_BUILD))/$(LOADER_TOP).json"
+
+loader-pnr: $(LOADER_BUILD)/$(LOADER_TOP).fasm
+$(LOADER_BUILD)/$(LOADER_TOP).fasm: $(LOADER_BUILD)/$(LOADER_TOP).json $(CHIPDB) $(CURDIR)/tms_trace_player.xdc
+	@rm -f $@; ok=0; for p in $(BRAM_PLACERS); do for s in $(SEEDS); do \
+	  echo "nextpnr placer $$p seed $$s router $(BRAM_ROUTER)"; \
+	  $(NEXTPNR) --chipdb $(call REL,$(CHIPDB)) --xdc $(call REL,$(CURDIR))/tms_trace_player.xdc \
+	    --json $(call REL,$(LOADER_BUILD))/$(LOADER_TOP).json --write $(call REL,$(LOADER_BUILD))/$(LOADER_TOP)_routed.json \
+	    --fasm $(call REL,$@) --freq $(FREQ_MHZ) --seed $$s --placer $$p --router $(BRAM_ROUTER) --timing-allow-fail \
+	    > $(LOADER_BUILD)/nextpnr_$${p}_seed$$s.log 2>&1 || true; \
+	  if [ -s $@ ] && ! grep -q "Failed to find a route" $(LOADER_BUILD)/nextpnr_$${p}_seed$$s.log; then ok=$$p/$$s; cp $(LOADER_BUILD)/nextpnr_$${p}_seed$$s.log $(LOADER_BUILD)/nextpnr.log; break 2; fi; \
+	  rm -f $@; done; done; \
+	  [ "$$ok" != 0 ] || { echo "no placer/seed routed"; exit 1; }; echo "routed with placer/seed $$ok"
+
+loader-bit: $(LOADER_BUILD)/$(LOADER_TOP).bit
+$(LOADER_BUILD)/$(LOADER_TOP).bit: $(LOADER_BUILD)/$(LOADER_TOP).fasm
+	$(PACK) bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $(PART) $(call REL,$<) $(call REL,$(LOADER_BUILD))/$(LOADER_TOP).frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$(PART)/part.yaml --part_name $(PART) --frm_file $(call REL,$(LOADER_BUILD))/$(LOADER_TOP).frames --output_file $(call REL,$@)"
+	@echo "frames: $$(wc -l < $(LOADER_BUILD)/$(LOADER_TOP).frames) lines; bit: $$(wc -c < $@) bytes"
+
+# SRAM only, never flash; never builds (the bitstream must exist).
+loader-flash:
+	@test -s $(LOADER_BUILD)/$(LOADER_TOP).bit || { echo "no bitstream in $(LOADER_BUILD): make loader-bit first"; exit 1; }
+	openFPGALoader -c $(CABLE) $(LOADER_BUILD)/$(LOADER_TOP).bit
+
+loader-report:
+	python3 $(ROOT)/tools/fpga-build-report.py --artifact-dir $(LOADER_BUILD) --commit $(BUILD_ID) --source local \
+	  --top $(LOADER_TOP) --output $(LOADER_REPORT) \
+	  --identity-note "$(LOADER_IDENTITY_NOTE)" \
+	  --flow "make -C fpga/ax7203 loader-bit CLOCK_MODE=$(CLOCK_MODE) BAUD_DIV=$(BAUD_DIV) LOADER_TIMEOUT=$(LOADER_TIMEOUT) LOADER_PROBATION=$(LOADER_PROBATION) FREQ_MHZ=$(FREQ_MHZ); yosys $(YOSYS_SYNTH) split around memory_libmap with fpga/ax7203/brams_x36.txt, read_verilog -nomem2reg; nextpnr-xilinx placers $(BRAM_PLACERS) seeds $(SEEDS) --router $(BRAM_ROUTER) --timing-allow-fail; prjxray fasm2frames + xc7frames2bit ($(IMAGE))"
+
+loader-clean:
+	rm -rf $(BUILD)/loader-clk*
+
 # ---- DDR3 (UberDDR3) on the AX7203, issue #60: build only ----
 # UberDDR3's ddr3_top (GPL-3.0-or-later, fetched at the commit in
 # ddr3/uberddr3.lock into build/uberddr3/, never committed) with our top, PLL

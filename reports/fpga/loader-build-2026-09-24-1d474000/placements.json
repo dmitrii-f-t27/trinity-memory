@@ -1,0 +1,89 @@
+{
+ "builds": [
+  {
+   "dir": "build/fpga/loader-clk1-div217",
+   "runs": [
+    {
+     "log": "nextpnr_heap_seed3.log",
+     "placer": "heap",
+     "seed": 3,
+     "routed": true,
+     "last_router_line": "Info:     iter=4 wires=219874 overused=0 overuse=0 archfail=0",
+     "max_frequency_lines": [
+      "Info: Max frequency for clock    'clk': 84.29 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock 'clk200': 956.02 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock    'clk': 77.27 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock 'clk200': 1223.99 MHz (PASS at 25.00 MHz)"
+     ]
+    }
+   ],
+   "fasm": {
+    "file": "tms_uart_loader_ax7203.fasm",
+    "sha256": "1a068651b29c2a5a8dde12c5fbc754dce283d37b948ce78b37abb2e01c8e63f1"
+   }
+  },
+  {
+   "dir": "build/fpga/loader-seed3-repeat",
+   "runs": [
+    {
+     "log": "nextpnr_heap_seed3.log",
+     "placer": "heap",
+     "seed": 3,
+     "routed": true,
+     "last_router_line": "Info:     iter=4 wires=219870 overused=0 overuse=0 archfail=0",
+     "max_frequency_lines": [
+      "Info: Max frequency for clock    'clk': 84.29 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock 'clk200': 956.02 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock    'clk': 77.27 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock 'clk200': 1223.99 MHz (PASS at 25.00 MHz)"
+     ]
+    }
+   ],
+   "fasm": {
+    "file": "tms_uart_loader_ax7203.fasm",
+    "sha256": "8ef5d2d2db9e30ac79bb1e58fbe848b247087479308e4003959fdbf4ada7146a"
+   }
+  },
+  {
+   "dir": "build/fpga/loader-seed4",
+   "runs": [
+    {
+     "log": "nextpnr_heap_seed4.log",
+     "placer": "heap",
+     "seed": 4,
+     "routed": false,
+     "last_router_line": "Info:     iter=2 wires=227649 overused=832 overuse=838 archfail=NA",
+     "max_frequency_lines": [
+      "Info: Max frequency for clock    'clk': 83.94 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock 'clk200': 1018.33 MHz (PASS at 25.00 MHz)"
+     ]
+    }
+   ]
+  },
+  {
+   "dir": "build/fpga/loader-seed5",
+   "runs": [
+    {
+     "log": "nextpnr_heap_seed5.log",
+     "placer": "heap",
+     "seed": 5,
+     "routed": false,
+     "last_router_line": "Info:     iter=2 wires=227623 overused=875 overuse=899 archfail=NA",
+     "max_frequency_lines": [
+      "Info: Max frequency for clock    'clk': 84.88 MHz (PASS at 25.00 MHz)",
+      "Info: Max frequency for clock 'clk200': 938.09 MHz (PASS at 25.00 MHz)"
+     ]
+    }
+   ]
+  }
+ ],
+ "fasm_lines_differing_from_first": [
+  {
+   "dir": "build/fpga/loader-seed3-repeat",
+   "only_in_first": 964,
+   "only_in_this": 960,
+   "lines_first": 193976,
+   "lines_this": 193972
+  }
+ ]
+}

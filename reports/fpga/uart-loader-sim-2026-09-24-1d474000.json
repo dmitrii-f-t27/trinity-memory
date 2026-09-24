@@ -1,0 +1,437 @@
+{
+ "schema": "trinity.uart-loader-sim.v1",
+ "clock_hz": 25000000,
+ "note": "Icarus runs of tests/test_uart_loader.py; turnaround = design clocks from the end of a load frame's last stop bit to the start bit of its ack (commit of 3 clocks per byte included)",
+ "scenarios": {
+  "transfer_top_+0.05": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "host_bit_skew": 0.05,
+   "bytes_received": 14635,
+   "events": 48,
+   "load_turnaround": [
+    {
+     "payload": 2,
+     "end_to_reply_stop_clocks": 155,
+     "turnaround_clocks": 3
+    },
+    {
+     "payload": 4096,
+     "end_to_reply_stop_clocks": 12436,
+     "turnaround_clocks": 12284
+    },
+    {
+     "payload": 17,
+     "end_to_reply_stop_clocks": 199,
+     "turnaround_clocks": 47
+    },
+    {
+     "payload": 1632,
+     "end_to_reply_stop_clocks": 5044,
+     "turnaround_clocks": 4892
+    },
+    {
+     "payload": 255,
+     "end_to_reply_stop_clocks": 913,
+     "turnaround_clocks": 761
+    },
+    {
+     "payload": 1,
+     "end_to_reply_stop_clocks": 151,
+     "turnaround_clocks": -1
+    },
+    {
+     "payload": 3,
+     "end_to_reply_stop_clocks": 157,
+     "turnaround_clocks": 5
+    },
+    {
+     "payload": 1936,
+     "end_to_reply_stop_clocks": 5957,
+     "turnaround_clocks": 5805
+    },
+    {
+     "payload": 3294,
+     "end_to_reply_stop_clocks": 10031,
+     "turnaround_clocks": 9879
+    },
+    {
+     "payload": 1000,
+     "end_to_reply_stop_clocks": 3149,
+     "turnaround_clocks": 2997
+    },
+    {
+     "payload": 256,
+     "end_to_reply_stop_clocks": 917,
+     "turnaround_clocks": 765
+    },
+    {
+     "payload": 1255,
+     "end_to_reply_stop_clocks": 3914,
+     "turnaround_clocks": 3762
+    }
+   ]
+  },
+  "transfer_ports_-0.04": {
+   "bench": "ports",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "SINK_MODE": 0
+   },
+   "host_bit_skew": -0.04,
+   "bytes_received": 12896,
+   "events": 48,
+   "load_turnaround": [
+    {
+     "payload": 17,
+     "end_to_reply_stop_clocks": 310,
+     "turnaround_clocks": 158
+    },
+    {
+     "payload": 2189,
+     "end_to_reply_stop_clocks": 13266,
+     "turnaround_clocks": 13114
+    },
+    {
+     "payload": 4096,
+     "end_to_reply_stop_clocks": 24529,
+     "turnaround_clocks": 24377
+    },
+    {
+     "payload": 1000,
+     "end_to_reply_stop_clocks": 6076,
+     "turnaround_clocks": 5924
+    },
+    {
+     "payload": 255,
+     "end_to_reply_stop_clocks": 1659,
+     "turnaround_clocks": 1507
+    },
+    {
+     "payload": 1,
+     "end_to_reply_stop_clocks": 173,
+     "turnaround_clocks": 21
+    },
+    {
+     "payload": 3,
+     "end_to_reply_stop_clocks": 194,
+     "turnaround_clocks": 42
+    },
+    {
+     "payload": 256,
+     "end_to_reply_stop_clocks": 1646,
+     "turnaround_clocks": 1494
+    },
+    {
+     "payload": 3047,
+     "end_to_reply_stop_clocks": 17680,
+     "turnaround_clocks": 17528
+    },
+    {
+     "payload": 12,
+     "end_to_reply_stop_clocks": 236,
+     "turnaround_clocks": 84
+    },
+    {
+     "payload": 2,
+     "end_to_reply_stop_clocks": 180,
+     "turnaround_clocks": 28
+    },
+    {
+     "payload": 1130,
+     "end_to_reply_stop_clocks": 6583,
+     "turnaround_clocks": 6431
+    }
+   ],
+   "sink": {
+    "writes": 12008,
+    "stalled_write_clocks": 34500,
+    "wr_last": 12
+   }
+  },
+  "transfer_ports0_+0.05": {
+   "bench": "ports",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "SINK_MODE": 1
+   },
+   "host_bit_skew": 0.05,
+   "bytes_received": 11504,
+   "events": 48,
+   "load_turnaround": [
+    {
+     "payload": 2,
+     "end_to_reply_stop_clocks": 154,
+     "turnaround_clocks": 2
+    },
+    {
+     "payload": 3,
+     "end_to_reply_stop_clocks": 157,
+     "turnaround_clocks": 5
+    },
+    {
+     "payload": 17,
+     "end_to_reply_stop_clocks": 199,
+     "turnaround_clocks": 47
+    },
+    {
+     "payload": 2173,
+     "end_to_reply_stop_clocks": 6667,
+     "turnaround_clocks": 6515
+    },
+    {
+     "payload": 255,
+     "end_to_reply_stop_clocks": 913,
+     "turnaround_clocks": 761
+    },
+    {
+     "payload": 1000,
+     "end_to_reply_stop_clocks": 3148,
+     "turnaround_clocks": 2996
+    },
+    {
+     "payload": 2058,
+     "end_to_reply_stop_clocks": 6322,
+     "turnaround_clocks": 6170
+    },
+    {
+     "payload": 256,
+     "end_to_reply_stop_clocks": 916,
+     "turnaround_clocks": 764
+    },
+    {
+     "payload": 628,
+     "end_to_reply_stop_clocks": 2032,
+     "turnaround_clocks": 1880
+    },
+    {
+     "payload": 127,
+     "end_to_reply_stop_clocks": 529,
+     "turnaround_clocks": 377
+    },
+    {
+     "payload": 4096,
+     "end_to_reply_stop_clocks": 12436,
+     "turnaround_clocks": 12284
+    },
+    {
+     "payload": 1,
+     "end_to_reply_stop_clocks": 151,
+     "turnaround_clocks": -1
+    }
+   ],
+   "sink": {
+    "writes": 10616,
+    "stalled_write_clocks": 0,
+    "wr_last": 12
+   }
+  },
+  "faults_-0.04": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "host_bit_skew": -0.04,
+   "bytes_received": 1502,
+   "events": 46,
+   "load_turnaround": [
+    {
+     "payload": 300,
+     "end_to_reply_stop_clocks": 1063,
+     "turnaround_clocks": 911
+    },
+    {
+     "payload": 300,
+     "end_to_reply_stop_clocks": 161,
+     "turnaround_clocks": 9
+    },
+    {
+     "payload": 200,
+     "end_to_reply_stop_clocks": 763,
+     "turnaround_clocks": 611
+    },
+    {
+     "payload": 300,
+     "end_to_reply_stop_clocks": 1062,
+     "turnaround_clocks": 910
+    },
+    {
+     "payload": 100,
+     "end_to_reply_stop_clocks": 463,
+     "turnaround_clocks": 311
+    },
+    {
+     "payload": 77,
+     "end_to_reply_stop_clocks": 394,
+     "turnaround_clocks": 242
+    },
+    {
+     "payload": 90,
+     "end_to_reply_stop_clocks": 433,
+     "turnaround_clocks": 281
+    }
+   ]
+  },
+  "pipelined": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "host_bit_skew": 0.0,
+   "bytes_received": 1140,
+   "events": 56,
+   "load_turnaround": []
+  },
+  "overflow": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "host_bit_skew": 0.0,
+   "bytes_received": 6664,
+   "events": 29,
+   "load_turnaround": [
+    {
+     "payload": 4096,
+     "end_to_reply_stop_clocks": 12445,
+     "turnaround_clocks": 12293
+    }
+   ]
+  },
+  "baud": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 32,
+    "TIMEOUT_CLOCKS": 7680,
+    "PROBATION_CLOCKS": 64000
+   },
+   "host_bit_skew": 0.0,
+   "bytes_received": 2028,
+   "events": 52,
+   "load_turnaround": [
+    {
+     "payload": 500,
+     "end_to_reply_stop_clocks": 1657,
+     "turnaround_clocks": 1353
+    }
+   ]
+  },
+  "watchdog": {
+   "bench": "ports",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "SINK_MODE": 0
+   },
+   "host_bit_skew": 0.0,
+   "bytes_received": 1914,
+   "events": 41,
+   "load_turnaround": [
+    {
+     "payload": 300,
+     "end_to_reply_stop_clocks": 1952,
+     "turnaround_clocks": 1800
+    },
+    {
+     "payload": 100,
+     "end_to_reply_stop_clocks": 770,
+     "turnaround_clocks": 618
+    },
+    {
+     "payload": 100,
+     "end_to_reply_stop_clocks": 806,
+     "turnaround_clocks": 654
+    },
+    {
+     "payload": 200,
+     "end_to_reply_stop_clocks": 1405,
+     "turnaround_clocks": 1253
+    },
+    {
+     "payload": 150,
+     "end_to_reply_stop_clocks": 958,
+     "turnaround_clocks": 806
+    }
+   ],
+   "sink": {
+    "writes": 1100,
+    "stalled_write_clocks": 8620,
+    "wr_last": 7
+   }
+  },
+  "resets": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "host_bit_skew": 0.0,
+   "bytes_received": 5241,
+   "events": 27,
+   "load_turnaround": [
+    {
+     "payload": 4096,
+     "end_to_reply_stop_clocks": 12445,
+     "turnaround_clocks": 12293
+    },
+    {
+     "payload": 300,
+     "end_to_reply_stop_clocks": 1057,
+     "turnaround_clocks": 905
+    }
+   ]
+  },
+  "board_rate_+5.0%": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 217,
+    "TIMEOUT_CLOCKS": 1250000,
+    "PROBATION_CLOCKS": 75000000
+   },
+   "host_bit_skew": 0.05,
+   "bytes_received": 118,
+   "events": 3,
+   "load_turnaround": [
+    {
+     "payload": 64,
+     "end_to_reply_stop_clocks": 2048,
+     "turnaround_clocks": -13
+    }
+   ]
+  },
+  "board_rate_-4.5%": {
+   "bench": "top",
+   "params": {
+    "BAUD_DIV": 217,
+    "TIMEOUT_CLOCKS": 1250000,
+    "PROBATION_CLOCKS": 75000000
+   },
+   "host_bit_skew": -0.045,
+   "bytes_received": 118,
+   "events": 3,
+   "load_turnaround": [
+    {
+     "payload": 64,
+     "end_to_reply_stop_clocks": 2255,
+     "turnaround_clocks": 194
+    }
+   ]
+  }
+ }
+}
