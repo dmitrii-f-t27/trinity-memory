@@ -9,10 +9,11 @@
   "ggml/src/ggml.c": "a286083b9320acbe9654b34c1cec68930a8d39ee",
   "ggml/src/gguf.cpp": "0eb9fb744d289c5805431de5ac8987a352bae122",
   "src/llama-arch.cpp": "03b7951c3cc109c92c0e03f4e0bea41a4af21db8",
+  "src/llama-model-loader.cpp": "43c396f15af3475e405da8dd73e6a8010ce3d7a5",
   "src/llama-model.cpp": "e195f50d0bde50333eef771a651cebde87d9616f",
-  "src/llama-model-loader.cpp": "43c396f15af3475e405da8dd73e6a8010ce3d7a5"
+  "src/llama.cpp": "ad8e443882ad66e8a68c028f970a0fffd03b92d4"
  },
- "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the commit (cmake target ggml, CPU only), ids with no traits omitted; architectures: LLM_ARCH_NAMES in src/llama-arch.cpp; gguf.cpp rules ggml/src/gguf.cpp:466-801",
+ "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the commit (cmake target ggml, CPU only), ids with no traits omitted; architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp that the model mapping src/llama-model.cpp:43-349 maps to a model class (unknown names are refused at :368-369, unmapped ones at :348); clip is mapped but refused as a main model after the hyperparameters, src/llama.cpp:352-353; gguf.cpp rules ggml/src/gguf.cpp:230-427 (reads) and :459-803",
  "type_count": 43,
  "hadamard": false,
  "types": [
@@ -270,7 +271,6 @@
   "falcon",
   "grok",
   "gpt2",
-  "gptj",
   "gptneox",
   "mpt",
   "baichuan",
@@ -414,7 +414,9 @@
   "mellum",
   "nanbeige",
   "qwen3tts",
-  "pockettts",
-  "(unknown)"
+  "pockettts"
+ ],
+ "archs_refused_as_main": [
+  "clip"
  ]
 }

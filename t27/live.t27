@@ -1,40 +1,67 @@
 // SPDX-License-Identifier: Apache-2.0
 // Ternary Check Live (issues #48-#51): what a runtime's GGUF reader and model
-// loader decide about a file, from its header alone. Canonical executable
-// source: the shared library is generated from it; Python only moves bytes.
+// loader decide about a model, from the headers of its files alone. Canonical
+// executable source: the shared library is generated from it; Python only
+// moves bytes.
 //
 // Runtimes and their tables are in t27/runtimes.t27 (generated from
 // specs/runtimes/*.json): ggml-org/llama.cpp@e6ab7c1a, the PrismML fork
 // PrismML-Eng/llama.cpp@bdc23b56 and bitnet.cpp's llama.cpp @390c3077.
+// Line numbers below are ggml-org's; the fork and bitnet.cpp hold the same
+// code a few lines away unless a difference is named.
 //
-//  - tlv_walk: the header as gguf.cpp reads it, in its order (ggml-org
-//    ggml/src/gguf.cpp:466-801; the fork :458-801 and bitnet.cpp :460-780 read
-//    the same way): magic; version (0, 1 and newer than 3 refused, a
-//    byte-swapped version is the endianness message); keys (none empty, none
-//    twice, readable values, general.alignment a u32 power of two); tensor
-//    records (name shorter than 64 bytes and unique up to its first NUL, at
-//    most 4 dims, no negative ne, the element count representable, a type id
-//    below GGML_TYPE_COUNT with traits, ne[0] whole blocks); then every offset
-//    equal to the padded sizes before it, in record order; then the model
+//  - tlv_walk: one file's header as gguf.cpp reads it (ggml/src/gguf.cpp:
+//    230-427 for the reads, :459-803 for the rules), in its order: magic;
+//    version (0, 1 and newer than 3 refused, a byte-swapped version is the
+//    endianness message); the tensor and key counts (negative ones refused);
+//    keys (none empty, none twice, readable values, no string or array longer
+//    than 2^30, general.alignment a u32 power of two); tensor records (name
+//    shorter than 64 bytes and unique up to its first NUL, at most 4 dims, no
+//    negative ne, the element count representable, a type id below
+//    GGML_TYPE_COUNT with a block size, ne[0] whole blocks, the byte size
+//    representable); the data section inside the file; then every offset
+//    equal to the padded sizes before it, in record order. A read past the
+//    end of the file is refused like any other. It then applies the model
 //    loader's rule that each tensor's data lie inside the file
-//    (src/llama-model-loader.h:40-50). The first refusal in that order is the
-//    status; for each record it also reports, when the caller gives room, its
-//    own status and, for a ternary record whose bytes do not fill its place,
-//    the layout that does (PrismML-Eng/llama.cpp#167: type 42 declared,
-//    128-weight groups stored).
+//    (src/llama-model-loader.h:40-50). bitnet.cpp's reader differs in two
+//    places, both followed here: it has no guard for tensors with no
+//    elements, so a 0 in ne[1..3] is refused (a division by zero), and it
+//    reads general.alignment with gguf_get_val_u32, which also takes an
+//    array of exactly one u32. For each record the walk also reports, when
+//    the caller gives room, its own status and, for a ternary record whose
+//    bytes do not fill its place, the layout that does
+//    (PrismML-Eng/llama.cpp#167: type 42 declared, 128-weight groups stored).
+//  - tlv_model: the verdict of one runtime on a model, which is one file or
+//    the parts of a split model (gguf-split writes the keys to the first
+//    part only), in the loader's order (src/llama-model-loader.cpp:570-674):
+//    the first file's header, its general.architecture read as a string,
+//    its tensors inside the file; split.count; for a split model split.no 0
+//    in the first file, whose name must end in -00001-of-<count>.gguf (the
+//    loader derives the other names from it), then every other part: its
+//    header, split.no, its tensors (a name loaded before, then the file
+//    end); split.tensors.count; then the architecture
+//    (src/llama-model.cpp:43-349 maps it to a model class, :368-369 refuses
+//    an unknown one); in the PrismML fork the Hadamard rules; clip is
+//    refused as a main model (src/llama.cpp:352-353). A runtime that does not
+//    apply prism.hadamard.* accepts such a model but ignores the rotation it
+//    declares.
 //  - tlv_hadamard: the fork's rules for prism.hadamard.* (src/llama-model.cpp
-//    :1196-1335 for the keys, :1971-2095 per listed weight), in its order. It
-//    assumes the architecture is one the fork knows (tlv_runtime checks that
-//    first, src/llama-model.cpp:359-363). A file without
-//    prism.hadamard.version passes with out.present false: the fork then
-//    applies no rotation at all (PrismML-Eng/llama.cpp#242).
-//  - tlv_runtime: the verdict of one runtime: accepts, refuses (with the first
-//    status in its order), or accepts but ignores the rotation a file declares.
+//    :1196-1335 for the keys, :1971-2095 per listed weight), in its order,
+//    over the tensors of every part. A model without prism.hadamard.version
+//    passes with out.present false: the fork then applies no rotation at all
+//    (PrismML-Eng/llama.cpp#242).
+//  - tlv_native: the runtime a model is written for; tlv_file_verdict folds
+//    the verdict there.
+//
+// Where the readers' own arithmetic overflows a signed integer (an element
+// count past 2^63 that wraps, bitnet.cpp's TL2 size of an absurd shape) the
+// outcome depends on the compiler, and the answer is TLV_ERR_LIMIT: no
+// verdict. Unsigned arithmetic (ggml_nbytes, the offsets) wraps as it does in C.
 //
 // Strings are compared as C strings, as the readers compare them (strcmp and
 // c_str in gguf.cpp and the loaders): up to the first NUL. Duplicate keys are
 // compared on all their bytes, as gguf.cpp does.
-// Status classes (specs/formats/OWNERS.md): -63 .. -84. This module needs
+// Status classes (specs/formats/OWNERS.md): -63 .. -87. This module needs
 // formats.h and runtimes.h earlier in the same translation unit.
 module TrinityMemoryLive {
     const TLV_ERR_HADAMARD_TYPE: i32 = -63;
@@ -59,22 +86,48 @@ module TrinityMemoryLive {
     const TLV_ERR_BOUNDS: i32 = -82;
     const TLV_ERR_ARCH: i32 = -83;
     const TLV_ERR_LIMIT: i32 = -84;
+    const TLV_ERR_SPLIT: i32 = -85;
+    const TLV_ERR_COUNT: i32 = -86;
+    const TLV_ERR_SHORT: i32 = -87;
 
-    // Limits of this scanner, not of the readers: headers beyond them get
-    // TLV_ERR_LIMIT and no verdict.
+    // Limits of this scanner, not of the readers: past them the answer is
+    // TLV_ERR_LIMIT and no verdict. TLV_MAX_HEADER bounds the bytes of one
+    // file the scanner reads; the work limits bound the time a crafted header
+    // can take (comparisons of names, values skipped again).
     const TLV_MAX_KEYS: u64 = 65536;
     const TLV_MAX_TENSORS: u64 = 32768;
+    const TLV_MAX_PARTS: u64 = 1024;
+    const TLV_MAX_HEADER: u64 = 268435456;
     const TLV_MAX_NAME_WORK: u64 = 50000000;
+    const TLV_MAX_KEY_WORK: u64 = 100000000;
+    // The readers' own limits (gguf.cpp:19-20).
+    const TLV_GGUF_MAX_STRING: u64 = 1073741824;
+    const TLV_GGUF_MAX_ARRAY: u64 = 1073741824;
 
     const TLV_RUN_ACCEPTS: i32 = 0;
     const TLV_RUN_REFUSES: i32 = 1;
     const TLV_RUN_IGNORES_ROTATION: i32 = 2;
 
-    // A file's verdict in the runtime it is written for (tlv_native).
+    // A model's verdict in the runtime it is written for (tlv_native).
     const TLV_FILE_OK: i32 = 0;
     const TLV_FILE_REFUSED: i32 = 1;
     const TLV_FILE_NO_TERNARY: i32 = 2;
     const TLV_FILE_UNDECIDED: i32 = 3;
+    const TLV_FILE_OTHER: i32 = 4;
+    // tlv_native for a model written for software none of the pinned runtimes is.
+    const TLV_NATIVE_OTHER: i32 = 0;
+
+    // Ternary layouts bitnet.cpp reads for which formats.t27 has no storage
+    // contract (TF_ERR_LAYOUT_UNSUPPORTED): their places are checked, their
+    // weights are not.
+    const TLV_LAYOUT_TL1: i32 = 101;
+    const TLV_LAYOUT_TL2: i32 = 102;
+
+    // A part table has TLV_PART_FIELDS u64 per file of the model, the first
+    // file first: where its header starts in `data` (0 for the first), the
+    // header's length, the file's size, and the split number and count its
+    // name carries (-KKKKK-of-NNNNN.gguf; 0 and 0 when it carries none).
+    const TLV_PART_FIELDS: u64 = 5;
 
     // One key-value pair. `at` is the first byte of the value; for arrays,
     // `elem` and `count` describe the elements and `items` is the first byte
@@ -88,14 +141,23 @@ module TrinityMemoryLive {
         items: u64,
     }
 
-    // What tlv_walk found. `status` is 0, the first refusal, TF_ERR_TRUNCATED
-    // (read at least `needed` bytes and call again) or TLV_ERR_LIMIT. `record`
-    // is the index of the record the status names (2^64 - 1 for the header),
-    // `expected` and `found` the two offsets of TLV_ERR_OFFSETS, or the end of
-    // the data and the file size of TLV_ERR_BOUNDS. `read` counts the records
-    // whose per-record outputs were written (all of them unless the walk stopped).
+    // What tlv_walk found. `reader` is gguf.cpp's own answer: 0 (it reads the
+    // file), its first refusal, TF_ERR_TRUNCATED (no answer yet: call again
+    // with at least `needed` bytes of the header) or TLV_ERR_LIMIT (none).
+    // `status` adds the loader's file-end rule (TLV_ERR_BOUNDS) to a reader
+    // that accepts, and is TF_ERR_TRUNCATED whenever more bytes would let the
+    // walk read further, also after a refusal, for the per-record outputs.
+    // `record` is the index of the record the status names (2^64 - 1 for the
+    // header), `expected` and `found` the two offsets of TLV_ERR_OFFSETS, or
+    // the end of the data and the file size of TLV_ERR_BOUNDS. `records_at`
+    // is the position in `data` of the first record, `data_start` the file
+    // offset of the data section. `read` counts the records read (their
+    // per-record outputs are written); `ternary` those of them with a ternary
+    // layout in the runtime that pass their own checks, `ternary_ok` those
+    // whose bytes also fill their place.
     struct TLVWalk {
         status: i32,
+        reader: i32,
         record: u64,
         expected: u64,
         found: u64,
@@ -130,16 +192,27 @@ module TrinityMemoryLive {
         index: u64,
     }
 
+    // One runtime's verdict. `part` is the row of the part table the status
+    // names; `record`, `expected` and `found` as in TLVWalk (for
+    // TLV_ERR_SPLIT, `expected` and `found` are the split values that differ;
+    // for a Hadamard status `record` is the entry index).
     struct TLVRun {
         verdict: i32,
         status: i32,
+        part: u64,
         record: u64,
         expected: u64,
         found: u64,
     }
 
+    // Work done by the loops a crafted header could make long.
+    struct TLVBudget {
+        work: u64,
+    }
+
     // ---- bytes and strings ----------------------------------------------------
 
+    // GGML_PAD for a power of two, wrapping as it does in C.
     fn tlv_pad(value: u64, alignment: u64) -> u64 {
         return ((value + alignment - 1) / alignment) * alignment;
     }
@@ -163,6 +236,10 @@ module TrinityMemoryLive {
         return true;
     }
 
+    fn tlv_read_u16(data: []u8, at: u64) -> u64 {
+        return (data[at as usize] as u64) | ((data[(at + 1) as usize] as u64) << 8);
+    }
+
     // The string value at `at` (a u64 length, then its bytes), read as a C string, equals `text`.
     fn tlv_text_at(data: []u8, at: u64, text: str, text_size: usize) -> bool {
         var length: u64 = tlv_cstr(data, at + 8, tf_read_u64(data, at as usize));
@@ -180,20 +257,37 @@ module TrinityMemoryLive {
         return false;
     }
 
-    // ---- key-value pairs -----------------------------------------------------------
+    // FNV-1a of data[at .. at + length).
+    fn tlv_hash(data: []u8, at: u64, length: u64) -> u64 {
+        var hash: u64 = 0xcbf29ce484222325;
+        var i: u64 = 0;
+        while (i < length) {
+            hash = (hash ^ (data[(at + i) as usize] as u64)) * 0x100000001b3;
+            i = i + 1;
+        }
+        return hash;
+    }
 
-    // Position of the first tensor record of a complete header whose keys
-    // tlv_walk has accepted, or TF_ERR_CONTAINER.
-    fn tlv_records(data: []u8, size: usize) -> i64 {
+    // Whether a * b stays at or below 2^63 - 1.
+    fn tlv_fits_i64(a: u64, b: u64) -> bool {
+        if (a == 0 || b == 0) { return true; }
+        return a <= 0x7fffffffffffffff / b;
+    }
+
+    // ---- key-value pairs of an accepted header --------------------------------
+
+    // Position in `data` of the first tensor record of a header at `base`
+    // whose keys gguf.cpp reads, or TF_ERR_CONTAINER.
+    fn tlv_records_in(data: []u8, base: u64, size: usize) -> i64 {
         var scratch: TFTensorInfo;
-        if (size < 24) { return TF_ERR_CONTAINER as i64; }
-        var keys: u64 = tf_read_u64(data, 16);
-        var pos: u64 = 24;
+        if ((size as u64) < base + 24) { return TF_ERR_CONTAINER as i64; }
+        var keys: u64 = tf_read_u64(data, (base + 16) as usize);
+        var pos: u64 = base + 24;
         var k: u64 = 0;
         while (k < keys) {
             if (pos + 8 > (size as u64)) { return TF_ERR_CONTAINER as i64; }
             var length: u64 = tf_read_u64(data, pos as usize);
-            if (length > 65535 || pos + 12 + length > (size as u64)) { return TF_ERR_CONTAINER as i64; }
+            if (length > TLV_GGUF_MAX_STRING || pos + 12 + length > (size as u64)) { return TF_ERR_CONTAINER as i64; }
             var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
             var next: i64 = tf_gguf_skip(data, size, pos + 12 + length, vtype, &scratch);
             if (next < 0) { return TF_ERR_CONTAINER as i64; }
@@ -203,20 +297,25 @@ module TrinityMemoryLive {
         return pos as i64;
     }
 
-    // The first key whose name, read as a C string, is `key` (gguf_find_key
-    // compares with strcmp). Returns 0 (out.found says whether it exists) or
-    // TF_ERR_CONTAINER. Call it on headers tlv_walk has accepted.
-    fn tlv_key(data: []u8, size: usize, key: str, key_size: usize, out: *TLVKey) -> i32 {
+    fn tlv_records(data: []u8, size: usize) -> i64 {
+        return tlv_records_in(data, 0, size);
+    }
+
+    // The first key of the header at `base` whose name, read as a C string,
+    // is `key` (gguf_find_key compares with strcmp). Returns 0 (out.found
+    // says whether it exists) or TF_ERR_CONTAINER. Call it on headers whose
+    // keys gguf.cpp reads.
+    fn tlv_key_in(data: []u8, base: u64, size: usize, key: str, key_size: usize, out: *TLVKey) -> i32 {
         var scratch: TFTensorInfo;
         out.found = false; out.vtype = 0; out.at = 0; out.elem = 0; out.count = 0; out.items = 0;
-        if (size < 24) { return TF_ERR_CONTAINER; }
-        var keys: u64 = tf_read_u64(data, 16);
-        var pos: u64 = 24;
+        if ((size as u64) < base + 24) { return TF_ERR_CONTAINER; }
+        var keys: u64 = tf_read_u64(data, (base + 16) as usize);
+        var pos: u64 = base + 24;
         var k: u64 = 0;
         while (k < keys) {
             if (pos + 8 > (size as u64)) { return TF_ERR_CONTAINER; }
             var length: u64 = tf_read_u64(data, pos as usize);
-            if (length > 65535 || pos + 12 + length > (size as u64)) { return TF_ERR_CONTAINER; }
+            if (length > TLV_GGUF_MAX_STRING || pos + 12 + length > (size as u64)) { return TF_ERR_CONTAINER; }
             var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
             var value_at: u64 = pos + 12 + length;
             var next: i64 = tf_gguf_skip(data, size, value_at, vtype, &scratch);
@@ -238,9 +337,14 @@ module TrinityMemoryLive {
         return 0;
     }
 
-    // The key `<arch>` + `suffix`, where `arch` is the string value at
-    // arch_at (up to its NUL), read as a strict u32 (the loaders' get_key).
-    // Returns the value, or 0 when the key is missing or not a u32.
+    fn tlv_key(data: []u8, size: usize, key: str, key_size: usize, out: *TLVKey) -> i32 {
+        return tlv_key_in(data, 0, size, key, key_size, out);
+    }
+
+    // The key `<arch>` + `suffix` of the first file, where `arch` is the
+    // string value at arch_at (up to its NUL), read as a strict u32 (the
+    // loaders' get_key). Returns the value, or 0 when the key is missing or
+    // not a u32.
     fn tlv_arch_u32(data: []u8, size: usize, arch_at: u64, suffix: str, suffix_size: usize) -> u64 {
         var scratch: TFTensorInfo;
         var arch_size: u64 = tlv_cstr(data, arch_at + 8, tf_read_u64(data, arch_at as usize));
@@ -250,7 +354,7 @@ module TrinityMemoryLive {
         while (k < keys) {
             if (pos + 8 > (size as u64)) { return 0; }
             var length: u64 = tf_read_u64(data, pos as usize);
-            if (length > 65535 || pos + 12 + length > (size as u64)) { return 0; }
+            if (length > TLV_GGUF_MAX_STRING || pos + 12 + length > (size as u64)) { return 0; }
             var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
             var value_at: u64 = pos + 12 + length;
             var next: i64 = tf_gguf_skip(data, size, value_at, vtype, &scratch);
@@ -270,32 +374,68 @@ module TrinityMemoryLive {
 
     // ---- byte counts ---------------------------------------------------------------
 
-    // ggml_nbytes of a tensor in `runtime`: 0 when any dim is 0 (ggml.c:
-    // ggml_nbytes returns 0 for a tensor with no elements), 2^64 - 1 when the
-    // id has no traits there or the TL2 rule does not apply.
+    // Whether bitnet.cpp's TL2 size of this shape stays in int64: it is
+    // computed in signed arithmetic (ggml.c:1317-1320), whose overflow C
+    // leaves undefined.
+    fn tlv_tl2_defined(ne0: u64, ne1: u64) -> bool {
+        var span: u64 = 0;
+        if (ne0 >= 256) { span = ne0 - 256; } else { span = 256 - ne0; }
+        if (!tlv_fits_i64(span, ne1)) { return false; }
+        if (!tlv_fits_i64(span * ne1 / 3, 5)) { return false; }
+        if (!tlv_fits_i64(256, ne1)) { return false; }
+        if (!tlv_fits_i64(256 * ne1 / 2, 4)) { return false; }
+        // Both terms are at most (2^63 - 1) / 8, so their sum fits.
+        return true;
+    }
+
+    // bitnet.cpp's TL2 byte count before its padding (ggml.c:1318): int64
+    // arithmetic, division truncating toward zero, stored in a size_t.
+    // Call only when tlv_tl2_defined.
+    fn tlv_tl2(ne0: u64, ne1: u64) -> u64 {
+        var a: i64 = (ne0 as i64) - 256;
+        var b: i64 = ne1 as i64;
+        var first: i64 = a * b / 3 * 5 / 8;
+        var second: i64 = 256 * b / 2 * 4 / 8;
+        return (first + second) as u64;
+    }
+
+    // ggml_nbytes of a tensor in `runtime` (ggml.c:1298-1321; bitnet.cpp's
+    // :1300-1331 adds I2_S, TL1 and TL2), in its unsigned arithmetic, which
+    // wraps: 0 when any dim is 0, 2^64 - 1 when the id has no traits there.
+    // For TL2, call only when tlv_tl2_defined.
     fn tlv_nbytes(runtime: i32, type_id: u32, ne0: u64, ne1: u64, ne2: u64, ne3: u64) -> u64 {
         var top: u64 = 0xffffffffffffffff;
         if (ne0 == 0 || ne1 == 0 || ne2 == 0 || ne3 == 0) { return 0; }
         var blck: u64 = trt_blck(runtime, type_id);
         var bytes: u64 = trt_bytes(runtime, type_id);
         if (blck == 0 || bytes == 0) { return top; }
-        var rule: i32 = trt_rule(runtime, type_id);
-        if (rule == TRT_RULE_I2S) {
-            return (ne0 * ne1 * ne2 * ne3 * bytes) / 4 + 32;
+        var nb0: u64 = bytes;
+        var nb1: u64 = nb0 * (ne0 / blck);
+        var nb2: u64 = nb1 * ne1;
+        var nb3: u64 = nb2 * ne2;
+        var n: u64 = 0;
+        if (blck == 1) {
+            n = bytes + (ne0 - 1) * nb0 + (ne1 - 1) * nb1 + (ne2 - 1) * nb2 + (ne3 - 1) * nb3;
+            var rule: i32 = trt_rule(runtime, type_id);
+            if (rule == TRT_RULE_I2S) { n = n / 4 + 32; }
+            if (rule == TRT_RULE_TL2) {
+                n = tlv_tl2(ne0, ne1);
+                if (n % 32 != 0) { n = 32 - n % 32 + n; }
+                n = n + 32;
+            }
+            return n;
         }
-        if (rule == TRT_RULE_TL2) {
-            if (ne0 < 256) { return top; }
-            var n: u64 = (ne0 - 256) * ne1 / 3 * 5 / 8 + 256 * ne1 / 2 * 4 / 8;
-            if (n % 32 != 0) { n = 32 - n % 32 + n; }
-            return n + 32;
-        }
-        return (ne0 / blck) * bytes * ne1 * ne2 * ne3;
+        return ne0 * nb0 / blck + (ne1 - 1) * nb1 + (ne2 - 1) * nb2 + (ne3 - 1) * nb3;
     }
 
-    // The ternary layout of a type id as `runtime` reads it (the format ids of
-    // t27/formats.t27), 0 when it is not one.
+    // The ternary layout of a type id as `runtime` reads it: a format id of
+    // t27/formats.t27, TLV_LAYOUT_TL1 or TLV_LAYOUT_TL2; 0 when it is not one.
     fn tlv_ternary(runtime: i32, type_id: u32) -> i32 {
         var format: i32 = tf_format_of_gguf(type_id, runtime == TRT_PRISMML, runtime == TRT_BITNET_CPP);
+        if (format == TF_ERR_LAYOUT_UNSUPPORTED) {
+            if (type_id == 38) { return TLV_LAYOUT_TL1; }
+            return TLV_LAYOUT_TL2;
+        }
         if (format < 0) { return 0; }
         return format;
     }
@@ -332,232 +472,473 @@ module TrinityMemoryLive {
         return 0;
     }
 
-    // ---- the header as gguf.cpp reads it ---------------------------------------------
+    // The status of a ternary record at `offset` holding `bytes`: `format`
+    // when its bytes fill its place, which runs to the next record's offset
+    // (`next`) or, for the last record, to the end of the file; TF_ERR_EXTENT
+    // when they do not fit in it, TLV_ERR_OFFSETS when a gap is left (or the
+    // next record starts below this one: the offsets are out of order),
+    // TLV_ERR_BOUNDS when the record starts past the end of the file.
+    fn tlv_place(format: i32, offset: u64, bytes: u64, next: u64, last: bool, data_start: u64, file_size: u64,
+                 alignment: u64) -> i32 {
+        if (last) {
+            if (data_start > file_size || file_size - data_start < offset) { return TLV_ERR_BOUNDS; }
+            if (file_size - data_start - offset < bytes) { return TF_ERR_EXTENT; }
+            return format;
+        }
+        if (next < offset) { return TLV_ERR_OFFSETS; }
+        if (next - offset < bytes) { return TF_ERR_EXTENT; }
+        if (next - offset != tlv_pad(bytes, alignment)) { return TLV_ERR_OFFSETS; }
+        return format;
+    }
+
+    // The room tlv_place measured (0 when there is none to measure).
+    fn tlv_room(offset: u64, next: u64, last: bool, data_start: u64, file_size: u64) -> u64 {
+        if (last) {
+            if (data_start > file_size || file_size - data_start < offset) { return 0; }
+            return file_size - data_start - offset;
+        }
+        if (next < offset) { return 0; }
+        return next - offset;
+    }
+
+    // When the offsets are out of record order no record has a place: the
+    // per-record answers of the ternary records become TLV_ERR_OFFSETS.
+    fn tlv_unplace(status: []i32, fit: []i32, count: u64) {
+        var i: u64 = 0;
+        while (i < count) {
+            var mine: i32 = status[i as usize];
+            if (mine > 0 || mine == TF_ERR_EXTENT || mine == TLV_ERR_OFFSETS || mine == TLV_ERR_BOUNDS) {
+                status[i as usize] = TLV_ERR_OFFSETS;
+                fit[i as usize] = 0;
+            }
+            i = i + 1;
+        }
+    }
+
+    // ---- one file's header as gguf.cpp reads it ------------------------------------------
 
     fn tlv_reset(out: *TLVWalk) {
-        out.status = 0; out.record = 0xffffffffffffffff; out.expected = 0; out.found = 0; out.needed = 0;
-        out.version = 0; out.keys = 0; out.tensors = 0; out.records_at = 0; out.data_start = 0;
+        out.status = 0; out.reader = 0; out.record = 0xffffffffffffffff; out.expected = 0; out.found = 0;
+        out.needed = 0; out.version = 0; out.keys = 0; out.tensors = 0; out.records_at = 0; out.data_start = 0;
         out.alignment = 32; out.ternary = 0; out.ternary_ok = 0; out.read = 0; out.prism = false; out.bitnet = false;
     }
 
-    // Returns out.status. With capacity >= out.tensors, status[i] holds for
-    // record i: the format id of a ternary record whose bytes fill its place,
-    // 0 for any other record that passes, or a negative status (the record's
-    // own refusal, or for a ternary record TF_ERR_EXTENT when its bytes run
-    // into the next record, TLV_ERR_OFFSETS when they stop short of it,
-    // TLV_ERR_BOUNDS past the end of the file); fit[i] the layout that fills
-    // the place instead (tlv_fit); type_ids[i] its type id; name_at[i] and
-    // name_size[i] where its name is (up to the first NUL). The per-record
-    // statuses cover every record whose shape could be read, also after the
-    // first refusal, so a caller can list them all.
-    fn tlv_walk(data: []u8, size: usize, file_size: u64, runtime: i32, status: []i32, fit: []i32,
+    // Whether the `count` bytes at `pos` are in the file and in `data`: 0
+    // when they are; TLV_ERR_SHORT when the file ends first (the reader
+    // fails there); else TLV_ERR_LIMIT past TLV_MAX_HEADER, or
+    // TF_ERR_TRUNCATED with out.needed, the bytes of this file's header
+    // needed to go on. `end` is the end of the header bytes in `data`.
+    fn tlv_have(out: *TLVWalk, end: u64, base: u64, file_size: u64, pos: u64, count: u64) -> i32 {
+        var offset: u64 = pos - base;
+        if (offset > file_size || count > file_size - offset) { return TLV_ERR_SHORT; }
+        if (count <= end - pos) { return 0; }
+        if (offset + count > TLV_MAX_HEADER) { return TLV_ERR_LIMIT; }
+        out.needed = offset + count;
+        return TF_ERR_TRUNCATED;
+    }
+
+    fn tlv_stop(out: *TLVWalk, status: i32) -> i32 {
+        out.status = status;
+        out.reader = status;
+        return status;
+    }
+
+    // The position after the key at `pos` of a header whose keys were read,
+    // counting the string elements it skips.
+    fn tlv_key_end(data: []u8, pos: u64, budget: *TLVBudget) -> u64 {
+        var length: u64 = tf_read_u64(data, pos as usize);
+        var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
+        var at: u64 = pos + 12 + length;
+        var element: u32 = vtype;
+        var count: u64 = 1;
+        if (vtype == 9) {
+            element = tf_read_u32(data, at as usize);
+            count = tf_read_u64(data, (at + 4) as usize);
+            at = at + 12;
+        }
+        var width: u64 = tf_gguf_scalar_size(element);
+        if (width != 0) { return at + count * width; }
+        var i: u64 = 0;
+        while (i < count) {
+            at = at + 8 + tf_read_u64(data, at as usize);
+            i = i + 1;
+        }
+        budget.work = budget.work + count;
+        return at;
+    }
+
+    // One value, as gguf.cpp reads it (gguf.cpp:230-360, :563-605):
+    // returns the position after it, TLV_ERR_KEY when the reader refuses it
+    // (an invalid type, a string or array longer than it reads), or a status
+    // of tlv_have. `vtype` is the value's type (for an array, of its elements).
+    fn tlv_value(data: []u8, end: u64, base: u64, file_size: u64, pos: u64, vtype: u32, array: bool, count: u64,
+                 budget: *TLVBudget, out: *TLVWalk) -> i64 {
+        if (vtype > 12 || vtype == 9) { return TLV_ERR_KEY as i64; }
+        if (array && count > TLV_GGUF_MAX_ARRAY) { return TLV_ERR_KEY as i64; }
+        var width: u64 = tf_gguf_scalar_size(vtype);
+        var have: i32 = 0;
+        if (width != 0) {
+            have = tlv_have(out, end, base, file_size, pos, count * width);
+            if (have != 0) { return have as i64; }
+            return (pos + count * width) as i64;
+        }
+        // Strings: a string array first needs 8 bytes per element in the file.
+        if (array) {
+            have = tlv_have(out, end, base, file_size, pos, 0);
+            if (have != 0) { return have as i64; }
+            if (count * 8 > file_size - (pos - base)) { return TLV_ERR_SHORT as i64; }
+        }
+        var at: u64 = pos;
+        var i: u64 = 0;
+        while (i < count) {
+            budget.work = budget.work + 1;
+            if (budget.work > TLV_MAX_KEY_WORK) { return TLV_ERR_LIMIT as i64; }
+            have = tlv_have(out, end, base, file_size, at, 8);
+            if (have != 0) { return have as i64; }
+            var length: u64 = tf_read_u64(data, at as usize);
+            if (length > TLV_GGUF_MAX_STRING) { return TLV_ERR_KEY as i64; }
+            have = tlv_have(out, end, base, file_size, at + 8, length);
+            if (have != 0) { return have as i64; }
+            at = at + 8 + length;
+            i = i + 1;
+        }
+        return at as i64;
+    }
+
+    // Returns out.status. The header starts at `base` in `data` and its bytes
+    // end at `size`; `file_size` is the size of the whole file. With capacity
+    // >= out.tensors, status[i] holds for record i: the ternary layout of a
+    // record whose bytes fill its place (tlv_ternary), 0 for any other record
+    // that passes, or a negative status (the record's own refusal, or for a
+    // ternary record tlv_place's answer); fit[i] the layout that fills the
+    // place instead (tlv_fit); type_ids[i] its type id; name_at[i] and
+    // name_size[i] where its name is (up to the first NUL, at most 64 bytes).
+    // The per-record statuses cover every record the walk could read, also
+    // after the first refusal, so a caller can list them all.
+    fn tlv_walk(data: []u8, base: u64, size: usize, file_size: u64, runtime: i32, status: []i32, fit: []i32,
                 type_ids: []u32, name_at: []u64, name_size: []u64, capacity: usize, out: *TLVWalk) -> i32 {
-        var scratch: TFTensorInfo;
         var top: u64 = 0xffffffffffffffff;
+        var most: u64 = 0x7fffffffffffffff;
+        var end: u64 = size as u64;
+        var budget: TLVBudget;
+        budget.work = 0;
         tlv_reset(out);
-        if (size < 4) { out.needed = 4; out.status = TF_ERR_TRUNCATED; return out.status; }
-        if (!tf_same_text(data, 0, 4, "GGUF", 4)) { out.status = TLV_ERR_MAGIC; return out.status; }
-        if (size < 8) { out.needed = 8; out.status = TF_ERR_TRUNCATED; return out.status; }
-        var version: u32 = tf_read_u32(data, 4);
+        if (base > end) { return tlv_stop(out, TF_ERR_CONTAINER); }
+        // Magic, version and the two counts (gguf.cpp:463-543).
+        var have: i32 = tlv_have(out, end, base, file_size, base, 4);
+        if (have != 0) { return tlv_stop(out, have); }
+        if (!tf_same_text(data, base as usize, 4, "GGUF", 4)) { return tlv_stop(out, TLV_ERR_MAGIC); }
+        have = tlv_have(out, end, base, file_size, base + 4, 4);
+        if (have != 0) { return tlv_stop(out, have); }
+        var version: u32 = tf_read_u32(data, (base + 4) as usize);
         out.version = version;
-        if (version == 0) { out.status = TLV_ERR_VERSION; return out.status; }
-        if ((version & 0xffff) == 0) { out.status = TLV_ERR_ENDIAN; return out.status; }
-        if (version == 1 || version > 3) { out.status = TLV_ERR_VERSION; return out.status; }
-        if (size < 24) { out.needed = 24; out.status = TF_ERR_TRUNCATED; return out.status; }
-        var tensors: u64 = tf_read_u64(data, 8);
-        var keys: u64 = tf_read_u64(data, 16);
+        if (version == 0) { return tlv_stop(out, TLV_ERR_VERSION); }
+        if ((version & 0xffff) == 0) { return tlv_stop(out, TLV_ERR_ENDIAN); }
+        if (version == 1 || version > 3) { return tlv_stop(out, TLV_ERR_VERSION); }
+        have = tlv_have(out, end, base, file_size, base + 8, 8);
+        if (have != 0) { return tlv_stop(out, have); }
+        var tensors: u64 = tf_read_u64(data, (base + 8) as usize);
         out.tensors = tensors;
+        if (tensors > most) { return tlv_stop(out, TLV_ERR_COUNT); }
+        have = tlv_have(out, end, base, file_size, base + 16, 8);
+        if (have != 0) { return tlv_stop(out, have); }
+        var keys: u64 = tf_read_u64(data, (base + 16) as usize);
         out.keys = keys;
-        if (tensors > TLV_MAX_TENSORS || keys > TLV_MAX_KEYS) { out.status = TLV_ERR_LIMIT; return out.status; }
-        // Keys (gguf.cpp:558-640).
-        var pos: u64 = 24;
-        var k: u64 = 0;
-        var alignment_type: u32 = 4;
+        if (keys > most) { return tlv_stop(out, TLV_ERR_COUNT); }
+        // Keys (gguf.cpp:545-638).
+        var pos: u64 = base + 24;
+        var key_at: [256]u64;
         var alignment_found: bool = false;
+        var alignment_type: u32 = 0;
+        var alignment_elem: u32 = 0;
+        var alignment_count: u64 = 0;
         var alignment_at: u64 = 0;
+        var k: u64 = 0;
         while (k < keys) {
-            if (pos + 8 > (size as u64)) { out.needed = pos + 8; out.status = TF_ERR_TRUNCATED; return out.status; }
+            if (k == TLV_MAX_KEYS) {
+                // A key takes at least 13 bytes: when the rest of the file
+                // cannot hold the keys left, the reader runs out of bytes.
+                if (keys - k > (file_size - (pos - base)) / 13) { return tlv_stop(out, TLV_ERR_SHORT); }
+                return tlv_stop(out, TLV_ERR_LIMIT);
+            }
+            have = tlv_have(out, end, base, file_size, pos, 8);
+            if (have != 0) { return tlv_stop(out, have); }
             var length: u64 = tf_read_u64(data, pos as usize);
-            if (length > 65535) { out.status = TLV_ERR_LIMIT; return out.status; }
-            if (pos + 12 + length > (size as u64)) { out.needed = pos + 12 + length; out.status = TF_ERR_TRUNCATED; return out.status; }
-            if (length == 0) { out.status = TLV_ERR_KEY; return out.status; }
+            if (length > TLV_GGUF_MAX_STRING) { return tlv_stop(out, TLV_ERR_KEY); }
+            have = tlv_have(out, end, base, file_size, pos + 8, length);
+            if (have != 0) { return tlv_stop(out, have); }
+            if (length == 0) { return tlv_stop(out, TLV_ERR_KEY); }
             // A duplicate compares all the bytes of both keys (std::string ==).
-            var other: u64 = 24;
+            var other: u64 = base + 24;
             var j: u64 = 0;
             while (j < k) {
+                if (j < 256) { other = key_at[j as usize]; }
                 var other_length: u64 = tf_read_u64(data, other as usize);
-                if (other_length == length && tlv_same_bytes(data, other + 8, pos + 8, length)) {
-                    out.status = TLV_ERR_KEY; return out.status;
+                budget.work = budget.work + 1;
+                if (other_length == length) {
+                    budget.work = budget.work + length;
+                    if (tlv_same_bytes(data, other + 8, pos + 8, length)) { return tlv_stop(out, TLV_ERR_KEY); }
                 }
-                var other_type: u32 = tf_read_u32(data, (other + 8 + other_length) as usize);
-                other = tf_gguf_skip(data, size, other + 12 + other_length, other_type, &scratch) as u64;
+                if (budget.work > TLV_MAX_KEY_WORK) { return tlv_stop(out, TLV_ERR_LIMIT); }
+                if (j >= 255 && j + 1 < k) { other = tlv_key_end(data, other, &budget); }
                 j = j + 1;
             }
+            if (k < 256) { key_at[k as usize] = pos; }
+            have = tlv_have(out, end, base, file_size, pos + 8 + length, 4);
+            if (have != 0) { return tlv_stop(out, have); }
             var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
             var value_at: u64 = pos + 12 + length;
-            if (vtype > 12) { out.status = TLV_ERR_KEY; return out.status; }
-            var next: i64 = tf_gguf_skip(data, size, value_at, vtype, &scratch);
-            if (next == (TF_ERR_TRUNCATED as i64)) { out.needed = scratch.needed; out.status = TF_ERR_TRUNCATED; return out.status; }
-            if (next < 0) { out.status = TLV_ERR_KEY; return out.status; }
+            var element: u32 = vtype;
+            var count: u64 = 1;
+            if (vtype == 9) {
+                have = tlv_have(out, end, base, file_size, value_at, 12);
+                if (have != 0) { return tlv_stop(out, have); }
+                element = tf_read_u32(data, value_at as usize);
+                count = tf_read_u64(data, (value_at + 4) as usize);
+                value_at = value_at + 12;
+            }
+            var next: i64 = tlv_value(data, end, base, file_size, value_at, element, vtype == 9, count, &budget, out);
+            if (next < 0) { return tlv_stop(out, next as i32); }
             var name: u64 = tlv_cstr(data, pos + 8, length);
             if (tf_same_text(data, (pos + 8) as usize, name as usize, "general.alignment", 17) && !alignment_found) {
-                alignment_found = true; alignment_type = vtype; alignment_at = value_at;
+                alignment_found = true; alignment_type = vtype; alignment_elem = element;
+                alignment_count = count; alignment_at = value_at;
             }
             if (name > 5 && tf_same_text(data, (pos + 8) as usize, 6, "prism.", 6)) { out.prism = true; }
             if (vtype == 8 && tf_same_text(data, (pos + 8) as usize, name as usize, "general.architecture", 20)
-                && tlv_text_at(data, value_at, "bitnet-b1.58", 12)) { out.bitnet = true; }
+                && tlv_text_at(data, pos + 12 + length, "bitnet-b1.58", 12)) { out.bitnet = true; }
             pos = next as u64;
             k = k + 1;
         }
+        // general.alignment (gguf.cpp:609-624): a u32 in llama.cpp and the
+        // fork; bitnet.cpp's gguf_get_val_u32 takes one u32 value, also an
+        // array of one.
         var alignment: u64 = 32;
         if (alignment_found) {
-            if (alignment_type != 4) { out.status = TLV_ERR_ALIGNMENT; return out.status; }
+            var one_u32: bool = alignment_type == 4;
+            if (runtime == TRT_BITNET_CPP && alignment_type == 9 && alignment_elem == 4 && alignment_count == 1) {
+                one_u32 = true;
+            }
+            if (!one_u32) { return tlv_stop(out, TLV_ERR_ALIGNMENT); }
             alignment = tf_read_u32(data, alignment_at as usize) as u64;
-            if (alignment == 0 || (alignment & (alignment - 1)) != 0) { out.status = TLV_ERR_ALIGNMENT; return out.status; }
+            if (alignment == 0 || (alignment & (alignment - 1)) != 0) { return tlv_stop(out, TLV_ERR_ALIGNMENT); }
         }
         out.alignment = alignment;
         out.records_at = pos;
-        // Tensor records (gguf.cpp:640-760): pass 1 reads every record and
-        // keeps the first refusal; per-record statuses continue after it.
+        // Tensor records (gguf.cpp:639-765).
         var name_work: u64 = 0;
+        // The first record whose element count leaves the reader's answer to the compiler.
+        var unsure_record: u64 = top;
+        // A bit per hash of the names read so far: only a name whose bit is
+        // set is compared with the records before it.
+        var seen: [8192]u64 = [0];
         var first: i32 = 0;
         var first_record: u64 = top;
+        var truncated: bool = false;
+        var done: bool = false;
+        // The previous record, while its place (which ends at this record's offset) is open.
+        var prev_open: bool = false;
+        var prev_t: u64 = 0;
+        var prev_format: i32 = 0;
+        var prev_offset: u64 = 0;
+        var prev_bytes: u64 = 0;
+        var prev_ne0: u64 = 0;
+        var prev_ne1: u64 = 0;
+        var prev_ne2: u64 = 0;
+        var prev_ne3: u64 = 0;
+        // Whether the offsets so far are in record order (equal ones: records with no bytes).
+        var ordered: bool = true;
+        var last_offset: u64 = 0;
         var t: u64 = 0;
-        while (t < tensors) {
-            if (pos + 8 > (size as u64)) { out.needed = pos + 8; out.status = TF_ERR_TRUNCATED; return out.status; }
-            var length: u64 = tf_read_u64(data, pos as usize);
-            if (length > 65535) { out.status = TLV_ERR_LIMIT; return out.status; }
-            if (pos + 12 + length > (size as u64)) { out.needed = pos + 12 + length; out.status = TF_ERR_TRUNCATED; return out.status; }
-            var dims: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
+        while (t < tensors && !done) {
+            var stop: i32 = 0;
+            var length: u64 = 0;
+            if (t == TLV_MAX_TENSORS) {
+                // A record takes at least 24 bytes (as for the keys above).
+                stop = TLV_ERR_LIMIT;
+                if (tensors - t > (file_size - (pos - base)) / 24) { stop = TLV_ERR_SHORT; }
+            }
+            if (stop == 0) { stop = tlv_have(out, end, base, file_size, pos, 8); }
             var own: i32 = 0;
-            if (length >= 64) { own = TLV_ERR_NAME; }
-            var cname: u64 = tlv_cstr(data, pos + 8, length);
-            if (own == 0) {
-                // Unique up to the first NUL (strcmp on ggml_set_name's copy).
-                name_work = name_work + t;
-                if (name_work > TLV_MAX_NAME_WORK) { out.status = TLV_ERR_LIMIT; return out.status; }
-                var other: u64 = out.records_at;
-                var j: u64 = 0;
-                while (j < t) {
-                    var other_length: u64 = tf_read_u64(data, other as usize);
-                    var other_dims: u64 = tf_read_u32(data, (other + 8 + other_length) as usize) as u64;
-                    var other_name: u64 = tlv_cstr(data, other + 8, other_length);
-                    if (other_length < 64 && other_name == cname && tlv_same_bytes(data, other + 8, pos + 8, cname)) {
-                        own = TLV_ERR_NAME;
+            if (stop == 0) {
+                length = tf_read_u64(data, pos as usize);
+                // A name of 64 bytes or more is refused whatever it holds
+                // (gguf.cpp:654-658): its bytes are read only to go on listing records.
+                if (length > TLV_GGUF_MAX_STRING) { stop = TLV_ERR_NAME; }
+                if (stop == 0 && length > file_size - (pos + 8 - base)) { stop = TLV_ERR_SHORT; }
+                if (stop == 0 && length >= 64) {
+                    own = TLV_ERR_NAME;
+                    if (tlv_have(out, end, base, file_size, pos + 8, length) != 0) { stop = TLV_ERR_NAME; }
+                }
+                if (stop == 0 && own == 0) { stop = tlv_have(out, end, base, file_size, pos + 8, length); }
+            }
+            var cname: u64 = 0;
+            if (stop == 0) {
+                if (length >= 64) {
+                    cname = tlv_cstr(data, pos + 8, 64);
+                } else {
+                    cname = tlv_cstr(data, pos + 8, length);
+                    // Unique up to the first NUL (strcmp on ggml_set_name's copy).
+                    var hash: u64 = tlv_hash(data, pos + 8, cname);
+                    var slot: usize = ((hash >> 6) & 8191) as usize;
+                    var bit: u64 = (1 as u64) << (hash & 63);
+                    var compare: bool = (seen[slot] & bit) != 0;
+                    seen[slot] = seen[slot] | bit;
+                    if (compare) {
+                        name_work = name_work + t;
+                        if (name_work > TLV_MAX_NAME_WORK) { stop = TLV_ERR_LIMIT; }
                     }
-                    other = other + 12 + other_length + 8 * other_dims + 12;
-                    j = j + 1;
+                    var other: u64 = out.records_at;
+                    var j: u64 = 0;
+                    if (!compare) { j = t; }
+                    while (j < t && stop == 0) {
+                        var other_length: u64 = tf_read_u64(data, other as usize);
+                        var other_dims: u64 = tf_read_u32(data, (other + 8 + other_length) as usize) as u64;
+                        if (other_length < 64 && tlv_cstr(data, other + 8, other_length) == cname
+                            && tlv_same_bytes(data, other + 8, pos + 8, cname)) {
+                            own = TLV_ERR_NAME;
+                        }
+                        other = other + 12 + other_length + 8 * other_dims + 12;
+                        j = j + 1;
+                    }
                 }
             }
-            if (dims > 4) {
+            if (stop == 0) { stop = tlv_have(out, end, base, file_size, pos + 8 + length, 4); }
+            var dims: u64 = 0;
+            if (stop == 0) {
+                dims = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
                 // gguf.cpp checks the name before the dims.
-                if (first == 0 && own != 0) { first = own; first_record = t; }
-                if (first == 0) { first = TLV_ERR_SHAPE; first_record = t; }
-                out.status = first; out.record = first_record; return out.status;
+                if (dims > 4) {
+                    if (own == 0) { own = TLV_ERR_SHAPE; }
+                    stop = own;
+                }
             }
-            var end: u64 = pos + 12 + length + 8 * (dims as u64) + 12;
-            if (end > (size as u64)) { out.needed = end; out.status = TF_ERR_TRUNCATED; return out.status; }
             var dim_at: u64 = pos + 12 + length;
-            var ne0: u64 = 1;
-            var ne1: u64 = 1;
-            var ne2: u64 = 1;
-            var ne3: u64 = 1;
-            if (dims > 0) { ne0 = tf_read_u64(data, dim_at as usize); }
-            if (dims > 1) { ne1 = tf_read_u64(data, (dim_at + 8) as usize); }
-            if (dims > 2) { ne2 = tf_read_u64(data, (dim_at + 16) as usize); }
-            if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
-            var most: u64 = 0x7fffffffffffffff;
-            if (own == 0 && (ne0 > most || ne1 > most || ne2 > most || ne3 > most)) { own = TLV_ERR_SHAPE; }
-            if (own == 0 && ne0 != 0 && ne1 != 0 && ne2 != 0 && ne3 != 0) {
-                if (most / ne1 <= ne0 || most / ne2 <= ne0 * ne1 || most / ne3 <= ne0 * ne1 * ne2) { own = TLV_ERR_SHAPE; }
+            if (stop == 0) { stop = tlv_have(out, end, base, file_size, dim_at, 8 * dims + 12); }
+            if (stop != 0) {
+                if (stop == TF_ERR_TRUNCATED) { truncated = true; }
+                if (stop != TF_ERR_TRUNCATED && first == 0) { first = stop; first_record = t; }
+                done = true;
+            } else {
+                var ne0: u64 = 1;
+                var ne1: u64 = 1;
+                var ne2: u64 = 1;
+                var ne3: u64 = 1;
+                if (dims > 0) { ne0 = tf_read_u64(data, dim_at as usize); }
+                if (dims > 1) { ne1 = tf_read_u64(data, (dim_at + 8) as usize); }
+                if (dims > 2) { ne2 = tf_read_u64(data, (dim_at + 16) as usize); }
+                if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
+                if (own == 0 && (ne0 > most || ne1 > most || ne2 > most || ne3 > most)) { own = TLV_ERR_SHAPE; }
+                // The element count must be representable (gguf.cpp:699-712).
+                // ggml-org and the fork skip the check when the int64 count is
+                // not positive; bitnet.cpp has no such guard and divides by
+                // ne[1..3]. When that int64 product overflows, the count the
+                // guard sees is compiler-defined: the reader refuses here or
+                // goes on, and the size check below reads the same count. Such
+                // a record is `unsure`: the walk goes on as if the reader did,
+                // and a refusal after it is the reader's answer either way.
+                var unsure: bool = false;
+                if (own == 0) {
+                    if (runtime == TRT_BITNET_CPP && (ne1 == 0 || ne2 == 0 || ne3 == 0)) { own = TLV_ERR_SHAPE; }
+                    if (own == 0 && ne0 != 0 && ne1 != 0 && ne2 != 0 && ne3 != 0) {
+                        if (most / ne1 <= ne0 || most / ne2 <= ne0 * ne1 || most / ne3 <= ne0 * ne1 * ne2) {
+                            own = TLV_ERR_SHAPE;
+                            if (runtime != TRT_BITNET_CPP) {
+                                var fits: bool = tlv_fits_i64(ne0, ne1) && tlv_fits_i64(ne0 * ne1, ne2)
+                                    && tlv_fits_i64(ne0 * ne1 * ne2, ne3);
+                                var wrapped: u64 = ne0 * ne1 * ne2 * ne3;
+                                if (!fits && (wrapped == 0 || wrapped > most)) { own = 0; unsure = true; }
+                            }
+                        }
+                    }
+                }
+                var type_id: u32 = tf_read_u32(data, (dim_at + 8 * dims) as usize);
+                var blck: u64 = 0;
+                if (type_id < trt_type_count(runtime)) { blck = trt_blck(runtime, type_id); }
+                if (own == 0 && blck == 0) { own = TLV_ERR_TYPE; }
+                if (own == 0 && ne0 % blck != 0) { own = TLV_ERR_ROW; }
+                // The byte size must be representable (gguf.cpp:737-743).
+                if (own == 0 && !unsure && ne0 != 0 && ne1 != 0 && ne2 != 0 && ne3 != 0
+                    && (ne0 * ne1 * ne2 * ne3) / blck > top / trt_bytes(runtime, type_id)) {
+                    own = TLV_ERR_SHAPE;
+                }
+                if (own == 0 && unsure) {
+                    own = TLV_ERR_LIMIT;
+                    if (first == 0 && unsure_record == top) { unsure_record = t; }
+                }
+                var offset: u64 = tf_read_u64(data, (dim_at + 8 * dims + 4) as usize);
+                if (t > 0 && offset < last_offset) { ordered = false; }
+                last_offset = offset;
+                if (t < (capacity as u64)) {
+                    status[t as usize] = own; fit[t as usize] = 0; type_ids[t as usize] = type_id;
+                    name_at[t as usize] = pos + 8; name_size[t as usize] = cname;
+                }
+                // The place of the previous ternary record ends at this offset.
+                if (prev_open) {
+                    var mine: i32 = tlv_place(prev_format, prev_offset, prev_bytes, offset, false, 0, 0, alignment);
+                    if (mine == prev_format) { out.ternary_ok = out.ternary_ok + 1; }
+                    if (prev_t < (capacity as u64)) {
+                        status[prev_t as usize] = mine;
+                        if (mine < 0 && mine != TLV_ERR_BOUNDS && offset >= prev_offset) {
+                            fit[prev_t as usize] = tlv_fit(prev_ne0, prev_ne1, prev_ne2, prev_ne3, offset - prev_offset,
+                                                           alignment, false);
+                        }
+                    }
+                    prev_open = false;
+                }
+                var format: i32 = tlv_ternary(runtime, type_id);
+                if (own == 0 && format > 0) {
+                    out.ternary = out.ternary + 1;
+                    var rule: i32 = trt_rule(runtime, type_id);
+                    if (rule != TRT_RULE_TL2 || tlv_tl2_defined(ne0, ne1)) {
+                        prev_open = true; prev_t = t; prev_format = format; prev_offset = offset;
+                        prev_bytes = tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3);
+                        prev_ne0 = ne0; prev_ne1 = ne1; prev_ne2 = ne2; prev_ne3 = ne3;
+                    }
+                }
+                if (own != 0 && own != TLV_ERR_LIMIT && first == 0) { first = own; first_record = t; }
+                pos = dim_at + 8 * dims + 12;
+                t = t + 1;
+                out.read = t;
             }
-            var type_id: u32 = tf_read_u32(data, (dim_at + 8 * (dims as u64)) as usize);
-            if (own == 0 && (type_id >= trt_type_count(runtime) || trt_blck(runtime, type_id) == 0)) { own = TLV_ERR_TYPE; }
-            if (own == 0 && ne0 % trt_blck(runtime, type_id) != 0) { own = TLV_ERR_ROW; }
-            // The byte size must be representable (gguf.cpp: elements / block <= SIZE_MAX / type size).
-            if (own == 0 && ne0 != 0 && ne1 != 0 && ne2 != 0 && ne3 != 0
-                && (ne0 * ne1 * ne2 * ne3) / trt_blck(runtime, type_id) > top / trt_bytes(runtime, type_id)) {
-                own = TLV_ERR_SHAPE;
-            }
-            if (own != 0 && first == 0) { first = own; first_record = t; }
-            if (t < (capacity as u64)) {
-                status[t as usize] = own; fit[t as usize] = 0; type_ids[t as usize] = type_id;
-                name_at[t as usize] = pos + 8; name_size[t as usize] = cname;
-            }
-            pos = end;
-            t = t + 1;
-            out.read = t;
         }
-        var data_start: u64 = pos;
-        if (tensors > 0) { data_start = tlv_pad(pos, alignment); }
+        var answered: u64 = out.read;
+        if (answered > (capacity as u64)) { answered = capacity as u64; }
+        if (!ordered) { out.ternary_ok = 0; tlv_unplace(status, fit, answered); }
+        if (truncated) {
+            // More bytes would let the walk read further.
+            out.status = TF_ERR_TRUNCATED;
+            out.reader = first;
+            if (first == 0) { out.reader = TF_ERR_TRUNCATED; }
+            out.record = first_record;
+            return out.status;
+        }
+        if (done) {
+            out.status = first; out.reader = first; out.record = first_record;
+            return out.status;
+        }
+        var data_start: u64 = pos - base;
+        if (tensors > 0) { data_start = tlv_pad(pos - base, alignment); }
         out.data_start = data_start;
         out.needed = data_start;
-        // Pass 2: offsets in record order (gguf.cpp:776-801), the file's end
-        // (src/llama-model-loader.h:40-50), and the ternary records' places.
-        var expected: u64 = 0;
-        var offsets_ok: bool = first == 0;
-        pos = out.records_at;
-        t = 0;
-        while (t < tensors) {
-            var length: u64 = tf_read_u64(data, pos as usize);
-            var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
-            var dim_at: u64 = pos + 12 + length;
-            var ne0: u64 = 1;
-            var ne1: u64 = 1;
-            var ne2: u64 = 1;
-            var ne3: u64 = 1;
-            if (dims > 0) { ne0 = tf_read_u64(data, dim_at as usize); }
-            if (dims > 1) { ne1 = tf_read_u64(data, (dim_at + 8) as usize); }
-            if (dims > 2) { ne2 = tf_read_u64(data, (dim_at + 16) as usize); }
-            if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
-            var type_id: u32 = tf_read_u32(data, (dim_at + 8 * dims) as usize);
-            var offset: u64 = tf_read_u64(data, (dim_at + 8 * dims + 4) as usize);
-            var next_pos: u64 = dim_at + 8 * dims + 12;
-            var own: i32 = 0;
-            if (t < (capacity as u64)) { own = status[t as usize]; }
-            var bytes: u64 = 0;
-            if (own == 0) { bytes = tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3); }
-            if (offsets_ok) {
-                if (offset != expected) {
-                    first = TLV_ERR_OFFSETS; first_record = t; out.expected = expected; out.found = offset;
-                    offsets_ok = false;
-                } else {
-                    var padded: u64 = tlv_pad(bytes, alignment);
-                    if (top - expected < padded) { first = TLV_ERR_SHAPE; first_record = t; offsets_ok = false; }
-                    else { expected = expected + padded; }
+        // The last ternary record's place runs to the end of the file.
+        if (prev_open) {
+            var mine: i32 = tlv_place(prev_format, prev_offset, prev_bytes, 0, true, data_start, file_size, alignment);
+            if (mine == prev_format) { out.ternary_ok = out.ternary_ok + 1; }
+            if (prev_t < (capacity as u64)) {
+                status[prev_t as usize] = mine;
+                if (mine < 0 && mine != TLV_ERR_BOUNDS) {
+                    fit[prev_t as usize] = tlv_fit(prev_ne0, prev_ne1, prev_ne2, prev_ne3,
+                                                   tlv_room(prev_offset, 0, true, data_start, file_size), alignment, true);
                 }
             }
-            var format: i32 = tlv_ternary(runtime, type_id);
-            if (format > 0 && own == 0) {
-                out.ternary = out.ternary + 1;
-                // The place of the record: up to the next record in record
-                // order when that one starts at or above it, else to the end of the file.
-                var last: bool = true;
-                var room: u64 = 0;
-                if (t + 1 < tensors) {
-                    var n_length: u64 = tf_read_u64(data, next_pos as usize);
-                    var n_dims: u64 = tf_read_u32(data, (next_pos + 8 + n_length) as usize) as u64;
-                    var n_offset: u64 = tf_read_u64(data, (next_pos + 12 + n_length + 8 * n_dims + 4) as usize);
-                    if (n_offset >= offset) { last = false; room = n_offset - offset; }
-                }
-                if (last) {
-                    if (data_start <= file_size && file_size - data_start >= offset) { room = file_size - data_start - offset; }
-                }
-                var mine: i32 = format;
-                if (last && (data_start > file_size || file_size - data_start < offset || room < bytes)) { mine = TLV_ERR_BOUNDS; }
-                if (!last && room < bytes) { mine = TF_ERR_EXTENT; }
-                if (!last && room >= bytes && room != tlv_pad(bytes, alignment)) { mine = TLV_ERR_OFFSETS; }
-                if (mine == format) { out.ternary_ok = out.ternary_ok + 1; }
-                if (t < (capacity as u64)) {
-                    status[t as usize] = mine;
-                    if (mine < 0) { fit[t as usize] = tlv_fit(ne0, ne1, ne2, ne3, room, alignment, last); }
-                }
-            }
-            pos = next_pos;
-            t = t + 1;
+            if (!ordered) { out.ternary_ok = 0; tlv_unplace(status, fit, answered); }
         }
+        // The data section must start inside the file (gguf.cpp:771-776).
+        if (first == 0 && tensors > 0 && data_start > file_size) { first = TLV_ERR_SHORT; first_record = top; }
+        // Offsets in record order and the size of the data section (gguf.cpp:781-802).
         if (first == 0) {
-            // The loader: every tensor's data inside the file.
+            var expected: u64 = 0;
             pos = out.records_at;
             t = 0;
             while (t < tensors && first == 0) {
@@ -574,10 +955,47 @@ module TrinityMemoryLive {
                 if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
                 var type_id: u32 = tf_read_u32(data, (dim_at + 8 * dims) as usize);
                 var offset: u64 = tf_read_u64(data, (dim_at + 8 * dims + 4) as usize);
-                var bytes: u64 = tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3);
-                if (data_start > file_size || top - data_start < offset || top - data_start - offset < bytes
-                    || data_start + offset + bytes > file_size) {
-                    first = TLV_ERR_BOUNDS; first_record = t; out.expected = data_start + offset + bytes; out.found = file_size;
+                if (offset != expected) {
+                    first = TLV_ERR_OFFSETS; first_record = t; out.expected = expected; out.found = offset;
+                }
+                if (first == 0 && trt_rule(runtime, type_id) == TRT_RULE_TL2 && ne0 != 0 && ne1 != 0 && ne2 != 0
+                    && ne3 != 0 && !tlv_tl2_defined(ne0, ne1)) {
+                    first = TLV_ERR_LIMIT; first_record = t;
+                }
+                if (first == 0) {
+                    var padded: u64 = tlv_pad(tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3), alignment);
+                    if (top - expected < padded) { first = TLV_ERR_SHAPE; first_record = t; }
+                    else { expected = expected + padded; }
+                }
+                pos = dim_at + 8 * dims + 12;
+                t = t + 1;
+            }
+        }
+        // Nothing refused after an unsure record: the answer is the compiler's.
+        if (first == 0 && unsure_record != top) { first = TLV_ERR_LIMIT; first_record = unsure_record; }
+        out.reader = first;
+        if (first == 0) {
+            // The loader: every tensor's data inside the file (offs + nbytes, wrapping).
+            pos = out.records_at;
+            t = 0;
+            while (t < tensors && first == 0) {
+                var length: u64 = tf_read_u64(data, pos as usize);
+                var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                var dim_at: u64 = pos + 12 + length;
+                var ne0: u64 = 1;
+                var ne1: u64 = 1;
+                var ne2: u64 = 1;
+                var ne3: u64 = 1;
+                if (dims > 0) { ne0 = tf_read_u64(data, dim_at as usize); }
+                if (dims > 1) { ne1 = tf_read_u64(data, (dim_at + 8) as usize); }
+                if (dims > 2) { ne2 = tf_read_u64(data, (dim_at + 16) as usize); }
+                if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
+                var type_id: u32 = tf_read_u32(data, (dim_at + 8 * dims) as usize);
+                var offset: u64 = tf_read_u64(data, (dim_at + 8 * dims + 4) as usize);
+                var offs: u64 = data_start + offset;
+                var last_byte: u64 = offs + tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3);
+                if (last_byte < offs || last_byte > file_size) {
+                    first = TLV_ERR_BOUNDS; first_record = t; out.expected = last_byte; out.found = file_size;
                 }
                 pos = dim_at + 8 * dims + 12;
                 t = t + 1;
@@ -588,32 +1006,109 @@ module TrinityMemoryLive {
         return out.status;
     }
 
-    // The runtime a file is written for, to read its layouts in: the PrismML
-    // fork when a key starts "prism." or a record has id 142 or 143; bitnet.cpp
-    // when the architecture is bitnet-b1.58 or a record has id 36 or 38;
-    // llama.cpp otherwise. Call after tlv_walk accepted the header's structure.
-    fn tlv_native(data: []u8, size: usize, walk: *TLVWalk) -> i32 {
-        if (walk.prism) { return TRT_PRISMML; }
-        if (walk.bitnet) { return TRT_BITNET_CPP; }
-        var pos: u64 = walk.records_at;
-        var t: u64 = 0;
-        var fork: bool = false;
-        var bitnet: bool = false;
-        while (t < walk.tensors) {
-            if (pos + 12 > (size as u64)) { return TRT_LLAMA_CPP; }
-            var length: u64 = tf_read_u64(data, pos as usize);
-            if (pos + 12 + length > (size as u64)) { return TRT_LLAMA_CPP; }
-            var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
-            if (dims > 4 || pos + 12 + length + 8 * dims + 12 > (size as u64)) { return TRT_LLAMA_CPP; }
-            var type_id: u32 = tf_read_u32(data, (pos + 12 + length + 8 * dims) as usize);
-            if (type_id == 142 || type_id == 143) { fork = true; }
-            if (type_id == 36 || type_id == 38) { bitnet = true; }
-            pos = pos + 12 + length + 8 * dims + 12;
-            t = t + 1;
+    // ---- part tables ---------------------------------------------------------------
+
+    fn tlv_part_at(parts: []u64, i: u64) -> u64 { return parts[(i * TLV_PART_FIELDS) as usize]; }
+    fn tlv_part_end(parts: []u64, i: u64) -> u64 {
+        return parts[(i * TLV_PART_FIELDS) as usize] + parts[(i * TLV_PART_FIELDS + 1) as usize];
+    }
+    fn tlv_part_file(parts: []u64, i: u64) -> u64 { return parts[(i * TLV_PART_FIELDS + 2) as usize]; }
+    fn tlv_part_no(parts: []u64, i: u64) -> u64 { return parts[(i * TLV_PART_FIELDS + 3) as usize]; }
+    fn tlv_part_count(parts: []u64, i: u64) -> u64 { return parts[(i * TLV_PART_FIELDS + 4) as usize]; }
+
+    // At least one part and at most TLV_MAX_PARTS, the first at 0, every
+    // header inside `data`.
+    fn tlv_parts_ok(total: usize, parts: []u64, count: usize) -> bool {
+        if (count == 0 || (count as u64) > TLV_MAX_PARTS) { return false; }
+        if (tlv_part_at(parts, 0) != 0) { return false; }
+        var i: u64 = 0;
+        while (i < (count as u64)) {
+            var at: u64 = tlv_part_at(parts, i);
+            var length: u64 = parts[(i * TLV_PART_FIELDS + 1) as usize];
+            if (at > (total as u64) || length > (total as u64) - at) { return false; }
+            i = i + 1;
         }
-        if (fork) { return TRT_PRISMML; }
-        if (bitnet) { return TRT_BITNET_CPP; }
-        return TRT_LLAMA_CPP;
+        return true;
+    }
+
+    // The u16 value of the first file's key `key`: 0 when it is missing,
+    // 0x10000 when it is not a u16 (the loader's get_key refuses it).
+    fn tlv_u16_key(data: []u8, size: usize, key: str, key_size: usize) -> u64 {
+        var found: TLVKey;
+        if (tlv_key(data, size, key, key_size, &found) < 0) { return 0x10000; }
+        if (!found.found) { return 0; }
+        if (found.vtype != 2) { return 0x10000; }
+        return tlv_read_u16(data, found.at);
+    }
+
+    // The number of rows the loader reads: all of them when the first file
+    // declares a split count above 1, else the first file alone.
+    fn tlv_loaded(data: []u8, total: usize, parts: []u64, count: usize) -> u64 {
+        if (!tlv_parts_ok(total, parts, count)) { return 0; }
+        var n_split: u64 = tlv_u16_key(data, tlv_part_end(parts, 0) as usize, "split.count", 11);
+        if (n_split > 1 && n_split != 0x10000) { return count as u64; }
+        return 1;
+    }
+
+    // Where the records of each of the first `count` parts start, and how
+    // many there are. Returns false when a header's keys cannot be read.
+    fn tlv_part_records(data: []u8, parts: []u64, count: u64, records: []u64, tensors: []u64) -> bool {
+        var i: u64 = 0;
+        while (i < count) {
+            var at: i64 = tlv_records_in(data, tlv_part_at(parts, i), tlv_part_end(parts, i) as usize);
+            if (at < 0) { return false; }
+            records[i as usize] = at as u64;
+            tensors[i as usize] = tf_read_u64(data, (tlv_part_at(parts, i) + 8) as usize);
+            i = i + 1;
+        }
+        return true;
+    }
+
+    // Whether a record of the first `upto` parts is named data[name_at ..
+    // name_at + name_size) (C strings): 1, 0, or TLV_ERR_LIMIT past the work limit.
+    fn tlv_name_loaded(data: []u8, records: []u64, tensors: []u64, upto: u64, name_at: u64, name_size: u64,
+                       budget: *TLVBudget) -> i32 {
+        var i: u64 = 0;
+        while (i < upto) {
+            var pos: u64 = records[i as usize];
+            var t: u64 = 0;
+            budget.work = budget.work + tensors[i as usize];
+            if (budget.work > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
+            while (t < tensors[i as usize]) {
+                var length: u64 = tf_read_u64(data, pos as usize);
+                var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                if (tlv_cstr(data, pos + 8, length) == name_size && tlv_same_bytes(data, pos + 8, name_at, name_size)) {
+                    return 1;
+                }
+                pos = pos + 12 + length + 8 * dims + 12;
+                t = t + 1;
+            }
+            i = i + 1;
+        }
+        return 0;
+    }
+
+    // ne[0] of the tensor named data[name_at .. name_at + name_size) (C
+    // strings on both sides) in the first `count` parts, or 2^64 - 1 when no
+    // record has that name.
+    fn tlv_tensor_ne0(data: []u8, records: []u64, tensors: []u64, count: u64, name_at: u64, name_size: u64) -> u64 {
+        var i: u64 = 0;
+        while (i < count) {
+            var pos: u64 = records[i as usize];
+            var t: u64 = 0;
+            while (t < tensors[i as usize]) {
+                var length: u64 = tf_read_u64(data, pos as usize);
+                var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                if (tlv_cstr(data, pos + 8, length) == name_size && tlv_same_bytes(data, pos + 8, name_at, name_size)) {
+                    if (dims == 0) { return 1; }
+                    return tf_read_u64(data, (pos + 12 + length) as usize);
+                }
+                pos = pos + 12 + length + 8 * dims + 12;
+                t = t + 1;
+            }
+            i = i + 1;
+        }
+        return 0xffffffffffffffff;
     }
 
     // ---- prism.hadamard.* --------------------------------------------------------
@@ -667,29 +1162,6 @@ module TrinityMemoryLive {
         return tlv_kind(data, (at + p) as usize, (length - p) as usize);
     }
 
-    // ne[0] of the tensor named data[name_at .. name_at + name_size) (C
-    // strings on both sides), or 2^64 - 1 when no record has that name.
-    fn tlv_tensor_ne0(data: []u8, size: usize, records: u64, tensors: u64, name_at: u64, name_size: u64) -> u64 {
-        var none: u64 = 0xffffffffffffffff;
-        var pos: u64 = records;
-        var t: u64 = 0;
-        while (t < tensors) {
-            if (pos + 8 > (size as u64)) { return none; }
-            var length: u64 = tf_read_u64(data, pos as usize);
-            if (length > 65535 || pos + 12 + length > (size as u64)) { return none; }
-            var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
-            if (dims > 4 || pos + 12 + length + 8 * dims + 12 > (size as u64)) { return none; }
-            var cname: u64 = tlv_cstr(data, pos + 8, length);
-            if (cname == name_size && tlv_same_bytes(data, pos + 8, name_at, cname)) {
-                if (dims == 0) { return 1; }
-                return tf_read_u64(data, (pos + 12 + length) as usize);
-            }
-            pos = pos + 12 + length + 8 * dims + 12;
-            t = t + 1;
-        }
-        return none;
-    }
-
     // Whether the explicit sign table holds a vector of width (uint32_t) ne0.
     fn tlv_has_width(data: []u8, widths: *TLVKey, ne0: u64) -> bool {
         var width: u64 = ne0 & 0xffffffff;
@@ -702,13 +1174,13 @@ module TrinityMemoryLive {
     }
 
     // One listed entry (src/llama-model.cpp:1971-2095), in the fork's order: a
-    // tensor of the file, ne[0] divisible by the block size, a sign vector of
+    // tensor of the model, ne[0] divisible by the block size, a sign vector of
     // width ne[0] in explicit mode, then for a grouped GDN ssm_out weight the
     // head geometry (n_k > 0, n_v > 0, n_v % n_k == 0, ne[0] % n_v == 0 with
     // n_v = <arch>.ssm.time_step_rank and n_k = <arch>.ssm.group_count).
-    fn tlv_entry_ok(data: []u8, size: usize, records: u64, tensors: u64, name_at: u64, name_size: u64, block: u32,
+    fn tlv_entry_ok(data: []u8, records: []u64, tensors: []u64, count: u64, name_at: u64, name_size: u64, block: u32,
                     explicit_signs: bool, widths: *TLVKey, gdn: bool, n_v: u64, n_k: u64) -> bool {
-        var ne0: u64 = tlv_tensor_ne0(data, size, records, tensors, name_at, name_size);
+        var ne0: u64 = tlv_tensor_ne0(data, records, tensors, count, name_at, name_size);
         if (ne0 == 0xffffffffffffffff) { return false; }
         if (ne0 % (block as u64) != 0) { return false; }
         if (explicit_signs && !tlv_has_width(data, widths, ne0)) { return false; }
@@ -718,7 +1190,9 @@ module TrinityMemoryLive {
         return true;
     }
 
-    fn tlv_hadamard(data: []u8, size: usize, out: *TLVHadamard) -> i32 {
+    // Keys from the first file; tensors from the first `count` rows of the
+    // part table (the rows the loader reads, tlv_loaded).
+    fn tlv_hadamard(data: []u8, total: usize, parts: []u64, count: usize, out: *TLVHadamard) -> i32 {
         out.present = false; out.block_size = 0; out.names = 0; out.inverse = 0;
         out.widths = 0; out.signs = 0; out.explicit_signs = false; out.gdn_v_grouped = false; out.index = 0;
         var version: TLVKey;
@@ -732,10 +1206,18 @@ module TrinityMemoryLive {
         var gdn: TLVKey;
         var inverse: TLVKey;
         var arch: TLVKey;
+        var budget: TLVBudget;
+        var records: [1024]u64;
+        var tensors: [1024]u64;
+        budget.work = 0;
         widths.found = false; widths.count = 0; widths.items = 0;
-        var records: i64 = tlv_records(data, size);
-        if (records < 0) { return records as i32; }
-        var tensors: u64 = tf_read_u64(data, 8);
+        if (!tlv_parts_ok(total, parts, count)) { return TF_ERR_CONTAINER; }
+        var size: usize = tlv_part_end(parts, 0) as usize;
+        var rows: u64 = count as u64;
+        if (!tlv_part_records(data, parts, rows, records, tensors)) { return TF_ERR_CONTAINER; }
+        var all_tensors: u64 = 0;
+        var r: u64 = 0;
+        while (r < rows) { all_tensors = all_tensors + tensors[r as usize]; r = r + 1; }
         // :1196-1200 version (optional u32, must be 1)
         var status: i32 = tlv_key(data, size, "prism.hadamard.version", 22, &version);
         if (status < 0) { return status; }
@@ -774,7 +1256,7 @@ module TrinityMemoryLive {
         var explicit_signs: bool = tlv_text_at(data, mode.at, "explicit", 8);
         if (!explicit_signs && !tlv_text_at(data, mode.at, "identity", 8)) { return TLV_ERR_HADAMARD_TRANSFORM; }
         if (names.count == 0) { out.index = 0; return TLV_ERR_HADAMARD_NAME; }
-        if (names.count > TLV_MAX_TENSORS || names.count * tensors > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
+        if (names.count > TLV_MAX_TENSORS || names.count * all_tensors > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
         // :1230-1257 explicit signs: widths partition the values, each a
         // positive multiple of the block size, every value +1 or -1
         out.explicit_signs = explicit_signs;
@@ -842,9 +1324,12 @@ module TrinityMemoryLive {
             while (j < i) {
                 var other_length: u64 = tf_read_u64(data, other as usize);
                 var other_name: u64 = tlv_cstr(data, other + 8, other_length);
-                if (other_name == cname && tlv_same_bytes(data, other + 8, name_at, cname)) {
-                    out.index = i; return TLV_ERR_HADAMARD_NAME;
+                budget.work = budget.work + 1;
+                if (other_name == cname) {
+                    budget.work = budget.work + cname;
+                    if (tlv_same_bytes(data, other + 8, name_at, cname)) { out.index = i; return TLV_ERR_HADAMARD_NAME; }
                 }
+                if (budget.work > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
                 other = other + 8 + other_length;
                 j = j + 1;
             }
@@ -859,7 +1344,7 @@ module TrinityMemoryLive {
             if (inverse.elem != 8) { return TLV_ERR_HADAMARD_TYPE; }
             inverse_count = inverse.count;
         }
-        if (inverse_count > TLV_MAX_TENSORS) { return TLV_ERR_LIMIT; }
+        if (inverse_count > TLV_MAX_TENSORS || inverse_count * all_tensors > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
         out.inverse = inverse_count;
         at = inverse.items;
         i = 0;
@@ -875,9 +1360,11 @@ module TrinityMemoryLive {
             while (j < names.count) {
                 var listed_length: u64 = tf_read_u64(data, listed as usize);
                 var listed_name: u64 = tlv_cstr(data, listed + 8, listed_length);
+                budget.work = budget.work + 1;
                 if (listed_name == cname && tlv_same_bytes(data, listed + 8, name_at, cname)) {
                     out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
                 }
+                if (budget.work > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
                 listed = listed + 8 + listed_length;
                 j = j + 1;
             }
@@ -886,9 +1373,11 @@ module TrinityMemoryLive {
             while (j < i) {
                 var before_length: u64 = tf_read_u64(data, before as usize);
                 var before_name: u64 = tlv_cstr(data, before + 8, before_length);
+                budget.work = budget.work + 1;
                 if (before_name == cname && tlv_same_bytes(data, before + 8, name_at, cname)) {
                     out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
                 }
+                if (budget.work > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
                 before = before + 8 + before_length;
                 j = j + 1;
             }
@@ -903,7 +1392,7 @@ module TrinityMemoryLive {
         while (i < names.count) {
             var length: u64 = tf_read_u64(data, at as usize);
             var cname: u64 = tlv_cstr(data, at + 8, length);
-            if (!tlv_entry_ok(data, size, records as u64, tensors, at + 8, cname, block, explicit_signs, &widths,
+            if (!tlv_entry_ok(data, records, tensors, rows, at + 8, cname, block, explicit_signs, &widths,
                               gdn_on, n_v, n_k)) {
                 out.index = i; return TLV_ERR_HADAMARD_TENSOR;
             }
@@ -915,7 +1404,7 @@ module TrinityMemoryLive {
         while (i < inverse_count) {
             var length: u64 = tf_read_u64(data, at as usize);
             var cname: u64 = tlv_cstr(data, at + 8, length);
-            if (!tlv_entry_ok(data, size, records as u64, tensors, at + 8, cname, block, explicit_signs, &widths,
+            if (!tlv_entry_ok(data, records, tensors, rows, at + 8, cname, block, explicit_signs, &widths,
                               gdn_on, n_v, n_k)) {
                 out.index = names.count + i; return TLV_ERR_HADAMARD_TENSOR;
             }
@@ -927,50 +1416,280 @@ module TrinityMemoryLive {
 
     // ---- the verdict of one runtime ------------------------------------------------------
 
-    // In the runtime's order: its GGUF reader and the loader's file-end rule
-    // (tlv_walk), the architecture (src/llama-model.cpp:359-363: an unknown one
-    // is refused), then in the PrismML fork the Hadamard rules. A runtime that
-    // does not apply prism.hadamard.* accepts such a file but ignores the
-    // rotation it declares.
-    fn tlv_runtime(data: []u8, size: usize, file_size: u64, runtime: i32, out: *TLVRun) -> i32 {
-        var walk: TLVWalk;
+    fn tlv_refuse(out: *TLVRun, status: i32, part: u64, record: u64, expected: u64, found: u64) -> i32 {
+        out.verdict = TLV_RUN_REFUSES; out.status = status; out.part = part; out.record = record;
+        out.expected = expected; out.found = found;
+        return TLV_RUN_REFUSES;
+    }
+
+    // No verdict: the walk needs more bytes or passed a limit.
+    fn tlv_undecided(out: *TLVRun, status: i32, part: u64) -> i32 {
+        out.verdict = status; out.status = status; out.part = part;
+        return status;
+    }
+
+    // Returns out.verdict: TLV_RUN_ACCEPTS, TLV_RUN_REFUSES,
+    // TLV_RUN_IGNORES_ROTATION, or a negative status (TF_ERR_TRUNCATED,
+    // TLV_ERR_LIMIT, TF_ERR_CONTAINER for a bad part table) when there is none.
+    fn tlv_model(data: []u8, total: usize, parts: []u64, count: usize, runtime: i32, out: *TLVRun) -> i32 {
         var none_i: [1]i32 = [0];
         var none_f: [1]i32 = [0];
         var none_t: [1]u32 = [0];
         var none_a: [1]u64 = [0];
         var none_s: [1]u64 = [0];
-        out.verdict = TLV_RUN_REFUSES; out.status = 0; out.record = 0xffffffffffffffff; out.expected = 0; out.found = 0;
-        var status: i32 = tlv_walk(data, size, file_size, runtime, none_i, none_f, none_t, none_a, none_s, 0, &walk);
-        out.record = walk.record; out.expected = walk.expected; out.found = walk.found;
-        if (status == TF_ERR_TRUNCATED || status == TLV_ERR_LIMIT) { out.status = status; return status; }
-        if (status < 0) { out.status = status; return TLV_RUN_REFUSES; }
+        var records: [1024]u64;
+        var tensors: [1024]u64;
+        var walk: TLVWalk;
+        var key: TLVKey;
+        var budget: TLVBudget;
+        budget.work = 0;
+        out.verdict = TLV_RUN_REFUSES; out.status = 0; out.part = 0; out.record = 0xffffffffffffffff;
+        out.expected = 0; out.found = 0;
+        if (!tlv_parts_ok(total, parts, count)) { return tlv_undecided(out, TF_ERR_CONTAINER, 0); }
+        var size: usize = tlv_part_end(parts, 0) as usize;
+        // The first file (src/llama-model-loader.cpp:570-593).
+        tlv_walk(data, 0, size, tlv_part_file(parts, 0), runtime, none_i, none_f, none_t, none_a, none_s, 0, &walk);
+        if (walk.reader == TF_ERR_TRUNCATED || walk.reader == TLV_ERR_LIMIT) {
+            return tlv_undecided(out, walk.reader, 0);
+        }
+        if (walk.reader < 0) { return tlv_refuse(out, walk.reader, 0, walk.record, walk.expected, walk.found); }
+        if (walk.status == TF_ERR_TRUNCATED) { return tlv_undecided(out, TF_ERR_TRUNCATED, 0); }
         var arch: TLVKey;
-        status = tlv_key(data, size, "general.architecture", 20, &arch);
-        if (status < 0) { out.status = status; return TLV_RUN_REFUSES; }
-        if (!arch.found || arch.vtype != 8) { out.status = TLV_ERR_ARCH; return TLV_RUN_REFUSES; }
+        if (tlv_key(data, size, "general.architecture", 20, &arch) < 0) { return tlv_undecided(out, TF_ERR_CONTAINER, 0); }
+        if (arch.found && arch.vtype != 8) { return tlv_refuse(out, TLV_ERR_ARCH, 0, 0xffffffffffffffff, 0, 0); }
+        if (walk.status < 0) { return tlv_refuse(out, walk.status, 0, walk.record, walk.expected, walk.found); }
+        // split.count (optional u16), :595-596
+        var n_split: u64 = tlv_u16_key(data, size, "split.count", 11);
+        if (n_split == 0x10000) { return tlv_refuse(out, TLV_ERR_SPLIT, 0, 0xffffffffffffffff, 0, 0); }
+        if (n_split > 1) {
+            if (n_split > TLV_MAX_PARTS) { return tlv_undecided(out, TLV_ERR_LIMIT, 0); }
+            // split.no 0 in the first file (:599-606); the loader derives the
+            // other names from the first's (:608-616, src/llama.cpp:569-598).
+            var no: u64 = tlv_u16_key(data, size, "split.no", 8);
+            if (tlv_key(data, size, "split.no", 8, &key) < 0 || !key.found || no != 0) {
+                return tlv_refuse(out, TLV_ERR_SPLIT, 0, 0xffffffffffffffff, 0, no);
+            }
+            if (tlv_part_no(parts, 0) != 1 || tlv_part_count(parts, 0) != n_split) {
+                return tlv_refuse(out, TLV_ERR_SPLIT, 0, 0xffffffffffffffff, n_split, tlv_part_count(parts, 0));
+            }
+            records[0] = walk.records_at;
+            tensors[0] = walk.tensors;
+            var loaded: u64 = walk.tensors;
+            var k: u64 = 1;
+            while (k < n_split) {
+                // Part k + 1 (:619-661): a missing file ends the load.
+                if (k >= (count as u64) || tlv_part_no(parts, k) != k + 1) {
+                    return tlv_refuse(out, TLV_ERR_SPLIT, k, 0xffffffffffffffff, k + 1, 0);
+                }
+                var at: u64 = tlv_part_at(parts, k);
+                var part_end: usize = tlv_part_end(parts, k) as usize;
+                tlv_walk(data, at, part_end, tlv_part_file(parts, k), runtime, none_i, none_f, none_t, none_a, none_s, 0,
+                         &walk);
+                if (walk.reader == TF_ERR_TRUNCATED || walk.reader == TLV_ERR_LIMIT) {
+                    return tlv_undecided(out, walk.reader, k);
+                }
+                if (walk.reader < 0) { return tlv_refuse(out, walk.reader, k, walk.record, walk.expected, walk.found); }
+                if (walk.status == TF_ERR_TRUNCATED) { return tlv_undecided(out, TF_ERR_TRUNCATED, k); }
+                // split.no: gguf_get_val_u16 takes one u16 value, also an array of one.
+                if (tlv_key_in(data, at, part_end, "split.no", 8, &key) < 0) { return tlv_undecided(out, TF_ERR_CONTAINER, k); }
+                if (!key.found) { return tlv_refuse(out, TLV_ERR_SPLIT, k, 0xffffffffffffffff, k, 0x10000); }
+                var part_no: u64 = 0x10000;
+                if (key.vtype == 2) { part_no = tlv_read_u16(data, key.at); }
+                if (key.vtype == 9 && key.elem == 2 && key.count == 1) { part_no = tlv_read_u16(data, key.items); }
+                if (part_no != k) { return tlv_refuse(out, TLV_ERR_SPLIT, k, 0xffffffffffffffff, k, part_no); }
+                // Its tensors: a name loaded before (:653-656), then the file end.
+                var pos: u64 = walk.records_at;
+                var t: u64 = 0;
+                while (t < walk.tensors) {
+                    var length: u64 = tf_read_u64(data, pos as usize);
+                    var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                    var seen: i32 = tlv_name_loaded(data, records, tensors, k, pos + 8, tlv_cstr(data, pos + 8, length),
+                                                    &budget);
+                    if (seen == TLV_ERR_LIMIT) { return tlv_undecided(out, TLV_ERR_LIMIT, k); }
+                    if (seen == 1) { return tlv_refuse(out, TLV_ERR_NAME, k, t, 0, 0); }
+                    if (walk.status == TLV_ERR_BOUNDS && walk.record == t) {
+                        return tlv_refuse(out, TLV_ERR_BOUNDS, k, t, walk.expected, walk.found);
+                    }
+                    pos = pos + 12 + length + 8 * dims + 12;
+                    t = t + 1;
+                }
+                records[k as usize] = walk.records_at;
+                tensors[k as usize] = walk.tensors;
+                loaded = loaded + walk.tensors;
+                k = k + 1;
+            }
+            // split.tensors.count: a required i32 equal to the tensors loaded (:663-671).
+            if (tlv_key(data, size, "split.tensors.count", 19, &key) < 0 || !key.found || key.vtype != 5) {
+                return tlv_refuse(out, TLV_ERR_SPLIT, 0, 0xffffffffffffffff, loaded, 0x10000);
+            }
+            var declared: i64 = (tf_read_u32(data, key.at as usize) as i32) as i64;
+            if (declared < 0 || (declared as u64) != loaded) {
+                return tlv_refuse(out, TLV_ERR_SPLIT, 0, 0xffffffffffffffff, declared as u64, loaded);
+            }
+        }
+        // The architecture (src/llama-model.cpp:361-369 and the mapping :43-349).
+        if (!arch.found) { return tlv_refuse(out, TLV_ERR_ARCH, 0, 0xffffffffffffffff, 0, 0); }
         var arch_size: u64 = tlv_cstr(data, arch.at + 8, tf_read_u64(data, arch.at as usize));
         if (!trt_arch_known(runtime, data, (arch.at + 8) as usize, arch_size as usize)) {
-            out.status = TLV_ERR_ARCH; return TLV_RUN_REFUSES;
+            return tlv_refuse(out, TLV_ERR_ARCH, 0, 0xffffffffffffffff, 0, 0);
         }
+        var rows: usize = 1;
+        if (n_split > 1) { rows = count; }
         var rotation: TLVHadamard;
-        status = tlv_hadamard(data, size, &rotation);
+        var status: i32 = tlv_hadamard(data, total, parts, rows, &rotation);
         if (trt_hadamard(runtime)) {
-            if (status < 0) { out.status = status; out.record = rotation.index; return TLV_RUN_REFUSES; }
-            out.verdict = TLV_RUN_ACCEPTS; return TLV_RUN_ACCEPTS;
+            if (status == TLV_ERR_LIMIT || status == TF_ERR_CONTAINER) { return tlv_undecided(out, status, 0); }
+            if (status < 0) { return tlv_refuse(out, status, 0, rotation.index, 0, 0); }
         }
-        if (rotation.present) { out.verdict = TLV_RUN_IGNORES_ROTATION; return TLV_RUN_IGNORES_ROTATION; }
-        out.verdict = TLV_RUN_ACCEPTS;
+        // clip after the hyperparameters (src/llama.cpp:352-353).
+        if (trt_arch_refused_as_main(runtime, data, (arch.at + 8) as usize, arch_size as usize)) {
+            return tlv_refuse(out, TLV_ERR_ARCH, 0, 0xffffffffffffffff, 0, 0);
+        }
+        if (!trt_hadamard(runtime) && rotation.present) {
+            out.verdict = TLV_RUN_IGNORES_ROTATION; out.status = 0;
+            return TLV_RUN_IGNORES_ROTATION;
+        }
+        out.verdict = TLV_RUN_ACCEPTS; out.status = 0;
         return TLV_RUN_ACCEPTS;
     }
 
-    // The file verdict from tlv_runtime's return in the native runtime and
-    // the number of ternary records tlv_walk found there: refused, undecided
-    // (truncated or past a scanner limit), no ternary layout, or ok. A runtime
-    // that ignores a declared rotation cannot be the native one.
-    fn tlv_file_verdict(run: i32, ternary: u64) -> i32 {
+    // tlv_model for a model of one file.
+    fn tlv_runtime(data: []u8, size: usize, file_size: u64, runtime: i32, out: *TLVRun) -> i32 {
+        var row: [5]u64 = [0, 0, 0, 0, 0];
+        row[1] = size as u64;
+        row[2] = file_size;
+        return tlv_model(data, size, row, 1, runtime, out);
+    }
+
+    // ---- the runtime a model is written for --------------------------------------------
+
+    // Whether any pinned runtime defines the type id.
+    fn tlv_type_anywhere(type_id: u32) -> bool {
+        return trt_blck(TRT_LLAMA_CPP, type_id) != 0 || trt_blck(TRT_PRISMML, type_id) != 0
+            || trt_blck(TRT_BITNET_CPP, type_id) != 0;
+    }
+
+    // The runtime a model is written for, to read its layouts in, from the
+    // first file's keys and the type ids of the files the loader reads: the
+    // PrismML fork when a key starts "prism."; bitnet.cpp when the
+    // architecture is bitnet-b1.58; the fork when a record has id 142 or 143;
+    // bitnet.cpp when one has id 36 or 38; for id 42 (Q2_0 in llama.cpp, TL2
+    // in bitnet.cpp) bitnet.cpp when it accepts the model and llama.cpp does
+    // not; TLV_NATIVE_OTHER for software none of them is: a type id none of
+    // them defines, an architecture none of them maps, or no architecture at
+    // all in a file that is not a later part of a split model; llama.cpp
+    // otherwise. Records past the first that cannot be read give no marker.
+    fn tlv_native(data: []u8, total: usize, parts: []u64, count: usize) -> i32 {
+        var none_i: [1]i32 = [0];
+        var none_f: [1]i32 = [0];
+        var none_t: [1]u32 = [0];
+        var none_a: [1]u64 = [0];
+        var none_s: [1]u64 = [0];
+        var walk: TLVWalk;
+        if (!tlv_parts_ok(total, parts, count)) { return TLV_NATIVE_OTHER; }
+        var size: usize = tlv_part_end(parts, 0) as usize;
+        tlv_walk(data, 0, size, tlv_part_file(parts, 0), TRT_LLAMA_CPP, none_i, none_f, none_t, none_a, none_s, 0, &walk);
+        if (walk.prism) { return TRT_PRISMML; }
+        if (walk.bitnet) { return TRT_BITNET_CPP; }
+        if (walk.records_at == 0) { return TRT_LLAMA_CPP; }
+        var arch: TLVKey;
+        if (tlv_key(data, size, "general.architecture", 20, &arch) < 0) { return TRT_LLAMA_CPP; }
+        if (arch.found) {
+            if (arch.vtype != 8) { return TLV_NATIVE_OTHER; }
+            var arch_size: u64 = tlv_cstr(data, arch.at + 8, tf_read_u64(data, arch.at as usize));
+            var at: usize = (arch.at + 8) as usize;
+            if (!trt_arch_known(TRT_LLAMA_CPP, data, at, arch_size as usize)
+                && !trt_arch_known(TRT_PRISMML, data, at, arch_size as usize)
+                && !trt_arch_known(TRT_BITNET_CPP, data, at, arch_size as usize)) {
+                return TLV_NATIVE_OTHER;
+            }
+        } else {
+            var no: u64 = tlv_u16_key(data, size, "split.no", 8);
+            if (no == 0 || no == 0x10000) { return TLV_NATIVE_OTHER; }
+        }
+        var rows: u64 = tlv_loaded(data, total, parts, count);
+        var fork: bool = false;
+        var bitnet: bool = false;
+        var q2: bool = false;
+        var i: u64 = 0;
+        while (i < rows) {
+            var at: u64 = tlv_part_at(parts, i);
+            var part_end: u64 = tlv_part_end(parts, i);
+            tlv_walk(data, at, part_end as usize, tlv_part_file(parts, i), TRT_LLAMA_CPP, none_i, none_f, none_t, none_a,
+                     none_s, 0, &walk);
+            var pos: u64 = walk.records_at;
+            var t: u64 = 0;
+            var readable: bool = pos != 0;
+            while (readable && t < walk.tensors) {
+                if (pos + 8 > part_end) { readable = false; }
+                var length: u64 = 0;
+                if (readable) {
+                    length = tf_read_u64(data, pos as usize);
+                    if (length > 65535 || pos + 12 + length > part_end) { readable = false; }
+                }
+                var dims: u64 = 0;
+                if (readable) {
+                    dims = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                    if (dims > 4 || pos + 12 + length + 8 * dims + 12 > part_end) { readable = false; }
+                }
+                if (readable) {
+                    var type_id: u32 = tf_read_u32(data, (pos + 12 + length + 8 * dims) as usize);
+                    if (!tlv_type_anywhere(type_id)) { return TLV_NATIVE_OTHER; }
+                    if (type_id == 142 || type_id == 143) { fork = true; }
+                    if (type_id == 36 || type_id == 38) { bitnet = true; }
+                    if (type_id == 42) { q2 = true; }
+                    pos = pos + 12 + length + 8 * dims + 12;
+                    t = t + 1;
+                }
+            }
+            i = i + 1;
+        }
+        if (fork) { return TRT_PRISMML; }
+        if (bitnet) { return TRT_BITNET_CPP; }
+        if (q2) {
+            var run: TLVRun;
+            if (tlv_model(data, total, parts, count, TRT_BITNET_CPP, &run) == TLV_RUN_ACCEPTS
+                && tlv_model(data, total, parts, count, TRT_LLAMA_CPP, &run) == TLV_RUN_REFUSES) {
+                return TRT_BITNET_CPP;
+            }
+        }
+        return TRT_LLAMA_CPP;
+    }
+
+    // Ternary records of the files the loader reads, in `runtime`, that pass their own checks.
+    fn tlv_ternary_count(data: []u8, total: usize, parts: []u64, count: usize, runtime: i32) -> u64 {
+        var none_i: [1]i32 = [0];
+        var none_f: [1]i32 = [0];
+        var none_t: [1]u32 = [0];
+        var none_a: [1]u64 = [0];
+        var none_s: [1]u64 = [0];
+        var walk: TLVWalk;
+        var rows: u64 = tlv_loaded(data, total, parts, count);
+        var ternary: u64 = 0;
+        var i: u64 = 0;
+        while (i < rows) {
+            tlv_walk(data, tlv_part_at(parts, i), tlv_part_end(parts, i) as usize, tlv_part_file(parts, i), runtime,
+                     none_i, none_f, none_t, none_a, none_s, 0, &walk);
+            ternary = ternary + walk.ternary;
+            i = i + 1;
+        }
+        return ternary;
+    }
+
+    // The model's verdict from tlv_model's return and status in the native
+    // runtime and the number of ternary records there: written for other
+    // software (no pinned runtime is its own, or a file for the other byte
+    // order), refused, undecided (no verdict), no ternary layout, or ok.
+    fn tlv_file_verdict(run: i32, status: i32, ternary: u64, native: i32) -> i32 {
+        if (native == TLV_NATIVE_OTHER || status == TLV_ERR_ENDIAN) { return TLV_FILE_OTHER; }
         if (run == TLV_RUN_REFUSES) { return TLV_FILE_REFUSED; }
         if (run < 0) { return TLV_FILE_UNDECIDED; }
         if (ternary == 0) { return TLV_FILE_NO_TERNARY; }
         return TLV_FILE_OK;
+    }
+
+    // TLV_MAX_HEADER, for the caller that reads the bytes.
+    fn tlv_max_header() -> u64 {
+        return TLV_MAX_HEADER;
     }
 }
