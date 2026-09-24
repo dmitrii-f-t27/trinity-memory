@@ -15,8 +15,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCUMENT_PATH = ROOT / "conformance" / "memory_bridge.json"
-HANDLE = re.compile(r"^[0-9a-f]{32}$")
-SHA256 = re.compile(r"^[0-9a-f]{64}$")
+# Used with fullmatch: `$` alone would also accept a trailing newline.
+HANDLE = re.compile(r"[0-9a-f]{32}")
+SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 def load_document():
@@ -65,10 +66,10 @@ def subset(expected, actual, path):
 
 def check_format(kind, value, path):
     if kind == "uuid4-hex32":
-        if not (isinstance(value, str) and HANDLE.match(value) and value[12] == "4" and value[16] in "89ab"):
+        if not (isinstance(value, str) and HANDLE.fullmatch(value) and value[12] == "4" and value[16] in "89ab"):
             raise VectorFailure(f"{path}: {value!r} is not a version-4 UUID in 32 lowercase hex characters")
     elif kind == "sha256-hex64":
-        if not (isinstance(value, str) and SHA256.match(value)):
+        if not (isinstance(value, str) and SHA256.fullmatch(value)):
             raise VectorFailure(f"{path}: {value!r} is not a sha256 in 64 lowercase hex characters")
     else:
         raise VectorFailure(f"{path}: unknown format {kind!r}")
@@ -92,6 +93,10 @@ def check(name, status, body, expect, request=None):
             raise VectorFailure(f"{name}: expected error {code}, got {body!r}")
         if not isinstance(error.get("message"), str) or not error["message"]:
             raise VectorFailure(f"{name}: error message must be a nonempty string: {error!r}")
+        # Optional: which refusal it was, when several share one code (-32000 for the fpga backend).
+        part = expect.get("error_message_contains")
+        if part is not None and part not in error["message"]:
+            raise VectorFailure(f"{name}: error message {error['message']!r} does not contain {part!r}")
         return {}
     if "error" in body or "result" not in body:
         raise VectorFailure(f"{name}: expected a result, got {body!r}")
@@ -101,6 +106,14 @@ def check(name, status, body, expect, request=None):
     for key in expect.get("result_keys", []):
         if not isinstance(result, dict) or key not in result:
             raise VectorFailure(f"{name}.result.{key}: missing")
+    # Lower bounds for counters that timing can raise but not lower (retransmissions of the
+    # fpga backend: a stalled process can add a timeout, never remove a fault's retransmission).
+    for key, minimum in expect.get("result_at_least", {}).items():
+        value = result
+        for part in key.split("."):
+            value = value.get(part) if isinstance(value, dict) else None
+        if type(value) is not int or value < minimum:
+            raise VectorFailure(f"{name}.result.{key}: expected at least {minimum}, got {value!r}")
     for key, kind in expect.get("result_format", {}).items():
         value = result
         for part in key.split("."):          # a dotted key is a path into the result
@@ -175,7 +188,7 @@ def fpga_double(backend):
         sys.path.insert(0, str(ROOT / "tests"))
         from fake_fpga_device import FakeDevice
         fake = FakeDevice(build_id=int(double.get("build_id", "1d474000"), 16), protocol=double.get("protocol"),
-                          faults=double.get("faults", ()),
+                          faults=double.get("faults", ()), byte_timeout=double.get("byte_timeout", 0.05),
                           result_faults={int(k): v for k, v in double.get("result_faults", {}).items()})
         try:
             yield fake.path, options

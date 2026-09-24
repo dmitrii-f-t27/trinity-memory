@@ -18,6 +18,7 @@ size_t tm_float_shortest(double, uint8_t *, size_t);
 int32_t tm_os_random(uint8_t *, size_t);
 int32_t tm_os_sha256(uint8_t *, size_t, uint8_t *);
 uint64_t tm_os_monotonic_ns(void);
+int32_t tm_os_serial_rate_ok(uint32_t);
 int32_t tm_os_serial_open(uint8_t *, size_t, uint32_t);
 int64_t tm_os_serial_read(int32_t, uint8_t *, size_t, uint32_t);
 int64_t tm_os_serial_write(int32_t, uint8_t *, size_t, uint32_t);
@@ -81,6 +82,7 @@ int32_t bridge_test_fpga(BridgeHarness *h, uint8_t *path, size_t path_size, uint
                          uint8_t *bitstream, uint32_t idcode, uint64_t dna, uint32_t build_id) {
     TMLink *l = &h->link;
     if (l->configured || !path || !path_size || path_size > 1023 || !attempts) return -1;
+    if (min_protocol < TL_PROTO_MATVEC || !tm_os_serial_rate_ok(baud)) return -1;
     size_t trits = h->state.max_trits;
     l->image_capacity = trits / 2 + 65536; l->capture_capacity = l->image_capacity * 2 + 1048576;
     l->rx_capacity = 16384; l->frame_capacity = 8192; l->x_capacity = trits; l->act_capacity = 1024 * 80;
