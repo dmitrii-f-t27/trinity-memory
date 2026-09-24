@@ -26,11 +26,17 @@ module TrinityFpgaDdr3MatvecT27;
 // act_data) writes one u64 per clock; the device frame handler that fills it from the host's
 // activation frames is the next wave (docs/bridge.md, "Wire protocol extension").
 //
-// A run: `start` with rows (1 .. 1024), cols (>= 1), fmt and seq, while idle. SETUP computes
+// A run: `start` with rows (1 .. 1024), cols (>= 1), fmt and seq, while idle (a start while
+// busy is ignored: the device's M handler must not start a run before `done`). SETUP computes
 // wpr and the lanes of the last word by repeated subtraction (no division; at most 1024
-// clocks, before the first word), then the lane mask of the last word. RUN takes every word
-// offered while it expects one (in_ready is constant true: there is no back-pressure). The
-// pipeline behind the input register:
+// clocks, before the first word), MASK the lane mask of the last word (one clock). RUN takes a
+// word in every clock that in_valid is high; in_ready (= st == RUN and not all words taken) is
+// the handshake: a word counts only in a clock where both are high. The producer (#62's reader)
+// must hold its words until in_ready rises: a word offered while in_ready is low is not taken.
+// A run ends early (status 2, only the Z lines) when RUN has taken no word for 65,536 clocks
+// (786 us at 83.33 MHz; the stream stopped, e.g. the reader gave up a phase on its watchdog) or
+// when `abort` was high in any clock since `start`; the module then drains its pipeline and is
+// idle again, so the next start works. The pipeline behind the input register:
 //   S0 word, the flags of its position in the row and the activations of its block (the
 //      banks read at the block index of the word being taken, in the same clock)
 //   S1 decode: 80 (dense5) or 64 (baseline2) lane codes and a flag per invalid code
@@ -54,17 +60,19 @@ module TrinityFpgaDdr3MatvecT27;
 // | v, check the low byte of the CRC-32 of tag, a[4], v[4], as fpga_uart_loader.t27):
 //   Y  a = (seq << 24) | row      v = y[row] (32-bit two's complement)
 //   Z  a = (seq << 24) | (11 << 16) | index, v = counter:
-//      0 status (0 ran, 1 refused: rows or cols out of range, fmt not 0 or 1)
+//      0 status (0 ran, 1 refused: rows or cols out of range, fmt not 0 or 1, more than
+//        1024 words per row; 2 ended early: no word for 65,536 clocks in RUN, or aborted)
 //      1 rows done            2 words per row (wpr)     3 words taken
-//      4 cycles: clocks from the first word taken to the last, inclusive
+//      4 cycles: clocks from the first word taken to the last, inclusive; equal to words
+//        taken + idle clocks by construction (every clock of that span adds to one of them)
 //      5 idle clocks: clocks of that span with no word offered (the bus left the consumer
 //        waiting: starvation, the memory-bound signal of #65)
-//      6 latency: clocks from the end of SETUP to the first word
+//      6 latency: clocks from the start of RUN to the first word taken
 //      7 invalid codes (dense5 codes 243-255 in any byte, baseline2 11 lanes in any lane)
-//      8 stray words: words offered while no word was expected (before RUN, after the last
-//        word of the run, during EMIT)
-//      9 consumer stalls: words offered while in_ready was low; in_ready is constant true,
-//        so this is 0 by construction and measures nothing
+//      8 stray words: clocks with in_valid while no run expects words (idle without start,
+//        after the last word, DRAIN, EMIT)
+//      9 consumer stalls: clocks with in_valid while a started run is not ready yet (the
+//        start clock, SETUP, MASK): in_ready low, the producer held off
 //      10 result checksum: c = rotl1(c) xor y[row] over the rows in order, 32 bits, at the
 //        write into the result memory; the host recomputes it from the Y lines it received,
 //        so a result memory read that differs from its write shows
@@ -90,6 +98,7 @@ const FMT_D5: u32 = 1;
 const MAX_ROWS: u32 = 1024;
 const MAX_WPR: u32 = 1024;
 const Z_COUNT: u32 = 11;
+const IDLE_LOG2: u32 = 16;
 const TAG_Y: u32 = 89;
 const TAG_Z: u32 = 90;
 const BIAS80: u32 = 10240;
@@ -147,7 +156,9 @@ var is_last: bool = false;
 var rows_in: u32 = 0;
 var input_done: bool = false;
 var seen_first: bool = false;
-var in_ready: bool = true;
+var quiet: u32 = 0;
+var aborting: bool = false;
+var short_run: bool = false;
 
 // Counters of a run.
 var words: u32 = 0;
@@ -576,10 +587,10 @@ fn rotl1_32(x: u32) -> u32 {
     return (x << 1) | (x >> 31);
 }
 
-fn zval(i: u32, refd: bool, rd: u32, w: u32, wd: u32, cy: u32, idl: u32, lat: u32, inv: u32, sw: u32,
+fn zval(i: u32, refd: bool, sh: bool, rd: u32, w: u32, wd: u32, cy: u32, idl: u32, lat: u32, inv: u32, sw: u32,
         cs: u32, c: u32) -> u32 {
     var v: u32 = c;
-    if (i == 0) { v = 0; if (refd) { v = 1; } }
+    if (i == 0) { v = 0; if (sh) { v = 2; } if (refd) { v = 1; } }
     if (i == 1) { v = rd; }
     if (i == 2) { v = w; }
     if (i == 3) { v = wd; }
@@ -609,7 +620,13 @@ var lanes_w: u32;
 var su_fits: bool;
 var su_next: u32;
 var taking: bool;
+var in_ready: bool;
 var word_in: bool;
+var pre_run: bool;
+var start_now: bool;
+var start_stall: u32;
+var quiet_hit: bool;
+var pipe_idle: bool;
 var k_plus: u32;
 var last_after: bool;
 var dl0: u64;
@@ -665,7 +682,13 @@ lanes_w = lanes_of(fmt);
 su_fits = su_r <= lanes_w;
 su_next = su_r - lanes_w;
 taking = st == ST_RUN && !input_done;
+in_ready = taking;
 word_in = in_valid && taking;
+pre_run = st == ST_SETUP || st == ST_MASK;
+start_now = st == ST_IDLE && start;
+start_stall = pick32(in_valid, 1, 0);
+quiet_hit = (quiet >> IDLE_LOG2) != 0;
+pipe_idle = !s0_v && !s1_v && !s2_v && !s3_v && !s4_v && !s45_v && !s5_v && !s6_v && !s7_v;
 k_plus = (k + 1) & 1023;
 last_after = k == wpr_m2;
 dd0 = d5_at(s0_lo, 0);
@@ -718,18 +741,19 @@ acc_base = pick32(s6_first, 0, acc);
 acc_next = acc_base + s6_dot;
 y_a = ((seq & 255) << 24) | (e_idx & 16777215);
 z_a = ((seq & 255) << 24) | (Z_COUNT << 16) | e_idx;
-z_v = zval(e_idx, refused, rows_done, wpr, words, cycles, idle_clocks, latency, invalid, stray, cons_stalls, chk);
+z_v = zval(e_idx, refused, short_run, rows_done, wpr, words, cycles, idle_clocks, latency, invalid, stray, cons_stalls, chk);
 e_tag = pick32(e_z, TAG_Z, TAG_Y);
 e_a = pick32(e_z, z_a, y_a);
 e_v = pick32(e_z, z_v, res_rd);
 e_bits = line_bits(line_tag, line_a, em_v);
 
 // start with cfg_rows, cfg_cols, cfg_fmt, cfg_seq: a run (taken while idle). in_valid,
-// in_lo, in_hi: a bus word (bytes 0-7, 8-15). act_we, act_entry, act_bank, act_data: one
-// activation word. line_idle: the line emitter's idle.
+// in_lo, in_hi: a bus word (bytes 0-7, 8-15), taken when in_ready is high. act_we, act_entry,
+// act_bank, act_data: one activation word. line_idle: the line emitter's idle. abort: end the
+// running run early (status 2); a pulse is kept until the run ends.
 fn on_clock(start: bool, cfg_rows: u32, cfg_cols: u32, cfg_fmt: u32, cfg_seq: u32,
             in_valid: bool, in_lo: u64, in_hi: u64,
-            act_we: bool, act_entry: u32, act_bank: u32, act_data: u64, line_idle: bool) {
+            act_we: bool, act_entry: u32, act_bank: u32, act_data: u64, line_idle: bool, abort: bool) {
     // Activation writes and the reads of the block being taken.
     if (act_we && act_bank == 0) { act0[act_entry & 1023] = act_data; }
     if (act_we && act_bank == 1) { act1[act_entry & 1023] = act_data; }
@@ -838,8 +862,10 @@ fn on_clock(start: bool, cfg_rows: u32, cfg_cols: u32, cfg_fmt: u32, cfg_seq: u3
     s0_last = is_last;
 
     // Input side and counters.
-    if (in_valid && !taking) { stray = stray + 1; }
-    if (in_valid && !in_ready) { cons_stalls = cons_stalls + 1; }
+    if (in_valid && !taking && !pre_run && !start_now) { stray = stray + 1; }
+    if (in_valid && pre_run) { cons_stalls = cons_stalls + 1; }
+    if (word_in || !taking) { quiet = 0; } else { quiet = quiet + 1; }
+    if (abort && st != ST_IDLE) { aborting = true; }
     if (taking) {
         if (seen_first || in_valid) { cycles = cycles + 1; }
         if (seen_first && !in_valid) { idle_clocks = idle_clocks + 1; }
@@ -882,7 +908,9 @@ fn on_clock(start: bool, cfg_rows: u32, cfg_cols: u32, cfg_fmt: u32, cfg_seq: u3
             latency = 0;
             invalid = 0;
             stray = 0;
-            cons_stalls = 0;
+            cons_stalls = start_stall;
+            aborting = false;
+            short_run = false;
             rows_done = 0;
             chk = 0;
             row_out = 0;
@@ -919,9 +947,23 @@ fn on_clock(start: bool, cfg_rows: u32, cfg_cols: u32, cfg_fmt: u32, cfg_seq: u3
         k = 0;
         st = ST_RUN;
     } else if (st == ST_RUN) {
-        if (input_done) { st = ST_DRAIN; }
+        if (input_done) {
+            st = ST_DRAIN;
+        } else if (aborting || quiet_hit) {
+            // The words stopped (or abort): end early, take nothing more, drain, send the Z lines.
+            input_done = true;
+            short_run = true;
+            st = ST_DRAIN;
+        }
     } else if (st == ST_DRAIN) {
-        if (rows_done == rows) {
+        if (short_run) {
+            if (pipe_idle) {
+                e_idx = 0;
+                e_z = true;
+                e_ph = E_READ;
+                st = ST_EMIT;
+            }
+        } else if (rows_done == rows) {
             e_idx = 0;
             e_z = false;
             e_ph = E_READ;
@@ -972,5 +1014,6 @@ test baseline2_clean_and_invalid { assert_eq(b2_clean(15), 0); assert_eq(b2_flag
 test lane_masks { assert_eq(therm(3, 0), 63); assert_eq(therm(37, 32), 1023); assert_eq(therm(10, 32), 0); }
 test biased_terms { assert_eq(terms8(1, 0, 5), 9259542123273814149); assert_eq(terms8(2, 0, 5), 9259542123273814138); assert_eq(neg8(2, 0), 1); }
 test sums { assert_eq(quad2(72340172838076673), 262148); assert_eq(pop16(65535), 16); }
+test run_status { assert_eq(zval(0, false, false, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 0); assert_eq(zval(0, false, true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 2); assert_eq(zval(0, true, false, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 1); assert_eq(zval(10, false, true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 10); }
 test config { assert_eq(config_ok(320, 2560, 1), true); assert_eq(config_ok(0, 2560, 1), false); assert_eq(config_ok(1025, 2560, 0), false); assert_eq(config_ok(1, 1, 2), false); }
 endmodule

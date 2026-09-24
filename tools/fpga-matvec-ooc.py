@@ -110,7 +110,7 @@ def main() -> int:
     summary = {
         "schema": "trinity.matvec-ooc.v1", "issue": "dmitrii-f-t27/trinity-memory#64",
         "what": "out-of-context estimates of t27/rtl/fpga_ddr3_matvec.t27 in fpga/ax7203/matvec/tms_matvec_ooc.v "
-                "(the harness adds a 388-bit input shift register, an XOR reduction, IBUFDS and BUFG); "
+                "(the harness adds a 389-bit input shift register, an XOR reduction, IBUFDS and BUFG); "
                 "synthesis cell counts and nextpnr timing-model estimates, not a bitstream and not a board result",
         "sources": {str(p.relative_to(ROOT)): sha256(p) for p in (SOURCE, HARNESS, XDC, BRAMS)},
         "generated_verilog_sha256": sha256(verilog),

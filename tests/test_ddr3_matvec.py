@@ -14,16 +14,26 @@
     payloads of the chunk), with the seed-27 activations: every one of the 320 accumulators equals
     t27/matvec.t27's (the first 320 of the q_proj product whose sha256 is the committed report's);
   * rows of 6,912 columns (down_proj's width) with extreme activations (all -128, all +127),
-    garbage in the padding lanes and past the last column of the activations, an invalid code in a
-    padding byte: exact accumulators up to +-884,736 (above 2^19), padding never counted;
-  * one-word rows and rows of exactly one word, no gaps and 75 % gaps; stray words before the run
-    and after its last word; refused configurations.
+    garbage in the whole padding bytes of dense5 rows and past the last column of the
+    activations, an invalid code in a padding byte: exact accumulators up to +-884,736 (above
+    2^19), padding never counted;
+  * padding lanes with +1 codes and nonzero activations behind them, so a mask that let one lane
+    through would change the result: baseline2 rows of 65, 97 and 1 columns (last-word masks
+    lm0/lm1), dense5 rows of 6,912 and 81 columns (the lanes inside a partly used byte);
+  * the limits themselves: one dense5 row of 81,920 columns (1,024 words) and 1,024 rows;
+  * one-word rows and rows of exactly one word, no gaps and 75 % gaps; words offered before the
+    run is ready (a word in the clock of start, words during SETUP: not taken, counted as consumer
+    stalls) and after its last word (stray); a reader that starts right after start and holds each
+    word until in_ready (the handshake); a stream that stops one word short (status 2 after the
+    idle limit, only the Z lines, and the next run works); an abort (status 2, next run works);
+    refused configurations.
   Every Y line's check byte, every row index, the Z counters (rows, words per row, words, the
-  result checksum over the rows) are checked, and the Z counters that measure time (cycles, idle
-  clocks, latency) and the stray words equal the bench's own counts of what it offered (the bench
-  counts independently of the module). Consumer stalls are 0 by construction (in_ready is a
-  constant): the bench confirms in_ready never went low, which says nothing more.
-The summary of the chunk runs goes to build/fpga/matvec-sim/summary.json.
+  result checksum over the rows) are checked. Idle clocks, latency, consumer stalls and stray
+  words equal the bench's own counts of what it offered (the bench counts independently of the
+  module). Identities, checked but not evidence: cycles = words + idle clocks (every clock of the
+  first-to-last span adds to exactly one of them, in the module and in the bench) and words =
+  rows x words per row.
+Every Icarus run's summary goes to build/fpga/matvec-sim/summary.json (the committed record).
 Runs with T27_ROOT set, Icarus installed and the native library built (tools/test-t27.sh);
 the chunk runs also need the fixture cache (skipped without it, as tests/test_matvec.py).
 """
@@ -264,7 +274,8 @@ class MatvecIcarus(unittest.TestCase):
         cls.work.cleanup()
 
     def simulate(self, *, image: bytes, acts: list[str], rows: int, cols: int, fmt: int, seq: int = 7, gap: int = 30,
-                 seed: int = 1, stray_before: int = 0, stray_after: int = 0, txbusy: int = 2):
+                 seed: int = 1, stray_before: int = 0, stray_after: int = 0, txbusy: int = 2, honor: int = 0,
+                 nfeed: int = -1, start_word: int = 0, abort_after: int = -1, retry: int = 0):
         type(self).case += 1
         work = Path(self.work.name) / f"case{self.case}"
         work.mkdir()
@@ -274,7 +285,9 @@ class MatvecIcarus(unittest.TestCase):
         args = ["vvp", "-n", str(self.binary), f"+words={work / 'words.hex'}", f"+acts={work / 'acts.hex'}",
                 f"+out={work / 'out.hex'}", f"+summary={work / 'summary.txt'}", f"+nwords={len(words)}",
                 f"+nacts={len(acts)}", f"+rows={rows}", f"+cols={cols}", f"+fmt={fmt}", f"+seq={seq}", f"+gap={gap}",
-                f"+seed={seed}", f"+stray_before={stray_before}", f"+stray_after={stray_after}", f"+txbusy={txbusy}"]
+                f"+seed={seed}", f"+stray_before={stray_before}", f"+stray_after={stray_after}", f"+txbusy={txbusy}",
+                f"+honor={honor}", f"+nfeed={nfeed}", f"+start_word={start_word}", f"+abort_after={abort_after}",
+                f"+retry={retry}"]
         start = time.monotonic()
         result = subprocess.run(args, capture_output=True, text=True, timeout=900)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -285,10 +298,17 @@ class MatvecIcarus(unittest.TestCase):
         events = decoder.feed(data) + decoder.finish()
         return events, bench, elapsed, len(data)
 
-    def check_run(self, events, bench, *, rows, cols, fmt, seq, want, stray=0):
+    def record(self, label, *, rows, cols, fmt, gap, seed, z, bench, elapsed, nbytes, **extra):
+        """Every run goes into the committed summary (build/fpga/matvec-sim/summary.json)."""
+        self.summary[label] = dict({"rows": rows, "cols": cols, "format": "dense5" if fmt == 1 else "baseline2",
+                                    "gap_percent": gap, "seed": seed, "z": z, "bench": bench, "uart_bytes": nbytes,
+                                    "icarus_seconds": round(elapsed, 1)}, **extra)
+
+    def check_run(self, events, bench, *, rows, cols, fmt, seq, want, stray=0, stalls=0):
         self.assertEqual(bench["done"], 1)
         self.assertTrue(all(e.kind == "line" for e in events), [e.as_dict() for e in events if e.kind != "line"][:3])
         self.assertTrue(all(e.check_ok for e in events))
+        events = [e for e in events if e.a >> 24 == seq & 255]
         y_lines = [e for e in events if e.tag == "Y"]
         z_lines = [e for e in events if e.tag == "Z"]
         self.assertEqual([e.a for e in y_lines], [link.y_word(seq, r) for r in range(rows)])
@@ -302,13 +322,15 @@ class MatvecIcarus(unittest.TestCase):
         self.assertEqual((z["status"], z["rows"], z["words_per_row"], z["words"]), (0, rows, wpr, rows * wpr))
         self.assertEqual(z["checksum"], link.result_checksum(want))
         self.assertEqual(bench["offered"], rows * wpr)
+        # Identities (by construction, in the module and in the bench): not evidence.
+        self.assertEqual(z["cycles"], z["words"] + z["idle_clocks"])
+        self.assertEqual(bench["first_to_last"], bench["offered"] + bench["gap_clocks"])
         # Not identities: the bench counts what it offered; the module counts what it saw.
-        self.assertEqual(z["cycles"], bench["first_to_last"])
         self.assertEqual(z["idle_clocks"], bench["gap_clocks"])
         self.assertEqual(z["latency"], bench["latency"])
-        self.assertEqual(z["stray_words"], stray)
-        self.assertEqual(bench["stray"], stray)
-        self.assertEqual((z["consumer_stalls"], bench["ever_not_ready"], bench["not_ready_offers"]), (0, 0, 0))
+        self.assertEqual((z["stray_words"], bench["stray"]), (stray, stray))
+        self.assertEqual((z["consumer_stalls"], bench["stalls"]), (stalls, stalls))
+        self.assertEqual(bench["not_ready_offers"], stalls + stray)
         return got, z
 
     def test_real_chunk_both_formats(self):
@@ -333,16 +355,15 @@ class MatvecIcarus(unittest.TestCase):
                 events, bench, elapsed, nbytes = self.simulate(image=image, acts=acts, rows=rows, cols=cols, fmt=fmt,
                                                                seq=64 + fmt, gap=30, seed=seed)
                 got, z = self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=64 + fmt, want=want)
-                self.summary[f"qproj_rows0_319_{codec}"] = {
-                    "tensor": stage1_chunk.TENSOR, "rows": [0, rows], "cols": cols, "format": codec,
-                    "words": rows * link.words_per_row(cols, fmt), "image_bytes": len(image),
-                    "image_sha256": hashlib.sha256(image).hexdigest(), "tmem_payload_equal": True,
-                    "activations": "tmv_activations seed 27 (t27/matvec.t27), 2560",
-                    "reference": "first 320 accumulators of t27/matvec.t27's q_proj product; sha256 of all 2560 "
-                                 f"{chunk['full_sha256']} = reports/ternary-check/matvec-2026-09-23.json hf_packed",
-                    "accumulators_match": f"{rows} of {rows}", "y_sha256_le": hashlib.sha256(struct.pack(f"<{rows}q", *got)).hexdigest(),
-                    "y_first8": got[:8], "gap_percent": 30, "seed": seed, "z": z, "bench": bench,
-                    "uart_bytes": nbytes, "icarus_seconds": round(elapsed, 1)}
+                self.record(f"qproj_rows0_319_{codec}", rows=rows, cols=cols, fmt=fmt, gap=30, seed=seed, z=z, bench=bench,
+                            elapsed=elapsed, nbytes=nbytes, tensor=stage1_chunk.TENSOR, row_range=[0, rows],
+                            words=rows * link.words_per_row(cols, fmt), image_bytes=len(image),
+                            image_sha256=hashlib.sha256(image).hexdigest(), tmem_payload_equal=True,
+                            activations="tmv_activations seed 27 (t27/matvec.t27), 2560",
+                            reference="first 320 accumulators of t27/matvec.t27's q_proj product; sha256 of all 2560 "
+                                      f"{chunk['full_sha256']} = reports/ternary-check/matvec-2026-09-23.json hf_packed",
+                            accumulators_match=f"{rows} of {rows}",
+                            y_sha256_le=hashlib.sha256(struct.pack(f"<{rows}q", *got)).hexdigest(), y_first8=got[:8])
 
     def test_down_proj_width_extremes_and_padding(self):
         cols, rng = 6912, random.Random(6912)
@@ -374,12 +395,15 @@ class MatvecIcarus(unittest.TestCase):
                         invalid = 0
                     acts = acts_hex(link.act_image(x, cols, fmt), garbage=rng, lanes_used=n, cols=cols)
                     want = expected_rows(trits, 2, cols, x)
-                    events, bench, _, _ = self.simulate(image=bytes(image), acts=acts, rows=2, cols=cols, fmt=fmt,
-                                                        seq=index, gap=20, seed=index + 3)
+                    events, bench, elapsed, nbytes = self.simulate(image=bytes(image), acts=acts, rows=2, cols=cols, fmt=fmt,
+                                                                   seq=index, gap=20, seed=index + 3)
                     got, z = self.check_run(events, bench, rows=2, cols=cols, fmt=fmt, seq=index, want=want)
                     self.assertEqual(z["invalid_codes"], invalid)
                     if index < 4:
                         self.assertEqual(abs(got[0]), 128 * cols if xs[0] == -128 else 127 * cols)
+                    self.record(f"down_proj_width_{'dense5' if fmt else 'baseline2'}_{index}", rows=2, cols=cols, fmt=fmt,
+                                gap=20, seed=index + 3, z=z, bench=bench, elapsed=elapsed, nbytes=nbytes,
+                                y=got, exact=True, extremes=index < 4)
                 self.assertEqual(128 * cols, 884736)
                 self.assertGreater(128 * cols, 1 << 19)
 
@@ -393,29 +417,137 @@ class MatvecIcarus(unittest.TestCase):
                 x = [rng.randint(-128, 127) for _ in range(cols)]
                 image = host_image(trits, rows, cols, fmt)
                 acts = acts_hex(host_act_image(x, cols, fmt))
-                events, bench, _, _ = self.simulate(image=image, acts=acts, rows=rows, cols=cols, fmt=fmt, seq=200 + rows,
-                                                    gap=gap, seed=cols)
-                self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=200 + rows,
-                               want=expected_rows(trits, rows, cols, x))
-        # Stray words: three while the module sets up (a 40-word row takes 40 clocks of SETUP), five
-        # after the last word of the run.
+                events, bench, elapsed, nbytes = self.simulate(image=image, acts=acts, rows=rows, cols=cols, fmt=fmt,
+                                                               seq=200 + rows, gap=gap, seed=cols)
+                _, z = self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=200 + rows,
+                                      want=expected_rows(trits, rows, cols, x))
+                self.record(f"short_rows_{rows}x{cols}_fmt{fmt}_gap{gap}", rows=rows, cols=cols, fmt=fmt, gap=gap,
+                            seed=cols, z=z, bench=bench, elapsed=elapsed, nbytes=nbytes, exact=True)
+        # Words before the run is ready: one in the clock of start and three while the module sets up
+        # (a 40-word row takes 40 clocks of SETUP): not taken, counted as consumer stalls (4). Five
+        # after the last word of the run: stray (5).
         rows, cols = 4, 2560
         trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
         x = [rng.randint(-128, 127) for _ in range(cols)]
-        events, bench, _, _ = self.simulate(image=host_image(trits, rows, cols, 0), acts=acts_hex(host_act_image(x, cols, 0)),
-                                            rows=rows, cols=cols, fmt=0, seq=9, gap=10, seed=4, stray_before=3, stray_after=5)
-        self.check_run(events, bench, rows=rows, cols=cols, fmt=0, seq=9, want=expected_rows(trits, rows, cols, x), stray=8)
+        events, bench, elapsed, nbytes = self.simulate(
+            image=host_image(trits, rows, cols, 0), acts=acts_hex(host_act_image(x, cols, 0)), rows=rows, cols=cols,
+            fmt=0, seq=9, gap=10, seed=4, start_word=1, stray_before=3, stray_after=5)
+        _, z = self.check_run(events, bench, rows=rows, cols=cols, fmt=0, seq=9, want=expected_rows(trits, rows, cols, x),
+                              stray=5, stalls=4)
+        self.record("early_and_stray_words_4x2560_baseline2", rows=rows, cols=cols, fmt=0, gap=10, seed=4, z=z,
+                    bench=bench, elapsed=elapsed, nbytes=nbytes, exact=True, start_word=1, stray_before=3, stray_after=5)
+
+    def test_handshake_short_stream_and_abort(self):
+        rng = random.Random(15)
+        # A reader that starts in the clock after start and holds each word until in_ready: every
+        # clock it waits (SETUP 40 + MASK 1 for a 40-word row) is a consumer stall; the run is exact.
+        for rows, cols, fmt in ((1, 2560, 0), (3, 2560, 1)):
+            with self.subTest(case="early reader", fmt=fmt):
+                trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+                x = [rng.randint(-128, 127) for _ in range(cols)]
+                wpr = link.words_per_row(cols, fmt)
+                events, bench, elapsed, nbytes = self.simulate(
+                    image=host_image(trits, rows, cols, fmt), acts=acts_hex(host_act_image(x, cols, fmt)), rows=rows,
+                    cols=cols, fmt=fmt, seq=21, gap=0, seed=5, honor=1)
+                _, z = self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=21,
+                                      want=expected_rows(trits, rows, cols, x), stalls=wpr + 1)
+                self.assertEqual(z["latency"], 0)
+                self.record(f"early_reader_{rows}x{cols}_fmt{fmt}", rows=rows, cols=cols, fmt=fmt, gap=0, seed=5, z=z,
+                            bench=bench, elapsed=elapsed, nbytes=nbytes, exact=True, honor_ready=True)
+        # A stream one word short (5 of 6), then abort after 50 of 160 words: status 2 with only the
+        # Z lines after the idle limit (65,536 clocks) or the abort; the next start runs exactly.
+        for label, rows, cols, fmt, extra, words_done in (("short_stream", 3, 160, 1, {"nfeed": 5}, 5),
+                                                          ("abort", 4, 2560, 0, {"abort_after": 50}, 50)):
+            with self.subTest(case=label):
+                trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+                x = [rng.randint(-128, 127) for _ in range(cols)]
+                wpr = link.words_per_row(cols, fmt)
+                events, bench, elapsed, nbytes = self.simulate(
+                    image=host_image(trits, rows, cols, fmt), acts=acts_hex(host_act_image(x, cols, fmt)), rows=rows,
+                    cols=cols, fmt=fmt, seq=30, gap=0, seed=6, retry=1, **extra)
+                first = [e for e in events if e.a >> 24 == 30]
+                self.assertTrue(all(e.kind == "line" and e.check_ok for e in first))
+                self.assertEqual([e.tag for e in first], ["Z"] * link.Z_COUNT)
+                self.assertEqual([e.a for e in first], [link.z_word(30, i) for i in range(link.Z_COUNT)])
+                z1 = dict(zip(link.Z_NAMES, (e.v for e in first)))
+                self.assertEqual((z1["status"], z1["words"], z1["rows"], z1["words_per_row"]),
+                                 (2, words_done, words_done // wpr, wpr))
+                self.assertEqual(z1["cycles"], z1["words"] + z1["idle_clocks"])       # identity
+                self.assertEqual(bench["runs_done"], 2)
+                _, z2 = self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=31,
+                                       want=expected_rows(trits, rows, cols, x))
+                self.record(label, rows=rows, cols=cols, fmt=fmt, gap=0, seed=6, z=z2, bench=bench, elapsed=elapsed,
+                            nbytes=nbytes, first_run_z=z1, second_run_exact=True, **extra)
+
+    def test_padding_lanes_and_limits(self):
+        rng = random.Random(13)
+
+        def plus_one_padding(image: bytearray, rows, cols, fmt):
+            """+1 codes in every padding lane of every row (inside partly used bytes too)."""
+            wpr, lanes = link.words_per_row(cols, fmt), link.lanes(fmt)
+            for r in range(rows):
+                base = r * wpr * 16
+                for j in range(cols, wpr * lanes):
+                    if fmt == 0:
+                        byte, shift = base + j // 4, 2 * (j % 4)
+                        image[byte] = (image[byte] & ~(3 << shift)) | (1 << shift)
+                    else:
+                        byte, digit = base + j // 5, j % 5
+                        digits = [(image[byte] // 3 ** i) % 3 for i in range(5)]
+                        digits[digit] = 2                                  # trit +1
+                        image[byte] = sum(d * 3 ** i for i, d in enumerate(digits))
+            return image
+
+        def acts_behind(x, cols, fmt, value=77):
+            """The activation image with `value` in every lane at and past cols (and in bytes 64-79 of
+            baseline2 blocks): a padding lane that is not masked adds value to its row."""
+            image = bytearray(link.act_image(x, cols, fmt))
+            lanes = link.lanes(fmt)
+            for k in range(len(image) // 80):
+                for i in range(80):
+                    if i >= lanes or k * lanes + i >= cols:
+                        image[k * 80 + i] = value
+            return acts_hex(bytes(image))
+
+        for rows, cols, fmt in ((3, 65, 0), (2, 97, 0), (4, 1, 0), (2, 6912, 1), (3, 81, 1), (2, 83, 1)):
+            with self.subTest(rows=rows, cols=cols, fmt=fmt):
+                trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+                x = [rng.randint(-128, 127) for _ in range(cols)]
+                image = plus_one_padding(bytearray(link.image(trits, rows, cols, fmt)), rows, cols, fmt)
+                wpr, lanes = link.words_per_row(cols, fmt), link.lanes(fmt)
+                self.assertGreater(wpr * lanes, cols)                               # there are padding lanes
+                events, bench, elapsed, nbytes = self.simulate(image=bytes(image), acts=acts_behind(x, cols, fmt),
+                                                               rows=rows, cols=cols, fmt=fmt, seq=40, gap=0, seed=1)
+                _, z = self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=40,
+                                      want=expected_rows(trits, rows, cols, x))
+                self.assertEqual(z["invalid_codes"], 0)
+                self.record(f"padding_plus_one_{rows}x{cols}_fmt{fmt}", rows=rows, cols=cols, fmt=fmt, gap=0, seed=1, z=z,
+                            bench=bench, elapsed=elapsed, nbytes=nbytes, exact=True, padding_lanes_per_row=wpr * lanes - cols)
+        # The limits: a row of 1,024 dense5 words (81,920 columns) and a run of 1,024 rows.
+        for label, rows, cols, fmt in (("max_words_per_row", 1, 81920, 1), ("max_rows", 1024, 16, 1)):
+            with self.subTest(case=label):
+                trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+                x = [rng.randint(-128, 127) for _ in range(cols)]
+                events, bench, elapsed, nbytes = self.simulate(image=link.image(trits, rows, cols, fmt),
+                                                               acts=acts_hex(link.act_image(x, cols, fmt)), rows=rows,
+                                                               cols=cols, fmt=fmt, seq=41, gap=5, seed=2, txbusy=1)
+                _, z = self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=41,
+                                      want=expected_rows(trits, rows, cols, x))
+                self.record(label, rows=rows, cols=cols, fmt=fmt, gap=5, seed=2, z=z, bench=bench, elapsed=elapsed,
+                            nbytes=nbytes, exact=True)
 
     def test_refused_configurations(self):
         for rows, cols, fmt in ((0, 80, 1), (1025, 80, 1), (1, 0, 1), (1, 80, 2), (1, 1024 * 80 + 1, 1)):
             with self.subTest(rows=rows, cols=cols, fmt=fmt):
-                events, bench, _, _ = self.simulate(image=bytes(16), acts=acts_hex(bytes(80)), rows=rows, cols=cols,
-                                                    fmt=fmt, seq=3, gap=0)
+                events, bench, elapsed, nbytes = self.simulate(image=bytes(16), acts=acts_hex(bytes(80)), rows=rows,
+                                                               cols=cols, fmt=fmt, seq=3, gap=0)
                 self.assertEqual(bench["done"], 1)
                 self.assertEqual([e.tag for e in events], ["Z"] * link.Z_COUNT)
                 self.assertTrue(all(e.check_ok for e in events))
                 z = dict(zip(link.Z_NAMES, (e.v for e in events)))
                 self.assertEqual((z["status"], z["rows"], z["words"]), (1, 0, 0))
+                self.record(f"refused_{rows}x{cols}_fmt{fmt}", rows=rows, cols=cols, fmt=fmt, gap=0, seed=1, z=z,
+                            bench=bench, elapsed=elapsed, nbytes=nbytes, refused=True)
 
 
 if __name__ == "__main__":
