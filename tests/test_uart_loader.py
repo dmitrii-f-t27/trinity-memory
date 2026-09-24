@@ -1032,8 +1032,9 @@ class HostTool(unittest.TestCase):
             link.close()
         self.assertTrue(result["identical"])
         self.assertEqual((result["chunks"], result["acked"]), (5, 5))
-        # The abort's timeout nak is sent while the port is being opened again and is lost,
-        # as on the board: the host resends after its own wait.
+        # The fake port takes 0.1 s to open again, longer than the device's 50 ms timeout:
+        # the abort's timeout nak is lost (as with the 22844259 records on the board; in the
+        # 1d474000 run 2 it arrived) and the host resends after its own wait.
         self.assertEqual(result["retransmits"], {"crc": 1, "timeout": 1, "no_reply": 1})
         self.assertEqual(result["per_chunk"][4]["duplicate"]["reply"]["reason_name"], "duplicate")
         self.assertEqual(result["store_before"]["bytes_the_load_changes"], sum(1 for x in data if x))

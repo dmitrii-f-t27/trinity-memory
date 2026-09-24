@@ -441,6 +441,7 @@ def main():
     parser.add_argument("--image-digest", default="", help="digest of the toolchain image (prjxray)")
     parser.add_argument("--variant", default="", help="free-text variant description")
     parser.add_argument("--chipdb", default="", help="chip database nextpnr read (hashed into the DDR3 record)")
+    parser.add_argument("--identity-note", default="", help="replaces the note on reproducible_identity")
     args = parser.parse_args()
     src = Path(args.artifact_dir)
     out = Path(args.output)
@@ -475,8 +476,9 @@ def main():
         "fasm_sha256": record.get("fasm", {}).get("sha256"),
         "frames_sha256": record.get("frames", {}).get("sha256"),
         "bitstream_sha256_from_sync": record.get("bitstream", {}).get("sha256_from_sync"),
-        "note": "a rebuild with the same inputs and tools reproduces these; bitstream.sha256 covers the .bit header "
-                "with xc7frames2bit's date and time and identifies only this one file (the one to flash)"}
+        "note": args.identity_note or (
+            "a rebuild with the same inputs and tools reproduces these; bitstream.sha256 covers the .bit header "
+            "with xc7frames2bit's date and time and identifies only this one file (the one to flash)")}
     problems = []
     if args.ddr3:
         record["ddr3"] = ddr3_record(src, args)
