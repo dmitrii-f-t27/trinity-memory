@@ -138,8 +138,8 @@ BRAM_TRITS     ?= 1013760
 BRAM_SIM_TRITS ?= 1980
 BRAM_ONLY      ?= -1
 override BRAM_ONLY := $(strip $(BRAM_ONLY))
-ifneq ($(words $(BRAM_ONLY)) $(filter -1 0 1 2,$(BRAM_ONLY)),1 $(BRAM_ONLY))
-$(error BRAM_ONLY must be -1 (all three layouts), 0 (b2), 1 (d5) or 2 (d5d2), not '$(BRAM_ONLY)')
+ifneq ($(words $(BRAM_ONLY)) $(filter -1 0 1 2 3,$(BRAM_ONLY)),1 $(BRAM_ONLY))
+$(error BRAM_ONLY must be -1 (all three layouts), 0 (b2), 1 (d5), 2 (d5d2) or 3 (d5p, with BRAM_ROM), not '$(BRAM_ONLY)')
 endif
 BRAM_SUFFIX    := $(if $(filter -1,$(BRAM_ONLY)),,-$(BRAM_ONLY))
 # yosys chparam does not take a negative literal; -1 is the Verilog default anyway.
@@ -147,16 +147,53 @@ BRAM_CHPARAM   := $(if $(BRAM_SUFFIX),-set ONLY $(BRAM_ONLY),)
 BRAM_EXPECT    := $(if $(BRAM_SUFFIX),$(BRAM_ONLY),0$(comma)1$(comma)2)
 BRAM_PLACERS   ?= heap sa
 BRAM_ROUTER    ?= router2
-BRAM_BUILD     ?= $(BUILD)/bram$(BRAM_SUFFIX)
-BRAM_SIMBUILD  ?= $(BUILD)/bram-sim$(BRAM_SUFFIX)
+# BRAM_ROM: a file of trits (one signed byte each, tools/extract-bram-trits.py)
+# that the stores hold as array initializers, loaded by configuration, instead
+# of writing the LFSR stream (t27/rtl/bram_trit_rom.t27): the first BRAM_TRITS
+# (BRAM_SIM_TRITS in simulation) trits of the file. Its builds have their own
+# directories (bram-rom-N).
+#   make -C fpga/ax7203 bram-sim BRAM_ONLY=2 BRAM_ROM=$(ROOT)/build/fpga/rom/trits.bin
+BRAM_ROM       ?=
+# BRAM_PIPE=1 (ROM mode): a register after the decoder and after the per-word sums.
+# BAUD_DIV must match CLOCK_MODE (1: 25 MHz, 217; 2: 50 MHz, 434; 3: 100 MHz, 868).
+BRAM_PIPE      ?= 0
+BAUD_DIV       ?= 217
+# BRAM_MATVEC: with BRAM_ROM, a file of int8 activations (tools/extract-bram-activations.py);
+# the d5d2 store computes y = W x, W the BRAM_TRITS trits as rows of that many
+# columns (t27/rtl/bram_trit_matvec.t27). d5d2 only (BRAM_ONLY=2); its simulation
+# stores BRAM_SIM_TRITS = two groups of 22 rows.
+#   make -C fpga/ax7203 bram-sim BRAM_ONLY=2 BRAM_ROM=$(ROOT)/build/fpga/rom/trits.bin BRAM_MATVEC=$(ROOT)/build/fpga/rom/act.bin
+BRAM_MATVEC    ?=
+ifneq ($(BRAM_MATVEC),)
+ifeq ($(BRAM_ROM),)
+$(error BRAM_MATVEC needs BRAM_ROM (the matrix))
+endif
+ifneq ($(BRAM_ONLY),2)
+$(error BRAM_MATVEC is a d5d2 store: set BRAM_ONLY=2)
+endif
+ifeq ($(origin BRAM_SIM_TRITS),file)
+BRAM_SIM_TRITS := 112640
+endif
+endif
+BRAM_KIND      := $(if $(BRAM_MATVEC),bram-matvec,$(if $(BRAM_ROM),bram-rom$(if $(filter 1,$(BRAM_PIPE)),-pipe),bram))
+BRAM_GEN_ARGS  := $(if $(BRAM_ROM),--rom-trits $(abspath $(BRAM_ROM)) --pipe $(BRAM_PIPE)) \
+                  $(if $(BRAM_MATVEC),--matvec-act $(abspath $(BRAM_MATVEC)))
+BRAM_BUILD     ?= $(BUILD)/$(BRAM_KIND)$(BRAM_SUFFIX)
+BRAM_SIMBUILD  ?= $(BUILD)/$(BRAM_KIND)-sim$(BRAM_SUFFIX)
 BRAM_TOP       := tms_bram_bench_ax7203
 BRAM_CORES     := fpga_tick fpga_reset fpga_uart_tx fpga_line_emitter fpga_bram_bench bram_trit_codec
-BRAM_FORMATS   := b2 d5 d5d2
+BRAM_FORMATS   := $(if $(BRAM_MATVEC),d5d2,b2 d5 d5d2 $(if $(BRAM_ROM),d5p))
 BRAM_CORE_V    := $(foreach c,$(BRAM_CORES),$(RTL)/$(c).v)
 # Every source whose hash the manifest records (tools/generate-bram-bench.py, SOURCES).
 BRAM_GEN_DEPS  := $(ROOT)/t27/rtl/bram_trit_engine.t27 $(ROOT)/t27/rtl/bram_trit_codec.t27 $(ROOT)/t27/rtl/fpga_bram_bench.t27 \
-                  $(ROOT)/tools/generate-bram-bench.py $(ROOT)/tools/bram_trit_model.py
+                  $(ROOT)/tools/generate-bram-bench.py $(ROOT)/tools/bram_trit_model.py \
+                  $(if $(BRAM_ROM),$(ROOT)/t27/rtl/bram_trit_rom.t27 $(abspath $(BRAM_ROM))) \
+                  $(if $(BRAM_MATVEC),$(ROOT)/t27/rtl/bram_trit_matvec.t27 $(abspath $(BRAM_MATVEC)))
 bram_sources    = $(BRAM_CORE_V) $(foreach f,$(BRAM_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
+# Synthesis of one layout reads only that layout's engine: the adapter elaborates
+# one slot, and in ROM mode yosys needs minutes per engine for the initializers.
+BRAM_SYNTH_FORMATS := $(if $(filter 0,$(BRAM_ONLY)),b2,$(if $(filter 1,$(BRAM_ONLY)),d5,$(if $(filter 2,$(BRAM_ONLY)),d5d2,$(if $(filter 3,$(BRAM_ONLY)),d5p,$(BRAM_FORMATS)))))
+bram_synth_sources = $(BRAM_CORE_V) $(foreach f,$(BRAM_SYNTH_FORMATS),$(1)/bram_trit_engine_$(f).v) $(CURDIR)/tms_bram_bench.v
 # synth_xilinx with the block RAM library restricted to the 1K x 36 configuration
 # (brams_x36.txt): every layout is mapped the same way, one 36-bit word per RAMB36
 # word, parity bits in use. $(1) is the top module.
@@ -167,12 +204,12 @@ bram_synth      = $(YOSYS_SYNTH) -top $(1) -run :map_memory; \
 
 # Stamps name the values a directory was built with, so changing BRAM_TRITS or
 # CLOCK_MODE rebuilds what depends on them.
-$(BRAM_BUILD)/trits-$(BRAM_TRITS).stamp $(BRAM_SIMBUILD)/trits-$(BRAM_SIM_TRITS).stamp $(BRAM_BUILD)/clock-$(CLOCK_MODE).stamp:
+$(BRAM_BUILD)/trits-$(BRAM_TRITS).stamp $(BRAM_SIMBUILD)/trits-$(BRAM_SIM_TRITS).stamp $(BRAM_BUILD)/clock-$(CLOCK_MODE)-$(BAUD_DIV).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)$(firstword $(subst -, ,$(notdir $@)))-*.stamp; touch $@
 $(BRAM_BUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS) $(BRAM_BUILD)/trits-$(BRAM_TRITS).stamp
-	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_TRITS) --output-dir $(BRAM_BUILD)
+	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_TRITS) $(BRAM_GEN_ARGS) --output-dir $(BRAM_BUILD)
 $(BRAM_SIMBUILD)/bram_bench_manifest.json: $(BRAM_GEN_DEPS) $(BRAM_SIMBUILD)/trits-$(BRAM_SIM_TRITS).stamp
-	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_SIM_TRITS) --output-dir $(BRAM_SIMBUILD)
+	python3 $(ROOT)/tools/generate-bram-bench.py --trits $(BRAM_SIM_TRITS) $(BRAM_GEN_ARGS) --output-dir $(BRAM_SIMBUILD)
 $(BRAM_BUILD)/bram_trit_engine_%.v: $(BRAM_BUILD)/bram_bench_manifest.json
 	@test -x "$(T27C)" || { echo "T27_ROOT must point at the pinned compiler checkout (native/compiler.lock)"; exit 1; }
 	"$(T27C)" gen-verilog $(BRAM_BUILD)/bram_trit_engine_$*.t27 > $@
@@ -195,8 +232,8 @@ bram-sim: $(call bram_sources,$(BRAM_SIMBUILD))
 	done
 
 bram-synth: $(BRAM_BUILD)/$(BRAM_TOP).json
-$(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD)) $(CURDIR)/brams_x36.txt $(BRAM_BUILD)/clock-$(CLOCK_MODE).stamp
-	$(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) $(BRAM_CHPARAM) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
+$(BRAM_BUILD)/$(BRAM_TOP).json: $(call bram_sources,$(BRAM_BUILD)) $(CURDIR)/brams_x36.txt $(BRAM_BUILD)/clock-$(CLOCK_MODE)-$(BAUD_DIV).stamp
+	$(YOSYS) -q -l $(call REL,$(BRAM_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach s,$(call bram_synth_sources,$(BRAM_BUILD)),$(call REL,$(s))); chparam -set BUILD_ID 32'h$(BUILD_ID) -set CLOCK_MODE $(CLOCK_MODE) -set BAUD_DIV $(BAUD_DIV) $(BRAM_CHPARAM) $(BRAM_TOP); $(call bram_synth,$(BRAM_TOP)); setundef -zero -params; tee -o $(call REL,$(BRAM_BUILD))/yosys_stat.txt stat; write_json $(call REL,$(BRAM_BUILD))/$(BRAM_TOP).json"
 
 # Cells of each layout on its own, synthesized out of context with the same
 # yosys flags as the bench: the engine with its encoder and decoder
