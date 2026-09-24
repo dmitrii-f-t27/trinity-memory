@@ -1,0 +1,341 @@
+{
+ "schema": "trinity.ddr3-capture.v1",
+ "label": "resident design of the first load (2026-09-24 08:51 UTC), read before the reload",
+ "tool": "tools/fpga-ddr3-capture.py",
+ "board": {
+  "dna": "0x00389c0c2d85e85c",
+  "idcode": "0x3636093",
+  "uart": "/dev/cu.usbserial-110 115200 8N1"
+ },
+ "bitstream": null,
+ "expect": {
+  "build_id": "f07e91cd",
+  "lanes": 2,
+  "period_ps": 3000,
+  "nominal_hz": 83333333.3
+ },
+ "run": {
+  "t0_utc": "2026-09-24T10:37:39.190Z",
+  "t0_note": "every *_s value is host seconds after t0 on one monotonic clock",
+  "steps": {
+   "idcode": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--detect"
+    ],
+    "started_utc": "2026-09-24T10:37:39.190Z",
+    "ended_utc": "2026-09-24T10:37:39.220Z",
+    "start_s": 0.0001,
+    "end_s": 0.0299,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "index 0:",
+     "\tidcode 0x3636093",
+     "\tmanufacturer xilinx",
+     "\tfamily artix a7 200t",
+     "\tmodel  xc7a200",
+     "\tirlength 6"
+    ]
+   },
+   "dna": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-dna"
+    ],
+    "started_utc": "2026-09-24T10:37:39.220Z",
+    "ended_utc": "2026-09-24T10:37:39.235Z",
+    "start_s": 0.03,
+    "end_s": 0.0452,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"dna\": \"0x00389c0c2d85e85c\"}"
+    ]
+   },
+   "xadc_before": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-24T10:37:39.235Z",
+    "ended_utc": "2026-09-24T10:37:39.335Z",
+    "start_s": 0.0452,
+    "end_s": 0.1453,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 49.2841, ",
+     "    \"maxtemp\": 49.7551, ",
+     "    \"mintemp\": 35.8054, ",
+     "\"raw\":  {\"0\": 41924, \"1\": 21717, \"2\": 39085, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21724, \"7\": 0},",
+     "\"vccint\": 0.993896, ",
+     "   \"maxvccint\": 0.996094, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.78931, ",
+     "   \"maxvccaux\": 1.7915, ",
+     "   \"minvccaux\": 1.78711, ",
+     "}"
+    ]
+   },
+   "xadc_after": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-24T10:37:50.613Z",
+    "ended_utc": "2026-09-24T10:37:50.727Z",
+    "start_s": 11.4234,
+    "end_s": 11.5366,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 49.3072, ",
+     "    \"maxtemp\": 49.8013, ",
+     "    \"mintemp\": 35.8054, ",
+     "\"raw\":  {\"0\": 41944, \"1\": 21713, \"2\": 39088, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21728, \"7\": 0},",
+     "\"vccint\": 0.993896, ",
+     "   \"maxvccint\": 0.996094, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.78931, ",
+     "   \"maxvccaux\": 1.7915, ",
+     "   \"minvccaux\": 1.78711, ",
+     "}"
+    ]
+   }
+  },
+  "idcode": "0x3636093",
+  "dna": "0x00389c0c2d85e85c",
+  "xadc_before": {
+   "temp": 49.2841,
+   "maxtemp": 49.7551,
+   "mintemp": 35.8054,
+   "raw": {
+    "0": 41924,
+    "1": 21717,
+    "2": 39085,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21724,
+    "7": 0
+   },
+   "vccint": 0.993896,
+   "maxvccint": 0.996094,
+   "minvccint": 0.992432,
+   "vccaux": 1.78931,
+   "maxvccaux": 1.7915,
+   "minvccaux": 1.78711
+  },
+  "uart_error": null,
+  "xadc_after": {
+   "temp": 49.3072,
+   "maxtemp": 49.8013,
+   "mintemp": 35.8054,
+   "raw": {
+    "0": 41944,
+    "1": 21713,
+    "2": 39088,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21728,
+    "7": 0
+   },
+   "vccint": 0.993896,
+   "maxvccint": 0.996094,
+   "minvccint": 0.992432,
+   "vccaux": 1.78931,
+   "maxvccaux": 1.7915,
+   "minvccaux": 1.78711
+  },
+  "load_end_s": null
+ },
+ "uart_transcript": {
+  "file": "uart.tsv",
+  "sha256": "3f92f065aa35324bc008026aad90f56e49fa3c770d9794af202d24fba252de08",
+  "lines": 14,
+  "raw_file": "uart-raw.txt",
+  "raw_sha256": "584ec0a703b6bfc79ca5264966ce7500ee0fd1354e81b97919087d39d9805fdd",
+  "raw_bytes": 280
+ },
+ "decoded": {
+  "header": [],
+  "status_lines": [
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532216680387,
+    "t_s": 0.8476
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532283926664,
+    "t_s": 1.6733
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532351172941,
+    "t_s": 2.4849
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532418419218,
+    "t_s": 3.2835
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532485665495,
+    "t_s": 4.0781
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532552911772,
+    "t_s": 4.8891
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532620158049,
+    "t_s": 5.6971
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532687404326,
+    "t_s": 6.4963
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532754650603,
+    "t_s": 7.3061
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532821896880,
+    "t_s": 8.1102
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532889143157,
+    "t_s": 8.9402
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 532956389434,
+    "t_s": 9.724
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 533023635711,
+    "t_s": 10.5321
+   },
+   {
+    "tag": "S",
+    "calib_complete": 1,
+    "state": 23,
+    "highest": 23,
+    "returns_to_idle": 0,
+    "clocks_low40": 533090881988,
+    "t_s": 11.3384
+   }
+  ],
+  "unparsed_lines": [],
+  "final": {
+   "tag": "S",
+   "calib_complete": 1,
+   "state": 23,
+   "highest": 23,
+   "returns_to_idle": 0,
+   "clocks_low40": 533090881988,
+   "t_s": 11.3384
+  },
+  "clock": {
+   "nominal_hz": 83333333.3,
+   "lines": 14,
+   "span_s": 10.491,
+   "measured_hz": 83418709.3,
+   "ppm_from_nominal": 1024.5,
+   "note": "fit of the S lines' clock count over the host arrival times; the arrival jitter of the USB serial bridge (milliseconds) bounds its precision"
+  },
+  "reset": {
+   "wraps_of_the_40_bit_count": null,
+   "last_line_since_reset_s_if_no_wrap": 6390.543,
+   "note": "no load in this run: the time since reset is this value plus an unknown multiple of 2^40 clocks (3.665 h at 83.33 MHz)"
+  },
+  "checks": {
+   "header_line": null,
+   "build_id": null,
+   "byte_lanes": null,
+   "ddr3_period_ps": null,
+   "calib_complete": true,
+   "done_calibrate": true,
+   "no_return_to_idle": true,
+   "no_unparsed_lines_after_header": true,
+   "reset_at_load": null
+  },
+  "pass": true
+ },
+ "exit_status": 0
+}
