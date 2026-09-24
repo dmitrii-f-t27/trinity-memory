@@ -280,7 +280,7 @@ bram-capture:
 # baud rate has to be confirmed in, both in design clocks. Its own build directory,
 # variables and targets: nothing here changes the other designs' commands.
 #   make -C fpga/ax7203 loader-sim                        Icarus scenarios (tests/test_uart_loader.py)
-#   make -C fpga/ax7203 loader-bit loader-flash FREQ_MHZ=25
+#   make -C fpga/ax7203 loader-bit loader-flash FREQ_MHZ=25 SEEDS=3   (the build of record: heap seed 3; seed 1 did not finish routing)
 #   python3 tools/fpga-uart-loader.py --port /dev/cu.usbserial-110 ...   (host side)
 .PHONY: loader-gen loader-sim loader-synth loader-pnr loader-bit loader-flash loader-report loader-clean
 LOADER_TOP       := tms_uart_loader_ax7203
