@@ -435,14 +435,14 @@ before this change (sha256 `9d3e0aad…`, 55 vectors). What #66 needs, nothing o
 here:
 
 1. `specs/memory/tmem/bridge.t27`: the change of `specs/memory/bridge.t27` in this commit range,
-   applied as is (the header lines on stage two, `enum BridgeTransport`, section 10's 34 constants,
-   the 14 reference functions from `tms_bridge_backend_hardware` to `tms_device_accumulator_fits`,
+   applied as is (the header lines on stage two, `enum BridgeTransport`, section 10's 31 constants,
+   the 15 reference functions from `tms_bridge_backend_hardware` to `tms_device_accumulator_fits`,
    7 invariants and 4 test blocks), line 2 unchanged. The result's sha256 is `510d6263…`
    (computed here from that file; `spec_hash` of the new seal).
 2. `conformance/tmem_bridge.json`: this repository's new `conformance/memory_bridge.json`
-   (`tools/generate-spec-vectors.py`): the 55 vectors unchanged, 8 fpga vectors, `constants.fpga`,
-   `sdk_adapter.fpga_chip_info_requires`, 6 more invariants, `replay.backend` and
-   `replay.result_format`. The fpga vectors need a device double to replay; upstream has none,
+   (`tools/generate-spec-vectors.py`, sha256 `733aa810…`): the 55 vectors unchanged, 8 fpga
+   vectors (63 in all), `constants.fpga`, `sdk_adapter.fpga_chip_info_requires`, 6 more
+   invariants (15 in all), `replay.backend` and `replay.result_format`. The fpga vectors need a device double to replay; upstream has none,
    so either the double comes along (`tests/fake_fpga_device.py`, `tools/bridge_link_protocol.py`,
    `tools/uart_loader_protocol.py`) or upstream's replay skips vectors with a `backend` key and says
    so.
