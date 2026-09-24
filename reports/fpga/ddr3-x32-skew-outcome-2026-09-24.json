@@ -1,0 +1,774 @@
+{
+ "schema": "trinity.ddr3-x32-skew-outcome.v1",
+ "written_utc": "2026-09-24T12:58:29Z",
+ "netlist": "7deeef16 x32, PATTERN_TEST 1 (reports/fpga/ddr3-build-2026-09-24-7deeef16-x32*/)",
+ "prediction": "reports/fpga/ddr3-x32-skew-prediction-2026-09-24.json (commit 5fd7caa, before seeds 19, 10, 12, 9 ran)",
+ "skew_note": "nextpnr-xilinx 0.9.7's delay model from the seed sweeps: clock buffer -> fabric inverter LUT -> CK OBUFDS input (ck_ps, the later of P and N) and -> each lane's DQS OSERDES CLK; ck_minus_dqs is their difference. Not measured on silicon.",
+ "also_board": {
+  "f07e91cd x32 seed 1 (#60 netlist, no pattern test)": {
+   "ck_minus_dqs_ps_by_lane": [
+    -107,
+    482,
+    478,
+    992
+   ],
+   "result": "calibrated in 3 of 3 loads, no return to IDLE (UberDDR3 self-test only)",
+   "captures": "reports/fpga/ddr3-bringup-2026-09-24-f07e91cd-x32/"
+  }
+ },
+ "seeds": [
+  {
+   "seed": 1,
+   "fmax_mhz": 86.16,
+   "meets_83_33": true,
+   "fasm_sha256": "3e4ad24659aec2e8d247abfc8e666171b65125a24fce4d5876beef93a100316d",
+   "inverter_lut": "SLICE_X162Y188/A6LUT",
+   "ck_ps": 4782,
+   "dqs_clk_ps_by_lane": [
+    2479,
+    2414,
+    2822,
+    3238
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    2303,
+    2368,
+    1960,
+    1544
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed1/load1",
+     "load_end_utc": "2026-09-24T11:55:25.980Z",
+     "seconds_after_reset": 60.116,
+     "calib_complete": 0,
+     "highest_state": 14,
+     "returns_to_idle": 255,
+     "passes": 0,
+     "clean_passes": 0,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": false,
+     "die_c": [
+      51.9968,
+      53.1407
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed1/load2",
+     "load_end_utc": "2026-09-24T11:57:40.380Z",
+     "seconds_after_reset": 15.109,
+     "calib_complete": 0,
+     "highest_state": 14,
+     "returns_to_idle": 255,
+     "passes": 0,
+     "clean_passes": 0,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": false,
+     "die_c": [
+      53.8924,
+      53.1695
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "fmax_mhz": 86.2,
+   "meets_83_33": true,
+   "fasm_sha256": "0d96d9561ba20bb797cd7011c7c25e093765749a3cf912c8fcf10d0558757da8",
+   "inverter_lut": "SLICE_X162Y176/B6LUT",
+   "ck_ps": 4074,
+   "dqs_clk_ps_by_lane": [
+    2803,
+    2403,
+    2266,
+    3037
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    1271,
+    1671,
+    1808,
+    1037
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed2/load1",
+     "load_end_utc": "2026-09-24T12:17:48.563Z",
+     "seconds_after_reset": 20.161,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 255,
+     "passes": 13,
+     "clean_passes": 0,
+     "bad_bursts": 23642,
+     "bit_errors": 1436348,
+     "pass": false,
+     "die_c": [
+      55.2401,
+      54.9036
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "fmax_mhz": 79.71,
+   "meets_83_33": false,
+   "fasm_sha256": "5eb3baad9daee13a76bdb7399e356fc11f28ea9474d9a7a7075c77f52e3d0494",
+   "inverter_lut": "SLICE_X162Y144/A6LUT",
+   "ck_ps": 3051,
+   "dqs_clk_ps_by_lane": [
+    4123,
+    3671,
+    3360,
+    3194
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -1072,
+    -620,
+    -309,
+    -143
+   ],
+   "board": null
+  },
+  {
+   "seed": 4,
+   "fmax_mhz": 83.9,
+   "meets_83_33": true,
+   "fasm_sha256": "9c550e2829ef8c52b1f44e20f1ef37c4019f0c59d8f43f1060e9ad85f1a4fc67",
+   "inverter_lut": "SLICE_X163Y168/B6LUT",
+   "ck_ps": 4183,
+   "dqs_clk_ps_by_lane": [
+    3099,
+    2746,
+    2403,
+    2462
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    1084,
+    1437,
+    1780,
+    1721
+   ],
+   "board": null
+  },
+  {
+   "seed": 5,
+   "fmax_mhz": 90.33,
+   "meets_83_33": true,
+   "fasm_sha256": "8d80e9f498cf8317db321128a72fd82f897e5635da151772cd2cabefffdfac69",
+   "inverter_lut": "SLICE_X162Y170/A6LUT",
+   "ck_ps": 4063,
+   "dqs_clk_ps_by_lane": [
+    3141,
+    2679,
+    2206,
+    2618
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    922,
+    1384,
+    1857,
+    1445
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed5/load1",
+     "load_end_utc": "2026-09-24T12:18:23.746Z",
+     "seconds_after_reset": 19.514,
+     "calib_complete": 0,
+     "highest_state": 18,
+     "returns_to_idle": 66,
+     "passes": 0,
+     "clean_passes": 0,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": false,
+     "die_c": [
+      54.8056,
+      53.4867
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 6,
+   "fmax_mhz": 81.79,
+   "meets_83_33": false,
+   "fasm_sha256": "61524fd53a646f7734c3b36563b796bede4194ae287eb083722751e3d8902d1b",
+   "inverter_lut": "SLICE_X163Y146/C6LUT",
+   "ck_ps": 3195,
+   "dqs_clk_ps_by_lane": [
+    3429,
+    3109,
+    3088,
+    2600
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -234,
+    86,
+    107,
+    595
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed6/load1",
+     "load_end_utc": "2026-09-24T12:24:33.645Z",
+     "seconds_after_reset": 19.802,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 15,
+     "clean_passes": 15,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      51.0586,
+      52.0871
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed6/load2",
+     "load_end_utc": "2026-09-24T12:26:03.468Z",
+     "seconds_after_reset": 60.045,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 62,
+     "clean_passes": 62,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      53.7097,
+      55.5515
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed6/load3",
+     "load_end_utc": "2026-09-24T12:27:18.550Z",
+     "seconds_after_reset": 60.047,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 61,
+     "clean_passes": 61,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      55.4611,
+      56.6992
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed6/load4-600s",
+     "load_end_utc": "2026-09-24T12:31:51.990Z",
+     "seconds_after_reset": 599.622,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 690,
+     "clean_passes": 690,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      58.5468,
+      61.444
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 7,
+   "fmax_mhz": 89.06,
+   "meets_83_33": true,
+   "fasm_sha256": "a84e47624ce69ed7eed6c1563335fcf643c51786404956a927235d217777611f",
+   "inverter_lut": "SLICE_X162Y144/A6LUT",
+   "ck_ps": 3051,
+   "dqs_clk_ps_by_lane": [
+    4237,
+    3927,
+    3326,
+    3032
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -1186,
+    -876,
+    -275,
+    19
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed7/load1",
+     "load_end_utc": "2026-09-24T12:17:08.502Z",
+     "seconds_after_reset": 20.086,
+     "calib_complete": 0,
+     "highest_state": 14,
+     "returns_to_idle": 255,
+     "passes": 0,
+     "clean_passes": 0,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": false,
+     "die_c": [
+      54.9747,
+      54.9594
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 8,
+   "fmax_mhz": 79.35,
+   "meets_83_33": false,
+   "fasm_sha256": "7520631eb12107901e03ca7267301fff48dde20274820b685f5cc72c7151455c",
+   "inverter_lut": "SLICE_X162Y146/D6LUT",
+   "ck_ps": 3321,
+   "dqs_clk_ps_by_lane": [
+    3869,
+    3558,
+    3247,
+    2603
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -548,
+    -237,
+    74,
+    718
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed8/load1",
+     "load_end_utc": "2026-09-24T12:25:08.699Z",
+     "seconds_after_reset": 19.79,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 15,
+     "clean_passes": 15,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      52.2159,
+      52.7081
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed8/load2",
+     "load_end_utc": "2026-09-24T12:28:33.583Z",
+     "seconds_after_reset": 60.041,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 62,
+     "clean_passes": 62,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      56.5627,
+      57.1856
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed8/load3",
+     "load_end_utc": "2026-09-24T12:29:48.682Z",
+     "seconds_after_reset": 60.047,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 61,
+     "clean_passes": 61,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      57.0991,
+      57.6951
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 9,
+   "fmax_mhz": 84.47,
+   "meets_83_33": true,
+   "fasm_sha256": "7e409f864fe7f04d7860a24ff43b95daa068edf111cfc3b22a24776b024f14da",
+   "inverter_lut": "SLICE_X162Y173/B6LUT",
+   "ck_ps": 4101,
+   "dqs_clk_ps_by_lane": [
+    2986,
+    2596,
+    2403,
+    2799
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    1115,
+    1505,
+    1698,
+    1302
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed9/load1",
+     "load_end_utc": "2026-09-24T12:44:31.339Z",
+     "seconds_after_reset": 30.153,
+     "calib_complete": 0,
+     "highest_state": 14,
+     "returns_to_idle": 255,
+     "passes": 0,
+     "clean_passes": 0,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": false,
+     "die_c": [
+      58.8871,
+      57.5874
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 10,
+   "fmax_mhz": 87.08,
+   "meets_83_33": true,
+   "fasm_sha256": "dc033b28321ff88f05330e3814060a2127262776fbf35fecc321257ecb14cf89",
+   "inverter_lut": "SLICE_X162Y152/C6LUT",
+   "ck_ps": 3291,
+   "dqs_clk_ps_by_lane": [
+    3488,
+    3128,
+    2917,
+    2405
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -197,
+    163,
+    374,
+    886
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed10/load1",
+     "load_end_utc": "2026-09-24T12:43:01.292Z",
+     "seconds_after_reset": 29.448,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 27,
+     "clean_passes": 27,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      60.3001,
+      59.3754
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 11,
+   "fmax_mhz": 81.3,
+   "meets_83_33": false,
+   "fasm_sha256": "4a775bc9f3eeee61964db3d3eafc965de151731c452bec3b295a2b0e45fac15a",
+   "inverter_lut": "SLICE_X163Y146/B6LUT",
+   "ck_ps": 3321,
+   "dqs_clk_ps_by_lane": [
+    3869,
+    3558,
+    3247,
+    2741
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -548,
+    -237,
+    74,
+    580
+   ],
+   "board": null
+  },
+  {
+   "seed": 12,
+   "fmax_mhz": 84.77,
+   "meets_83_33": true,
+   "fasm_sha256": "8ba2404c30825950b8094e3d1cd6de829958b2a17e462d4ff9a6baa38070da35",
+   "inverter_lut": "SLICE_X162Y149/A6LUT",
+   "ck_ps": 3453,
+   "dqs_clk_ps_by_lane": [
+    3877,
+    3469,
+    3069,
+    2669
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -424,
+    -16,
+    384,
+    784
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed12/load1",
+     "load_end_utc": "2026-09-24T12:43:46.372Z",
+     "seconds_after_reset": 29.441,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 26,
+     "clean_passes": 26,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      59.4234,
+      58.9217
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 13,
+   "fmax_mhz": 75.04,
+   "meets_83_33": false,
+   "fasm_sha256": "3dc95e0f86553c3b3e2deca6ece608dcec67d5472070df97d3b9559a0e85519b",
+   "inverter_lut": "SLICE_X163Y148/D6LUT",
+   "ck_ps": 3253,
+   "dqs_clk_ps_by_lane": [
+    3828,
+    3625,
+    3329,
+    2827
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -575,
+    -372,
+    -76,
+    426
+   ],
+   "board": null
+  },
+  {
+   "seed": 14,
+   "fmax_mhz": 79.81,
+   "meets_83_33": false,
+   "fasm_sha256": "1eff5a9ce8bad7032772d4043f35977540677a14f61e7f09b5b013497d4c0900",
+   "inverter_lut": "SLICE_X163Y148/D6LUT",
+   "ck_ps": 3310,
+   "dqs_clk_ps_by_lane": [
+    3626,
+    3235,
+    2846,
+    2456
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -316,
+    75,
+    464,
+    854
+   ],
+   "board": null
+  },
+  {
+   "seed": 15,
+   "fmax_mhz": 85.46,
+   "meets_83_33": true,
+   "fasm_sha256": "f47535ce37044f8348c34158d43f95e796cfc420987772015de221b5b9b38f9a",
+   "inverter_lut": "SLICE_X163Y146/B6LUT",
+   "ck_ps": 3070,
+   "dqs_clk_ps_by_lane": [
+    3813,
+    3423,
+    3033,
+    2643
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -743,
+    -353,
+    37,
+    427
+   ],
+   "board": null
+  },
+  {
+   "seed": 16,
+   "fmax_mhz": 89.77,
+   "meets_83_33": true,
+   "fasm_sha256": "c140a4b022d2c0d7ccc6132716de2648acaba7be819eb471e0edea18e97111d0",
+   "inverter_lut": "SLICE_X162Y152/C6LUT",
+   "ck_ps": 3451,
+   "dqs_clk_ps_by_lane": [
+    4202,
+    3810,
+    3149,
+    2735
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -751,
+    -359,
+    302,
+    716
+   ],
+   "board": null
+  },
+  {
+   "seed": 17,
+   "fmax_mhz": 80.98,
+   "meets_83_33": false,
+   "fasm_sha256": "73085bb27a63a53d6a196cfbbd66748886a55b0870a2b7c1b28241b6aee7235d",
+   "inverter_lut": "SLICE_X162Y143/A6LUT",
+   "ck_ps": 3051,
+   "dqs_clk_ps_by_lane": [
+    4087,
+    3687,
+    3338,
+    2886
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -1036,
+    -636,
+    -287,
+    165
+   ],
+   "board": null
+  },
+  {
+   "seed": 18,
+   "fmax_mhz": 82.29,
+   "meets_83_33": false,
+   "fasm_sha256": "9a24b117439a55a933aa6e35043747e54f528058722b52c2b1d94e72af656d96",
+   "inverter_lut": "SLICE_X162Y159/A6LUT",
+   "ck_ps": 3635,
+   "dqs_clk_ps_by_lane": [
+    3166,
+    3097,
+    2740,
+    2207
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    469,
+    538,
+    895,
+    1428
+   ],
+   "board": null
+  },
+  {
+   "seed": 19,
+   "fmax_mhz": 83.72,
+   "meets_83_33": true,
+   "fasm_sha256": "1aebac33ff30fd7399d2b4ce7dbaeaf3d86d17d2d104f1e1b43c637bbf65c05c",
+   "inverter_lut": "SLICE_X162Y148/A6LUT",
+   "ck_ps": 3099,
+   "dqs_clk_ps_by_lane": [
+    3415,
+    3108,
+    2953,
+    2461
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -316,
+    -9,
+    146,
+    638
+   ],
+   "board": [
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed19/load1",
+     "load_end_utc": "2026-09-24T12:42:16.235Z",
+     "seconds_after_reset": 29.439,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 27,
+     "clean_passes": 27,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      61.3825,
+      60.2963
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed19/load2",
+     "load_end_utc": "2026-09-24T12:45:23.545Z",
+     "seconds_after_reset": 60.039,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 61,
+     "clean_passes": 61,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      57.4836,
+      58.2795
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed19/load3",
+     "load_end_utc": "2026-09-24T12:46:38.568Z",
+     "seconds_after_reset": 60.048,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 61,
+     "clean_passes": 61,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      58.2584,
+      58.6275
+     ]
+    },
+    {
+     "capture": "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed19/load4-600s",
+     "load_end_utc": "2026-09-24T12:47:59.554Z",
+     "seconds_after_reset": 599.611,
+     "calib_complete": 1,
+     "highest_state": 23,
+     "returns_to_idle": 0,
+     "passes": 690,
+     "clean_passes": 690,
+     "bad_bursts": 0,
+     "bit_errors": 0,
+     "pass": true,
+     "die_c": [
+      58.5833,
+      61.7439
+     ]
+    }
+   ]
+  },
+  {
+   "seed": 20,
+   "fmax_mhz": 84.83,
+   "meets_83_33": true,
+   "fasm_sha256": "16c4c2985930a42c97f02eaae3a32f4c3fae87385d555f56f294f636c09230d0",
+   "inverter_lut": "SLICE_X162Y144/A6LUT",
+   "ck_ps": 3051,
+   "dqs_clk_ps_by_lane": [
+    4046,
+    3656,
+    3292,
+    2821
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -995,
+    -605,
+    -241,
+    230
+   ],
+   "board": null
+  }
+ ]
+}

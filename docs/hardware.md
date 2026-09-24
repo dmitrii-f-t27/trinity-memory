@@ -626,10 +626,11 @@ routing), not the multiply-accumulate datapath.
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open
 flow's support for those primitives is partial (gHashTag/trinity-fpga records an
 IDDR path that never fires, openXC7 issue 114) and no DDR3 controller has been
-brought up on this board with it beyond calibration (the DDR3 flow of issue #60,
-next section, has calibrated on the board and passed UberDDR3's own self-test,
-which covers 3/4 of the memory; no host-checked data test has run yet), so any DDR
-figure would rest on unverified primitives; the protocol above ("If testing DDR bandwidth …") stays the plan for
+brought up on this board with it beyond a memory test (the DDR3 flow of issue #60,
+next section, calibrates on the board and passes our write/read-back pattern test
+over all of U6 in x16 and over all 1 GiB in x32 for some placements; no bandwidth
+of the stage-2 kind has been measured), so any DDR figure would rest on primitives
+whose timing nothing analyses; the protocol above ("If testing DDR bandwidth …") stays the plan for
 a Vivado-built controller or a repaired open PHY. Power needs an instrument on
 the 12 V input or the board's rails; none is attached to the bench, and the USB
 ports power only the bridges. Both are therefore separate experiments with their
@@ -640,13 +641,27 @@ Fmax is an estimate, not a measurement.
 ### DDR3 in the open flow
 
 Issue #60 is the build: synthesis, place and route and a bitstream with recorded
-hashes. Issue #61 is the board. **One bitstream of this flow has run on the
-board**: the x16 build of nextpnr-xilinx 0.9.7 (whole-file sha256 `0ae4ed6c…`),
-loaded into SRAM three times on 2026-09-24. It calibrates, and UberDDR3's calibration
-self-test found no wrong read, over the 3/4 of U6 it covers ("First board runs",
-below). Nothing else has run: not x32, not the 45a986b8 line, and no Wishbone
-write/read-back checked by the host. Nothing here says that DDR3 holds data over
-time on the AX7203.
+hashes. Issue #61 is the board. **State on 2026-09-24 (all nextpnr-xilinx 0.9.7,
+SRAM loads only, AX7203 DNA `0x00389c0c2d85e85c`):**
+
+- **x16 (chip U6, 512 MiB):** the build with our pattern test (`7deeef16`)
+  calibrated on 4 of 4 loads and then wrote, read back and compared every one of
+  the 2^25 bursts with address-unique data, true and complement: 881 passes of
+  512 MiB, 0 wrong bits (3 captures of 60 s and one of 600 s). The
+  `UART_DEBUG_BIST` build (`0e94ee86`) printed `correct_read_data` =
+  33,554,431, the self-test's checked reads exactly, and no wrong-read report, on
+  3 of 3 loads.
+- **x32 (both chips, 1 GiB):** placement decides it. With our pattern test, 5 of
+  the 10 placements (seeds) of the same netlist loaded on the board passed the
+  full 1 GiB test on every load (13 loads, 1,858 passes of 1 GiB, 0 wrong bits,
+  two captures of 600 s); 5 failed: 4 never calibrated, and 1 calibrated after 255 or
+  more retries and then read wrong bits on U5 only. What separated them was, in
+  nextpnr's delay model, the skew between CK and each byte lane's write-DQS clock,
+  both of which leave the clock network through one fabric LUT (below); a
+  prediction from it, committed before four more seeds ran, held for all four.
+- Not run: the 45a986b8 line, any VREF change, `BIST_MODE 2`, a hold between
+  write and read, a soak longer than 600 s, and x32 with `UART_DEBUG_BIST`.
+  Details, evidence and limits: "Board runs of the pattern test", below.
 
 **What is built.** [UberDDR3](https://github.com/AngeloJacobo/UberDDR3) at
 `79d8fd3e30ebba6acd84eecac2fa57b7f95f4544`: `rtl/ddr3_top.v`,
@@ -1100,7 +1115,7 @@ one bit per byte and drives DM (L1296). The #60 top tied `i_wb_cyc` to 1 and
 the address faults above, and defining `UART_DEBUG` sets `reset_from_test` to 0
 (L3655), so a wrong read would no longer return the controller to IDLE.
 
-**Pattern test (#61): built and simulated, not yet run on the board.**
+**Pattern test (#61).**
 [`t27/rtl/fpga_ddr3_pattern.t27`](../t27/rtl/fpga_ddr3_pattern.t27) is an
 `on_clock` Wishbone master on UberDDR3's user port, wired by
 `tms_ddr3_ax7203.v` when `PATTERN_TEST` is 1 (`make ... DDR3_PATTERN=1`, the
@@ -1128,8 +1143,9 @@ of the #60 builds). How it meets the list above:
   stuck, open or aliased address or bank line) differs from what was expected in
   every word; every stored bit is written and read as 0 and as 1 in a round, so a
   stuck DQ or a dropped write shows. The round key comes from `PATTERN_SEED`,
-  the controller clock count at which `o_calib_complete` was seen (reported, and
-  expected to differ from load to load; not yet measured across loads) and the
+  the controller clock count at which `o_calib_complete` was seen (reported; on
+  the board it often came out the same from load to load, so loads can repeat
+  the same key sequence: "The round keys repeat across loads", below) and the
   round number. [`tools/ddr3_pattern_model.py`](../tools/ddr3_pattern_model.py)
   states the same rules in Python.
 - *Port.* `stb`, `we`, address and data stay unchanged until a clock with `stb`
@@ -1191,7 +1207,7 @@ Icarus); the board run's region of 2^25 bursts has aliasing pairs for every one
 of the 25 bits. The model is not UberDDR3: its stall and ack timing are
 invented, and nothing here simulates the PHY or the memory chips.
 
-*Builds with the test (commit `7deeef16`, not flashed).* Same flow and tools as
+*Builds with the test (commit `7deeef16`).* Same flow and tools as
 the 0.9.7 builds above (native yosys 0.69, native nextpnr-xilinx 0.9.7 with the
 seed search, prjxray of the image), `DDR3_PATTERN=1` with the defaults: 2^25
 bursts, hold 0, rounds 0 (until reset), watchdog 2^24 clocks; clean source tree
@@ -1224,27 +1240,182 @@ runs (logs not committed) with the test's reset taken straight from `rst` gave
 and 3 with the critical path from the `rst` comparator to an SR pin and seed 2
 from an unnamed flip-flop through 13 LUT levels (not traced); after the reset
 change the critical paths of the trial and committed runs started in UberDDR3 or
-at `o_debug1`. No seed sweep of these netlists was run. The same limits as above
+at `o_debug1`. No seed sweep of the x16 netlist was run; the x32 one was (below). The same limits as above
 apply: Fmax covers fabric register-to-register paths on the controller clock
 only. The fabric-clock LUT moved (x16 `SLICE_X162Y152/C6LUT`, x32
 `SLICE_X162Y188/A6LUT`). Buffer to pin through it: x16 DQS OSERDES 3.58-3.60 ns,
 CK 3.25-3.29 ns, inside the 2.47-4.63 ns of the x16 0.9.7 sweep; x32 DQS OSERDES
 2.41-3.24 ns but CK 4.74-4.78 ns, above the 2.26-3.94 ns of the x32 0.9.7 sweep
-(and below the 5.61 ns seen with 45a986b8). To run on the board (#61, with the
-board and approval): `tools/fpga-ddr3-capture.py --bit
-build/fpga/ddr3-x16-pattern/tms_ddr3_ax7203.bit --report
-reports/fpga/ddr3-build-2026-09-24-7deeef16-x16/build.json ...`.
+(and below the 5.61 ns seen with 45a986b8). The x16 build and the x32 seed-1
+build ran on the board, and the x32 netlist was placed with more seeds (next).
 
-**Limits.** One board result: the x16 0.9.7 build calibrates and passes the
-self-test, which reads back 3/4 of U6 and cannot see some address faults (above);
-x32 and the 45a986b8 line have not run, and the pattern test (built and
-simulated, above) has not run on the board. No
-timing analysis of the PHY: neither of its I/O
-nor of the controller-clock paths into and out of its primitives. CK and the
-write-DQS clock go through a fabric LUT with an untimed, seed-dependent delay
-(above). The internal 0.675 V VREF on bank 35. The 0.9.7 line departs from the
-precedent's nextpnr line and PLL tables and has no hardware record; the 45a986b8
-line matches the precedent but programs the MULT = 8 PLL tables. The x16 Fmax gap
-to the probe is structural and not yet traced to a part of our top. The VREF,
-termination and VCCO facts come from the AX7103 core-board schematic Rev 1.0,
-not from an AX7203 one.
+**Board runs of the pattern test (#61, 2026-09-24).** Every run: an SRAM load
+by `tools/fpga-ddr3-capture.py` through `make ddr3-flash`, which checks the
+`.bit` against its report (whole-file sha256, or the sha256 from the sync word
+for the rebuild named below); IDCODE `0x3636093`, DNA `0x00389c0c2d85e85c`,
+XADC before and after; the UART recorded from before the load; the `H` line's
+build id, byte lanes and 3,000 ps checked; the reset 2-13 ms after the load
+returned by the clock count (so no other reset happened); the transcript's
+sha256 in `capture.json`. Transcripts above 256 KB are committed as `.gz`
+(`gzip -n`; the sha256 values are those of the uncompressed files, and the
+decoder and `tests/test_ddr3_bringup.py` read either). Die temperature over all
+runs: 49.9-61.7 °C (the stop limit was 80 °C); VCCINT 0.992-0.995 V. Elapsed times
+are host times from the recorded load, never the 40-bit field.
+
+*x16, pattern test* ([`ddr3-bringup-2026-09-24-7deeef16-x16-pattern/`](../reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x16-pattern/),
+build [`ddr3-build-2026-09-24-7deeef16-x16`](../reports/fpga/ddr3-build-2026-09-24-7deeef16-x16/),
+`.bit` whole-file sha256 `5715d9f7…`):
+
+| Load (load returned, UTC) | Capture after reset | Calibration | Passes (512 MiB each) | Wrong bursts / bits | Die °C before → after |
+| --- | --- | --- | --- | --- | --- |
+| 1 (11:51:09.98) | 59.9 s | done at 5.196 s, no return to IDLE | 63 (31 rounds + 1 true pass) | 0 / 0 | 49.9 → 50.5 |
+| 2 (11:52:41.00) | 60.0 s | same | 63 | 0 / 0 | 51.0 → 51.4 |
+| 3 (11:53:55.90) | 60.0 s | same | 63 | 0 / 0 | 51.4 → 51.8 |
+| 4 (12:06:16.52) | 599.5 s | same | 692 (346 rounds) | 0 / 0 | 54.4 → 55.0 |
+
+881 passes: 881 x 2^25 bursts written, read back and compared, 473 GB in each
+direction (881 x 536,870,912 bytes = 440.5 GiB), with no wrong bit and no watchdog stop. The
+first pass ended 6.06 s after reset. Each phase (all writes, or all reads) took
+35,514,620-35,514,662 controller clocks for the 33,554,432 bursts: 0.4262 s,
+**1,259.7 MB/s as the pattern test's own in-order single-master rate** (region
+bytes over phase clocks, refresh and row changes included; 94.5 % of one burst
+per clock, and of DDR3-667 x16's 1,333 MB/s). This is not the stage-2
+measurement. Every burst was read at least 0.4027 s after it was written
+(hold 0): that, and not the length of the run, is the retention the test shows.
+The controller clock fitted from the `S` lines: 83.329-83.335 MHz.
+
+*The round keys repeat across loads.* The key of round r depends on the clock
+count at which calibration completed, and on this board that count came out the
+same on x16 loads 1-3 (432,973,211 clocks) and differed by 33 clocks on load 4;
+x32 seed 8 repeated its count on 3 of 3 loads, seed 19 on 3 of 4, seed 6 on 2 of 4. So within a load every
+round has a new key (346 in the 600 s run), but loads 1-3 of x16 wrote the same
+data sequence. A different sequence per load needs another `PATTERN_SEED`
+(a rebuild) or a key source that differs; not done.
+
+*x32, pattern test: seed-1 build fails, the placement decides.* The reported x32
+build (`7deeef16`, seed 1, `52bd1734…`) never calibrated: in two loads the
+controller returned to IDLE every ~0.7 ms (the count saturates at 255 within
+0.2 s), highest state 14 (CHECK_STARTING_DATA, the write/read alignment of a
+lane). To separate the board from the build, the #60 x32 netlist was rebuilt
+from master (`00262ff`, `BUILD_ID=f07e91cd`, seed 1): its FASM, frames and
+`.bit` from the sync word equal the committed report's (`e18284b0…`,
+`b95fc020…`, `f409b7bb…`), and it calibrated on 3 of 3 loads with no return to
+IDLE ([`ddr3-bringup-2026-09-24-f07e91cd-x32/`](../reports/fpga/ddr3-bringup-2026-09-24-f07e91cd-x32/);
+it has no pattern test, so that is UberDDR3's self-test only). U5 and the x32
+pins therefore work with some placements. The 7deeef16 x32 netlist was then
+placed with seeds 1-20 ([`ddr3-seed-sweep-2026-09-24-7deeef16-x32.json`](../reports/fpga/ddr3-seed-sweep-2026-09-24-7deeef16-x32.json)
+and [`...-seeds9-20.json`](../reports/fpga/ddr3-seed-sweep-2026-09-24-7deeef16-x32-seeds9-20.json)),
+and ten of them were built and loaded (reports `ddr3-build-2026-09-24-7deeef16-x32-seed<n>/`,
+captures `ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed<n>/`; seed 1 is the
+reported build). The column "CK - DQS" is, per byte lane 0-3, nextpnr's delay
+from the DDR3 clock buffer through the fabric inverter LUT to the CK output
+minus the same to that lane's write-DQS OSERDES clock
+([`ddr3-x32-skew-outcome-2026-09-24.json`](../reports/fpga/ddr3-x32-skew-outcome-2026-09-24.json)):
+
+| Seed | Fmax, controller clock | CK - DQS, lanes 0-3 (ns, model) | Loads | Result on the board |
+| --- | --- | --- | --- | --- |
+| 1 | 86.16 MHz | +2.30 +2.37 +1.96 +1.54 | 2 | never calibrates (highest state 14) |
+| 7 | 89.06 MHz | -1.19 -0.88 -0.28 +0.02 | 1 | never calibrates (highest state 14) |
+| 9 | 84.47 MHz | +1.12 +1.51 +1.70 +1.30 | 1 | never calibrates (highest state 14) |
+| 5 | 90.33 MHz | +0.92 +1.38 +1.86 +1.45 | 1 | aligns, then the self-test reads fail: 66 returns to IDLE in 19.5 s, highest state 18 |
+| 2 | 86.20 MHz | +1.27 +1.67 +1.81 +1.04 | 1 | calibrated at 8.88 s after 255 or more returns to IDLE, then 13 passes with wrong data on DQ16-31 (U5) only: 769-2,816 wrong bursts per pass, 23,642 in all, 1,436,348 wrong bits |
+| 6 | 81.79 MHz (**misses** 83.33) | -0.23 +0.09 +0.11 +0.60 | 4 (one 600 s) | 828 passes of 1 GiB, 0 wrong bits |
+| 8 | 79.35 MHz (**misses** 83.33) | -0.55 -0.24 +0.07 +0.72 | 3 | 138 passes, 0 wrong bits |
+| 19 | 83.72 MHz | -0.32 -0.01 +0.15 +0.64 | 4 (one 600 s) | 839 passes, 0 wrong bits |
+| 10 | 87.08 MHz | -0.20 +0.16 +0.37 +0.89 | 1 | 27 passes, 0 wrong bits |
+| 12 | 84.77 MHz | -0.42 -0.02 +0.38 +0.78 | 1 | 26 passes, 0 wrong bits |
+
+Every placement whose four lanes lay within -0.55 … +0.89 ns passed on every
+load; every one that failed had a lane at +1.70 ns or more, or at -1.19 ns. For
+comparison, the x16 builds that ran: 7deeef16 seed 3 -0.29 / -0.31, the
+`UART_DEBUG_BIST` build -0.68 / -0.37 (both pass), #60's f07e91cd x16 +0.74 /
++1.09 and x32 seed 1 -0.11 … +0.99 (both calibrate; self-test only). Seeds 19,
+10, 12 and 9 were chosen, and their outcome predicted, from this skew before
+they were loaded ([`ddr3-x32-skew-prediction-2026-09-24.json`](../reports/fpga/ddr3-x32-skew-prediction-2026-09-24.json),
+committed in 5fd7caa first): 19, 10 and 12 pass, 9 fails; all four came out so.
+This is a correlation over ten placements in a delay model, not a measured
+mechanism. A plausible one: CK and write DQS both leave the clock network
+through one fabric LUT and general routing (above), and with `ODELAY_SUPPORTED 0`
+nothing adjusts write DQS against CK afterwards, so the route sets tDQSS
+(±0.25 tCK = ±0.75 ns at 333 MHz), on top of the board's own CK-to-U5 and
+DQS flight times, which are unknown. Seeds 6 and 8 run on the board although
+their fabric paths miss the 12 ns target in nextpnr's model; seeds 19, 10 and 12
+meet it (19 by 0.39 MHz).
+
+x32 on the builds that pass (seeds 6, 8, 10, 12, 19; 13 loads): 1,858 passes of
+2^25 bursts of 32 bytes, 1,858 GiB (2.0 TB) in each direction, no wrong bit, calibration
+done 6.90 s after reset with no return to IDLE, the first pass 7.76 s after
+reset. Each phase: 35,514,620-35,514,659 clocks, **2,519.5 MB/s as the pattern
+test's own rate** (94.5 % of DDR3-667 x32's 2,667 MB/s; not the stage-2
+measurement). The two 600 s captures (seed 6 from 12:31:52 UTC, seed 19 from
+12:47:59 UTC) ran 690 passes each, the die rising from 58.5 to 61.4 °C and from
+58.6 to 61.7 °C.
+The x32 build of record for what follows is seed 19: it meets the constraint and
+passed 4 of 4 loads (`.bit` of `ddr3-build-2026-09-24-7deeef16-x32-seed19`).
+
+*`UART_DEBUG_BIST` build (the issue's counters, x16).* `make ... DDR3_WIDTH=16
+DDR3_PATTERN=0 DDR3_UART_DEBUG_BIST=1` reads UberDDR3 with `define
+UART_DEBUG_BIST` and hands N15 to its debug UART (`UBER_UART 1`); the `uart_tx`
+module UberDDR3 then instantiates, which the pinned files do not contain, is
+[`fpga/ax7203/ddr3/uart_tx_t27.v`](../fpga/ax7203/ddr3/uart_tx_t27.v), wiring
+around our t27 transmitter (bit period `CLK_HZ / BIT_RATE` = 83,000,000 / 9600
+= 8,645 clocks, 9,640 baud at the real clock; `tests/test_ddr3_uart_debug.py`
+drives it with UberDDR3's handshake in Icarus). Build `0e94ee86`
+([report](../reports/fpga/ddr3-build-2026-09-24-0e94ee86-x16-uart-debug-bist/),
+`.bit` `1c59401f…`): seeds 1-8 all missed 83.33 MHz (61.8-83.13 MHz, logs not
+committed), seed 9 of the next search met it (83.55 MHz); CK - DQS -0.68 /
+-0.37 ns. Three loads ([`ddr3-bringup-2026-09-24-0e94ee86-x16-uart-debug-bist/`](../reports/fpga/ddr3-bringup-2026-09-24-0e94ee86-x16-uart-debug-bist/),
+loads returned at 12:20:47, 12:21:29 and 12:22:04 UTC; 9600 baud), each the same: the five phase
+messages in order (burst write per byte, burst read, random write, random read,
+alternating write-read) 1.82-5.79 s after the load, then `DONE BIST_MODE=1,
+correct_read_data=` 33,554,431 at 5.88-5.89 s, which is exactly the number of
+reads the self-test checks in `BIST_MODE 1` (2^23 + 2^24 + 2^23 - 1, from
+`tools/uberddr3-bist-model.py`), and no `RESET` report in the 14 s that followed.
+`wrong_read_data` is printed only in those reports, which the controller sends
+from its first wrong read on, so it stayed 0 while the capture ran. The DONE
+message is sent from FINISH_READ in the clock that sets `final_calibration_done`
+(= `o_calib_complete`); this build then repeated it about every 0.12 s with the
+same count (122-123 times per capture); why UberDDR3 repeats it under
+`UART_DEBUG` was not traced, and it is not a new self-test (the count does not
+grow). The counters see the
+same 3/4 of U6 as the self-test and none of its blind address bits; the pattern
+test above is the stronger evidence.
+
+*Decoder corrections during these runs* (both applied with `--redecode`, which
+keeps the earlier checks and the reason in the record): the second x32 seed-1
+load's `H` line arrived appended to a line the previous design was cut off in,
+and is now recovered from the joined line; the first decode of the
+`UART_DEBUG_BIST` loads also read the resident design's repeated DONE message
+from before the load, and now reads from the load's first phase message on.
+
+**Limits.** What the board runs above show, per width, and what they do not.
+- *Shown, x16:* calibration on every load of three builds; the pattern test over
+  all 2^25 bursts of U6, so a stuck or aliased line on any address bit
+  (`bank[1]`, `bank[2]` and `row[8..14]` included, which UberDDR3's self-test
+  cannot see) would have made the aliased bursts wrong in every word (detection
+  simulated in Icarus for bits 0-11 only), every 64-bit word of a pass distinct, true and complement data, 881 passes without a wrong
+  bit; `correct_read_data` 33,554,431 and no wrong-read report in the
+  `UART_DEBUG_BIST` build.
+- *Shown, x32:* the same test over all 2^25 bursts of both chips (1 GiB) without a
+  wrong bit on 13 loads of five placements, and failure on five others.
+- *Not shown:* retention beyond the test's 0.40 s write-to-read separation (no
+  `PATTERN_HOLD`), behaviour over hours (the longest capture is 600 s per width),
+  temperature beyond 61.7 °C die (the DDR3 case temperature is unknown), other
+  boards, and data patterns other than this generator's (no walking bits, no
+  row-hammer or neighbour patterns). The key sequence repeated across loads of
+  one bitstream. The MB/s figures are the test's own in-order single-master rate,
+  not the stage-2 measurement.
+- *Not analysed:* the timing of the 333 MHz, 90-degree and 200 MHz domains and of
+  the PHY's I/O, and the controller-clock paths into and out of its primitives
+  (nextpnr gives them no timing class). CK and write DQS go through a fabric LUT
+  with a seed-dependent delay; x32 works only with some placements, chosen here
+  by nextpnr's modelled skew, and two of the passing placements (seeds 6 and 8)
+  miss nextpnr's controller-clock target. A different netlist (any RTL change)
+  needs its placements checked on the board again. Folding the inverter into the
+  OSERDES (`ZINV_CLK`) would take DQS off the fabric; not done.
+- *Unchanged:* the internal 0.675 V VREF on bank 35 against the board's 0.75 V
+  (not patched; x16 and the good x32 placements pass with it). Only the 0.9.7
+  line ran; the 45a986b8 line (the precedent's) has not run. The x16 Fmax gap to
+  the probe is structural and not yet traced to a part of our top. The VREF,
+  termination and VCCO facts come from the AX7103 core-board schematic Rev 1.0,
+  not from an AX7203 one.
