@@ -81,6 +81,12 @@ jobs:
         run: |
           sh tools/test-t27.sh
           python -m unittest discover -s tests/reference/legacy_tests -v
+      - name: ProcessorCI kit (generated copies, vectors, Icarus runs, wrapper compile, ml_dtypes cross-check)
+        run: |
+          python3 scripts/generate_rtl.py --compiler "$T27_ROOT/target/release/t27c"
+          make -C kits/processorci check
+          python3 -m pip install --quiet numpy ml_dtypes
+          python3 kits/processorci/tools/crosscheck_ml_dtypes.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
