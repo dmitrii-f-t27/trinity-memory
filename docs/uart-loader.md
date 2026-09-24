@@ -663,8 +663,9 @@ chunks).
 
 "Bytes the load changed" counts the payload bytes that differed from what the range held
 before the load (read first), so an identical read-back shows at least that many bytes
-landed; the others matched already. In runs 1-4 almost every byte differed (the ranges held
-what UberDDR3's self-test left below 128 MiB, and unknown power-up contents above). Runs 5-7
+landed; the others matched already. In runs 1-4 almost every byte differed (below 128 MiB,
+runs 1 and 4, the ranges held what UberDDR3's self-test wrote there by #61's model of it; above
+it, runs 2 and 3, whatever the chips held; neither was checked apart). Runs 5-7
 read their ranges before loading and found every byte of runs 1-3 still there: 0 bytes
 changed. Runs 5, 6 and 7 started 7 min 34 s, 7 min 23 s and 2 min 31 s after runs 1, 2 and 3
 ended (record times), with other runs' loads and reads in between. That is retention within one load of the bitstream for minutes,
@@ -755,3 +756,9 @@ Wishbone-side watchdog and the arbiter's second master shown in simulation only)
   the other by hand (the source diff test only checks that the differences are marked).
 - 2 of the 12 seeds miss 83.33 MHz; the remaining critical paths are the loader's state
   decode and the status line selection (session logs).
+- The registered checks of the DDR3 loader are assigned at the end of `on_clock` from values
+  that branches above may have written in the same tick: the Verilog (nonblocking) reads the
+  previous clock's values, which the settle clocks rely on, while the generated C of
+  `on_clock` would read the new ones. No test runs the C of `on_clock` (only its functions),
+  so the file's "every statement reads a variable before the same tick writes it" does not
+  hold for those lines; the Icarus runs are the check of the module.
