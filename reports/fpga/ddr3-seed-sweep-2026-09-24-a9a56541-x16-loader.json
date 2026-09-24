@@ -1,0 +1,839 @@
+{
+ "chipdb_sha256": "5c88a26d973bff2fc33582f3937cc07d30bfc397ebae16d69a18fe49a14786a7",
+ "commit": "a9a56541",
+ "label": "nextpnr-xilinx 0.9.7, x16, --router router2 --timing-allow-fail",
+ "netlist_ff_to_ff_max_lut_levels": 11,
+ "netlist_sha256": "9cfb2df2812287d2759110a6ac4f22a126504709002fbaaaf263939e69050242",
+ "note": "DDR3_APP=loader; seeds 1-12 run as three make ddr3-sweep invocations (seeds 1-4, 5-8, 9-12) in separate build directories from the same netlist (sha256 equal), their logs summarised together here",
+ "runs": [
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 85.71,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 1,
+    "clock": "clk_ctrl",
+    "first_net": "debug1[1]",
+    "last_net": "$abc$400336$flatten\\ddr3.\\ddr3_controller_inst.$2$lookahead\\calib_data$19197[127:0]$19524[85]",
+    "logic_ns": 1.5,
+    "lut_stages": 6,
+    "routing_ns": 10.2,
+    "start": "$auto$ff.cc:337:slice$84385.Q"
+   },
+   "fasm_sha256": "385d4c24577cde754e23d7895d864c1ce73c3ba12920af2a1244da02fddc704e",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "20884b64d5d8c9a6eac3013c7a326a1669d0ff4e2930a7a64c6885dc356a9398",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y147/A6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2233,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2188,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2340,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 1751
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed1",
+   "seed": 1,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 85.42,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "$techmap406876$auto$abc_ops_reintegrate.cc:611:reintegrate$401525.A[1]",
+    "last_net": "$techmap156504$auto$ff.cc:337:slice$95414.D",
+    "logic_ns": 0.8,
+    "lut_stages": 5,
+    "routing_ns": 10.9,
+    "start": "$auto$ff.cc:337:slice$101084.Q"
+   },
+   "fasm_sha256": "2c0e359094bfd649c2b903220c586dead0a204f89062074152ce9e9343f6f568",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "f901539dc14419347dfebab4a871c18821228bf251fa758e93d311bd7f16b6bf",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X163Y146/D6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2103,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2058,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2651,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2340
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed2",
+   "seed": 2,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 87.84,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "$techmap405925$abc$400336$lut$aiger400335$14049.A[2]",
+    "last_net": "$abc$400336$auto$simple.cc:210:make_patterns_logic$58459",
+    "logic_ns": 1.1,
+    "lut_stages": 7,
+    "routing_ns": 10.3,
+    "start": "$auto$ff.cc:337:slice$88772.Q"
+   },
+   "fasm_sha256": "9e00576592db666efffcf04b99eb674c2910fb3a0cf8098cb3a7653f8cb9d609",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "3065b5c21359ea5daeeb2b18136c2d6cc11d1db8f994927291ce9a7abcaa05ac",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y156/A6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2308,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2263,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2605,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2004
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed3",
+   "seed": 3,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 91.4,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 2,
+    "clock": "clk_ctrl",
+    "first_net": "$techmap405346$auto$abc_ops_reintegrate.cc:611:reintegrate$402042.A[1]",
+    "last_net": "ddr3.ddr3_controller_inst.stage1_do_pre_d",
+    "logic_ns": 1.7,
+    "lut_stages": 7,
+    "routing_ns": 9.2,
+    "start": "$auto$ff.cc:337:slice$80244.Q"
+   },
+   "fasm_sha256": "75fbf5e0c61e1c60445ad5f5a9e4153630e08da1582e83bff8142b6376350eea",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "222eed157e5cade71cbd67653f5ba1d1faa2bba41f45e131ee7a2663b6358dd6",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y160/B6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2518,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2473,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2339,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2030
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed4",
+   "seed": 4,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 81.01,
+     "target_mhz": 83.33,
+     "verdict": "FAIL"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 2,
+    "clock": "clk_ctrl",
+    "first_net": "$techmap405346$auto$abc_ops_reintegrate.cc:611:reintegrate$402042.A[1]",
+    "last_net": "ddr3.ddr3_controller_inst.stage1_do_pre_d",
+    "logic_ns": 1.9,
+    "lut_stages": 7,
+    "routing_ns": 10.4,
+    "start": "$auto$ff.cc:337:slice$80244.Q"
+   },
+   "fasm_sha256": "70d671376c28c4f5fc183263a2212ce546c85cdd4ffae0c665e907d3cc2ca558",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "392edfc516a8c41d220dde5378ed746337f63bfa33825be860025b3f2709eff0",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X163Y144/C6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 1833,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 1788,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2803,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2465
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed5",
+   "seed": 5,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 88.6,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "$techmap405925$abc$400336$lut$aiger400335$14049.A[2]",
+    "last_net": "$abc$400336$auto$simple.cc:210:make_patterns_logic$58459",
+    "logic_ns": 1.1,
+    "lut_stages": 7,
+    "routing_ns": 10.2,
+    "start": "$auto$ff.cc:337:slice$88772.Q"
+   },
+   "fasm_sha256": "09611db489fe9c2964f29fe795a04b376ae6d7058282ba0f53a2cf8eaab8966a",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "af7d0038bcc0daa6cd1341a4be66c8539118effeb329fa25042cd74fb9c5001f",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y145/A6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 1837,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 1792,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2777,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2325
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed6",
+   "seed": 6,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 86.17,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "ddr3.ddr3_controller_inst.lane",
+    "last_net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$19887.Y[14]",
+    "logic_ns": 1.4,
+    "lut_stages": 10,
+    "routing_ns": 10.2,
+    "start": "$auto$ff.cc:337:slice$84707.Q"
+   },
+   "fasm_sha256": "e9f6a15e26eeefb3663bd8b08cb86aca59f7c88ec7805e720bd9810f9409cdd6",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "9267f217d0f88126ad7940d06cc9b9ba39b1d2398b75d3e1cd2d91d812a5fc99",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y153/B6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2093,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2048,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2681,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2288
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed7",
+   "seed": 7,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 81.41,
+     "target_mhz": 83.33,
+     "verdict": "FAIL"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 2,
+    "clock": "clk_ctrl",
+    "first_net": "master.outst[1]",
+    "last_net": "$auto$xilinx_dffopt.cc:347:execute$413410",
+    "logic_ns": 1.7,
+    "lut_stages": 6,
+    "routing_ns": 10.6,
+    "start": "$auto$ff.cc:337:slice$89708.Q"
+   },
+   "fasm_sha256": "7c3f6fc961993bc90d3bd1c89ec97cd90f9cbc5607019b3153d763cad68e367b",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "1e951b9742eaeb4e8bec299d850842a9e608d65a3ef99d108d6eb37cb300ec18",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y145/A6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 1837,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 1792,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 3086,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2325
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed8",
+   "seed": 8,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 85.46,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 1,
+    "clock": "clk_ctrl",
+    "first_net": "debug1[1]",
+    "last_net": "$abc$400336$flatten\\ddr3.\\ddr3_controller_inst.$2$lookahead\\calib_data$19197[127:0]$19524[89]",
+    "logic_ns": 1.4,
+    "lut_stages": 5,
+    "routing_ns": 10.3,
+    "start": "$auto$ff.cc:337:slice$84385.Q"
+   },
+   "fasm_sha256": "4cf380213d2f02943617946d33dca34bad52a53cdc8c8307574e92323b4aea79",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "f8684a90eedbe23e5455999f23af10d0d7f35eb225cb83a2ff13a4f550dc8f19",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y147/D6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2096,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2051,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2406,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2401
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed9",
+   "seed": 9,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 85.81,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "wr_addr[21]",
+    "last_net": "$techmap406900$auto$abc_ops_reintegrate.cc:611:reintegrate$401518.A[1]",
+    "logic_ns": 1.1,
+    "lut_stages": 7,
+    "routing_ns": 10.6,
+    "start": "$auto$ff.cc:337:slice$85125.Q"
+   },
+   "fasm_sha256": "79a4cc6a2215d192e2a06f64913047d5f5e46b834df64a673c59df0af826db1a",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "1b4d610da958546ad1bc9e0dba63800853c20ef3cfe52862e773d206085d5469",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y145/B6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2065,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2020,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2677,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2200
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed10",
+   "seed": 10,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 90.29,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "$techmap406876$auto$abc_ops_reintegrate.cc:611:reintegrate$401525.A[1]",
+    "last_net": "$abc$400336$auto$simple.cc:210:make_patterns_logic$57890",
+    "logic_ns": 0.6,
+    "lut_stages": 3,
+    "routing_ns": 10.5,
+    "start": "$auto$ff.cc:337:slice$101084.Q"
+   },
+   "fasm_sha256": "b42475fd0f9b594b90212ec32a0c999f59444ab23b61789ba92d5aa2b9960bf2",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "72de7e37bb5541a8e9f905c19cddf93ea2f1f321ef466b7ab09de53a6eace4ae",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X163Y167/D6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2500,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2455,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 1955,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 1565
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed11",
+   "seed": 11,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 89.48,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "ddr3.ddr3_controller_inst.lane",
+    "last_net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$19887.Y[26]",
+    "logic_ns": 1.4,
+    "lut_stages": 10,
+    "routing_ns": 9.7,
+    "start": "$auto$ff.cc:337:slice$84707.Q"
+   },
+   "fasm_sha256": "e398b8d251316ed6fe9987ab6d5f6f59d3f480ded95aa0030dae626074383347",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "7556c381229f7141a2cef52a150a7c95a97554901509cad56b7ae5b763d8ff4e",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y146/D6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2103,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2058,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2651,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2340
+     }
+    }
+   ],
+   "packed_lut1": 4574,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0x73BE8FA401",
+     "result": "PASS",
+     "table": "0x1EC"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed12",
+   "seed": 12,
+   "utilisation": {
+    "CARRY4": 597,
+    "SLICE_FFX": 5465,
+    "SLICE_LUTX": 12136
+   }
+  }
+ ],
+ "schema": "trinity.fpga-seed-sweep.v1",
+ "summary": {
+  "fmax_mhz_range": {
+   "clk_ctrl": [
+    81.01,
+    91.4
+   ]
+  },
+  "met_every_clock": [
+   "heap_seed1",
+   "heap_seed2",
+   "heap_seed3",
+   "heap_seed4",
+   "heap_seed6",
+   "heap_seed7",
+   "heap_seed9",
+   "heap_seed10",
+   "heap_seed11",
+   "heap_seed12"
+  ],
+  "routed": 12,
+  "runs": 12
+ },
+ "top": "tms_ddr3_loader_ax7203",
+ "written_at": "2026-09-24T20:08:50+00:00"
+}
