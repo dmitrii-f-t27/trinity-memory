@@ -49,7 +49,8 @@ def place_and_route(nextpnr: str, chipdb: str, netlist: Path, out: Path, seed: i
     log.write_text(result.stdout + result.stderr, encoding="utf-8")
     text = log.read_text(encoding="utf-8")
     fmax = [float(m) for m in re.findall(r"Max frequency for clock 'clk': ([0-9.]+) MHz", text)]
-    utilisation = dict((name, int(used)) for name, used in re.findall(r"Info:\s+(\w+):\s+(\d+)/\s*\d+\s+\d+%", text))
+    utilisation = dict((name, int(used)) for name, used in re.findall(r"Info:\s+(\w+):\s+(\d+)/\s*\d+\s+\d+%", text)
+                       if int(used))
     tail = text[text.rfind("Critical path report for clock 'clk'"):] if "Critical path report" in text else ""
     nets = re.findall(r"Net (mv\.[\w\[\]\.]+)", tail.split("Max frequency")[0]) if tail else []
     delay = re.search(r"([0-9.]+) ns logic, ([0-9.]+) ns routing", tail)
