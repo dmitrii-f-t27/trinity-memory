@@ -543,10 +543,12 @@ here:
    7 invariants and 4 test blocks), line 2 unchanged. The result's sha256 is `27ea45d6…`
    (computed here from that file; `spec_hash` of the new seal).
 2. `conformance/tmem_bridge.json`: this repository's new `conformance/memory_bridge.json`
-   (`tools/generate-spec-vectors.py`, sha256 `e80057f3…`): the 55 vectors unchanged, 8 fpga
+   (`tools/generate-spec-vectors.py`, sha256 `631b47eb…`): the 55 vectors unchanged, 8 fpga
    vectors (63 in all), `constants.fpga`, `sdk_adapter.fpga_chip_info_requires`, 6 more
    invariants (15 in all), and the replay keys `replay.backend`, `replay.result_format`,
-   `replay.result_at_least` (lower bounds for counters that timing can raise) and
+   `replay.result_at_least` (lower bounds for counters a stalled process can raise but not
+   lower; a key may be a sum of paths joined by `+`, for counters a stall can move into
+   `late_replies`) and
    `replay.error_message_contains` (which refusal, when several share `-32000`). The fpga vectors
    need a device double to replay; upstream has none, so either the double comes along
    (`tests/fake_fpga_device.py`, `tools/bridge_link_protocol.py`, `tools/uart_loader_protocol.py`)

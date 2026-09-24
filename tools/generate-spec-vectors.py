@@ -470,11 +470,18 @@ def fpga_vectors():
                      result={"accumulators": [y + (5 if r == 1 else 0) for r, y in enumerate(exact_rows(wide_values, 4, 1100, xw))],
                              "reference": {"backend": "emulator", "mismatches": 1, "first_mismatch": 1},
                              "transfer": {"image_bytes": 4 * 14 * 16, "matvec_runs": 1}},
-                     result_at_least={"transfer.matvec_attempts": 2, "transfer.naks": 1, "transfer.timeouts": 1,
-                                      "transfer.retransmits": 3, "transfer.bad_lines": 1},
+                     result_at_least={"transfer.matvec_attempts": 2, "transfer.retransmits": 3,
+                                      "transfer.timeouts": 1,
+                                      "transfer.naks+transfer.late_replies": 1,
+                                      "transfer.bad_lines+transfer.late_replies": 1},
                      result_format=evidence_format,
-                     description="Each fault forces at least one retransmission or repeated run; a stalled host "
-                                 "process can add more, never fewer, so these are lower bounds"),
+                     description="Each fault forces at least one retransmission or repeated run, and a stalled "
+                                 "host process can add more, never fewer: retransmits, matvec_attempts and "
+                                 "timeouts (the lost ack never arrives, so at least one attempt of that frame "
+                                 "ends at its deadline) are lower bounds. A stall longer than the reply timeout can make "
+                                 "the host read the nak or the corrupted Y line while it waits out the "
+                                 "retransmission, where it counts as a late reply, so naks and bad_lines are "
+                                 "bounded only together with late_replies"),
             ],
         },
         {
@@ -759,8 +766,11 @@ def build_bridge():
                               "pseudo-terminal with the vector's `double` options, or a port that does not exist "
                               "when `double` is {\"absent\": true}",
                    "result_format": "keys may be dotted paths into the result",
-                   "result_at_least": "dotted paths to integer counters and their lower bounds (counters that "
-                                      "timing can raise, such as retransmissions)",
+                   "result_at_least": "dotted paths to integer counters, or sums of such paths joined by "
+                                      "\"+\", and their lower bounds: counters a stalled process can raise "
+                                      "but not lower, such as retransmissions; a sum where a stall can move "
+                                      "a count from one counter to another (a nak or bad line read as a "
+                                      "late reply)",
                    "error_message_contains": "with error_code: a substring the error message must contain (which "
                                              "refusal it was, when several share one code)",
                    "kinds": {"rpc": "one request body, default or per-vector limits",

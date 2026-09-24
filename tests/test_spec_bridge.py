@@ -73,6 +73,25 @@ class SpecBridgeTcpReplay(unittest.TestCase):
         self.assertEqual(run, len(DOCUMENT["vectors"]))
         self.assertGreaterEqual(steps, 40)
 
+    def test_lower_bounds_accept_sums_of_counters(self):
+        # A stall can move a nak or a bad line into late_replies: the fault vector bounds the sum.
+        def body(**transfer):
+            return {"jsonrpc": "2.0", "id": 1, "result": {"transfer": transfer}}
+        expect = {"result_at_least": {"transfer.retransmits": 3, "transfer.naks+transfer.late_replies": 1}}
+        replay.check("sum", 200, body(retransmits=3, naks=1, late_replies=0), expect)
+        replay.check("sum", 200, body(retransmits=4, naks=0, late_replies=2), expect)
+        for transfer, fragment in (({"retransmits": 3, "naks": 0, "late_replies": 0}, "expected at least 1, got 0"),
+                                   ({"retransmits": 2, "naks": 1, "late_replies": 0}, "expected at least 3, got 2"),
+                                   ({"retransmits": 3, "naks": 1}, "expected an integer counter"),
+                                   ({"retransmits": 3, "naks": True, "late_replies": 1}, "expected an integer counter")):
+            with self.assertRaisesRegex(replay.VectorFailure, fragment):
+                replay.check("sum", 200, body(**transfer), expect)
+        vector = next(v for v in DOCUMENT["vectors"] if v["id"] == "fpga_dot_retransmits_and_reports")
+        bounds = vector["steps"][-1]["expect"]["result_at_least"]
+        self.assertEqual(set(bounds), {"transfer.matvec_attempts", "transfer.retransmits", "transfer.timeouts",
+                                       "transfer.naks+transfer.late_replies",
+                                       "transfer.bad_lines+transfer.late_replies"})
+
     def test_identity_follows_the_documented_derivation(self):
         expected = DOCUMENT["constants"]["identity"]
         for part in ("phi", "euler", "gamma"):
