@@ -1,0 +1,639 @@
+{
+ "chipdb_sha256": "81dc7e2c31470876ae43dbc16ce2efdfc72ce53d112f8c9666781bfc530df499",
+ "commit": "f07e91cd",
+ "label": "nextpnr-xilinx 45a986b8, x32, --router router2 --timing-allow-fail",
+ "netlist_ff_to_ff_max_lut_levels": 13,
+ "netlist_sha256": "be20dda3d96733e970deee7b061c8b02e1d66a36a2cf5366fa8b978cf5d8f4c4",
+ "note": "make -C fpga/ax7203 ddr3-sweep DDR3_PNR_LINE=image DDR3_WIDTH=32 BUILD_ID=f07e91cd in a clean clone of 170e1a2, native yosys 0.69 and a native build of nextpnr-xilinx 45a986b8 (NEXTPNR), the image's chip database, heap seeds 1-8",
+ "runs": [
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 87.44,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "debug1[0]",
+    "last_net": "$abc$305129$auto$simple.cc:210:make_patterns_logic$33381",
+    "logic_ns": 1.0,
+    "lut_stages": 6,
+    "routing_ns": 10.5,
+    "start": "$auto$ff.cc:337:slice$43348.Q"
+   },
+   "fasm_sha256": "f9a9846195745cb46934e7574ecf625caf5c27b9eb576b4d0b0332e2481224b5",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "91ce8d8040cc19eb80b07fe0b5426701600b609a1db563486b08dc445b6d9d05",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y147/C5LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2233,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2188,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2200,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 1751,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 1755,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1241
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed1",
+   "seed": 1,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 83.42,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "ddr3.ddr3_controller_inst.stage2_pending",
+    "last_net": "ddr3.ddr3_controller_inst.o_wb_stall_int_d",
+    "logic_ns": 1.6,
+    "lut_stages": 10,
+    "routing_ns": 10.4,
+    "start": "$auto$ff.cc:337:slice$45249.Q"
+   },
+   "fasm_sha256": "38c9046c09d1426bbfe95895b274ced1ba2303a8be7e39cf6cdcce72cbc0a17d",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "bb5c995f6e5345f374959bf3c94f75d90f190569dd5c7522fe29ee42713f2e0b",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X163Y154/C6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2298,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2253,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2519,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2119,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 1719,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1251
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed2",
+   "seed": 2,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 93.45,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "debug1[0]",
+    "last_net": "$abc$305129$flatten\\ddr3.\\ddr3_controller_inst.$2$lookahead\\calib_data$10266[255:0]$10621[57]",
+    "logic_ns": 1.1,
+    "lut_stages": 7,
+    "routing_ns": 9.6,
+    "start": "$auto$ff.cc:337:slice$43348.Q"
+   },
+   "fasm_sha256": "cb6c98186b7ac341244744817c3ccd8847168d0863bf7d11271efe01c72656f8",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "f7cd91bdfe035ea5a94e3115e09fb480fb52d899e9aee508fc20e7acba9e5f1f",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y144/B6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 2895,
+     "clock_net": "clk_ddr",
+     "init": "11001010",
+     "input": "A1",
+     "loads": {
+      "SLICE_FFX.D": 1,
+      "SLICE_LUTX.A1": 1,
+      "SLICE_LUTX.A3": 1
+     },
+     "lut": "$abc$305129$lut$aiger$o6279",
+     "lut_to_load_ps": {
+      "$abc$305129$lut$aiger305128$11128/A3": 1365,
+      "$abc$305129$lut$aiger305128$11183/A1": 1740,
+      "$auto$ff.cc:337:slice$43837/D": 25
+     },
+     "note": "shares its LUT site's input pins with $abc$305129$lut$not$aiger305128$477; the clock reaches this LUT's pin only through that shared pin"
+    },
+    {
+     "bel": "SLICE_X162Y144/B5LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 2895,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 1821,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 1776,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2715,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2315,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 2043,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1572
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed3",
+   "seed": 3,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 93.82,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 5,
+    "clock": "clk_ctrl",
+    "first_net": "ddr3.ddr3_controller_inst.write_by_byte_counter[0]",
+    "last_net": "$abc$305129$flatten\\ddr3.\\ddr3_controller_inst.$2$lookahead\\calib_data$10266[255:0]$10621[248]",
+    "logic_ns": 3.8,
+    "lut_stages": 8,
+    "routing_ns": 6.9,
+    "start": "$auto$ff.cc:337:slice$44226.Q"
+   },
+   "fasm_sha256": "90e4a676bc96be2485242f10b093b0ea0d0add53db1f7a1eeec2a039b4a65d14",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "93b4347f2f3613d9c89856c67b8ef8df7703f6dd85b80ccb47479571e5931a93",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X160Y144/A6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 1833,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 1788,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2825,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2385,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 1972,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1643
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed4",
+   "seed": 4,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 90.26,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "debug1[0]",
+    "last_net": "$abc$305129$flatten\\ddr3.\\ddr3_controller_inst.$2$lookahead\\calib_data$10266[255:0]$10621[123]",
+    "logic_ns": 1.1,
+    "lut_stages": 7,
+    "routing_ns": 10.0,
+    "start": "$auto$ff.cc:337:slice$43348.Q"
+   },
+   "fasm_sha256": "b4b782edce2bbfbb86b92adc838cbb1deb5fc90cb6f5ac70e859c87fef5a6ca3",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "77008a021bc38dcce47ba1f2952e48100d718b81fc76b136a3cd4ae98852222e",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y149/A6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 2985,
+     "clock_net": "clk_ddr",
+     "init": "10101100",
+     "input": "A1",
+     "loads": {
+      "SLICE_FFX.D": 1,
+      "SLICE_LUTX.A2": 1
+     },
+     "lut": "$abc$305129$lut$aiger$o6252",
+     "lut_to_load_ps": {
+      "$abc$305129$lut$aiger305128$11733/A2": 1424,
+      "$auto$ff.cc:337:slice$43833/D": 25
+     },
+     "note": "shares its LUT site's input pins with $abc$305129$lut$not$aiger305128$477; the clock reaches this LUT's pin only through that shared pin"
+    },
+    {
+     "bel": "SLICE_X162Y149/A5LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 2985,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2235,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2190,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2575,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2265,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 2166,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1451
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed5",
+   "seed": 5,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 90.58,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 5,
+    "clock": "clk_ctrl",
+    "first_net": "ddr3.ddr3_controller_inst.write_by_byte_counter[0]",
+    "last_net": "$abc$305129$flatten\\ddr3.\\ddr3_controller_inst.$2$lookahead\\calib_data$10266[255:0]$10621[248]",
+    "logic_ns": 3.8,
+    "lut_stages": 8,
+    "routing_ns": 7.2,
+    "start": "$auto$ff.cc:337:slice$44226.Q"
+   },
+   "fasm_sha256": "a3ed7eee3af7ff0369b18992d47c1d42e67f50061af51e7c03be82d96456f976",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "1b7b9246f87cda45aba8d99dd735cb55d239df0590057c4b2ea76bf493c00adc",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y148/A5LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 1883,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 1838,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2580,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2180,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 1780,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1380
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed6",
+   "seed": 6,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 85.29,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "clk_ctrl",
+    "first_net": "ddr3.ddr3_controller_inst.stage2_pending",
+    "last_net": "ddr3.ddr3_controller_inst.o_wb_stall_int_d",
+    "logic_ns": 1.8,
+    "lut_stages": 12,
+    "routing_ns": 9.9,
+    "start": "$auto$ff.cc:337:slice$45249.Q"
+   },
+   "fasm_sha256": "b527470c6a385a47030f04bd39cf9278e1a5f4075e98b2de61366236ae4ade72",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "40bec4182d1134a6121abf7b17c3dc6abf355fa39b479f1fe7551df9eb65a22b",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X163Y179/C6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2873,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2828,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 1578,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 1036,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 1389,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1742
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed7",
+   "seed": 7,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  },
+  {
+   "clocks_routed": [
+    {
+     "clock": "clk_ctrl",
+     "fmax_mhz": 89.94,
+     "target_mhz": 83.33,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 5,
+    "clock": "clk_ctrl",
+    "first_net": "ddr3.ddr3_controller_inst.write_by_byte_counter[0]",
+    "last_net": "$abc$305129$flatten\\ddr3.\\ddr3_controller_inst.$2$lookahead\\calib_data$10266[255:0]$10621[186]",
+    "logic_ns": 3.7,
+    "lut_stages": 7,
+    "routing_ns": 7.4,
+    "start": "$auto$ff.cc:337:slice$44226.Q"
+   },
+   "fasm_sha256": "b0bd87f9effd25140c51742533b9261a3f7cc50ed75e42a95936dfd1cfb15032",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "6c1430951b84b02279976c2fa0ec898dfc95b07e43055f81c1e868d938481003",
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X163Y152/C5LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 4
+     },
+     "lut": "$abc$305129$lut$not$aiger305128$477",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2073,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2028,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2196,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 1900,
+      "ddr3.ddr3_phy_inst.genblk7[2].genblk1.OSERDESE2_dqs/CLK": 1577,
+      "ddr3.ddr3_phy_inst.genblk7[3].genblk1.OSERDESE2_dqs/CLK": 1187
+     }
+    }
+   ],
+   "packed_lut1": 1315,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed8",
+   "seed": 8,
+   "utilisation": {
+    "CARRY4": 169,
+    "SLICE_FFX": 4094,
+    "SLICE_LUTX": 8136
+   }
+  }
+ ],
+ "schema": "trinity.fpga-seed-sweep.v1",
+ "summary": {
+  "fmax_mhz_range": {
+   "clk_ctrl": [
+    83.42,
+    93.82
+   ]
+  },
+  "met_every_clock": [
+   "heap_seed1",
+   "heap_seed2",
+   "heap_seed3",
+   "heap_seed4",
+   "heap_seed5",
+   "heap_seed6",
+   "heap_seed7",
+   "heap_seed8"
+  ],
+  "routed": 8,
+  "runs": 8
+ },
+ "top": "tms_ddr3_ax7203",
+ "written_at": "2026-09-24T08:20:05+00:00"
+}

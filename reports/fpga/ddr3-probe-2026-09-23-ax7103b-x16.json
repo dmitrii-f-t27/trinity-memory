@@ -1,0 +1,68 @@
+{
+ "chipdb_sha256": null,
+ "commit": "",
+ "label": "AX7103B probe of 2026-09-23 (#60): UberDDR3's unmodified alinx_ax7103b demo top at 79d8fd3 on xc7a200t, x16, yosys 0.69, nextpnr-xilinx 45a986b8 native --placer heap --seed 1 --router router2",
+ "netlist_ff_to_ff_max_lut_levels": 9,
+ "netlist_sha256": "30efc9cac6e142313a0492c4f779e722a533a3947fb5ee48a5a1bda2808ede26",
+ "note": "Summary of the research probe's local log, FASM and netlist (not committed; scratch of the #60 research, hashed here). In x32 the demo declares no create_clock on the controller clock, so that run is checked against nextpnr's 12 MHz default.",
+ "runs": [
+  {
+   "clocks_routed": [
+    {
+     "clock": "i_controller_clk",
+     "fmax_mhz": 107.83,
+     "target_mhz": 83.34,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 0,
+    "clock": "i_controller_clk",
+    "first_net": "ddr3_top.ddr3_controller_inst.stage2_pending",
+    "last_net": "ddr3_top.ddr3_controller_inst.stage2_do_pre_d",
+    "logic_ns": 1.0,
+    "lut_stages": 6,
+    "routing_ns": 8.3,
+    "start": "$auto$ff.cc:337:slice$27729.Q"
+   },
+   "fasm_sha256": "4ea6f56310d154fc30fc9f1a9d2409cc754e592f2d972515689799e8f920b900",
+   "iologic_clock_from_fabric": 4,
+   "log_sha256": "3b511d97467f308f6a74dd5c47d785158d3d26093651bb2c245454be06f47029",
+   "packed_lut1": 680,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed1",
+   "seed": 1,
+   "utilisation": {
+    "CARRY4": 89,
+    "SLICE_FFX": 2310,
+    "SLICE_LUTX": 4932
+   }
+  }
+ ],
+ "schema": "trinity.fpga-seed-sweep.v1",
+ "summary": {
+  "fmax_mhz_range": {
+   "i_controller_clk": [
+    107.83,
+    107.83
+   ]
+  },
+  "met_every_clock": [
+   "heap_seed1"
+  ],
+  "routed": 1,
+  "runs": 1
+ },
+ "top": "ax7103_ddr3",
+ "written_at": "2026-09-24T08:13:09+00:00"
+}
