@@ -1,0 +1,183 @@
+{
+ "schema": "trinity.fpga-bram-bench.v1",
+ "mode": "rom",
+ "trits": 1013760,
+ "seed": null,
+ "word_bits": 36,
+ "activation_rule": "(global trit index mod 8) + 1",
+ "trit_stream": "fixed tensor stored as array initializers (see rom); trit i is lane i mod LANES of word i / LANES",
+ "engines": [
+  {
+   "format": 0,
+   "name": "b2",
+   "lanes": 18,
+   "words": 56320,
+   "trits": 1013760,
+   "write_ticks": 0,
+   "read_ticks": 56321,
+   "bad_words": 0,
+   "invalid_groups": 0,
+   "pos": 349720,
+   "neg": 348525,
+   "dot": 4040,
+   "chk": 9314798845370276627,
+   "lanes_check": 9314798845370276627,
+   "pipe": 0,
+   "module": "TrinityBramTritEngineB2T27",
+   "source": "bram_trit_engine_b2.t27",
+   "used_bits_per_word": 36,
+   "physical_bits_per_trit": 2.0,
+   "payload_bits_per_trit": 2.0,
+   "bank_words": [
+    16384,
+    16384,
+    16384,
+    7168
+   ],
+   "ramb36_at_1k_x_36": 55,
+   "trits_per_ramb36": 18432
+  },
+  {
+   "format": 1,
+   "name": "d5",
+   "lanes": 20,
+   "words": 50688,
+   "trits": 1013760,
+   "write_ticks": 0,
+   "read_ticks": 50689,
+   "bad_words": 0,
+   "invalid_groups": 0,
+   "pos": 349720,
+   "neg": 348525,
+   "dot": 4040,
+   "chk": 18045144322311373984,
+   "lanes_check": 10519639493135474884,
+   "pipe": 0,
+   "module": "TrinityBramTritEngineD5T27",
+   "source": "bram_trit_engine_d5.t27",
+   "used_bits_per_word": 32,
+   "physical_bits_per_trit": 1.8,
+   "payload_bits_per_trit": 1.6,
+   "bank_words": [
+    16384,
+    16384,
+    16384,
+    1536
+   ],
+   "ramb36_at_1k_x_36": 50,
+   "trits_per_ramb36": 20480
+  },
+  {
+   "format": 2,
+   "name": "d5d2",
+   "lanes": 22,
+   "words": 46080,
+   "trits": 1013760,
+   "write_ticks": 0,
+   "read_ticks": 46081,
+   "bad_words": 0,
+   "invalid_groups": 0,
+   "pos": 349720,
+   "neg": 348525,
+   "dot": 4040,
+   "chk": 15068326795104525062,
+   "lanes_check": 14975169515311309946,
+   "pipe": 0,
+   "module": "TrinityBramTritEngineD5D2T27",
+   "source": "bram_trit_engine_d5d2.t27",
+   "used_bits_per_word": 36,
+   "physical_bits_per_trit": 1.6363636363636365,
+   "payload_bits_per_trit": 1.6363636363636365,
+   "bank_words": [
+    16384,
+    16384,
+    13312,
+    0
+   ],
+   "ramb36_at_1k_x_36": 45,
+   "trits_per_ramb36": 22528
+  },
+  {
+   "format": 3,
+   "name": "d5p",
+   "lanes": 45,
+   "words": 45056,
+   "trits": 1013760,
+   "write_ticks": 0,
+   "read_ticks": 45057,
+   "bad_words": 0,
+   "invalid_groups": 0,
+   "pos": 349720,
+   "neg": 348525,
+   "dot": 4040,
+   "chk": 1015143822654577788,
+   "lanes_check": 13583255267322731865,
+   "pipe": 0,
+   "module": "TrinityBramTritEngineD5PT27",
+   "source": "bram_trit_engine_d5p.t27",
+   "used_bits_per_word": 36,
+   "physical_bits_per_trit": 1.6,
+   "payload_bits_per_trit": 1.6,
+   "bank_words": [
+    16384,
+    16384,
+    12288,
+    0
+   ],
+   "ramb36_at_1k_x_36": 44,
+   "trits_per_ramb36": 23040
+  }
+ ],
+ "report_format": 1,
+ "sources": {
+  "t27/rtl/bram_trit_engine.t27": "29feb8baf5dcc0b8fc0a67109f6584eb37e5dd9eb0c14829e7e245f9023ccbb2",
+  "t27/rtl/bram_trit_codec.t27": "5fe37d7f5bcd236545b8f5a68cc537056eee6b5d9365fa054f71f0bed2b7b683",
+  "t27/rtl/fpga_bram_bench.t27": "c8243ef7a034a89cbe4371973aa2fa5bb47d4e7b8c398c7860acb2f1d69bd125",
+  "tools/bram_trit_model.py": "51a2bd58f2f67a0a62b7f554c947dbe8e5c336c26c4289d8e4e6709ae65fb27a",
+  "tools/generate-bram-bench.py": "229555f6754c0364c763dbc214c1239a7717e51bb104bccfd1eb15c33c97de20",
+  "t27/rtl/bram_trit_rom.t27": "ff421ab5f338cf4509ba1df3cad8ab76c3ab45c0e95659c9667c1ee2d9477948"
+ },
+ "entropy_bits_per_trit": 1.584962500721156,
+ "rom": {
+  "trits_file": "trits.bin",
+  "trits_sha256": "1da0a68106eb716c7234ab2c6df82fbf739c02990e052dcfd0d97e1dccc6f09c",
+  "trits_used": 1013760,
+  "source": {
+   "schema": "trinity.bram-trits.v1",
+   "model": "BitNet b1.58 2B4T",
+   "tensor": "model.layers.0.self_attn.q_proj.weight",
+   "gguf_tensor": "blk.0.attn_q.weight",
+   "shape": [
+    2560,
+    2560
+   ],
+   "rows": [
+    0,
+    396
+   ],
+   "trits": 1013760,
+   "order": "row-major rows of the unpacked [rows, cols] matrix (Hugging Face unpack order)",
+   "sources": {
+    "hf_packed": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors",
+     "size": 1178623988
+    },
+    "I2_S": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+     "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+     "file": "ggml-model-i2_s.gguf",
+     "size": 1187801280
+    }
+   },
+   "i2s_mismatches": 0,
+   "counts": {
+    "+1": 349720,
+    "0": 315515,
+    "-1": 348525
+   },
+   "sha256": "1da0a68106eb716c7234ab2c6df82fbf739c02990e052dcfd0d97e1dccc6f09c"
+  }
+ }
+}
