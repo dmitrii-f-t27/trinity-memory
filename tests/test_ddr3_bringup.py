@@ -262,9 +262,31 @@ class CommittedEvidence(unittest.TestCase):
             again = capture.decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                                    expect_period_ps=expect["period_ps"], load_end_s=record["run"].get("load_end_s"),
                                    nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
-            self.assertEqual(again["pass"], record["decoded"]["pass"], path)
-            self.assertEqual(again["final"], record["decoded"]["final"], path)
-            self.assertEqual(record["board"]["dna"], "0x00389c0c2d85e85c")
+            # The whole record, as JSON keeps it: every committed capture is decoded by this decoder.
+            self.assertEqual(json.loads(json.dumps(again)), record["decoded"], path)
+
+    def test_pattern_totals_behind_the_docs(self):
+        """The pass and wrong-bit totals docs/hardware.md quotes for the 2026-09-24 runs."""
+        def totals(prefix):
+            out = {}
+            for path in sorted(ROOT.glob(f"reports/fpga/{prefix}/*/capture.json*")):
+                record = json.loads(capture.read_kept(path.with_name("capture.json")))
+                pattern = record["decoded"].get("pattern")
+                if pattern:
+                    out[path.parent.name] = pattern["totals"]
+            return out
+
+        x16 = totals("ddr3-bringup-2026-09-24-7deeef16-x16-pattern")
+        self.assertEqual(sum(t["passes"] for t in x16.values()), 881)
+        self.assertEqual(sum(t["bit_errors"] for t in x16.values()), 0)
+        good = [totals(f"ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed{n}") for n in (6, 8, 19, 10, 12)]
+        self.assertEqual([sum(t["passes"] for t in g.values()) for g in good], [828, 138, 839, 27, 26])
+        self.assertEqual(sum(len(g) for g in good), 13)
+        self.assertEqual(sum(t["bit_errors"] for g in good for t in g.values()), 0)
+        seed2 = totals("ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed2")["load1"]
+        self.assertEqual((seed2["passes"], seed2["bad_bursts"], seed2["bit_errors"]), (13, 23_642, 1_436_348))
+        for n in (1, 5, 7, 9):
+            self.assertEqual(sum(t["passes"] for t in totals(f"ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed{n}").values()), 0)
 
 
 if __name__ == "__main__":
