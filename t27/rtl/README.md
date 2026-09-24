@@ -61,6 +61,19 @@ with original commit and byte hashes recorded in
   `tests/test_ddr3_flow.py` runs it with the emitter and the transmitter in
   Icarus. See `docs/hardware.md`, "DDR3 in the open flow".
 
+- DDR3 pattern test (`fpga_ddr3_pattern.t27`, wired by
+  `fpga/ax7203/ddr3/tms_ddr3_ax7203.v` with `PATTERN_TEST` 1, issue #61): a
+  Wishbone master on UberDDR3's user port that, after calibration, writes every
+  burst address of the region with address-unique data (per 64-bit word
+  `key ^ lin((word << 32) | address)`, `lin` a bijection of 64 bits), reads it all
+  back and compares, then repeats with the complement; per pass it reports the
+  wrong bursts, 64-bit words and bits, the DQ bits ever wrong, the first failing
+  burst and the controller clocks of each phase, and it arbitrates the report
+  line with the status reporter. `tests/test_ddr3_pattern.py` checks its functions
+  in C against `tools/ddr3_pattern_model.py` and runs the whole top in Icarus
+  against a behavioural Wishbone memory with injected faults. See
+  `docs/hardware.md`, "Pattern test (#61)".
+
 ## Current compiler boundaries
 
 - `trinity_dot_stream_t27` supports `ACC_WIDTH=2..32`; the native accumulator is

@@ -668,7 +668,8 @@ UberDDR3 uses tRFC 300 ns instead of the inherited 8 Gb's 350 ns; `SPEED_BIN 3`;
 `ODELAY_SUPPORTED 0`; `BIST_MODE 1`; `NO_IOSERDES_LOOPBACK 1`, which is the
 `ddr3_phy` default at 79d8fd3 (`ddr3_top` does not pass it; a `chparam` only pins
 it in case a later commit changes the default); DIC RZQ/7, RTT_NOM RZQ/4; the user
-Wishbone port idle), one `PLLE2_ADV`, the t27 reset generator on T6 (LVCMOS15)
+Wishbone port idle in the #60 builds, driven by the pattern test with
+`PATTERN_TEST` 1, below), one `PLLE2_ADV`, the t27 reset generator on T6 (LVCMOS15)
 and a status line: [`t27/rtl/fpga_ddr3_status.t27`](../t27/rtl/fpga_ddr3_status.t27)
 sends `H` (build id, byte lanes, DDR3 clock period) and then `S` lines
 (`o_calib_complete`, the calibration state from `o_debug1`, the highest state
@@ -1075,8 +1076,7 @@ geometry). The Wishbone address counts BL8 bursts, 25 bits {row, bank, col[9:3]}
   does not cover. The self-test's "no wrong read" is not a test of address
   decoding, nor of 512 MiB of separate storage.
 
-**What the #61 pattern test needs** (none of it exists yet: no generator, no
-Icarus Wishbone model, no host decoder). From the above: every one of the 2^25
+**What the #61 pattern test needs.** From the above: every one of the 2^25
 bursts; data unique to the address, the beat and the byte lane (the self-test
 repeats every 8 bytes, so x16 beats k and k+4 and x32 beats k and k+2 are
 identical) with a seed per run; the whole region written before any read, then
@@ -1095,15 +1095,104 @@ calibration discards pending requests and acks in flight (L1441-1444,
 L2312-2319), so `cyc` stays high until every request is acknowledged; the
 address unit is one burst in both widths, 25 bits; data is `64 * BYTE_LANES`
 bits with beat k, lane l at bits `[8*(BYTE_LANES*k+l) +: 8]`, and `i_wb_sel` is
-one bit per byte and drives DM (L1296). The current top ties `i_wb_cyc` to 1 and
-`i_wb_sel` to all ones, harmless while `i_wb_stb` is 0; the generator rewires
-them. UberDDR3's `UART_DEBUG_BIST` counters are no substitute: they cannot see
+one bit per byte and drives DM (L1296). The #60 top tied `i_wb_cyc` to 1 and
+`i_wb_sel` to all ones, harmless while `i_wb_stb` is 0. UberDDR3's `UART_DEBUG_BIST` counters are no substitute: they cannot see
 the address faults above, and defining `UART_DEBUG` sets `reset_from_test` to 0
 (L3655), so a wrong read would no longer return the controller to IDLE.
 
+**Pattern test (#61): built and simulated, not yet run on the board.**
+[`t27/rtl/fpga_ddr3_pattern.t27`](../t27/rtl/fpga_ddr3_pattern.t27) is an
+`on_clock` Wishbone master on UberDDR3's user port, wired by
+`tms_ddr3_ax7203.v` when `PATTERN_TEST` is 1 (`make ... DDR3_PATTERN=1`, the
+default of the Makefile since this change; `DDR3_PATTERN=0` gives the idle port
+of the #60 builds). How it meets the list above:
+
+- *Coverage and order.* After `o_calib_complete`, a round writes every burst
+  address `0 .. PATTERN_BURSTS-1` in order (default 2^25: all of U6 in x16, all
+  1 GiB in x32), waits until every write is acknowledged and then `PATTERN_HOLD`
+  controller clocks, reads every burst back in the same order and compares it; a
+  second pass does the same with the complement. `PATTERN_ROUNDS` rounds (0, the
+  default, runs until reset), each with a new key. No burst is read before all
+  bursts of its pass were written and acknowledged, and a request is accepted at
+  most once per clock, so every burst's read request is accepted at least
+  `PATTERN_HOLD + PATTERN_BURSTS - 1` controller clocks after its write request:
+  about 0.40 s at 2^25 bursts, 83.33 MHz and hold 0. That separation is the only
+  retention figure the test supports; a longer one needs a hold.
+- *Data.* The burst's `64 * BYTE_LANES` bits are `BYTE_LANES` 64-bit words; word
+  w of burst a is `kdata ^ lin((w << 32) | a)`, `lin` being nine xorshift steps
+  (a bijection of 64 bits, linear over GF(2)) and `kdata` the round key or its
+  complement. So every 64-bit word of a pass (4 beats x 2 lanes in x16, 2 beats x
+  4 lanes in x32) has its own value, and x16 beats k and k+4 or x32 beats k and
+  k+2 lie in different words; the bytes inside a word are pseudo-random, not
+  unique (a byte has 256 values). A burst read from another address's storage (a
+  stuck, open or aliased address or bank line) differs from what was expected in
+  every word; every stored bit is written and read as 0 and as 1 in a round, so a
+  stuck DQ or a dropped write shows. The round key comes from `PATTERN_SEED`,
+  the controller clock count at which `o_calib_complete` was seen (reported, and
+  expected to differ from load to load; not yet measured across loads) and the
+  round number. [`tools/ddr3_pattern_model.py`](../tools/ddr3_pattern_model.py)
+  states the same rules in Python.
+- *Port.* `stb`, `we`, address and data stay unchanged until a clock with `stb`
+  and not `stall` takes the request; the n-th ack belongs to the n-th request;
+  `cyc` is high from reset (as in the calibrated #60 build) and falls only when the
+  watchdog stops the test (no request taken and no ack for `PATTERN_WATCHDOG`
+  clocks, default 2^24, about 0.2 s), which aborts the requests in flight; `sel`
+  is all ones from reset. The data of the next two bursts is precomputed
+  (registered), so the path into `i_wb_data` starts at a flip-flop. The test's
+  flip-flops take their reset from the two-flip-flop stage of a second
+  `fpga_reset` instance fed by `rst`, not from the comparator behind `rst`: in a
+  trial place and route of the x16 top with the test on the reset net directly,
+  the routed critical path of two of the first three seeds ran from that
+  comparator to a flip-flop's SR pin.
+- *Counting.* A four-stage compare pipeline counts, per pass, the bursts and the
+  64-bit words with a wrong bit, the wrong bits, the DQ bits ever wrong (bit j of
+  the mask = DQ j: byte b of a word is byte lane `b % BYTE_LANES`) and the first
+  failing burst with the index and low 32 bits of (read xor expected) of its
+  first wrong word. Controller clocks of each phase are counted from the first
+  request presented to the last ack.
+- *Report.* After the status reporter's `H` and `S` lines, which keep coming
+  (the module holds a status line in a one-line buffer and hands it to the
+  emitter before its own; in every simulated run the pattern lines arrived
+  complete and in order): `G` (bursts; format, byte lanes and
+  rounds), `K` (seed; clock count at calibration), `L` (hold; watchdog) once,
+  then per pass `W` and `R` (round << 1 | pass; write / read phase clocks), `E`
+  (wrong bursts; wrong bits), `M` (wrong 64-bit words; DQ mask), `F` (first
+  failing burst or `ffffffff`; word index and xor), and `T` on a watchdog stop,
+  `Z` after the last round. [`tools/fpga-ddr3-capture.py`](../tools/fpga-ddr3-capture.py)
+  decodes them into `pattern` of the `trinity.ddr3-capture.v1` record (every pass,
+  totals, the minimum write-to-read separation) and fails the run on a wrong bit,
+  a watchdog stop, a line out of order, a missing test in a build whose report
+  names `PATTERN_TEST 1`, or no complete round. The MB/s it derives
+  (`pattern_test_write_MBps`, `pattern_test_read_MBps`: region bytes over the
+  phase's clocks) is this test's in-order single-master throughput with refresh
+  and row changes, not the stage-2 measurement. Elapsed time comes from the host
+  times of the lines against the recorded load, as for the status lines.
+
+*Simulation.* [`tests/test_ddr3_pattern.py`](../tests/test_ddr3_pattern.py) runs
+the whole top in Icarus with the t27 cores and
+[`tests/sim_ddr3_top_model.v`](../tests/sim_ddr3_top_model.v) in place of
+UberDDR3: our behavioural Wishbone memory with the port list of `ddr3_top`,
+random stalls, a refresh-like stall window, in-order acks 6-13 clocks after the
+request, and checks that a stalled request stays presented unchanged. The UART
+lines go through the capture decoder. Clean runs pass (x16 with 256 and 4096
+bursts, x32 with 256 bursts and two rounds). Each injected fault is detected, and
+the counts of every pass (wrong bursts, words and bits, DQ mask, first failing
+burst and word) equal those of a Python replay of the same fault on the model's
+data: stuck-at 0 and 1 on burst-address bits 0-7 (256 bursts) and 8-11 (4096
+bursts), half the region wrong in every pass; stuck DQ 0, 7, 8, 15 (x16) and 16,
+31 (x32), exactly 8 wrong bits per burst over a round and only that DQ in the
+mask; a write dropped in a true pass and in a complement pass (then every bit of
+the burst is wrong); a port that stops taking requests (the watchdog's `T`). The
+generated C of the module's functions agrees with the Python model on random
+inputs. Address bits 12-24 are not simulated (the region would be too long for
+Icarus); the board run's region of 2^25 bursts has aliasing pairs for every one
+of the 25 bits. The model is not UberDDR3: its stall and ack timing are
+invented, and nothing here simulates the PHY or the memory chips.
+
 **Limits.** One board result: the x16 0.9.7 build calibrates and passes the
 self-test, which reads back 3/4 of U6 and cannot see some address faults (above);
-x32 and the 45a986b8 line have not run, and no host-checked data test has. No
+x32 and the 45a986b8 line have not run, and the pattern test (built and
+simulated, above) has not run on the board. No
 timing analysis of the PHY: neither of its I/O
 nor of the controller-clock paths into and out of its primitives. CK and the
 write-DQS clock go through a fabric LUT with an untimed, seed-dependent delay

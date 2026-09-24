@@ -1,8 +1,9 @@
-// AX7203 DDR3 build (issue #60): UberDDR3's ddr3_top with its built-in
-// self-test, our clocking, reset, LEDs and a calibration status line on the
-// UART. Wiring only: the status logic is executable t27
-// (t27/rtl/fpga_ddr3_status.t27, fpga_reset.t27, fpga_uart_tx.t27,
-// fpga_line_emitter.t27), the controller and its PHY are UberDDR3 at the commit
+// AX7203 DDR3 build (issues #60, #61): UberDDR3's ddr3_top with its built-in
+// self-test, our clocking, reset, LEDs, a calibration status line on the UART
+// and, with PATTERN_TEST 1, our pattern test on the user Wishbone port. Wiring
+// only: the status and test logic is executable t27
+// (t27/rtl/fpga_ddr3_status.t27, fpga_ddr3_pattern.t27, fpga_reset.t27,
+// fpga_uart_tx.t27, fpga_line_emitter.t27), the controller and its PHY are UberDDR3 at the commit
 // pinned in uberddr3.lock (GPL-3.0-or-later, fetched into build/uberddr3/ by
 // `make -C fpga/ax7203 ddr3-fetch`, never committed here).
 //
@@ -28,7 +29,16 @@
 // LEDs: [0] heartbeat (controller clock), [1] o_calib_complete,
 //       [2] PLL locked, [3] the controller returned to IDLE at least once since
 //       reset (`recalibrated`: a wrong self-test read or a failed alignment step).
-// UART (N15, 115200 8N1): see t27/rtl/fpga_ddr3_status.t27 for the H and S lines.
+// UART (N15, 115200 8N1): see t27/rtl/fpga_ddr3_status.t27 for the H and S lines
+// and t27/rtl/fpga_ddr3_pattern.t27 for the pattern test's lines.
+//
+// Pattern test (PATTERN_TEST 1): after o_calib_complete, rounds of a write of
+// every burst address below PATTERN_BURSTS with address-unique data, a read-back
+// and compare, then the same with the complement (PATTERN_ROUNDS rounds, 0 =
+// until reset); PATTERN_HOLD controller clocks between the last write and the
+// first read of a pass. The test's line requests and the status reporter's share
+// the emitter through the arbiter in the t27 module. PATTERN_TEST 0 leaves the
+// user port idle as in the #60 builds (cyc 1, stb 0, sel all ones).
 `timescale 1ns/1ps
 `default_nettype none
 module tms_ddr3_ax7203 #(
@@ -36,7 +46,14 @@ module tms_ddr3_ax7203 #(
     parameter integer PLL_MULT = 5,             // VCO = 200 MHz * PLL_MULT (800..1866 MHz for -2)
     parameter integer DDR_DIV = 3,              // DDR3 clock = VCO / DDR_DIV
     parameter integer REPORT_PERIOD = 67108864, // controller clocks between status lines without a change
-    parameter [31:0] BUILD_ID = 32'h0
+    parameter [31:0] BUILD_ID = 32'h0,
+    parameter integer PATTERN_TEST = 0,         // 1: the pattern test drives the user Wishbone port
+    parameter [31:0] PATTERN_BURSTS = 32'd33554432, // burst addresses tested, from 0 (2^25 = all: 512 MiB x16, 1 GiB x32)
+    parameter [31:0] PATTERN_SEED = 32'h00000061,
+    parameter [31:0] PATTERN_HOLD = 32'd0,      // controller clocks between a pass's last write ack and its first read
+    parameter [31:0] PATTERN_ROUNDS = 32'd0,    // rounds (true + complement pass), 0 = until reset
+    parameter [31:0] PATTERN_WATCHDOG = 32'd16777216, // clocks without progress after which the test stops
+    parameter integer UART_DIV = 0              // clocks per UART bit; 0 = 115200 baud from the controller clock
 ) (
     input  wire                      clk200_p,
     input  wire                      clk200_n,
@@ -63,7 +80,7 @@ module tms_ddr3_ax7203 #(
     localparam integer DDR3_PS = VCO_PS * DDR_DIV;         // 3000 ps
     localparam integer CTRL_PS = 4 * DDR3_PS;              // 12000 ps
     localparam integer CTRL_HZ = 200000000 / (4 * DDR_DIV) * PLL_MULT;
-    localparam integer BAUD_DIV = (CTRL_HZ + 57600) / 115200; // 723 at 83.33 MHz
+    localparam integer BAUD_DIV = UART_DIV != 0 ? UART_DIV : (CTRL_HZ + 57600) / 115200; // 723 at 83.33 MHz
     localparam integer WB_ADDR = 15 + 10 + 3 - 3;           // ROW + COL + BA - log2(8), burst addressed
     localparam integer WB_DATA = 64 * BYTE_LANES;           // 8 bits x lanes x 4:1 x 2 (DDR)
 
@@ -107,6 +124,15 @@ module tms_ddr3_ax7203 #(
     // ---- UberDDR3 ----
     wire        calib_complete;
     wire [31:0] debug1;
+    // User Wishbone port: 25-bit burst address, 64 * BYTE_LANES data bits (beat k,
+    // lane l at [8*(BYTE_LANES*k+l) +: 8]), one select bit per byte. The t27 test
+    // has four 64-bit data words; words at or above BYTE_LANES are unused.
+    wire         wb_cyc, wb_stb, wb_we, wb_stall, wb_ack;
+    wire [31:0]  wb_addr, wb_sel;
+    wire [63:0]  wb_wd0, wb_wd1, wb_wd2, wb_wd3;
+    wire [255:0] wb_wdata = {wb_wd3, wb_wd2, wb_wd1, wb_wd0};
+    wire [WB_DATA-1:0] wb_rdata;
+    wire [255:0] wb_rdata_words = wb_rdata;   // zero-extended to four words
     ddr3_top #(
         .CONTROLLER_CLK_PERIOD(CTRL_PS),
         .DDR3_CLK_PERIOD(DDR3_PS),
@@ -133,11 +159,11 @@ module tms_ddr3_ax7203 #(
     ) ddr3 (
         .i_controller_clk(clk_ctrl), .i_ddr3_clk(clk_ddr), .i_ref_clk(clk_ref), .i_ddr3_clk_90(clk_ddr_90),
         .i_rst_n(!rst),
-        // No user traffic in this build: the bus is idle and the self-test runs
-        // inside calibration. The pattern test over Wishbone is issue #61.
-        .i_wb_cyc(1'b1), .i_wb_stb(1'b0), .i_wb_we(1'b0),
-        .i_wb_addr({WB_ADDR{1'b0}}), .i_wb_data({WB_DATA{1'b0}}), .i_wb_sel({(WB_DATA/8){1'b1}}), .i_aux(4'd0),
-        .o_wb_stall(), .o_wb_ack(), .o_wb_err(), .o_wb_data(), .o_aux(),
+        // The self-test runs inside calibration; afterwards the user port carries
+        // the pattern test (PATTERN_TEST 1) or stays idle (PATTERN_TEST 0).
+        .i_wb_cyc(wb_cyc), .i_wb_stb(wb_stb), .i_wb_we(wb_we),
+        .i_wb_addr(wb_addr[WB_ADDR-1:0]), .i_wb_data(wb_wdata[WB_DATA-1:0]), .i_wb_sel(wb_sel[WB_DATA/8-1:0]), .i_aux(4'd0),
+        .o_wb_stall(wb_stall), .o_wb_ack(wb_ack), .o_wb_err(), .o_wb_data(wb_rdata), .o_aux(),
         .i_wb2_cyc(1'b0), .i_wb2_stb(1'b0), .i_wb2_we(1'b0), .i_wb2_addr(7'd0), .i_wb2_data(32'd0), .i_wb2_sel(4'd0),
         .o_wb2_stall(), .o_wb2_ack(), .o_wb2_data(),
         .o_ddr3_clk_p(ddr3_ck_p), .o_ddr3_clk_n(ddr3_ck_n), .o_ddr3_reset_n(ddr3_reset_n),
@@ -150,16 +176,53 @@ module tms_ddr3_ax7203 #(
         .i_user_self_refresh(1'b0), .uart_tx()
     );
 
-    // ---- status line: reporter, line emitter, UART transmitter ----
-    wire        line_go, line_idle, recalibrated, tx_start, tx_busy;
-    wire [31:0] line_tag, line_a, tx_byte;
-    wire [63:0] line_b;
+    // ---- status line and pattern test: reporter, test, line emitter, UART transmitter ----
+    wire        s_go, s_idle, line_go, line_idle, recalibrated, tx_start, tx_busy;
+    wire [31:0] s_tag, s_a, line_tag, line_a, tx_byte;
+    wire [63:0] s_b, line_b;
     TrinityFpgaDdr3StatusT27 status (
         .clk(clk_ctrl), .rst_n(!rst), .en(1'b1), .ready(),
-        .state(debug1), .calib(calib_complete), .line_idle(line_idle), .build_id(BUILD_ID),
+        .state(debug1), .calib(calib_complete), .line_idle(s_idle), .build_id(BUILD_ID),
         .lanes(BYTE_LANES), .period_ps(DDR3_PS), .period(REPORT_PERIOD),
-        .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b), .recalibrated(recalibrated)
+        .line_go(s_go), .line_tag(s_tag), .line_a(s_a), .line_b(s_b), .recalibrated(recalibrated)
     );
+    generate
+        if (PATTERN_TEST != 0) begin : pattern
+            // The test's reset: `rst` through the two-flip-flop stage of a second
+            // reset generator (its hold and heartbeat are unused), so the test's
+            // many flip-flops hang off a register, not off the comparator behind
+            // `rst`. The test enters and leaves reset two clocks after the rest.
+            wire test_rst_n;
+            TrinityFpgaResetT27 test_reset (
+                .clk(clk_ctrl), .rst_n(1'b1), .en(1'b1), .ready(), .button_n(!rst),
+                .stage1(), .stage2(test_rst_n), .hold(), .blink(), .reset(), .heartbeat()
+            );
+            TrinityFpgaDdr3PatternT27 test (
+                .clk(clk_ctrl), .rst_n(test_rst_n), .en(1'b1), .ready(),
+                .calib(calib_complete), .stall(wb_stall), .ack(wb_ack),
+                .rdata0(wb_rdata_words[63:0]), .rdata1(wb_rdata_words[127:64]),
+                .rdata2(wb_rdata_words[191:128]), .rdata3(wb_rdata_words[255:192]),
+                .lanes(BYTE_LANES), .bursts(PATTERN_BURSTS), .seed(PATTERN_SEED), .hold(PATTERN_HOLD),
+                .rounds(PATTERN_ROUNDS), .watchdog(PATTERN_WATCHDOG),
+                .s_go(s_go), .s_tag(s_tag), .s_a(s_a), .s_b(s_b), .line_idle(line_idle),
+                .wb_cyc(wb_cyc), .wb_stb(wb_stb), .wb_we(wb_we), .wb_addr(wb_addr), .wb_sel(wb_sel),
+                .cur0(wb_wd0), .cur1(wb_wd1), .cur2(wb_wd2), .cur3(wb_wd3),
+                .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b), .status_idle(s_idle)
+            );
+        end else begin : idle_port
+            assign wb_cyc = 1'b1;
+            assign wb_stb = 1'b0;
+            assign wb_we = 1'b0;
+            assign wb_addr = 32'd0;
+            assign wb_sel = 32'hffffffff;
+            assign {wb_wd3, wb_wd2, wb_wd1, wb_wd0} = 256'd0;
+            assign line_go = s_go;
+            assign line_tag = s_tag;
+            assign line_a = s_a;
+            assign line_b = s_b;
+            assign s_idle = line_idle;
+        end
+    endgenerate
     TrinityFpgaLineEmitterT27 emitter (
         .clk(clk_ctrl), .rst_n(!rst), .en(1'b1), .ready(),
         .go(line_go), .tag(line_tag), .a(line_a), .b(line_b), .tx_busy(tx_busy),

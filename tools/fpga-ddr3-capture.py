@@ -23,10 +23,20 @@ and so how many times the 40-bit count wrapped (every 2^40 clocks, 3.665 h at
 the same run the wrap count is unknown and the report says so.
 
 What the lines can and cannot show: after DONE_CALIBRATE (state 23) UberDDR3
-checks no data (its self-test runs once, inside calibration) and the user port
-of this build is idle, so the returns to IDLE can change only during
-calibration. A later line shows that the design has not been reset since, not
-that memory kept data.
+checks no data (its self-test runs once, inside calibration), so the returns to
+IDLE can change only during calibration. A later line shows that the design has
+not been reset since, not that memory kept data.
+
+A build with the pattern test (PATTERN_TEST 1, t27/rtl/fpga_ddr3_pattern.t27; the
+report's variant names it) also sends G, K and L lines once after calibration and
+W, R, E, M, F lines after every pass of its write / read-back / compare over the
+burst addresses (true data, then the complement), T when its watchdog stopped it
+and Z after its last round. They are decoded into `pattern`: every pass with its
+wrong bursts, 64-bit words and bits, the DQ bits ever wrong, the first failing
+burst, and its write and read phase clocks. The MB/s derived from those clocks is
+the pattern test's own throughput (in-order bursts, one request per clock at
+most, refresh and row changes included), not the stage-2 measurement. The test
+checks only what it read back: the passes decoded, over the bursts it covered.
 
   ../.venv-hw/bin/python tools/fpga-ddr3-capture.py --port /dev/cu.usbserial-110 \\
       --bit build/fpga/ddr3-x16/tms_ddr3_ax7203.bit \\
@@ -53,7 +63,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = "trinity.ddr3-capture.v1"
-LINE = re.compile(r"^([HS])([0-9a-f]{8})([0-9a-f]{10})$")
+LINE = re.compile(r"^([HSGKLWREMFTZ])([0-9a-f]{8})([0-9a-f]{10})$")
+PATTERN_TAGS = "GKLWREMFTZ"
+PASS_ORDER = "WREMF"
+NONE32 = 0xFFFFFFFF
 WRAP = 1 << 40
 DONE_CALIBRATE = 23
 
@@ -69,6 +82,8 @@ def parse_line(text: str):
     if not match:
         return None
     tag, a, b = match.group(1), int(match.group(2), 16), int(match.group(3), 16)
+    if tag in PATTERN_TAGS:
+        return {"tag": tag, "a": a, "b": b}
     if tag == "H":
         return {"tag": "H", "build_id": f"{a:08x}", "format": b >> 32, "byte_lanes": (b >> 24) & 0xFF,
                 "ddr3_period_ps": b & 0xFFFFFF}
@@ -93,20 +108,117 @@ def fit_clock(points):
     return slope, (rss / (len(points) - 2) / sxx) ** 0.5
 
 
+def decode_pattern(lines, *, hz=None, lanes=None) -> dict:
+    """The pattern test's lines (parsed, with t_s) of one reset, in arrival order."""
+    header, passes, problems = {}, [], []
+    timeout = done = None
+    block = None
+    for ln in lines:
+        tag, a, b = ln["tag"], ln["a"], ln["b"]
+        if tag == "G":
+            header.update({"bursts": a, "format": b >> 32, "byte_lanes": (b >> 24) & 0xFF,
+                           "rounds_configured": b & 0xFFFFFF, "t_s": ln["t_s"]})
+        elif tag == "K":
+            header.update({"seed": a, "calib_complete_clocks_low40": b})
+        elif tag == "L":
+            header.update({"hold_clocks": a, "watchdog_clocks": b})
+        elif tag in PASS_ORDER:
+            want = PASS_ORDER[len(block["_seen"])] if block else "W"
+            if tag != want:
+                problems.append({"t_s": ln["t_s"], "problem": f"{tag} line where {want} was expected"})
+                block = None
+                if tag != "W":
+                    continue
+            if tag == "W":
+                block = {"round": a >> 1, "pass": a & 1, "data": "complement" if a & 1 else "true",
+                         "write_clocks": b, "_seen": "W", "_rp": a}
+            elif tag == "R":
+                if a != block["_rp"]:
+                    problems.append({"t_s": ln["t_s"], "problem": f"R line for pass {a:#x} in the block of {block['_rp']:#x}"})
+                block.update({"read_clocks": b, "_seen": block["_seen"] + "R"})
+            elif tag == "E":
+                block.update({"bad_bursts": a, "bit_errors": b, "_seen": block["_seen"] + "E"})
+            elif tag == "M":
+                block.update({"bad_words_64bit": a, "dq_fail_mask": f"{b:#010x}",
+                              "dq_failed": [j for j in range(32) if b >> j & 1], "_seen": block["_seen"] + "M"})
+            else:
+                block.update({"first_fail_burst": None if a == NONE32 else a,
+                              "first_fail_word": (b >> 32) if a != NONE32 else None,
+                              "first_fail_xor_low32": f"{b & NONE32:#010x}" if a != NONE32 else None,
+                              "reported_t_s": ln["t_s"]})
+                block.pop("_seen")
+                block.pop("_rp")
+                passes.append(block)
+                block = None
+        elif tag == "T":
+            timeout = {"acks": a, "read_phase": bool(b >> 36 & 1), "pass": b >> 32 & 1, "round": b & NONE32,
+                       "t_s": ln["t_s"]}
+        elif tag == "Z":
+            done = {"rounds": a, "bad_bursts_all_passes": b, "t_s": ln["t_s"]}
+    partial = None
+    if block:
+        partial = {k: v for k, v in block.items() if not k.startswith("_")}
+    lanes = header.get("byte_lanes") or lanes
+    bursts = header.get("bursts")
+    region = bursts * 8 * lanes if bursts is not None and lanes else None
+    for p in passes:
+        p["clean"] = p["bad_bursts"] == 0 and p["bit_errors"] == 0 and p["bad_words_64bit"] == 0
+        if hz and region:
+            for phase in ("write", "read"):
+                seconds = p[f"{phase}_clocks"] / hz
+                p[f"{phase}_s"] = round(seconds, 6)
+                p[f"pattern_test_{phase}_MBps"] = round(region / seconds / 1e6, 1) if seconds else None
+    rounds = {}
+    for p in passes:
+        rounds.setdefault(p["round"], set()).add(p["pass"])
+    complete = sorted(r for r, got in rounds.items() if got == {0, 1})
+    hold = header.get("hold_clocks")
+    min_sep = hold + bursts - 1 if hold is not None and bursts else None
+    return {
+        "header": header,
+        "bytes_per_burst": 8 * lanes if lanes else None,
+        "region_bytes": region,
+        "passes": passes,
+        "partial_pass_at_end": partial,
+        "problems": problems,
+        "timeout": timeout,
+        "done": done,
+        "totals": {"passes": len(passes), "clean_passes": sum(p["clean"] for p in passes),
+                   "rounds_complete": len(complete),
+                   "bad_bursts": sum(p["bad_bursts"] for p in passes),
+                   "bit_errors": sum(p["bit_errors"] for p in passes),
+                   "bytes_written_and_read_back": len(passes) * region if region else None},
+        "min_write_to_read_clocks": min_sep,
+        "min_write_to_read_s": round(min_sep / hz, 6) if min_sep is not None and hz else None,
+        "notes": ["pattern_test_*_MBps: region bytes over the phase's controller clocks (first request "
+                  "presented to last ack), with the in-order single-master access of this test, refresh and "
+                  "row changes included; it is not the stage-2 throughput measurement",
+                  "min_write_to_read: every burst's read request is accepted at least hold + bursts - 1 "
+                  "controller clocks after its write request (all writes are acknowledged before the first "
+                  "read, at most one request per clock); no longer retention is claimed",
+                  "a pass covers the burst addresses 0 .. bursts-1 once for write and once for read-back; "
+                  "the counts are per pass, bursts and 64-bit words counted once however many bits are wrong"],
+    }
+
+
 def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps=None,
-           load_end_s=None, nominal_hz=None, min_span_s=1.0) -> dict:
+           load_end_s=None, nominal_hz=None, min_span_s=1.0, expect_pattern=None) -> dict:
     """Decode a timestamped transcript.
 
     entries: [{"t_s": host seconds on one monotonic clock, "line": text}] in arrival order.
-    load_end_s: host seconds (same clock) at which the load returned, if this run loaded."""
-    headers, status, other = [], [], []
+    load_end_s: host seconds (same clock) at which the load returned, if this run loaded.
+    expect_pattern: True when the build has the pattern test, False when it has not, None unknown."""
+    headers, status, other, pattern_lines = [], [], [], []
     for entry in entries:
         parsed = parse_line(entry["line"])
         if parsed is None:
             other.append({"t_s": entry["t_s"], "line": entry["line"]})
             continue
         parsed["t_s"] = entry["t_s"]
-        (headers if parsed["tag"] == "H" else status).append(parsed)
+        if parsed["tag"] in PATTERN_TAGS:
+            pattern_lines.append(parsed)
+        else:
+            (headers if parsed["tag"] == "H" else status).append(parsed)
     # The S lines after the last H line belong to the design's current reset.
     last_h = headers[-1]["t_s"] if headers else None
     current = [s for s in status if last_h is None or s["t_s"] >= last_h]
@@ -156,6 +268,12 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
     if rate and before and after:
         calibration["calib_complete_between_s"] = [round(before[-1]["clocks_low40"] / rate, 4),
                                                    round(after[0]["clocks_low40"] / rate, 4)]
+    current_pattern = [p for p in pattern_lines if last_h is None or p["t_s"] >= last_h]
+    pattern = None
+    if current_pattern or expect_pattern:
+        pattern = decode_pattern(current_pattern, hz=rate,
+                                 lanes=headers[-1]["byte_lanes"] if headers else expect_lanes)
+    has_pattern = bool(current_pattern)
     checks = {
         "header_line": bool(headers) if load_end_s is not None else None,
         "build_id": (headers[-1]["build_id"] == expect_build_id) if headers and expect_build_id else None,
@@ -171,10 +289,23 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
         # openFPGALoader returns; a reset far from the load means another one happened.
         "reset_at_load": (-3.0 <= reset["reset_minus_load_end_s"] <= 3.0)
         if "reset_minus_load_end_s" in reset else None,
+        # Pattern test: present exactly when the build has it; every pass reported in order and
+        # without a wrong bit; no watchdog stop; at least one round (true and complement pass).
+        "pattern_present": (has_pattern == bool(expect_pattern)) if expect_pattern is not None else None,
+        "pattern_header": bool(pattern["header"].get("bursts") is not None) if pattern else None,
+        "pattern_lanes": (pattern["header"].get("byte_lanes") == headers[-1]["byte_lanes"])
+        if pattern and headers and "byte_lanes" in pattern["header"] else None,
+        "pattern_well_formed": not pattern["problems"] if pattern else None,
+        "pattern_no_wrong_bits": (all(p["clean"] for p in pattern["passes"]) and pattern["timeout"] is None)
+        if pattern else None,
+        "pattern_round_complete": pattern["totals"]["rounds_complete"] >= 1 if pattern else None,
     }
     passed = all(v for v in checks.values() if v is not None)
-    return {"header": headers, "status_lines": status, "unparsed_lines": other, "final": final,
-            "clock": clock, "reset": reset, "calibration": calibration, "checks": checks, "pass": passed}
+    result = {"header": headers, "status_lines": status, "unparsed_lines": other, "final": final,
+              "clock": clock, "reset": reset, "calibration": calibration, "checks": checks, "pass": passed}
+    if pattern is not None:
+        result["pattern"] = pattern
+    return result
 
 
 def parse_xadc(text: str) -> dict:
@@ -262,7 +393,10 @@ def expectations(report: dict) -> dict:
     match = re.search(r"BYTE_LANES (\d+)", ddr3.get("variant", ""))
     if match:
         lanes = int(match.group(1))
-    return {"build_id": ddr3.get("netlist_build_id"), "lanes": lanes,
+    # Builds before the pattern test name no PATTERN_TEST and have none.
+    match = re.search(r"PATTERN_TEST (\d)", ddr3.get("variant", ""))
+    pattern = bool(int(match.group(1))) if match else False
+    return {"build_id": ddr3.get("netlist_build_id"), "lanes": lanes, "pattern": pattern,
             "period_ps": round(ddr_clock["period_ns"] * 1000) if ddr_clock.get("period_ns") else None,
             "nominal_hz": round(1e9 / ctrl_clock["period_ns"], 1) if ctrl_clock.get("period_ns") else None}
 
@@ -354,7 +488,7 @@ def main() -> int:
             entries.append({"t_s": float(t_s), "line": line})
         result = decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                         expect_period_ps=expect["period_ps"], load_end_s=args.load_end_s,
-                        nominal_hz=expect["nominal_hz"])
+                        nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
         print(json.dumps(result, indent=1))
         return 0 if result["pass"] else 1
 
@@ -389,13 +523,14 @@ def main() -> int:
     if status == 0:
         record["decoded"] = decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                                    expect_period_ps=expect["period_ps"], load_end_s=run.get("load_end_s"),
-                                   nominal_hz=expect["nominal_hz"])
+                                   nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
         status = 0 if record["decoded"]["pass"] else 1
     record["exit_status"] = status
     (out / "capture.json").write_text(json.dumps(record, indent=1) + "\n")
     summary = record.get("decoded", {})
     print(json.dumps({"exit_status": status, "stopped": run.get("stopped"), "checks": summary.get("checks"),
                       "final": summary.get("final"), "clock": summary.get("clock"), "reset": summary.get("reset"),
+                      "pattern_totals": (summary.get("pattern") or {}).get("totals"),
                       "xadc_before": run.get("xadc_before", {}).get("temp"),
                       "xadc_after": run.get("xadc_after", {}).get("temp")}, indent=1))
     return status
