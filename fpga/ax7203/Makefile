@@ -298,8 +298,9 @@ bram-capture:
 #   make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_WIDTH=16 yosys -> nextpnr -> prjxray -> .bit, then reports/fpga/...
 #   make -C fpga/ax7203 ddr3-all                           both widths, bitstreams and reports (one command)
 #   make -C fpga/ax7203 ddr3-sweep DDR3_WIDTH=16           every seed of DDR3_SEEDS on the current netlist, summarised
-#   make -C fpga/ax7203 ddr3-flash DDR3_WIDTH=16 DDR3_EXPECT_SHA256=<sha256>
+#   make -C fpga/ax7203 ddr3-flash DDR3_WIDTH=16 DDR3_FLASH_REPORT=<build.json> (or DDR3_EXPECT_SHA256=<sha256>)
 #                                                          SRAM only; never builds; needs the board and approval (#61)
+#   tools/fpga-ddr3-capture.py                             that load with the UART capture, IDCODE, DNA and XADC around it
 #
 # BUILD_ID (default: the short HEAD) is baked into the netlist and sent on the
 # UART H line, so a build at another commit is a different netlist, FASM and
@@ -566,16 +567,17 @@ ddr3-sweep: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(DDR3_BUILD)/$(DDR3_T
 # SRAM only: nothing is written to the configuration flash. Needs the board and
 # the founders' approval of the run (issue #61); never part of a build. It never
 # builds either: it flashes the existing bitstream only when its sha256 equals
-# DDR3_EXPECT_SHA256, or the bitstream sha256 of the report DDR3_FLASH_REPORT.
+# DDR3_EXPECT_SHA256, or, with DDR3_FLASH_REPORT=<build.json>, when the whole file
+# matches the report's bitstream sha256 or the file from its sync word on matches
+# the report's sha256_from_sync (a rebuild differs from the report only in the
+# header time; tools/ddr3-flash-check.py).
 ddr3-flash:
-	@bit=$(DDR3_BUILD)/$(DDR3_TOP).bit; want="$(DDR3_EXPECT_SHA256)"; \
-	if [ -z "$$want" ] && [ -n "$(DDR3_FLASH_REPORT)" ]; then \
-	  want=$$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["bitstream"]["sha256"])' "$(DDR3_FLASH_REPORT)") || exit 1; fi; \
-	[ -n "$$want" ] || { echo "ddr3-flash: set DDR3_EXPECT_SHA256=<sha256> or DDR3_FLASH_REPORT=<build.json>; nothing was flashed"; exit 1; }; \
+	@bit=$(DDR3_BUILD)/$(DDR3_TOP).bit; \
+	if [ -n "$(DDR3_EXPECT_SHA256)" ]; then how="--expect $(DDR3_EXPECT_SHA256)"; \
+	elif [ -n "$(DDR3_FLASH_REPORT)" ]; then how="--report $(DDR3_FLASH_REPORT)"; \
+	else echo "ddr3-flash: set DDR3_EXPECT_SHA256=<sha256> or DDR3_FLASH_REPORT=<build.json>; nothing was flashed"; exit 1; fi; \
 	[ -f "$$bit" ] || { echo "ddr3-flash: no $$bit (ddr3-flash never builds: make ddr3-bit ddr3-report first); nothing was flashed"; exit 1; }; \
-	got=$$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$$bit"); \
-	[ "$$got" = "$$want" ] || { echo "ddr3-flash: $$bit has sha256 $$got, not $$want; nothing was flashed"; exit 1; }; \
-	echo "ddr3-flash: $$bit sha256 $$got as expected"; \
+	python3 $(ROOT)/tools/ddr3-flash-check.py "$$bit" $$how || exit 1; \
 	$(OPENFPGALOADER) -c $(DDR3_CABLE) "$$bit"
 
 ddr3-clean:

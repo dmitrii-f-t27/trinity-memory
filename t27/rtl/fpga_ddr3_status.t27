@@ -7,16 +7,19 @@ module TrinityFpgaDdr3StatusT27;
 // one status line, then a status line whenever the line emitter is free and either the state or
 // calib_complete changed since the last line or `period` clocks have passed.
 // Changes during a line are coalesced: the next line carries the latest state.
-// With BIST_MODE 1 a wrong read during the built-in self-test resets the
-// controller, whose state then returns to IDLE; every such return (a state of 0
-// after a state other than 0) is counted as a recalibration.
+// Every return to IDLE (a state of 0 after a state other than 0) is counted
+// (`recals`, a name kept from before; the docs say "returns to IDLE"). UberDDR3
+// returns to IDLE on a wrong read in its built-in self-test (BIST_MODE 1) and on
+// a failed read-alignment step, both only before calibration completes; the S
+// line keeps the highest state, not the state before a return, so a count does
+// not say which cause it had.
 // Every statement reads a variable before the same tick writes it, so the C
 // and the Verilog backends agree.
 // Report lines (tag, a, b), b is 40 bits:
 //   H a=build id
 //     b=(REPORT_FORMAT << 32) | (byte lanes << 24) | DDR3 clock period in ps
-//   S a=(calib_complete << 24) | (state << 16) | (highest state << 8) | recalibrations
-//     (recalibrations saturate at 255)
+//   S a=(calib_complete << 24) | (state << 16) | (highest state << 8) | returns to IDLE
+//     (the count saturates at 255)
 //     b=controller clocks since reset (low 40 bits)
 const S_HEADER: u32 = 0;
 const S_LINE_START: u32 = 1;
@@ -61,7 +64,7 @@ fn bump(n: u32) -> u32 {
     return n + 1;
 }
 
-// The highest state and the recalibration count including this tick's state, so
+// The highest state and the count of returns to IDLE including this tick's state, so
 // that a line sent on a change already counts it.
 fn top_of(top: u32, s: u32) -> u32 {
     if (s > top) { return s; }

@@ -26,7 +26,8 @@
 // 128-clock hold); its reset holds ddr3_top, the status reporter and the UART.
 //
 // LEDs: [0] heartbeat (controller clock), [1] o_calib_complete,
-//       [2] PLL locked, [3] the controller recalibrated at least once since reset.
+//       [2] PLL locked, [3] the controller returned to IDLE at least once since
+//       reset (`recalibrated`: a wrong self-test read or a failed alignment step).
 // UART (N15, 115200 8N1): see t27/rtl/fpga_ddr3_status.t27 for the H and S lines.
 `timescale 1ns/1ps
 `default_nettype none
@@ -122,7 +123,9 @@ module tms_ddr3_ax7203 #(
         .SECOND_WISHBONE(0),
         .DLL_OFF(0),
         .WB_ERROR(0),
-        .BIST_MODE(1),               // one self-test pass over the whole address space during calibration
+        .BIST_MODE(1),               // one self-test pass during calibration: one sweep of the burst counter
+                                     // split over three tests, which reads back 3/4 of the bursts (rows
+                                     // 8192-24575 of banks 0, 1, 6, 7 are never touched; tools/uberddr3-bist-model.py)
         .ECC_ENABLE(0),
         .DIC(2'b01),                 // output driver RZQ/7
         .RTT_NOM(3'b001),            // RZQ/4
