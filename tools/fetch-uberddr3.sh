@@ -4,14 +4,23 @@
 # GPL-3.0-or-later and this repository is Apache-2.0.
 #
 #   sh tools/fetch-uberddr3.sh [LOCK] [OUTDIR]
+#   sh tools/fetch-uberddr3.sh --verify [LOCK] [OUTDIR]
 #
 # Defaults: fpga/ax7203/ddr3/uberddr3.lock and build/uberddr3. A file already in
-# OUTDIR with the right hash is kept; any mismatch (download or existing file)
-# stops with an error and leaves no file with the wrong content in OUTDIR.
+# OUTDIR with the right hash is kept. An existing file with a wrong hash (a local
+# edit, a partial copy) is deleted and downloaded again; only a downloaded file
+# whose hash does not match stops the script with an error, and no file with the
+# wrong content is left in OUTDIR either way.
+# --verify downloads nothing: it checks that every file of the lock is in OUTDIR
+# with its hash and exits 1 otherwise. The synthesis rule of the DDR3 build runs
+# it before every yosys run, so a locally edited UberDDR3 file is never
+# synthesized under the pinned commit's name.
 # UBERDDR3_BASE_URL overrides the raw-file base (default
 # https://raw.githubusercontent.com/<owner>/<repo>/<commit>), e.g. a local mirror.
 set -eu
 cd "$(dirname "$0")/.."
+verify=0
+if [ "${1:-}" = "--verify" ]; then verify=1; shift; fi
 lock=${1:-fpga/ax7203/ddr3/uberddr3.lock}
 out=${2:-build/uberddr3}
 [ -f "$lock" ] || { echo "fetch-uberddr3: no lock file $lock" >&2; exit 1; }
@@ -30,6 +39,22 @@ case "$repo" in
     *) echo "fetch-uberddr3: repository must be a github.com URL, not '$repo'" >&2; exit 1 ;;
 esac
 base=${UBERDDR3_BASE_URL:-https://raw.githubusercontent.com/$slug/$commit}
+if [ "$verify" = 1 ]; then
+    bad=0; count=0
+    for entry in $(awk '$1 == "file" { print $2 "=" $3 }' "$lock"); do
+        want=${entry%%=*}; path=${entry#*=}
+        count=$((count + 1))
+        if [ ! -f "$out/$path" ]; then
+            echo "fetch-uberddr3: $out/$path is missing (make -C fpga/ax7203 ddr3-fetch)" >&2; bad=1
+        elif [ "$(sha256_of "$out/$path")" != "$want" ]; then
+            echo "fetch-uberddr3: $out/$path does not match the pinned sha256 $want (edited locally?); make -C fpga/ax7203 ddr3-fetch restores it" >&2; bad=1
+        fi
+    done
+    [ "$count" -gt 0 ] || { echo "fetch-uberddr3: no files listed in $lock" >&2; exit 1; }
+    [ "$bad" = 0 ] || exit 1
+    echo "UberDDR3 $commit: $count files in $out match $lock"
+    exit 0
+fi
 mkdir -p "$out"
 # SOURCE marks a complete, verified fetch: it is removed first and written last.
 rm -f "$out/SOURCE"

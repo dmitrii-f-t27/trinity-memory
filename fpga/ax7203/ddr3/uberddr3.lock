@@ -2,7 +2,9 @@
 # AX7203 DDR3 build (issue #60). Its RTL is GPL-3.0-or-later (the header of each
 # file below); this repository is Apache-2.0, so nothing of it is committed here.
 # tools/fetch-uberddr3.sh downloads each file at the pinned commit into
-# build/uberddr3/ and stops on any sha256 mismatch. The demo files
+# build/uberddr3/, replaces an existing copy whose sha256 differs and stops when a
+# download does not match; the synthesis rule checks every hash again before each
+# yosys run (fetch-uberddr3.sh --verify). The demo files
 # (example_demo/, also GPL) are not used: our top, clocking and constraints are
 # in this directory.
 #

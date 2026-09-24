@@ -13,14 +13,19 @@ name: fpga-ax7203-ddr3
 # image (cached by commit and image digest), its chip database comes from its own
 # bbaexport and prjxray-db (cached), and fasm2frames reads that same prjxray-db.
 #
-# Published: the build reports (trinity.fpga-build.v1: bitstream and FASM sha256,
-# tool revisions, image digest, UberDDR3 commit and license, resource counts,
-# routed Fmax per clock, PLL table check, VREF lines) and the logs. Never a .bit
-# or a .fasm: Actions artifacts of a public repository can be downloaded by any
-# signed-in GitHub user, and publishing bitstreams built from UberDDR3 is a
-# founders' decision (#60). The image's yosys (0.62) differs from the native
-# build's (0.69), so CI and native bitstream hashes differ; until that decision a
-# bitstream flashed for #61 is a native build identified by its sha256.
+# Published: the build reports (trinity.fpga-build.v1: bitstream, frames and FASM
+# sha256, tool revisions, image digest, UberDDR3 commit and license, resource
+# counts, routed Fmax per clock, PLL table check, VREF lines), the XDC nextpnr
+# read and the logs. Never a .bit or a .fasm: Actions artifacts of a public
+# repository can be downloaded by any signed-in GitHub user, and publishing
+# bitstreams built from UberDDR3 is a founders' decision (#60).
+# Identity: xc7frames2bit writes the time it ran into the .bit header, so no two
+# runs give the same whole-file sha256, on one machine or two. The FASM and
+# frames sha256 (and the .bit's sha256 from its sync word on) are what a rebuild
+# reproduces; they also differ between CI and the native reports, because the
+# image's yosys (0.62) is not the native 0.69 and gives another netlist. Until
+# the founders decide, a bitstream flashed for #61 is a native build, the one
+# file whose whole-file sha256 its report records (make ddr3-flash checks it).
 # Nothing here touches a board.
 
 on:
@@ -34,7 +39,9 @@ on:
       - 't27/rtl/fpga_uart_tx.t27'
       - 't27/rtl/fpga_line_emitter.t27'
       - 'tools/fetch-uberddr3.sh'
+      - 'tools/git-revision.sh'
       - 'tools/fpga-build-report.py'
+      - 'native/compiler.lock'
       - '.github/workflows/fpga-ax7203-ddr3.yml'
   push:
     branches: [master]
@@ -46,7 +53,9 @@ on:
       - 't27/rtl/fpga_uart_tx.t27'
       - 't27/rtl/fpga_line_emitter.t27'
       - 'tools/fetch-uberddr3.sh'
+      - 'tools/git-revision.sh'
       - 'tools/fpga-build-report.py'
+      - 'native/compiler.lock'
       - '.github/workflows/fpga-ax7203-ddr3.yml'
 
 permissions:
@@ -108,37 +117,42 @@ jobs:
       - name: Restore the chip database of nextpnr-xilinx ${{ env.NEXTPNR_DDR3_REV }}
         uses: actions/cache@v4
         with:
-          path: build/fpga/chipdb-nextpnr-${{ env.NEXTPNR_DDR3_REV }}/xc7a200tfbg484-2.bin
-          key: chipdb-xc7a200tfbg484-2-nextpnr-${{ env.NEXTPNR_DDR3_COMMIT }}-prjxray-db-${{ env.PRJXRAY_DB_COMMIT }}-v1
+          # .inputs names the nextpnr, prjxray-db and meta revisions the database was built from.
+          path: |
+            build/fpga/chipdb-nextpnr-${{ env.NEXTPNR_DDR3_REV }}/xc7a200tfbg484-2.bin
+            build/fpga/chipdb-nextpnr-${{ env.NEXTPNR_DDR3_REV }}/xc7a200tfbg484-2.bin.inputs
+          key: chipdb-xc7a200tfbg484-2-nextpnr-${{ env.NEXTPNR_DDR3_COMMIT }}-prjxray-db-${{ env.PRJXRAY_DB_COMMIT }}-v2
       - name: Generate the chip database if not cached (bbaexport + bbasm in the image)
         run: make -C fpga/ax7203 ddr3-chipdb $DDR3_MAKE
       - name: Build both widths (yosys, nextpnr-xilinx seed search, prjxray) and write the reports
         run: |
+          make -C fpga/ax7203 ddr3-all $DDR3_MAKE \
+            DDR3_SOURCE_LABEL="github actions run ${{ github.run_id }} (${{ github.sha }})" \
+            DDR3_REPORT_ROOT=${{ github.workspace }}/build/fpga/ddr3-reports
           for w in 16 32; do
-            make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_WIDTH=$w $DDR3_MAKE \
-              DDR3_SOURCE_LABEL="github actions run ${{ github.run_id }} (${{ github.sha }})" \
-              DDR3_REPORT=${{ github.workspace }}/build/fpga/ddr3-reports/x$w
-            cp build/fpga/ddr3-x$w/nextpnr_heap_seed*.log build/fpga/ddr3-reports/x$w/ 2>/dev/null || true
-            cp build/fpga/ddr3-x$w/tms_ddr3_ax7203.xdc build/fpga/ddr3-reports/x$w/
+            cp build/fpga/ddr3-x$w/nextpnr_heap_seed*.log build/fpga/ddr3-reports/*-x$w/ 2>/dev/null || true
           done
       - name: Summary (sha256 and figures only)
         if: always()
         run: |
           python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
           import json, pathlib
-          print("| variant | bitstream sha256 | yosys LUT / FF | nextpnr SLICE_LUTX / SLICE_FFX | OSERDESE2 / ISERDESE2 / IDELAYE2 | routed Fmax clk_ctrl | PLL tables |")
-          print("| --- | --- | --- | --- | --- | --- | --- |")
+          print("FASM and frames sha256 are what a rebuild reproduces; the whole-file .bit sha256 includes the time xc7frames2bit ran.\n")
+          print("| variant | FASM sha256 | frames sha256 | .bit sha256 (whole file) | yosys LUT / FF | nextpnr SLICE_LUTX / SLICE_FFX | OSERDESE2 / ISERDESE2 / IDELAYE2 | routed Fmax clk_ctrl | PLL tables |")
+          print("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
           for w in (16, 32):
-              p = pathlib.Path(f"build/fpga/ddr3-reports/x{w}/build.json")
-              if not p.is_file():
-                  print(f"| x{w} | (no report) | | | | | |"); continue
+              found = sorted(pathlib.Path("build/fpga/ddr3-reports").glob(f"*-x{w}/build.json"))
+              if not found:
+                  print(f"| x{w} | (no report) | | | | | | | |"); continue
+              p = found[-1]
               r = json.loads(p.read_text()); y = r["yosys"]["by_type"]; u = r["nextpnr"]["utilisation"]
               lut = sum(v for k, v in y.items() if k.startswith("LUT")); ff = sum(v for k, v in y.items() if k.startswith("FD"))
               clk = [c for c in r["ddr3"]["clocks"] if c["name"] == "clk_ctrl"]
               fmax = f'{clk[0]["fmax_mhz"]} MHz ({clk[0]["verdict"]})' if clk and clk[0]["fmax_mhz"] else "n/a"
               ser = " / ".join(str(u.get(k, {}).get("used", "?")) for k in ("OSERDESE2", "ISERDESE2", "IDELAYE2"))
               pll = ", ".join(x["result"] for x in r["ddr3"].get("pll_check", []))
-              print(f'| x{w} | `{r["bitstream"]["sha256"]}` | {lut} / {ff} | {u["SLICE_LUTX"]["used"]} / {u["SLICE_FFX"]["used"]} | {ser} | {fmax} | {pll} |')
+              ident = r.get("reproducible_identity", {})
+              print(f'| x{w} | `{ident.get("fasm_sha256")}` | `{ident.get("frames_sha256")}` | `{r["bitstream"]["sha256"]}` | {lut} / {ff} | {u["SLICE_LUTX"]["used"]} / {u["SLICE_FFX"]["used"]} | {ser} | {fmax} | {pll} |')
           EOF
       - name: Publish the reports and the sha256 values (no bitstream, no FASM)
         if: always()

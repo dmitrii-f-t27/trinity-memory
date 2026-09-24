@@ -4,7 +4,14 @@ Covers what can be checked without the board and without the toolchain image:
 - fpga/ax7203/ddr3/uberddr3.lock names a commit, a license and sha256 per file, and
   no UberDDR3 file is tracked in this repository (it is GPL-3.0-or-later);
 - tools/fetch-uberddr3.sh keeps a file only when its sha256 matches (run offline
-  against a file:// mirror);
+  against a file:// mirror), and --verify reports an edited file without replacing it;
+- tools/git-revision.sh never reports the HEAD of an enclosing repository for a plain
+  directory, and reads the commit of an assembled database;
+- the report keeps a reproducible identity next to the whole-file .bit sha256 (the header
+  holds the build time), refuses a netlist whose BUILD_ID is not the report's commit or
+  fetched files that do not match the lock, copies the XDC, and counts the LUT levels into
+  the PHY primitives and the IOLOGIC clocks fed from the fabric;
+- make ddr3-flash never builds and flashes only a bitstream with the expected sha256;
 - the DDR3 XDC agrees pin for pin with the LiteX AX7203 platform (litex-boards 9f84c87,
   alinx_ax7203.py L102-L125) and with the ports of our top, with the I/O standards,
   termination and slew of every pin, and reuses the board's verified reset and LED pins;
@@ -16,10 +23,12 @@ Covers what can be checked without the board and without the toolchain image:
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -122,12 +131,55 @@ class UberDdr3Lock(unittest.TestCase):
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual((out / "rtl/ddr3_top.v").read_bytes(), body)
             self.assertIn("license GPL-3.0-or-later", (out / "SOURCE").read_text())
-            # A tampered copy in the output directory is replaced by a checked download.
+            run = subprocess.run(["sh", str(ROOT / "tools/fetch-uberddr3.sh"), "--verify", str(good), str(out)],
+                                 capture_output=True, text=True, env=env)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            # --verify (run before every synthesis) stops on an edited copy and leaves it alone.
             (out / "rtl/ddr3_top.v").write_bytes(b"tampered\n")
+            run = subprocess.run(["sh", str(ROOT / "tools/fetch-uberddr3.sh"), "--verify", str(good), str(out)],
+                                 capture_output=True, text=True, env=dict(env, UBERDDR3_BASE_URL="file:///nonexistent"))
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn("does not match the pinned sha256", run.stderr)
+            self.assertEqual((out / "rtl/ddr3_top.v").read_bytes(), b"tampered\n")
+            # A fetch replaces the tampered copy with a checked download.
             run = subprocess.run(["sh", str(ROOT / "tools/fetch-uberddr3.sh"), str(good), str(out)],
                                  capture_output=True, text=True, env=env)
             self.assertEqual(run.returncode, 0, run.stderr)
             self.assertEqual((out / "rtl/ddr3_top.v").read_bytes(), body)
+
+    def test_synthesis_checks_the_hashes_and_the_build_id(self):
+        makefile = (ROOT / "fpga/ax7203/Makefile").read_text()
+        rule = re.search(r"^\$\(DDR3_BUILD\)/\$\(DDR3_TOP\)\.json:(.*)\n((?:\t.*\n)+)", makefile, re.M)
+        self.assertIsNotNone(rule)
+        self.assertIn("build-id-$(BUILD_ID).stamp", rule.group(1))
+        self.assertIn("fetch-uberddr3.sh --verify", rule.group(2).splitlines()[0])
+
+
+@unittest.skipUnless(shutil.which("git"), "git required")
+class GitRevision(unittest.TestCase):
+    def run_rev(self, *args):
+        return subprocess.run(["sh", str(ROOT / "tools/git-revision.sh"), *map(str, args)],
+                              capture_output=True, text=True, check=True).stdout.strip()
+
+    def test_plain_directory_inside_a_repository(self):
+        with tempfile.TemporaryDirectory(prefix="trinity-gitrev-") as tmp:
+            repo = Path(tmp) / "repo"
+            (repo / "build/db").mkdir(parents=True)
+            (repo / "build/tool").mkdir(parents=True)
+            git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            (repo / "f").write_text("x\n")
+            subprocess.run(git + ["add", "f"], check=True)
+            subprocess.run(git + ["commit", "-q", "-m", "x"], check=True)
+            head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True,
+                                  check=True).stdout.strip()
+            (repo / "build/db/ASSEMBLED-openXC7_prjxray-db-a90f27c1caef.txt").write_text(
+                "assembled from files\ncommit a90f27c1caefee5276f47440f4c730b50519a86f\n")
+            self.assertEqual(self.run_rev(repo), head)
+            self.assertEqual(self.run_rev(repo / "build/db"), "a90f27c1caefee5276f47440f4c730b50519a86f")
+            self.assertEqual(self.run_rev(repo / "build/tool"), "unknown")
+            self.assertEqual(self.run_rev("--describe", repo / "build/tool"), "unknown")
+            self.assertEqual(self.run_rev(Path(tmp) / "missing"), "unknown")
 
 
 class Ddr3Constraints(unittest.TestCase):
@@ -225,6 +277,151 @@ class PllTableCheck(unittest.TestCase):
                "Info: Max frequency for clock 'clk_ctrl': 90.00 MHz (PASS at 83.33 MHz)\n")
         self.assertEqual(self.report.routed_clocks(log),
                          [{"clock": "clk_ctrl", "fmax_mhz": 90.0, "verdict": "PASS", "target_mhz": 83.33}])
+
+
+def bit_file(time: str) -> bytes:
+    def field(key: bytes, text: str) -> bytes:
+        body = text.encode() + b"\0"
+        return key + len(body).to_bytes(2, "big") + body
+    head = bytes.fromhex("0009") + bytes.fromhex("0ff00ff00ff00ff000") + bytes.fromhex("0001")
+    fields = field(b"a", "x.frames;Generator=xc7frames2bit") + field(b"b", "xc7a200tfbg484-2") + \
+        field(b"c", "2026/09/24") + field(b"d", time)
+    payload = b"\xff" * 16 + bytes.fromhex("000000bb11220044ffffffff") + bytes.fromhex("AA995566") + bytes(range(64))
+    return head + fields + b"e" + len(payload).to_bytes(4, "big") + payload
+
+
+NETLIST = {"modules": {"tms_ddr3_ax7203": {
+    "parameter_default_values": {"BUILD_ID": format(0xF07E91CD, "032b")},
+    "cells": {
+        "ff": {"type": "FDRE", "port_directions": {"C": "input", "D": "input", "Q": "output"},
+               "connections": {"C": [1], "D": [9], "Q": [2]}},
+        "l1": {"type": "LUT2", "port_directions": {"I0": "input", "I1": "input", "O": "output"},
+               "connections": {"I0": [2], "I1": [2], "O": [3]}},
+        "c4": {"type": "CARRY4", "port_directions": {"CI": "input", "O": "output"},
+               "connections": {"CI": [3], "O": [4]}},
+        "l2": {"type": "LUT1", "port_directions": {"I0": "input", "O": "output"},
+               "connections": {"I0": [4], "O": [5]}},
+        "oser": {"type": "OSERDESE2", "port_directions": {"D1": "input", "D2": "input", "CLK": "input", "OQ": "output"},
+                 "connections": {"D1": [5], "D2": [2], "CLK": [1], "OQ": [6]}},
+        "iser": {"type": "ISERDESE2", "port_directions": {"Q1": "output", "CLK": "input"},
+                 "connections": {"Q1": [7], "CLK": [1]}},
+        "l3": {"type": "LUT1", "port_directions": {"I0": "input", "O": "output"},
+               "connections": {"I0": [7], "O": [9]}}}}}}
+
+FASM_CLOCKS = """\
+RIOI3_TBYTESRC_X105Y193.IOI_OCLK_0.IOI_IMUX31_1
+RIOI3_TBYTESRC_X105Y193.IOI_OCLKM_0.IOI_IMUX31_1
+RIOI3_X105Y195.IOI_OCLK_0.IOI_LEAF_GCLK2
+RIOI3_TBYTESRC_X105Y143.IOI_OLOGIC0_D1.IOI_IMUX34_1
+RIOI3_TBYTESRC_X105Y143.OLOGIC_Y0.OMUX.D1
+"""
+
+
+class BuildReportIdentity(unittest.TestCase):
+    def setUp(self):
+        self.report = load_report_module()
+
+    def test_bitstream_identity_ignores_the_header_time(self):
+        with tempfile.TemporaryDirectory(prefix="trinity-bit-") as tmp:
+            a, b = Path(tmp) / "a.bit", Path(tmp) / "b.bit"
+            a.write_bytes(bit_file("00:53:18"))
+            b.write_bytes(bit_file("01:15:12"))
+            ia, ib = self.report.bitstream_identity(a), self.report.bitstream_identity(b)
+        self.assertNotEqual(ia["sha256"], ib["sha256"])
+        self.assertEqual(ia["sha256_from_sync"], ib["sha256_from_sync"])
+        self.assertEqual(ia["header"]["d"], "00:53:18")
+        self.assertEqual(ia["header"]["b"], "xc7a200tfbg484-2")
+
+    def test_phy_path_levels(self):
+        levels = self.report.phy_path_levels(NETLIST["modules"]["tms_ddr3_ax7203"])
+        # FF -> LUT2 -> CARRY4 (not a level) -> LUT1 -> OSERDESE2.D1; FF -> D2 directly.
+        self.assertEqual(levels["into_phy_max_lut_levels"], {"OSERDESE2.D1": 2, "OSERDESE2.D2": 0})
+        self.assertEqual(levels["out_of_phy_max_lut_levels"], {"FDRE.D": 1})
+        self.assertEqual(self.report.netlist_build_id(NETLIST["modules"]["tms_ddr3_ax7203"]), "f07e91cd")
+
+    def test_fabric_clock_pips(self):
+        record = self.report.fabric_clocks(FASM_CLOCKS)
+        self.assertEqual(record["iologic_clock_from_fabric"], [
+            "RIOI3_TBYTESRC_X105Y193.IOI_OCLKM_0.IOI_IMUX31_1", "RIOI3_TBYTESRC_X105Y193.IOI_OCLK_0.IOI_IMUX31_1"])
+        self.assertEqual(record["ologic_d1_route_through"], ["RIOI3_TBYTESRC_X105Y143.OLOGIC_Y0"])
+
+    def run_report(self, tmp: Path, commit: str, tamper: bool = False):
+        art, uber = tmp / "art", tmp / "uber"
+        (uber / "rtl").mkdir(parents=True, exist_ok=True)
+        art.mkdir(exist_ok=True)
+        body = b"module ddr3_top; endmodule\n"
+        (uber / "rtl/ddr3_top.v").write_bytes(b"edited\n" if tamper else body)
+        lock = tmp / "u.lock"
+        lock.write_text(f"repository https://github.com/example/UberDDR3\ncommit {'a' * 40}\nlicense GPL-3.0-or-later\n"
+                        f"file {sha256_hex(body)} rtl/ddr3_top.v\n")
+        (art / "tms_ddr3_ax7203.json").write_text(json.dumps(NETLIST))
+        (art / "tms_ddr3_ax7203.xdc").write_text("create_clock -period 12.000 -name clk_ctrl [get_nets clk_ctrl]\n")
+        (art / "tms_ddr3_ax7203.bit").write_bytes(bit_file("00:00:00"))
+        (art / "tms_ddr3_ax7203.frames").write_text("0x00000000 0x0\n")
+        (art / "tms_ddr3_ax7203.fasm").write_text(FASM_CLOCKS)
+        out = tmp / "report"
+        run = subprocess.run([sys.executable, str(ROOT / "tools/fpga-build-report.py"), "--artifact-dir", str(art),
+                              "--top", "tms_ddr3_ax7203", "--commit", commit, "--output", str(out), "--ddr3",
+                              "--uberddr3-dir", str(uber), "--lock", str(lock)], capture_output=True, text=True)
+        return run, out
+
+    def test_report_checks_build_id_and_files_and_copies_the_xdc(self):
+        with tempfile.TemporaryDirectory(prefix="trinity-report-") as tmp:
+            tmp = Path(tmp)
+            run, out = self.run_report(tmp, "f07e91cd")
+            self.assertEqual(run.returncode, 0, run.stderr)
+            record = json.loads((out / "build.json").read_text())
+            self.assertTrue((out / "tms_ddr3_ax7203.xdc").is_file())
+            self.assertIn("tms_ddr3_ax7203.xdc", record["files"])
+            self.assertEqual(record["ddr3"]["netlist_build_id"], "f07e91cd")
+            identity = record["reproducible_identity"]
+            self.assertEqual(identity["bitstream_sha256_from_sync"], record["bitstream"]["sha256_from_sync"])
+            self.assertEqual(identity["frames_sha256"], record["frames"]["sha256"])
+            self.assertEqual(identity["fasm_sha256"], record["fasm"]["sha256"])
+            run, out = self.run_report(tmp, "5b9574e3")
+            self.assertEqual(run.returncode, 1)
+            self.assertIn("BUILD_ID f07e91cd", run.stderr)
+            run, out = self.run_report(tmp, "f07e91cd", tamper=True)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn("rtl/ddr3_top.v", run.stderr)
+            self.assertFalse(json.loads((out / "build.json").read_text())["ddr3"]["uberddr3"]["files"]["rtl/ddr3_top.v"]["verified"])
+
+
+@unittest.skipUnless(shutil.which("make"), "make required")
+class Ddr3Flash(unittest.TestCase):
+    def flash(self, build: Path, *extra: str):
+        return subprocess.run(["make", "-s", "-C", str(ROOT / "fpga/ax7203"), "ddr3-flash", f"DDR3_BUILD={build}",
+                               "OPENFPGALOADER=echo LOADER", *extra], capture_output=True, text=True)
+
+    def test_flash_never_builds_and_checks_the_hash(self):
+        with tempfile.TemporaryDirectory(prefix="trinity-flash-") as tmp:
+            build = Path(tmp)
+            run = self.flash(build, "DDR3_EXPECT_SHA256=" + "0" * 64)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn("never builds", run.stdout + run.stderr)
+            bit = build / "tms_ddr3_ax7203.bit"
+            bit.write_bytes(bit_file("00:00:00"))
+            run = self.flash(build)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn("DDR3_EXPECT_SHA256", run.stdout + run.stderr)
+            run = self.flash(build, "DDR3_EXPECT_SHA256=" + "0" * 64)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertNotIn("LOADER", run.stdout)
+            want = sha256_hex(bit.read_bytes())
+            run = self.flash(build, "DDR3_EXPECT_SHA256=" + want)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn(f"LOADER -c digilent_hs2 {bit}", run.stdout)
+            report = build / "build.json"
+            report.write_text(json.dumps({"bitstream": {"sha256": want}}))
+            run = self.flash(build, f"DDR3_FLASH_REPORT={report}")
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn("LOADER", run.stdout)
+
+    def test_ddr3_all_refuses_a_single_width(self):
+        run = subprocess.run(["make", "-n", "-C", str(ROOT / "fpga/ax7203"), "ddr3-all", "DDR3_WIDTH=16"],
+                             capture_output=True, text=True)
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("ddr3-all builds x16 and x32", run.stderr)
 
 
 TESTBENCH = r"""
