@@ -139,6 +139,149 @@ class BramTritPacking(unittest.TestCase):
                          {(reference.count(1), reference.count(-1),
                            sum(t * model.activation(i) for i, t in enumerate(reference)))})
 
+    def test_rom_model_agrees_with_the_engine_model(self):
+        # The same trits as a fixed tensor: the read-only store must report what the
+        # engine reports after writing the stream, with no write phase.
+        trits = model.stream_trits(1980 * 2)
+        for fmt, k in model.LANES.items():
+            engine = model.engine_results(fmt, len(trits) // k)
+            rom = model.rom_results(fmt, trits)
+            for key in ("words", "pos", "neg", "dot", "chk", "read_ticks"):
+                self.assertEqual(rom[key], engine[key], (fmt, key))
+            self.assertEqual(rom["write_ticks"], 0)
+            lanes_check = 0
+            for lanes, _ in model.words_of_trits(fmt, trits):
+                lanes_check = model.rotl1(lanes_check) ^ lanes
+            self.assertEqual(rom["lanes_check"], lanes_check)
+
+    def test_rom_generator_writes_the_words_and_the_check(self):
+        generator = load_generator()
+        rng = random.Random(32)
+        trits = [rng.choice((-1, 0, 1)) for _ in range(1980)]
+        for fmt, k in model.LANES.items():
+            words = [word for _, word in model.words_of_trits(fmt, trits)]
+            check = model.rom_results(fmt, trits)["lanes_check"]
+            text = generator.specialize_rom(fmt, words, check)
+            self.assertIn(f"const LANES_CHECK: u64 = {check};", text)
+            self.assertIn(f"const WORDS: u32 = {1980 // k};", text)
+            body = re.search(r"var mem_b0: \[B0_WORDS\]u64 = \[B0_WORDS\]u64\{(.*?)\};", text, re.S).group(1)
+            self.assertEqual([int(x) for x in body.replace("\n", " ").split(",")], words)
+            self.assertIn("var mem_b1: [B1_WORDS]u64 = [B1_WORDS]u64{\n    0\n};", text)
+            self.assertIn("const PIPE: u32 = 0;", text)
+            self.assertIn("const PIPE: u32 = 1;", generator.specialize_rom(fmt, words, check, 1))
+            piped = model.rom_results(fmt, trits, pipe=1)
+            self.assertEqual(piped["read_ticks"], 1980 // k + 4)
+            self.assertEqual({key: piped[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")},
+                             {key: model.rom_results(fmt, trits)[key] for key in ("pos", "neg", "dot", "chk", "lanes_check")})
+
+    def test_pair_layout_round_trip_and_counts(self):
+        rng = random.Random(34)
+        trits = [rng.choice((-1, 0, 1)) for _ in range(1980)]
+        words = model.pair_words(trits)
+        self.assertEqual(len(words), 1980 // 45 * 2)
+        for w in range(0, len(words), 2):
+            a, b, bad = model.decode_pair(words[w][1], words[w + 1][1])
+            self.assertEqual((a, b, bad), (words[w][0], words[w + 1][0], 0))
+            self.assertLess(words[w][1] | words[w + 1][1], 1 << 36)
+        # a parity byte of 243 or more (high nibble 15 in the second word) is one invalid group
+        self.assertEqual(model.decode_pair(words[0][1], words[1][1] | (15 << 32))[2], 1)
+        rom = model.rom_results(model.FMT_D5P, trits)
+        other = model.rom_results(model.FMT_D5D2, trits)
+        self.assertEqual((rom["pos"], rom["neg"], rom["dot"]), (other["pos"], other["neg"], other["dot"]))
+        self.assertEqual((rom["words"], rom["lanes"], rom["read_ticks"]), (88, 45, 89))
+        generator = load_generator()
+        text = generator.specialize_rom(model.FMT_D5P, [w for _, w in words], rom["lanes_check"])
+        for line in ("module TrinityBramTritEngineD5PT27;", "const PAIR: u32 = 1;", "const LANES: u32 = 25;",
+                     "const BYTE_LANES: u32 = 20;", "const LANES_OUT: u32 = 45;", "const WORDS: u32 = 88;"):
+            self.assertIn(line, text)
+
+    def test_rom_functions_match_the_model(self):
+        with tempfile.TemporaryDirectory(prefix="trinity-bram-rom-") as work:
+            rom = build_library(ROOT / "t27/rtl/bram_trit_rom.t27", Path(work))
+            rom.count_code.argtypes, rom.count_code.restype = (ctypes.c_uint64, ctypes.c_uint64), ctypes.c_uint32
+            rom.weighted.argtypes, rom.weighted.restype = (ctypes.c_uint64, ctypes.c_uint32), ctypes.c_int64
+            rom.group5_lanes.argtypes, rom.group5_lanes.restype = (ctypes.c_uint16,), ctypes.c_uint64
+            rom.lanes_step.argtypes, rom.lanes_step.restype = (ctypes.c_uint32, ctypes.c_bool), ctypes.c_uint32
+            for code in range(256):
+                lanes, _ = model.decode_word(model.FMT_D5, code)   # byte 0 is the code; keep its five lanes
+                self.assertEqual(rom.group5_lanes(code), (lanes & 1023) if code < 243 else 0, code)
+            self.assertEqual([rom.lanes_step(1, False), rom.lanes_step(1, True)], [20, 25])
+            rng = random.Random(33)
+            for _ in range(2000):
+                value = random_lanes(rng, 22)
+                base = rng.randrange(8)
+                trits = [model.trit_of_lane((value >> (2 * j)) & 3) for j in range(22)]
+                self.assertEqual(rom.count_code(value, 1), trits.count(1))
+                self.assertEqual(rom.count_code(value, 2), trits.count(-1))
+                self.assertEqual(rom.weighted(value, base), sum(t * (((base + j) & 7) + 1) for j, t in enumerate(trits)))
+
+    def test_matvec_model_orders_and_multiplies(self):
+        rng = random.Random(35)
+        rows, cols = 44, 30
+        trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+        acts = [rng.randrange(-128, 128) for _ in range(cols)]
+        result = model.matvec_results(model.FMT_D5D2, trits, acts, rows, cols)
+        self.assertEqual(result["outputs"], [sum(trits[r * cols + c] * acts[c] for c in range(cols)) for r in range(rows)])
+        order = model.matvec_order(trits, rows, cols, 22)
+        self.assertEqual(order[(1 * cols + 7) * 22 + 3], trits[(22 + 3) * cols + 7])   # group 1, column 7, lane 3
+        self.assertEqual((result["words"], result["read_ticks"]), (60, 60 + model.MATVEC_LATENCY))
+        self.assertEqual(model.act_words([1, -1, 127, -128, 5]), [0x807FFF01, 5])
+        with self.assertRaises(ValueError):
+            model.matvec_order(trits[:21 * cols], 21, cols, 22)
+
+    def test_matvec_generator_writes_words_acts_and_check(self):
+        generator = load_generator()
+        rng = random.Random(36)
+        rows, cols = 22, 24
+        trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+        acts = [rng.randrange(-128, 128) for _ in range(cols)]
+        with tempfile.TemporaryDirectory(prefix="trinity-bram-matvec-") as work:
+            engine = generator.matvec_engine(trits, acts, Path(work))
+            text = (Path(work) / "bram_trit_engine_d5d2.t27").read_text(encoding="utf-8")
+            with self.assertRaises(SystemExit):   # fewer than 24 columns
+                generator.matvec_engine(trits[:22 * 23], acts[:23], Path(work))
+            with self.assertRaises(SystemExit):   # not a whole group of 22 rows
+                generator.matvec_engine(trits[:21 * cols], acts, Path(work))
+        for line in ("module TrinityBramTritEngineD5D2T27;", "const ROWS: u32 = 22;", "const COLS: u32 = 24;",
+                     "const WORDS: u32 = 24;", "const ACT_WORDS: u32 = 6;", f"const Y_CHECK: u64 = {engine['chk']};"):
+            self.assertIn(line, text)
+        body = re.search(r"var mem_b0: \[B0_WORDS\]u64 = \[B0_WORDS\]u64\{(.*?)\};", text, re.S).group(1)
+        words = [int(x) for x in body.replace("\n", " ").split(",")]
+        expected = model.words_of_trits(model.FMT_D5D2, model.matvec_order(trits, rows, cols, 22))
+        self.assertEqual(words, [word for _, word in expected])
+        body = re.search(r"var act_mem: \[ACT_WORDS\]u32 = \[ACT_WORDS\]u32\{(.*?)\};", text, re.S).group(1)
+        self.assertEqual([int(x) for x in body.replace("\n", " ").split(",")], model.act_words(acts))
+
+    def test_matvec_functions_match_the_model(self):
+        # The store's functions, run in the store's order (group by group, one column
+        # per step, eight packed accumulators), give the host's y = W x.
+        u32, u64 = ctypes.c_uint32, ctypes.c_uint64
+        with tempfile.TemporaryDirectory(prefix="trinity-bram-matvec-") as work:
+            lib = build_library(ROOT / "t27/rtl/bram_trit_matvec.t27", Path(work))
+            lib.acc_next.argtypes, lib.acc_next.restype = (u64, ctypes.c_bool, u64, u32, u32, u32, u32), u64
+            lib.act_of.argtypes, lib.act_of.restype = (u32, u32), u32
+            lib.negate20.argtypes, lib.negate20.restype = (u32,), u32
+            lib.pick_hold.argtypes, lib.pick_hold.restype = (u32, u32) + (u64,) * 8, u32
+            lib.widen20.argtypes, lib.widen20.restype = (u32,), u64
+            rng = random.Random(37)
+            rows, cols = 44, 40
+            trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+            acts = [rng.choice((-128, 127, 0)) if rng.random() < 0.2 else rng.randrange(-128, 128) for _ in range(cols)]
+            words = model.words_of_trits(model.FMT_D5D2, model.matvec_order(trits, rows, cols, 22))
+            act_mem = model.act_words(acts)
+            outputs = []
+            for g in range(rows // 22):
+                accs = [0] * 8
+                for c in range(cols):
+                    lanes, _ = words[g * cols + c]
+                    xs = lib.act_of(act_mem[c >> 2], c & 3)
+                    xn = lib.negate20(xs)
+                    accs = [lib.acc_next(accs[i], c == 0, lanes, 3 * i, 3 if i < 7 else 1, xs, xn) for i in range(8)]
+                for j in range(22):
+                    wide = lib.widen20(lib.pick_hold(j // 3, j % 3, *accs))
+                    outputs.append(wide - (1 << 64) if wide >> 63 else wide)
+            self.assertEqual(outputs, model.matvec_results(model.FMT_D5D2, trits, acts, rows, cols)["outputs"])
+
 
 if __name__ == "__main__":
     unittest.main()

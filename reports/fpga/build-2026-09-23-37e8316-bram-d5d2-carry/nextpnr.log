@@ -1,0 +1,1791 @@
+Info: Packing constants..
+Info: Inserting IO buffers..
+Info:     IO port 'clk200_n' driven by IBUFDS 'clk_ibufds'
+Info:     IO port 'clk200_p' driven by IBUFDS 'clk_ibufds'
+Info:     IO port 'rst_n' driven by IBUF '$iopadmap$tms_bram_bench_ax7203.rst_n'
+Info:     IO port 'uart_rx' driven by IBUF '$iopadmap$tms_bram_bench_ax7203.uart_rx'
+Info:     IO port 'uart_tx' driven by OBUF '$iopadmap$tms_bram_bench_ax7203.uart_tx'
+Info:     IO port 'led[0]' driven by OBUF '$iopadmap$tms_bram_bench_ax7203.led'
+Info:     IO port 'led[1]' driven by OBUF '$iopadmap$tms_bram_bench_ax7203.led_1'
+Info:     IO port 'led[2]' driven by OBUF '$iopadmap$tms_bram_bench_ax7203.led_2'
+Info:     IO port 'led[3]' driven by OBUF '$iopadmap$tms_bram_bench_ax7203.led_3'
+Info:     Constraining 'clk200_n' to site 'IOB_X1Y123'
+Info:     Tile 'RIOB33_X105Y123'
+Info:     Constraining 'clk200_p' to site 'IOB_X1Y124'
+Info:     Tile 'RIOB33_X105Y123'
+Info:     Constraining 'rst_n' to site 'IOB_X1Y115'
+Info:     Tile 'RIOB33_X105Y115'
+Info:     Constraining 'uart_rx' to site 'IOB_X0Y149'
+Info:     Tile 'LIOB33_SING_X0Y149'
+Info:     Constraining 'uart_tx' to site 'IOB_X0Y100'
+Info:     Tile 'LIOB33_SING_X0Y100'
+Info:     Constraining 'led[0]' to site 'IOB_X0Y233'
+Info:     Tile 'LIOB33_X0Y233'
+Info:     Constraining 'led[1]' to site 'IOB_X0Y234'
+Info:     Tile 'LIOB33_X0Y233'
+Info:     Constraining 'led[2]' to site 'IOB_X0Y238'
+Info:     Tile 'LIOB33_X0Y237'
+Info:     Constraining 'led[3]' to site 'IOB_X0Y237'
+Info:     Tile 'LIOB33_X0Y237'
+Info: Generating input buffer for '$iopadmap$tms_bram_bench_ax7203.rst_n'
+Info: Generating input buffer for '$iopadmap$tms_bram_bench_ax7203.uart_rx'
+Info: Generating output buffer for '$iopadmap$tms_bram_bench_ax7203.uart_tx'
+Info: Generating output buffer for '$iopadmap$tms_bram_bench_ax7203.led'
+Info: Generating output buffer for '$iopadmap$tms_bram_bench_ax7203.led_1'
+Info: Generating output buffer for '$iopadmap$tms_bram_bench_ax7203.led_2'
+Info: Generating output buffer for '$iopadmap$tms_bram_bench_ax7203.led_3'
+Info:     Created 9 PAD cells from:
+Info:              9x PAD
+Info: Preparing clocking...
+Info: Packing constants..
+Info: Packing cfg...
+Info: Packing PLLs...
+Info: Packing Gigabit Transceivers..
+Info: Packing global buffers...
+Info:     Constrained BUFGCTRL 'clk200_bufg' to bel 'BUFGCTRL_X0Y0/BUFGCTRL' based on dedicated routing
+Info: Packing MUX[789]s..
+Info: Packing carries..
+Info:    Grouped 1960 MUXCYs and 1960 XORCYs into 202 chains.
+Info:    Blasted 0 non-chain MUXCYs and 49 non-chain XORCYs to soft logic
+Info: Packing LUTs..
+Info:     Created 6947 SLICE_LUTX cells from:
+Info:           3597x LUT1
+Info:            506x LUT2
+Info:            715x LUT3
+Info:            494x LUT4
+Info:            946x LUT5
+Info:            689x LUT6
+Info: Packing DRAM..
+Info:    Transformed 0 tied-low DRAM address inputs to be tied-high
+Info: Packing BRAM..
+Info: Packing DSPs..
+Info: Packing flipflops..
+Info:     Created 1110 SLICE_FFX cells from:
+Info:            959x FDCE
+Info:             12x FDPE
+Info:            139x FDRE
+Info: Constrained 838 LUTFF pairs.
+
+Info: Annotating ports with timing budgets for target frequency 200.00 MHz
+Info: Checksum: 0xccdb7599
+
+Info: Device utilisation:
+Info: 	          SLICE_LUTX:  6947/269200     2%
+Info: 	           SLICE_FFX:  1110/269200     0%
+Info: 	              CARRY4:   493/33650     1%
+Info: 	          PSEUDO_GND:     1/69165     0%
+Info: 	          PSEUDO_VCC:     1/69165     0%
+Info: 	               HARD0:     0/ 3960     0%
+Info: 	            RAMB18E1:     0/  730     0%
+Info: 	            FIFO18E1:     0/  365     0%
+Info: 	        RAMBFIFO36E1:     0/  365     0%
+Info: 	            RAMB36E1:    45/  365    12%
+Info: 	             DSP48E1:     0/  740     0%
+Info: 	                 PAD:     9/ 1062     0%
+Info: 	       IOB33M_OUTBUF:     0/  240     0%
+Info: 	       IOB33S_OUTBUF:     0/  240     0%
+Info: 	        IOB33_OUTBUF:     5/  500     1%
+Info: 	     IOB33M_INBUF_EN:     1/  240     0%
+Info: 	     IOB33S_INBUF_EN:     0/  240     0%
+Info: 	      IOB33_INBUF_EN:     2/  500     0%
+Info: 	IOB33M_TERM_OVERRIDE:     0/  240     0%
+Info: 	IOB33S_TERM_OVERRIDE:     0/  240     0%
+Info: 	 IOB33_TERM_OVERRIDE:     0/  500     0%
+Info: 	       PULL_OR_KEEP1:     0/  980     0%
+Info: 	            IDELAYE2:     0/  500     0%
+Info: 	        OLOGICE3_TFF:     0/  500     0%
+Info: 	      OLOGICE3_OUTFF:     0/  500     0%
+Info: 	       OLOGICE3_MISR:     0/  500     0%
+Info: 	           OSERDESE2:     0/  500     0%
+Info: 	        ILOGICE3_IFF:     0/  500     0%
+Info: 	ILOGICE3_ZHOLD_DELAY:     0/  500     0%
+Info: 	           ISERDESE2:     0/  500     0%
+Info: 	                BUFR:     0/   40     0%
+Info: 	               BUFIO:     0/   40     0%
+Info: 	          IDELAYCTRL:     0/   10     0%
+Info: 	            BUFGCTRL:     2/   32     6%
+Info: 	            PCIE_2_1:     0/    1     0%
+Info: 	               BSCAN:     0/    4     0%
+Info: 	                BUFG:     0/   32     0%
+Info: 	              BUFHCE:     0/  120     0%
+Info: 	            DCIRESET:     0/    1     0%
+Info: 	            DNA_PORT:     0/    1     0%
+Info: 	           EFUSE_USR:     0/    1     0%
+Info: 	           FRAME_ECC:     0/    1     0%
+Info: 	       GTPE2_CHANNEL:     0/   16     0%
+Info: 	        GTPE2_COMMON:     0/    4     0%
+Info: 	         IBUFDS_GTE2:     0/    8     0%
+Info: 	                ICAP:     0/    2     0%
+Info: 	            INVERTER:     0/  240     0%
+Info: 	          MMCME2_ADV:     0/   10     0%
+Info: 	        OLOGICE2_TFF:     0/  500     0%
+Info: 	      OLOGICE2_OUTFF:     0/  500     0%
+Info: 	           PLLE2_ADV:     0/   10     0%
+Info: 	           SELMUX2_1:     0/102950     0%
+Info: 	             STARTUP:     0/    1     0%
+Info: 	          USR_ACCESS:     0/    1     0%
+Info: 	              BUFFER:     0/   82     0%
+Info: 	        ILOGICE2_IFF:     0/  500     0%
+Info: 	       OLOGICE2_MISR:     0/  500     0%
+
+Info: Placed 18 cells based on constraints.
+Info: Creating initial analytic placement for 3544 cells, random placement wirelen = 1953065.
+Info:     at initial placer iter 0, wirelen = 13248
+Info:     at initial placer iter 1, wirelen = 12777
+Info:     at initial placer iter 2, wirelen = 12743
+Info:     at initial placer iter 3, wirelen = 12633
+Info: Running main analytical placer.
+Info:     at iteration #1, type ALL: wirelen solved = 12913, spread = 419345, legal = 422858; time = 0.07s
+Info:     at iteration #2, type ALL: wirelen solved = 19046, spread = 370360, legal = 372765; time = 0.08s
+Info:     at iteration #3, type ALL: wirelen solved = 26410, spread = 367328, legal = 374938; time = 0.07s
+Info:     at iteration #4, type ALL: wirelen solved = 33096, spread = 387618, legal = 396888; time = 0.07s
+Info:     at iteration #5, type ALL: wirelen solved = 38980, spread = 367157, legal = 371907; time = 0.07s
+Info:     at iteration #6, type ALL: wirelen solved = 43123, spread = 362740, legal = 366226; time = 0.07s
+Info:     at iteration #7, type ALL: wirelen solved = 44781, spread = 349529, legal = 356511; time = 0.07s
+Info:     at iteration #8, type ALL: wirelen solved = 46163, spread = 356045, legal = 366282; time = 0.07s
+Info:     at iteration #9, type ALL: wirelen solved = 48611, spread = 347990, legal = 347651; time = 0.07s
+Info:     at iteration #10, type ALL: wirelen solved = 50766, spread = 353949, legal = 359787; time = 0.07s
+Info:     at iteration #11, type ALL: wirelen solved = 52561, spread = 343028, legal = 345788; time = 0.07s
+Info:     at iteration #12, type ALL: wirelen solved = 53780, spread = 351896, legal = 359575; time = 0.07s
+Info:     at iteration #13, type ALL: wirelen solved = 56811, spread = 354309, legal = 360485; time = 0.07s
+Info:     at iteration #14, type ALL: wirelen solved = 58125, spread = 352284, legal = 357819; time = 0.07s
+Info:     at iteration #15, type ALL: wirelen solved = 60605, spread = 356884, legal = 362262; time = 0.07s
+Info:     at iteration #16, type ALL: wirelen solved = 63103, spread = 359458, legal = 364822; time = 0.07s
+Info: HeAP Placer Time: 1.82s
+Info:   of which solving equations: 0.89s
+Info:   of which spreading cells: 0.23s
+Info:   of which strict legalisation: 0.08s
+
+Info: Running simulated annealing placer for refinement.
+Info:   at iteration #1: temp = 0.000000, timing cost = 1999, wirelen = 345788
+Info:   at iteration #5: temp = 0.000000, timing cost = 1731, wirelen = 332683
+Info:   at iteration #10: temp = 0.000000, timing cost = 1708, wirelen = 332120
+Info:   at iteration #12: temp = 0.000000, timing cost = 1704, wirelen = 332057 
+Info: SA placement time 0.88s
+
+Info: Max frequency for clock    'clk': 7.66 MHz (FAIL at 200.00 MHz)
+Info: Max frequency for clock 'clk200': 603.14 MHz (PASS at 200.00 MHz)
+
+Info: Slack histogram:
+Info:  legend: * represents 17 endpoint(s)
+Info:          + represents [1,17) endpoint(s)
+Info: [-125608, -119093) |*+
+Info: [-119093, -112578) |+
+Info: [-112578, -106063) |+
+Info: [-106063, -99548) |+
+Info: [-99548, -93033) |+
+Info: [-93033, -86518) |*+
+Info: [-86518, -80003) |*+
+Info: [-80003, -73488) |+
+Info: [-73488, -66973) | 
+Info: [-66973, -60458) |*+
+Info: [-60458, -53943) |*+
+Info: [-53943, -47428) |+
+Info: [-47428, -40913) | 
+Info: [-40913, -34398) | 
+Info: [-34398, -27883) | 
+Info: [-27883, -21368) | 
+Info: [-21368, -14853) | 
+Info: [-14853,  -8338) |***********************+
+Info: [ -8338,  -1823) |************************************************************ 
+Info: [ -1823,   4692) |*****************************************************+
+Info: Checksum: 0x2f86ef25
+Info: Running post-placement legalisation...
+Info: Routing global clocks...
+Info:     routing clock 'clk'
+Info:     routing clock 'clk200'
+Info: Running router2...
+Info: Setting up routing resources...
+Info: Running main router loop...
+Info:     iter=1 wires=178612 overused=6111 overuse=7065 archfail=NA
+Info:     iter=2 wires=185822 overused=201 overuse=201 archfail=NA
+Info:     iter=3 wires=186099 overused=4 overuse=4 archfail=NA
+Info:     iter=4 wires=186105 overused=1 overuse=1 archfail=NA
+Info:     iter=5 wires=186108 overused=0 overuse=0 archfail=0
+Info: 1000 slowest nets by runtime:
+                                 $techmap2425831$abc$2423749$lut$aiger2423748$17581.A[3]      1 2368.1ms
+                                 $techmap2425832$abc$2423749$lut$aiger2423748$17586.A[4]      1 2355.9ms
+                                 $techmap2425812$abc$2423749$lut$aiger2423748$17455.A[4]      1 2317.9ms
+                                 $techmap2425829$abc$2423749$lut$aiger2423748$17571.A[2]      1 2202.2ms
+                                 $techmap2425930$abc$2423749$lut$aiger2423748$17830.A[2]      1 2168.3ms
+                                 $techmap2425826$abc$2423749$lut$aiger2423748$17556.A[3]      1 2165.9ms
+                                 $techmap2425690$abc$2423749$lut$aiger2423748$18424.A[3]      1 2112.5ms
+                                 $techmap2425923$abc$2423749$lut$aiger2423748$18204.A[3]      1 2110.5ms
+                                 $techmap2425923$abc$2423749$lut$aiger2423748$18204.A[4]      1 2086.2ms
+                                 $techmap2425958$abc$2423749$lut$aiger2423748$17753.A[3]      1 2085.3ms
+                                 $techmap2425722$abc$2423749$lut$aiger2423748$19184.A[5]      1 2078.6ms
+                                                                         $PACKER_VCC_NET   3706 2071.8ms
+                                 $techmap2425722$abc$2423749$lut$aiger2423748$19184.A[4]      1 2065.1ms
+                                 $techmap2425886$abc$2423749$lut$aiger2423748$17966.A[2]      1 1983.3ms
+                                 $techmap2425809$abc$2423749$lut$aiger2423748$17434.A[4]      1 1964.9ms
+                                 $techmap2425808$abc$2423749$lut$aiger2423748$17425.A[5]      1 1937.8ms
+                                 $techmap2425890$abc$2423749$lut$aiger2423748$17994.A[4]      1 1922.0ms
+                                 $techmap2425890$abc$2423749$lut$aiger2423748$17994.A[5]      1 1891.3ms
+                                 $techmap2425809$abc$2423749$lut$aiger2423748$17434.A[5]      1 1885.4ms
+                                 $techmap2425957$abc$2423749$lut$aiger2423748$17748.A[4]      1 1848.8ms
+                                 $techmap2425704$abc$2423749$lut$aiger2423748$18518.A[4]      1 1845.2ms
+                                 $techmap2425700$abc$2423749$lut$aiger2423748$18488.A[3]      1 1843.9ms
+                                 $techmap2425687$abc$2423749$lut$aiger2423748$18409.A[3]      1 1821.3ms
+                                 $techmap2425700$abc$2423749$lut$aiger2423748$18488.A[5]      1 1818.4ms
+                                 $techmap2425812$abc$2423749$lut$aiger2423748$17455.A[3]      1 1814.2ms
+                                 $techmap2425954$abc$2423749$lut$aiger2423748$17733.A[2]      1 1801.8ms
+                                 $techmap2425722$abc$2423749$lut$aiger2423748$19184.A[2]      1 1740.6ms
+                                 $techmap2425919$abc$2423749$lut$aiger2423748$18180.A[3]      1 1723.9ms
+                                 $techmap2425721$abc$2423749$lut$aiger2423748$19175.A[2]      1 1722.2ms
+                                 $techmap2425924$abc$2423749$lut$aiger2423748$18213.A[4]      1 1703.6ms
+                                 $techmap2425886$abc$2423749$lut$aiger2423748$17966.A[3]      1 1650.5ms
+                                 $techmap2425700$abc$2423749$lut$aiger2423748$18488.A[2]      1 1645.4ms
+                                 $techmap2425931$abc$2423749$lut$aiger2423748$17839.A[4]      1 1636.2ms
+                                 $techmap2425689$abc$2423749$lut$aiger2423748$18419.A[3]      1 1610.4ms
+                                 $techmap2425811$abc$2423749$lut$aiger2423748$17446.A[5]      1 1607.6ms
+                                 $techmap2425833$abc$2423749$lut$aiger2423748$17591.A[3]      1 1601.6ms
+                                 $techmap2425885$abc$2423749$lut$aiger2423748$17961.A[4]      1 1557.7ms
+                                 $techmap2425953$abc$2423749$lut$aiger2423748$17728.A[4]      1 1557.0ms
+                                 $techmap2425933$abc$2423749$lut$aiger2423748$17851.A[4]      1 1540.5ms
+                                 $techmap2425827$abc$2423749$lut$aiger2423748$17561.A[2]      1 1536.6ms
+                                 $techmap2425923$abc$2423749$lut$aiger2423748$18204.A[2]      1 1534.7ms
+                                 $techmap2425718$abc$2423749$lut$aiger2423748$19160.A[3]      1 1532.8ms
+                                 $techmap2425924$abc$2423749$lut$aiger2423748$18213.A[5]      1 1526.5ms
+                                 $techmap2425921$abc$2423749$lut$aiger2423748$18190.A[3]      1 1522.6ms
+                                 $techmap2425922$abc$2423749$lut$aiger2423748$18195.A[2]      1 1521.3ms
+                                 $techmap2425811$abc$2423749$lut$aiger2423748$17446.A[2]      1 1509.7ms
+                                 $techmap2425931$abc$2423749$lut$aiger2423748$17839.A[3]      1 1506.2ms
+                                 $techmap2425723$abc$2423749$lut$aiger2423748$19193.A[4]      1 1501.3ms
+                                 $techmap2425890$abc$2423749$lut$aiger2423748$17994.A[3]      1 1499.4ms
+                                 $techmap2425723$abc$2423749$lut$aiger2423748$19193.A[5]      1 1498.8ms
+                                 $techmap2425808$abc$2423749$lut$aiger2423748$17425.A[4]      1 1491.8ms
+                                 $techmap2425722$abc$2423749$lut$aiger2423748$19184.A[3]      1 1488.1ms
+                                 $techmap2425960$abc$2423749$lut$aiger2423748$17763.A[3]      1 1476.6ms
+                                 $techmap2425921$abc$2423749$lut$aiger2423748$18190.A[4]      1 1416.2ms
+                                 $techmap2425690$abc$2423749$lut$aiger2423748$18424.A[2]      1 1410.5ms
+                                 $techmap2425923$abc$2423749$lut$aiger2423748$18204.A[5]      1 1396.3ms
+                                 $techmap2425685$abc$2423749$lut$aiger2423748$18399.A[4]      1 1394.3ms
+                                 $techmap2425890$abc$2423749$lut$aiger2423748$17994.A[2]      1 1377.5ms
+                                 $techmap2425686$abc$2423749$lut$aiger2423748$18404.A[3]      1 1362.1ms
+                                 $techmap2425832$abc$2423749$lut$aiger2423748$17586.A[3]      1 1356.8ms
+                                 $techmap2425718$abc$2423749$lut$aiger2423748$19160.A[4]      1 1338.2ms
+                                 $techmap2425812$abc$2423749$lut$aiger2423748$17455.A[2]      1 1325.1ms
+                                 $techmap2425701$abc$2423749$lut$aiger2423748$18497.A[2]      1 1321.4ms
+                                 $techmap2425955$abc$2423749$lut$aiger2423748$17738.A[3]      1 1305.0ms
+                                 $techmap2425687$abc$2423749$lut$aiger2423748$18409.A[4]      1 1294.9ms
+                                 $techmap2425688$abc$2423749$lut$aiger2423748$18414.A[3]      1 1282.3ms
+                                 $techmap2425686$abc$2423749$lut$aiger2423748$18404.A[2]      1 1273.0ms
+                                 $techmap2425889$abc$2423749$lut$aiger2423748$17985.A[2]      1 1255.2ms
+                                 $techmap2425889$abc$2423749$lut$aiger2423748$17985.A[3]      1 1250.1ms
+                                 $techmap2425808$abc$2423749$lut$aiger2423748$17425.A[3]      1 1245.4ms
+                                 $techmap2425808$abc$2423749$lut$aiger2423748$17425.A[2]      1 1242.8ms
+                                 $techmap2425924$abc$2423749$lut$aiger2423748$18213.A[2]      1 1209.3ms
+                                 $techmap2425885$abc$2423749$lut$aiger2423748$17961.A[3]      1 1205.6ms
+                                 $techmap2425703$abc$2423749$lut$aiger2423748$18509.A[2]      1 1201.1ms
+                                 $techmap2425930$abc$2423749$lut$aiger2423748$17830.A[4]      1 1190.1ms
+                                 $techmap2425723$abc$2423749$lut$aiger2423748$19193.A[3]      1 1184.7ms
+                                 $techmap2425700$abc$2423749$lut$aiger2423748$18488.A[4]      1 1183.1ms
+                                 $techmap2425957$abc$2423749$lut$aiger2423748$17748.A[3]      1 1179.8ms
+                                 $techmap2425830$abc$2423749$lut$aiger2423748$17576.A[3]      1 1170.7ms
+                                 $techmap2425889$abc$2423749$lut$aiger2423748$17985.A[5]      1 1166.5ms
+                                 $techmap2425688$abc$2423749$lut$aiger2423748$18414.A[2]      1 1163.8ms
+                                 $techmap2425811$abc$2423749$lut$aiger2423748$17446.A[4]      1 1154.0ms
+                                 $techmap2425888$abc$2423749$lut$aiger2423748$17976.A[2]      1 1138.7ms
+                                 $techmap2425930$abc$2423749$lut$aiger2423748$17830.A[5]      1 1134.4ms
+                                 $techmap2425720$abc$2423749$lut$aiger2423748$19170.A[3]      1 1126.3ms
+                                 $techmap2425689$abc$2423749$lut$aiger2423748$18419.A[4]      1 1116.2ms
+                                 $techmap2425831$abc$2423749$lut$aiger2423748$17581.A[2]      1 1096.9ms
+                                 $techmap2425826$abc$2423749$lut$aiger2423748$17556.A[4]      1 1089.3ms
+                                 $techmap2425958$abc$2423749$lut$aiger2423748$17753.A[2]      1 1086.5ms
+                                 $techmap2425924$abc$2423749$lut$aiger2423748$18213.A[3]      1 1067.7ms
+                                 $techmap2425828$abc$2423749$lut$aiger2423748$17566.A[3]      1 1051.0ms
+                                 $techmap2425933$abc$2423749$lut$aiger2423748$17851.A[3]      1 1050.1ms
+                                 $techmap2425959$abc$2423749$lut$aiger2423748$17758.A[4]      1 1026.8ms
+                                 $techmap2425830$abc$2423749$lut$aiger2423748$17576.A[4]      1 991.9ms
+                                 $techmap2425704$abc$2423749$lut$aiger2423748$18518.A[3]      1 979.4ms
+                                 $techmap2425919$abc$2423749$lut$aiger2423748$18180.A[4]      1 978.7ms
+                                 $techmap2425953$abc$2423749$lut$aiger2423748$17728.A[3]      1 972.8ms
+                                 $techmap2425887$abc$2423749$lut$aiger2423748$17971.A[3]      1 972.1ms
+                                 $techmap2425703$abc$2423749$lut$aiger2423748$18509.A[4]      1 968.8ms
+                                 $techmap2425833$abc$2423749$lut$aiger2423748$17591.A[2]      1 965.5ms
+                                 $techmap2425701$abc$2423749$lut$aiger2423748$18497.A[5]      1 959.7ms
+                                 $techmap2425931$abc$2423749$lut$aiger2423748$17839.A[5]      1 957.4ms
+                                 $techmap2425887$abc$2423749$lut$aiger2423748$17971.A[4]      1 944.9ms
+                                 $techmap2425954$abc$2423749$lut$aiger2423748$17733.A[3]      1 928.3ms
+                                 $techmap2425719$abc$2423749$lut$aiger2423748$19165.A[3]      1 921.2ms
+                                 $techmap2425956$abc$2423749$lut$aiger2423748$17743.A[3]      1 914.6ms
+                                 $techmap2425683$abc$2423749$lut$aiger2423748$18389.A[3]      1 911.1ms
+                                 $techmap2425920$abc$2423749$lut$aiger2423748$18185.A[2]      1 910.2ms
+                                 $techmap2425703$abc$2423749$lut$aiger2423748$18509.A[5]      1 906.3ms
+                                 $techmap2425827$abc$2423749$lut$aiger2423748$17561.A[3]      1 906.0ms
+                                 $techmap2425956$abc$2423749$lut$aiger2423748$17743.A[2]      1 898.4ms
+                                 $techmap2425703$abc$2423749$lut$aiger2423748$18509.A[3]      1 893.7ms
+                                 $techmap2425934$abc$2423749$lut$aiger2423748$17860.A[5]      1 880.2ms
+                                 $techmap2425812$abc$2423749$lut$aiger2423748$17455.A[5]      1 879.8ms
+                                 $techmap2425889$abc$2423749$lut$aiger2423748$17985.A[4]      1 879.1ms
+                                 $techmap2425719$abc$2423749$lut$aiger2423748$19165.A[2]      1 878.6ms
+                                 $techmap2425701$abc$2423749$lut$aiger2423748$18497.A[4]      1 876.2ms
+                                 $techmap2425934$abc$2423749$lut$aiger2423748$17860.A[2]      1 871.7ms
+                                 $techmap2425701$abc$2423749$lut$aiger2423748$18497.A[3]      1 867.3ms
+                                 $techmap2425933$abc$2423749$lut$aiger2423748$17851.A[2]      1 864.4ms
+                                 $techmap2425955$abc$2423749$lut$aiger2423748$17738.A[4]      1 863.1ms
+                                 $techmap2425723$abc$2423749$lut$aiger2423748$19193.A[2]      1 862.5ms
+                                 $techmap2425829$abc$2423749$lut$aiger2423748$17571.A[3]      1 854.9ms
+                                 $techmap2425683$abc$2423749$lut$aiger2423748$18389.A[4]      1 847.9ms
+                                 $techmap2425685$abc$2423749$lut$aiger2423748$18399.A[3]      1 842.2ms
+                                 $techmap2425922$abc$2423749$lut$aiger2423748$18195.A[3]      1 838.4ms
+                                 $techmap2425720$abc$2423749$lut$aiger2423748$19170.A[4]      1 835.8ms
+                                 $techmap2425959$abc$2423749$lut$aiger2423748$17758.A[3]      1 831.3ms
+                                 $techmap2425721$abc$2423749$lut$aiger2423748$19175.A[3]      1 826.7ms
+                                 $techmap2425704$abc$2423749$lut$aiger2423748$18518.A[5]      1 824.0ms
+                                 $techmap2425684$abc$2423749$lut$aiger2423748$18394.A[2]      1 821.4ms
+                                 $techmap2425684$abc$2423749$lut$aiger2423748$18394.A[3]      1 820.2ms
+                                 $techmap2425931$abc$2423749$lut$aiger2423748$17839.A[2]      1 805.9ms
+                                 $techmap2425934$abc$2423749$lut$aiger2423748$17860.A[3]      1 798.2ms
+                                 $techmap2425809$abc$2423749$lut$aiger2423748$17434.A[3]      1 785.0ms
+                                 $techmap2425920$abc$2423749$lut$aiger2423748$18185.A[3]      1 778.7ms
+                                 $techmap2425704$abc$2423749$lut$aiger2423748$18518.A[2]      1 775.3ms
+                                 $techmap2425828$abc$2423749$lut$aiger2423748$17566.A[4]      1 773.0ms
+                                 $techmap2425933$abc$2423749$lut$aiger2423748$17851.A[5]      1 770.1ms
+                                 $techmap2425960$abc$2423749$lut$aiger2423748$17763.A[2]      1 765.9ms
+                                 $techmap2425811$abc$2423749$lut$aiger2423748$17446.A[3]      1 758.3ms
+                                 $techmap2425934$abc$2423749$lut$aiger2423748$17860.A[4]      1 744.6ms
+                                 $techmap2425809$abc$2423749$lut$aiger2423748$17434.A[2]      1 708.8ms
+                                 $techmap2425888$abc$2423749$lut$aiger2423748$17976.A[3]      1 702.3ms
+                                                                $abc$2423749$aiger$o1367      8 552.4ms
+                                                                         $PACKER_GND_NET   4807 539.0ms
+                                 $techmap2425930$abc$2423749$lut$aiger2423748$17830.A[3]      1 527.3ms
+                                                             genblk2.slot0_d5d2.word[21]     46 451.2ms
+                                                             genblk2.slot0_d5d2.word[25]     47 407.7ms
+                                                             genblk2.slot0_d5d2.word[23]     46 385.8ms
+                                 $techmap2427522$abc$2423749$lut$aiger2423748$20347.A[1]     93 377.7ms
+                                 $techmap2427485$abc$2423749$lut$aiger2423748$14624.A[2]     93 369.7ms
+                                 $techmap2427519$abc$2423749$lut$aiger2423748$20335.A[3]     93 363.9ms
+                              $techmap2425444\genblk2.slot0_d5d2.eng.mem_b2.0.24.ENBWREN    132 350.9ms
+                                                             genblk2.slot0_d5d2.word[24]     48 350.4ms
+                                 $techmap2427519$abc$2423749$lut$aiger2423748$20335.A[0]     93 346.9ms
+                                                                $abc$2423749$aiger$o1485      8 305.9ms
+                                 $techmap2425678$abc$2423749$lut$aiger2423748$18353.A[3]      1 297.6ms
+                                 $techmap2427520$abc$2423749$lut$aiger2423748$20339.A[1]     93 296.0ms
+                                 $techmap2426054$abc$2423749$lut$aiger2423748$14862.A[2]      1 289.8ms
+                                 $techmap2427522$abc$2423749$lut$aiger2423748$20347.A[2]     93 288.6ms
+                                                             genblk2.slot0_d5d2.word[22]     46 283.6ms
+                                 $techmap2427519$abc$2423749$lut$aiger2423748$20335.A[2]     93 282.3ms
+                                            $techmap2424577$auto$ff.cc:337:slice$86970.D    414 275.6ms
+                                 $techmap2425866$abc$2423749$lut$aiger2423748$17288.A[2]      1 274.2ms
+                                                             genblk2.slot0_d5d2.word[16]     48 271.7ms
+                                                              genblk2.slot0_d5d2.word[8]     48 270.1ms
+                                                             genblk2.slot0_d5d2.word[12]     46 269.6ms
+                                 $techmap2427487$abc$2423749$lut$aiger2423748$14633.A[5]     93 257.1ms
+                                                             genblk2.slot0_d5d2.word[19]     46 250.5ms
+                                                             genblk2.slot0_d5d2.word[17]     47 235.0ms
+                                                             genblk2.slot0_d5d2.word[26]     46 229.7ms
+                                 $techmap2427485$abc$2423749$lut$aiger2423748$14624.A[3]     93 229.3ms
+                                                              genblk2.slot0_d5d2.word[5]     46 227.4ms
+                                 $techmap2427519$abc$2423749$lut$aiger2423748$20335.A[1]     93 226.2ms
+                                 $techmap2427485$abc$2423749$lut$aiger2423748$14624.A[0]     93 223.4ms
+                                 $techmap2425605$abc$2423749$lut$aiger2423748$20015.A[3]      1 221.4ms
+                                 $techmap2427487$abc$2423749$lut$aiger2423748$14633.A[2]     93 217.5ms
+                                 $techmap2425537$abc$2423749$lut$aiger2423748$19551.A[0]    250 217.2ms
+                                            $techmap2425366$auto$ff.cc:337:slice$78359.D    361 216.7ms
+                                                                                     rst    976 214.7ms
+                                                                $abc$2423749$aiger$o1368      8 210.6ms
+                                                              genblk2.slot0_d5d2.word[7]     46 207.5ms
+                                 $techmap2427520$abc$2423749$lut$aiger2423748$20339.A[0]     93 207.0ms
+                                 $techmap2427487$abc$2423749$lut$aiger2423748$14633.A[3]     93 206.9ms
+                                 $techmap2425908$abc$2423749$lut$aiger2423748$18117.A[2]      1 206.4ms
+                                 $techmap2427487$abc$2423749$lut$aiger2423748$14633.A[4]     93 204.1ms
+                                                             genblk2.slot0_d5d2.word[30]     46 199.1ms
+                                 $techmap2426228$abc$2423749$lut$aiger2423748$16542.A[4]      1 197.7ms
+                                                             genblk2.slot0_d5d2.word[18]     46 194.3ms
+                                 $techmap2425627$abc$2423749$lut$aiger2423748$18668.A[2]      1 193.6ms
+                                                       genblk2.slot0_d5d2.eng.r_addr[11]     68 189.5ms
+                                                             genblk2.slot0_d5d2.word[15]     46 189.2ms
+                                                             genblk2.slot0_d5d2.word[20]     46 189.0ms
+                                 $techmap2426115$abc$2423749$lut$aiger2423748$15274.A[4]      1 188.9ms
+                                 $techmap2425999$abc$2423749$lut$aiger2423748$14985.A[4]      1 188.3ms
+                                                              genblk2.slot0_d5d2.word[1]     47 186.9ms
+                                 $techmap2426327$abc$2423749$lut$aiger2423748$16407.A[3]      1 185.7ms
+                                 $techmap2425893$abc$2423749$lut$aiger2423748$18019.A[3]      1 179.2ms
+                                 $techmap2426114$abc$2423749$lut$aiger2423748$15265.A[5]      1 179.2ms
+                                                              genblk2.slot0_d5d2.word[4]     46 169.5ms
+                                 $techmap2425580$abc$2423749$lut$aiger2423748$19845.A[2]      1 168.5ms
+                                 $techmap2425854$abc$2423749$lut$aiger2423748$17198.A[3]      1 167.2ms
+                                 $techmap2426260$abc$2423749$lut$aiger2423748$16758.A[3]      1 162.9ms
+                                                             genblk2.slot0_d5d2.word[28]     46 158.4ms
+                                                             genblk2.slot0_d5d2.word[14]     46 156.5ms
+                                 $techmap2425904$abc$2423749$lut$aiger2423748$18100.A[4]      1 154.6ms
+                                 $techmap2427488$abc$2423749$lut$aiger2423748$14637.A[0]     70 152.9ms
+                                                              genblk2.slot0_d5d2.word[6]     46 152.4ms
+                                                             genblk2.slot0_d5d2.word[32]     48 149.4ms
+                                 $techmap2427485$abc$2423749$lut$aiger2423748$14624.A[1]     93 145.2ms
+                                 $techmap2427488$abc$2423749$lut$aiger2423748$14637.A[1]     71 142.9ms
+                                                       genblk2.slot0_d5d2.eng.r_addr[10]     68 141.0ms
+                                                                $abc$2423749$aiger$o1369      8 140.5ms
+                                 $techmap2426051$abc$2423749$lut$aiger2423748$14845.A[4]      1 140.4ms
+                                 $techmap2425725$abc$2423749$lut$aiger2423748$19209.A[2]      1 140.0ms
+                                                                $abc$2423749$aiger$o1482      8 139.2ms
+                                 $techmap2425537$abc$2423749$lut$aiger2423748$19551.A[1]    328 137.8ms
+                                                             genblk2.slot0_d5d2.word[34]     46 137.2ms
+                                                                 $abc$2423749$aiger$o141      8 136.9ms
+                                                             genblk2.slot0_d5d2.word[27]     46 130.1ms
+                                                                $abc$2423749$aiger$o1483      8 129.3ms
+                                 $techmap2426326$abc$2423749$lut$aiger2423748$16398.A[3]      1 128.2ms
+                                                              genblk2.slot0_d5d2.word[0]     48 127.8ms
+                                 $techmap2426308$abc$2423749$lut$aiger2423748$16263.A[5]      1 125.6ms
+                                 $techmap2426291$abc$2423749$lut$aiger2423748$16940.A[3]      1 125.1ms
+                                 $techmap2426227$abc$2423749$lut$aiger2423748$16533.A[5]      1 123.8ms
+                                                             genblk2.slot0_d5d2.word[13]     46 122.9ms
+                                                                $abc$2423749$aiger$o1484      8 122.9ms
+                                 $techmap2425556$abc$2423749$lut$aiger2423748$19735.A[4]      1 122.8ms
+                                 $techmap2426210$abc$2423749$lut$aiger2423748$16148.A[4]      1 120.3ms
+                                                             genblk2.slot0_d5d2.word[35]     46 120.3ms
+                                                             genblk2.slot0_d5d2.word[31]     46 118.0ms
+                                                             genblk2.slot0_d5d2.word[33]     47 116.7ms
+                                 $techmap2426285$abc$2423749$lut$aiger2423748$16906.A[3]      1 116.5ms
+                                 $techmap2426246$abc$2423749$lut$aiger2423748$16664.A[4]      1 116.3ms
+                                 $techmap2427483$abc$2423749$lut$aiger2423748$13972.A[0]     59 111.0ms
+                                 $techmap2426131$abc$2423749$lut$aiger2423748$15405.A[2]      1 108.9ms
+                $techmap2425597$auto$abc_ops_reintegrate.cc:611:reintegrate$2424437.A[0]    136 106.9ms
+                                                             genblk2.slot0_d5d2.word[10]     46 106.6ms
+                                                              genblk2.slot0_d5d2.word[3]     46 106.2ms
+                                                                 $abc$2423749$aiger$o140      8 104.3ms
+                                       $techmap2428136$abc$2423749$lut$aiger$o16833.A[1]    223 104.3ms
+                                 $techmap2425604$abc$2423749$lut$aiger2423748$20006.A[3]      1 102.4ms
+                                                             genblk2.slot0_d5d2.word[29]     46 101.5ms
+                                                             genblk2.slot0_d5d2.word[11]     46 101.0ms
+                                 $techmap2425537$abc$2423749$lut$aiger2423748$19551.A[2]    360 98.7ms
+                                                              genblk2.slot0_d5d2.word[9]     47 98.5ms
+                                 $techmap2425766$abc$2423749$lut$aiger2423748$19083.A[4]      1 96.1ms
+                                 $techmap2426115$abc$2423749$lut$aiger2423748$15274.A[2]      1 92.9ms
+                                 $techmap2425575$abc$2423749$lut$aiger2423748$19825.A[3]      1 91.6ms
+                                 $techmap2425557$abc$2423749$lut$aiger2423748$19744.A[5]      1 90.3ms
+                                 $techmap2425867$abc$2423749$lut$aiger2423748$17297.A[4]      1 89.9ms
+                                                              genblk2.slot0_d5d2.word[2]     46 88.6ms
+                                 $techmap2425855$abc$2423749$lut$aiger2423748$17207.A[3]      1 87.0ms
+                                 $techmap2425726$abc$2423749$lut$aiger2423748$19218.A[5]      1 86.6ms
+                                 $techmap2425836$abc$2423749$lut$aiger2423748$17614.A[3]      1 86.5ms
+                                 $techmap2427578$abc$2423749$lut$aiger2423748$21460.A[2]     56 86.4ms
+                $techmap2427489$auto$abc_ops_reintegrate.cc:611:reintegrate$2423902.A[0]     80 82.1ms
+                                 $techmap2427563$abc$2423749$lut$aiger2423748$21412.A[3]     41 81.1ms
+                                 $techmap2426239$abc$2423749$lut$aiger2423748$16623.A[3]      1 78.8ms
+                                                                $abc$2423749$aiger$o1366      8 78.2ms
+                                 $techmap2425835$abc$2423749$lut$aiger2423748$17605.A[3]      1 76.4ms
+                                 $techmap2426309$abc$2423749$lut$aiger2423748$16272.A[2]      1 74.8ms
+                                 $techmap2426097$abc$2423749$lut$aiger2423748$15686.A[5]      1 72.0ms
+                                 $techmap2427483$abc$2423749$lut$aiger2423748$13972.A[1]     59 71.4ms
+                $techmap2426400$auto$abc_ops_reintegrate.cc:611:reintegrate$2424332.A[0]     81 71.1ms
+                                 $techmap2425878$abc$2423749$lut$aiger2423748$17369.A[4]      1 71.0ms
+                                 $techmap2426034$abc$2423749$lut$aiger2423748$14706.A[5]      1 70.8ms
+                                           $techmap2424479$auto$ff.cc:337:slice$111364.D     77 70.0ms
+                                 $techmap2426016$abc$2423749$lut$aiger2423748$15125.A[3]      1 67.9ms
+                                 $techmap2426292$abc$2423749$lut$aiger2423748$16949.A[2]      1 67.8ms
+                                 $techmap2425950$abc$2423749$lut$aiger2423748$17715.A[3]      1 67.6ms
+                                 $techmap2426206$abc$2423749$lut$aiger2423748$16124.A[4]      1 67.5ms
+                                 $techmap2425999$abc$2423749$lut$aiger2423748$14985.A[3]      1 65.6ms
+                                 $techmap2425851$abc$2423749$lut$aiger2423748$17173.A[5]      1 62.2ms
+                                 $techmap2426264$abc$2423749$lut$aiger2423748$16775.A[2]      1 61.4ms
+                                 $techmap2426239$abc$2423749$lut$aiger2423748$16623.A[4]      1 61.4ms
+                                 $techmap2428135$abc$2423749$lut$aiger2423748$14615.A[2]    120 61.3ms
+                                 $techmap2426283$abc$2423749$lut$aiger2423748$16896.A[2]      1 61.2ms
+                                 $techmap2426016$abc$2423749$lut$aiger2423748$15125.A[5]      1 60.7ms
+                $techmap2427531$auto$abc_ops_reintegrate.cc:611:reintegrate$2423894.A[0]    122 60.7ms
+                                 $techmap2426320$abc$2423749$lut$aiger2423748$16353.A[2]      1 60.3ms
+                                 $techmap2425879$abc$2423749$lut$aiger2423748$17374.A[2]      1 59.9ms
+                                 $techmap2426284$abc$2423749$lut$aiger2423748$16901.A[4]      1 58.7ms
+                                 $techmap2426077$abc$2423749$lut$aiger2423748$15546.A[4]      1 58.6ms
+                                 $techmap2425765$abc$2423749$lut$aiger2423748$19074.A[2]      1 57.7ms
+                                 $techmap2425849$abc$2423749$lut$aiger2423748$17159.A[4]      1 56.7ms
+                                 $techmap2425628$abc$2423749$lut$aiger2423748$18677.A[3]      1 56.6ms
+                                 $techmap2425814$abc$2423749$lut$aiger2423748$17470.A[3]      1 56.4ms
+                                 $techmap2425648$abc$2423749$lut$aiger2423748$18803.A[2]      1 56.0ms
+                                 $techmap2425892$abc$2423749$lut$aiger2423748$18010.A[2]      1 55.8ms
+                                 $techmap2426239$abc$2423749$lut$aiger2423748$16623.A[5]      1 55.2ms
+                                 $techmap2426204$abc$2423749$lut$aiger2423748$16113.A[3]      1 54.4ms
+                                 $techmap2425706$abc$2423749$lut$aiger2423748$18533.A[4]      1 54.1ms
+                                 $techmap2425605$abc$2423749$lut$aiger2423748$20015.A[2]      1 52.9ms
+                                                                              run_active     47 52.5ms
+                                                        genblk2.slot0_d5d2.eng.r_addr[0]     29 51.9ms
+                                 $techmap2426320$abc$2423749$lut$aiger2423748$16353.A[4]      1 51.6ms
+                                 $techmap2425604$abc$2423749$lut$aiger2423748$20006.A[2]      1 51.6ms
+                                 $techmap2426000$abc$2423749$lut$aiger2423748$14994.A[5]      1 51.6ms
+                                 $techmap2426204$abc$2423749$lut$aiger2423748$16113.A[5]      1 51.2ms
+                                 $techmap2425878$abc$2423749$lut$aiger2423748$17369.A[3]      1 51.0ms
+                                 $techmap2425850$abc$2423749$lut$aiger2423748$17164.A[2]      1 51.0ms
+                                            $techmap2425362$auto$ff.cc:337:slice$78363.D     62 50.7ms
+                                       $techmap2427529$abc$2423749$lut$aiger$o17344.A[1]     44 50.4ms
+                                 $techmap2426283$abc$2423749$lut$aiger2423748$16896.A[3]      1 49.3ms
+                                 $techmap2425879$abc$2423749$lut$aiger2423748$17374.A[3]      1 48.8ms
+                $techmap2427595$auto$abc_ops_reintegrate.cc:611:reintegrate$2423881.A[3]     54 48.0ms
+                                 $techmap2426187$abc$2423749$lut$aiger2423748$15992.A[2]      1 48.0ms
+                                 $techmap2426189$abc$2423749$lut$aiger2423748$16010.A[2]      1 47.8ms
+                                                                                 tx_busy     77 46.9ms
+                $techmap2427478$auto$abc_ops_reintegrate.cc:611:reintegrate$2423903.A[1]     52 46.0ms
+                                 $techmap2426054$abc$2423749$lut$aiger2423748$14862.A[3]      1 45.6ms
+                                 $techmap2425544$abc$2423749$lut$aiger2423748$19600.A[3]      1 44.8ms
+                                 $techmap2425679$abc$2423749$lut$aiger2423748$18362.A[3]      1 44.7ms
+                                 $techmap2425881$abc$2423749$lut$aiger2423748$17392.A[4]      1 44.1ms
+                                 $techmap2426291$abc$2423749$lut$aiger2423748$16940.A[4]      1 41.9ms
+                                 $techmap2426207$abc$2423749$lut$aiger2423748$16129.A[2]      1 41.8ms
+                                 $techmap2425999$abc$2423749$lut$aiger2423748$14985.A[5]      1 40.9ms
+                                 $techmap2426304$abc$2423749$lut$aiger2423748$16227.A[4]      1 40.4ms
+                                 $techmap2426241$abc$2423749$lut$aiger2423748$16631.A[3]      1 39.9ms
+                $techmap2427516$auto$abc_ops_reintegrate.cc:611:reintegrate$2423898.A[1]     67 39.9ms
+                                 $techmap2425544$abc$2423749$lut$aiger2423748$19600.A[0]    121 39.8ms
+                                 $techmap2425544$abc$2423749$lut$aiger2423748$19600.A[4]      1 39.6ms
+                                 $techmap2426278$abc$2423749$lut$aiger2423748$16862.A[2]      1 39.6ms
+                                 $techmap2425707$abc$2423749$lut$aiger2423748$18542.A[2]      1 39.5ms
+                                 $techmap2425854$abc$2423749$lut$aiger2423748$17198.A[2]      1 39.2ms
+                                 $techmap2425544$abc$2423749$lut$aiger2423748$19600.A[1]    121 38.9ms
+                                 $techmap2425866$abc$2423749$lut$aiger2423748$17288.A[4]      1 38.7ms
+                                 $techmap2426305$abc$2423749$lut$aiger2423748$16236.A[5]      1 38.7ms
+                               $abc$2423749$auto$simple.cc:210:make_patterns_logic$45176     43 38.5ms
+                                 $techmap2425537$abc$2423749$lut$aiger2423748$19551.A[4]      1 38.1ms
+                                 $techmap2427563$abc$2423749$lut$aiger2423748$21412.A[5]     42 37.8ms
+                                 $techmap2426282$abc$2423749$lut$aiger2423748$16891.A[3]      1 37.4ms
+                                 $techmap2426098$abc$2423749$lut$aiger2423748$15695.A[4]      1 37.1ms
+                                 $techmap2426286$abc$2423749$lut$aiger2423748$16911.A[3]      1 37.0ms
+                                       $techmap2428119$abc$2423749$lut$aiger$o15245.A[1]     69 37.0ms
+                                 $techmap2426033$abc$2423749$lut$aiger2423748$14697.A[5]      1 36.5ms
+                                 $techmap2427563$abc$2423749$lut$aiger2423748$21412.A[4]     42 36.3ms
+                                 $techmap2426306$abc$2423749$lut$aiger2423748$16245.A[2]      1 36.3ms
+                                 $techmap2425629$abc$2423749$lut$aiger2423748$18686.A[4]      1 36.3ms
+                                            $techmap2425363$auto$ff.cc:337:slice$78362.D     60 36.2ms
+                                 $techmap2426131$abc$2423749$lut$aiger2423748$15405.A[3]      1 36.1ms
+                                 $techmap2425950$abc$2423749$lut$aiger2423748$17715.A[2]      1 36.0ms
+                               $abc$2423749$auto$simple.cc:210:make_patterns_logic$44808     43 35.8ms
+                                 $techmap2425847$abc$2423749$lut$aiger2423748$17149.A[3]      1 34.9ms
+                                 $techmap2426182$abc$2423749$lut$aiger2423748$15953.A[3]      1 33.6ms
+                                 $techmap2425849$abc$2423749$lut$aiger2423748$17159.A[3]      1 33.5ms
+                                 $techmap2426184$abc$2423749$lut$aiger2423748$15967.A[2]      1 33.5ms
+                                 $techmap2425936$abc$2423749$lut$aiger2423748$17875.A[3]      1 33.5ms
+                                 $techmap2425867$abc$2423749$lut$aiger2423748$17297.A[3]      1 33.4ms
+                $techmap2427053$auto$abc_ops_reintegrate.cc:611:reintegrate$2424051.A[0]     47 33.4ms
+                                 $techmap2426184$abc$2423749$lut$aiger2423748$15967.A[3]      1 32.8ms
+                                 $techmap2425851$abc$2423749$lut$aiger2423748$17173.A[4]      1 32.5ms
+                                 $techmap2426323$abc$2423749$lut$aiger2423748$16374.A[4]      1 32.4ms
+                                 $techmap2425881$abc$2423749$lut$aiger2423748$17392.A[3]      1 32.3ms
+                                 $techmap2426131$abc$2423749$lut$aiger2423748$15405.A[4]      1 32.3ms
+                $techmap2425555$auto$abc_ops_reintegrate.cc:611:reintegrate$2424439.A[2]     48 32.2ms
+                                 $techmap2426324$abc$2423749$lut$aiger2423748$16383.A[4]      1 32.1ms
+                                 $techmap2425575$abc$2423749$lut$aiger2423748$19825.A[2]      1 32.1ms
+                                 $techmap2426114$abc$2423749$lut$aiger2423748$15265.A[2]      1 31.7ms
+                                 $techmap2425815$abc$2423749$lut$aiger2423748$17479.A[3]      1 31.5ms
+                                 $techmap2425627$abc$2423749$lut$aiger2423748$18668.A[3]      1 31.4ms
+                                 $techmap2426181$abc$2423749$lut$aiger2423748$15948.A[3]      1 31.4ms
+                                 $techmap2425672$abc$2423749$lut$aiger2423748$18893.A[2]      1 31.3ms
+                                                        genblk2.slot0_d5d2.eng.r_addr[1]     29 31.1ms
+                                 $techmap2426327$abc$2423749$lut$aiger2423748$16407.A[2]      1 30.6ms
+                                 $techmap2425580$abc$2423749$lut$aiger2423748$19845.A[3]      1 30.5ms
+                                 $techmap2426309$abc$2423749$lut$aiger2423748$16272.A[5]      1 30.2ms
+                                 $techmap2426203$abc$2423749$lut$aiger2423748$16104.A[3]      1 30.1ms
+                                 $techmap2425556$abc$2423749$lut$aiger2423748$19735.A[2]      1 30.1ms
+                                 $techmap2426017$abc$2423749$lut$aiger2423748$15134.A[3]      1 29.9ms
+               $abc$2423749$flatten\genblk2.slot0_d5d2.eng.$auto$rtlil.cc:3386:Mux$44757     36 29.8ms
+                                 $techmap2425908$abc$2423749$lut$aiger2423748$18117.A[3]      1 29.6ms
+                                 $techmap2425545$abc$2423749$lut$aiger2423748$19609.A[4]      1 28.9ms
+                                 $techmap2426115$abc$2423749$lut$aiger2423748$15274.A[3]      1 28.7ms
+                                 $techmap2426182$abc$2423749$lut$aiger2423748$15953.A[4]      1 28.7ms
+                                 $techmap2425649$abc$2423749$lut$aiger2423748$18812.A[2]      1 28.6ms
+                                 $techmap2426323$abc$2423749$lut$aiger2423748$16374.A[3]      1 28.5ms
+                                 $techmap2426278$abc$2423749$lut$aiger2423748$16862.A[3]      1 28.3ms
+                                 $techmap2425746$abc$2423749$lut$aiger2423748$19362.A[4]      1 28.2ms
+                                 $techmap2426324$abc$2423749$lut$aiger2423748$16383.A[2]      1 28.2ms
+                                 $techmap2426108$abc$2423749$lut$aiger2423748$15772.A[5]      1 28.0ms
+                                 $techmap2425545$abc$2423749$lut$aiger2423748$19609.A[3]      1 27.9ms
+                                 $techmap2426306$abc$2423749$lut$aiger2423748$16245.A[5]      1 27.4ms
+                                 $techmap2426277$abc$2423749$lut$aiger2423748$16853.A[5]      1 27.3ms
+                                 $techmap2426203$abc$2423749$lut$aiger2423748$16104.A[5]      1 27.0ms
+                                 $techmap2426306$abc$2423749$lut$aiger2423748$16245.A[4]      1 26.8ms
+                                 $techmap2426276$abc$2423749$lut$aiger2423748$16844.A[2]      1 26.3ms
+                                 $techmap2426304$abc$2423749$lut$aiger2423748$16227.A[3]      1 26.3ms
+                                 $techmap2426187$abc$2423749$lut$aiger2423748$15992.A[5]      1 26.1ms
+                                 $techmap2426303$abc$2423749$lut$aiger2423748$16218.A[3]      1 25.7ms
+                                 $techmap2426184$abc$2423749$lut$aiger2423748$15967.A[5]      1 25.6ms
+                                 $techmap2425544$abc$2423749$lut$aiger2423748$19600.A[5]      1 25.5ms
+                                 $techmap2426275$abc$2423749$lut$aiger2423748$16839.A[3]      1 25.4ms
+                                 $techmap2426264$abc$2423749$lut$aiger2423748$16775.A[3]      1 25.1ms
+                                 $techmap2425848$abc$2423749$lut$aiger2423748$17154.A[3]      1 24.9ms
+                                 $techmap2426017$abc$2423749$lut$aiger2423748$15134.A[4]      1 24.7ms
+                                 $techmap2425766$abc$2423749$lut$aiger2423748$19083.A[2]      1 24.7ms
+                                 $techmap2426244$abc$2423749$lut$aiger2423748$16653.A[2]      1 24.6ms
+                                 $techmap2426277$abc$2423749$lut$aiger2423748$16853.A[4]      1 24.3ms
+                                 $techmap2425850$abc$2423749$lut$aiger2423748$17164.A[3]      1 24.2ms
+                                 $techmap2426277$abc$2423749$lut$aiger2423748$16853.A[2]      1 23.8ms
+                                 $techmap2426305$abc$2423749$lut$aiger2423748$16236.A[2]      1 23.6ms
+                                 $techmap2425706$abc$2423749$lut$aiger2423748$18533.A[5]      1 23.4ms
+                                 $techmap2426206$abc$2423749$lut$aiger2423748$16124.A[3]      1 23.3ms
+                                 $techmap2426250$abc$2423749$lut$aiger2423748$16688.A[5]      1 23.3ms
+                                 $techmap2426055$abc$2423749$lut$aiger2423748$14866.A[3]      1 23.1ms
+                                       $techmap2428139$abc$2423749$lut$aiger$o16836.A[1]     65 23.1ms
+                                 $techmap2426078$abc$2423749$lut$aiger2423748$15555.A[5]      1 22.9ms
+                                 $techmap2426204$abc$2423749$lut$aiger2423748$16113.A[2]      1 22.8ms
+                                 $techmap2426180$abc$2423749$lut$aiger2423748$15943.A[3]      1 22.8ms
+                                 $techmap2426276$abc$2423749$lut$aiger2423748$16844.A[3]      1 22.8ms
+                                 $techmap2426308$abc$2423749$lut$aiger2423748$16263.A[3]      1 22.8ms
+                                 $techmap2426034$abc$2423749$lut$aiger2423748$14706.A[3]      1 22.5ms
+                                 $techmap2425678$abc$2423749$lut$aiger2423748$18353.A[4]      1 22.3ms
+                $techmap2427826$auto$abc_ops_reintegrate.cc:611:reintegrate$2423767.A[0]      6 22.1ms
+             $techmap46532$flatten\resetgen.$lt$build/t27/specs/rtl/fpga_reset.v:94$21.Y     33 22.1ms
+                                 $techmap2425847$abc$2423749$lut$aiger2423748$17149.A[4]      1 22.0ms
+                                 $techmap2426247$abc$2423749$lut$aiger2423748$16669.A[3]      1 22.0ms
+                                                                                 uart.tx      1 21.9ms
+                                 $techmap2426201$abc$2423749$lut$aiger2423748$16091.A[2]      1 21.5ms
+                                 $techmap2426180$abc$2423749$lut$aiger2423748$15943.A[4]      1 21.4ms
+                                 $techmap2426200$abc$2423749$lut$aiger2423748$16087.A[3]      1 21.2ms
+                                 $techmap2425881$abc$2423749$lut$aiger2423748$17392.A[2]      1 21.2ms
+                                 $techmap2425673$abc$2423749$lut$aiger2423748$18902.A[5]      1 20.7ms
+                                 $techmap2425880$abc$2423749$lut$aiger2423748$17383.A[4]      1 20.6ms
+                                 $techmap2426016$abc$2423749$lut$aiger2423748$15125.A[4]      1 20.5ms
+                                 $techmap2426282$abc$2423749$lut$aiger2423748$16891.A[4]      1 20.3ms
+                                 $techmap2426199$abc$2423749$lut$aiger2423748$16083.A[3]      1 20.2ms
+                                 $techmap2426188$abc$2423749$lut$aiger2423748$16001.A[5]      1 20.2ms
+                                 $techmap2425936$abc$2423749$lut$aiger2423748$17875.A[5]      1 20.0ms
+                                 $techmap2426181$abc$2423749$lut$aiger2423748$15948.A[2]      1 19.9ms
+                                 $techmap2425605$abc$2423749$lut$aiger2423748$20015.A[5]      1 19.8ms
+                                 $techmap2426250$abc$2423749$lut$aiger2423748$16688.A[4]      1 19.8ms
+                                 $techmap2426199$abc$2423749$lut$aiger2423748$16083.A[5]      1 19.6ms
+                                 $techmap2425945$abc$2423749$lut$aiger2423748$17695.A[5]      1 19.5ms
+                                 $techmap2425744$abc$2423749$lut$aiger2423748$19344.A[4]      1 19.5ms
+                                 $techmap2427429$abc$2423749$lut$aiger2423748$20860.A[0]     25 19.3ms
+                                 $techmap2426277$abc$2423749$lut$aiger2423748$16853.A[3]      1 19.2ms
+                                 $techmap2425649$abc$2423749$lut$aiger2423748$18812.A[4]      1 18.9ms
+                                 $techmap2425937$abc$2423749$lut$aiger2423748$17884.A[2]      1 18.8ms
+                                 $techmap2426187$abc$2423749$lut$aiger2423748$15992.A[4]      1 18.8ms
+                                 $techmap2426077$abc$2423749$lut$aiger2423748$15546.A[3]      1 18.7ms
+                                 $techmap2425904$abc$2423749$lut$aiger2423748$18100.A[5]      1 18.7ms
+                                 $techmap2425848$abc$2423749$lut$aiger2423748$17154.A[2]      1 18.6ms
+                                 $techmap2426306$abc$2423749$lut$aiger2423748$16245.A[3]      1 18.6ms
+                                 $techmap2425814$abc$2423749$lut$aiger2423748$17470.A[4]      1 18.6ms
+                                 $techmap2426227$abc$2423749$lut$aiger2423748$16533.A[2]      1 18.4ms
+                                 $techmap2425556$abc$2423749$lut$aiger2423748$19735.A[5]      1 18.3ms
+                                 $techmap2426292$abc$2423749$lut$aiger2423748$16949.A[5]      1 18.0ms
+                $techmap2426616$auto$abc_ops_reintegrate.cc:611:reintegrate$2424236.A[1]     30 18.0ms
+                                 $techmap2426284$abc$2423749$lut$aiger2423748$16901.A[3]      1 18.0ms
+                                 $techmap2426278$abc$2423749$lut$aiger2423748$16862.A[5]      1 17.9ms
+                                 $techmap2426210$abc$2423749$lut$aiger2423748$16148.A[2]      1 17.8ms
+                                 $techmap2426200$abc$2423749$lut$aiger2423748$16087.A[2]      1 17.7ms
+                                 $techmap2426303$abc$2423749$lut$aiger2423748$16218.A[2]      1 17.7ms
+                                 $techmap2425766$abc$2423749$lut$aiger2423748$19083.A[3]      1 17.7ms
+                                 $techmap2426231$abc$2423749$lut$aiger2423748$16566.A[2]      1 17.5ms
+                $techmap2426496$auto$abc_ops_reintegrate.cc:611:reintegrate$2424321.A[0]     34 17.4ms
+                                 $techmap2426097$abc$2423749$lut$aiger2423748$15686.A[3]      1 17.4ms
+                                 $techmap2426210$abc$2423749$lut$aiger2423748$16148.A[5]      1 17.4ms
+                                 $techmap2426240$abc$2423749$lut$aiger2423748$16627.A[3]      1 17.2ms
+                                 $techmap2426115$abc$2423749$lut$aiger2423748$15274.A[5]      1 17.0ms
+                                 $techmap2425851$abc$2423749$lut$aiger2423748$17173.A[3]      1 16.8ms
+                                 $techmap2426305$abc$2423749$lut$aiger2423748$16236.A[3]      1 16.8ms
+                                 $techmap2425836$abc$2423749$lut$aiger2423748$17614.A[2]      1 16.7ms
+                                 $techmap2425815$abc$2423749$lut$aiger2423748$17479.A[2]      1 16.6ms
+                                 $techmap2425575$abc$2423749$lut$aiger2423748$19825.A[4]      1 16.4ms
+                                 $techmap2425670$abc$2423749$lut$aiger2423748$19005.A[2]      1 16.4ms
+                                 $techmap2425909$abc$2423749$lut$aiger2423748$18121.A[2]      1 16.3ms
+                                 $techmap2426114$abc$2423749$lut$aiger2423748$15265.A[3]      1 16.3ms
+                $techmap2426621$auto$abc_ops_reintegrate.cc:611:reintegrate$2424233.A[1]     21 16.3ms
+                                 $techmap2425604$abc$2423749$lut$aiger2423748$20006.A[5]      1 16.3ms
+                                 $techmap2425744$abc$2423749$lut$aiger2423748$19344.A[3]      1 16.1ms
+                                 $techmap2425627$abc$2423749$lut$aiger2423748$18668.A[5]      1 16.1ms
+                                 $techmap2426308$abc$2423749$lut$aiger2423748$16263.A[4]      1 16.0ms
+                                 $techmap2426208$abc$2423749$lut$aiger2423748$16134.A[4]      1 15.9ms
+                                 $techmap2426184$abc$2423749$lut$aiger2423748$15967.A[4]      1 15.8ms
+                                 $techmap2427564$abc$2423749$lut$aiger2423748$21418.A[2]     37 15.7ms
+                $techmap2427503$auto$abc_ops_reintegrate.cc:611:reintegrate$2423900.A[5]     24 15.6ms
+                                 $techmap2425585$abc$2423749$lut$aiger2423748$19872.A[4]      1 15.6ms
+                                 $techmap2426201$abc$2423749$lut$aiger2423748$16091.A[3]      1 15.6ms
+                                 $techmap2426228$abc$2423749$lut$aiger2423748$16542.A[3]      1 15.2ms
+                                 $techmap2426326$abc$2423749$lut$aiger2423748$16398.A[2]      1 15.2ms
+                                 $techmap2425725$abc$2423749$lut$aiger2423748$19209.A[5]      1 15.1ms
+                $techmap2427489$auto$abc_ops_reintegrate.cc:611:reintegrate$2423902.A[1]     24 15.0ms
+                                 $techmap2426055$abc$2423749$lut$aiger2423748$14866.A[2]      1 14.8ms
+                                 $techmap2425706$abc$2423749$lut$aiger2423748$18533.A[3]      1 14.6ms
+                                 $techmap2426320$abc$2423749$lut$aiger2423748$16353.A[3]      1 14.6ms
+                                 $techmap2425881$abc$2423749$lut$aiger2423748$17392.A[5]      1 14.5ms
+                                 $techmap2426098$abc$2423749$lut$aiger2423748$15695.A[3]      1 14.5ms
+                                 $techmap2425951$abc$2423749$lut$aiger2423748$17719.A[3]      1 14.5ms
+                                 $techmap2426275$abc$2423749$lut$aiger2423748$16839.A[4]      1 14.4ms
+                                 $techmap2425837$abc$2423749$lut$aiger2423748$17623.A[5]      1 14.4ms
+                                 $techmap2425737$abc$2423749$lut$aiger2423748$19295.A[4]      1 14.3ms
+                                 $techmap2426243$abc$2423749$lut$aiger2423748$16644.A[2]      1 14.2ms
+                                 $techmap2425624$abc$2423749$lut$aiger2423748$18643.A[3]      1 14.2ms
+                $techmap2427595$auto$abc_ops_reintegrate.cc:611:reintegrate$2423881.A[4]     28 14.1ms
+                                 $techmap2426132$abc$2423749$lut$aiger2423748$15414.A[4]      1 14.0ms
+                                 $techmap2426188$abc$2423749$lut$aiger2423748$16001.A[3]      1 13.9ms
+                                 $techmap2425601$abc$2423749$lut$aiger2423748$19982.A[4]      1 13.8ms
+                $techmap2427295$auto$abc_ops_reintegrate.cc:611:reintegrate$2423978.A[1]     51 13.5ms
+                                 $techmap2426027$abc$2423749$lut$aiger2423748$15211.A[2]      1 13.5ms
+                                 $techmap2425673$abc$2423749$lut$aiger2423748$18902.A[4]      1 13.4ms
+                                 $techmap2425856$abc$2423749$lut$aiger2423748$17216.A[2]      1 13.4ms
+                                 $techmap2425581$abc$2423749$lut$aiger2423748$19849.A[3]      1 13.3ms
+                                       $techmap2427089$abc$2423749$lut$aiger$o10298.A[1]      2 13.2ms
+                                 $techmap2426091$abc$2423749$lut$aiger2423748$15632.A[4]      1 12.8ms
+                                 $techmap2425669$abc$2423749$lut$aiger2423748$18996.A[2]      1 12.8ms
+                                 $techmap2425745$abc$2423749$lut$aiger2423748$19353.A[3]      1 12.8ms
+                                 $techmap2425765$abc$2423749$lut$aiger2423748$19074.A[4]      1 12.7ms
+                               $abc$2423749$auto$simple.cc:210:make_patterns_logic$44979      1 12.6ms
+                                 $techmap2425855$abc$2423749$lut$aiger2423748$17207.A[2]      1 12.5ms
+                                 $techmap2425835$abc$2423749$lut$aiger2423748$17605.A[2]      1 12.5ms
+                                 $techmap2425545$abc$2423749$lut$aiger2423748$19609.A[5]      1 12.3ms
+                                 $techmap2425945$abc$2423749$lut$aiger2423748$17695.A[4]      1 12.3ms
+                                 $techmap2425868$abc$2423749$lut$aiger2423748$17306.A[4]      1 12.3ms
+                                 $techmap2426051$abc$2423749$lut$aiger2423748$14845.A[5]      1 12.2ms
+                                 $techmap2426320$abc$2423749$lut$aiger2423748$16353.A[5]      1 11.8ms
+                $techmap2427551$auto$abc_ops_reintegrate.cc:611:reintegrate$2423893.A[3]      3 11.7ms
+                                 $techmap2425672$abc$2423749$lut$aiger2423748$18893.A[3]      1 11.7ms
+                $techmap2426694$auto$abc_ops_reintegrate.cc:611:reintegrate$2424190.A[1]     35 11.5ms
+                                 $techmap2425678$abc$2423749$lut$aiger2423748$18353.A[5]      1 11.5ms
+                                 $techmap2425642$abc$2423749$lut$aiger2423748$18769.A[3]      1 11.4ms
+                                 $techmap2426241$abc$2423749$lut$aiger2423748$16631.A[2]      1 11.4ms
+                                 $techmap2425575$abc$2423749$lut$aiger2423748$19825.A[5]      1 11.4ms
+                                 $techmap2425673$abc$2423749$lut$aiger2423748$18902.A[3]      1 11.4ms
+                                           $techmap2424475$auto$ff.cc:337:slice$113260.D     40 11.3ms
+                                 $techmap2426000$abc$2423749$lut$aiger2423748$14994.A[3]      1 11.3ms
+                $techmap2426474$auto$abc_ops_reintegrate.cc:611:reintegrate$2424337.A[0]     30 11.0ms
+                $techmap2426427$auto$abc_ops_reintegrate.cc:611:reintegrate$2424257.A[1]     18 10.8ms
+                $techmap2426667$auto$abc_ops_reintegrate.cc:611:reintegrate$2424205.A[1]     34 10.8ms
+                                 $techmap2425628$abc$2423749$lut$aiger2423748$18677.A[2]      1 10.7ms
+                $techmap2427552$auto$abc_ops_reintegrate.cc:611:reintegrate$2423892.A[0]     24 10.7ms
+                $techmap2426711$auto$abc_ops_reintegrate.cc:611:reintegrate$2424183.A[1]     36 10.7ms
+                $techmap2426596$auto$abc_ops_reintegrate.cc:611:reintegrate$2424251.A[1]     28 10.6ms
+                                            $auto$alumacc.cc:548:replace_alu$55745.Y[11]      2 10.6ms
+                                       $techmap2427529$abc$2423749$lut$aiger$o17344.A[0]     37 10.5ms
+                $techmap2426478$auto$abc_ops_reintegrate.cc:611:reintegrate$2424334.A[0]     18 10.5ms
+                                 $techmap2426286$abc$2423749$lut$aiger2423748$16911.A[4]      1 10.4ms
+                                 $techmap2425587$abc$2423749$lut$aiger2423748$19890.A[3]      1 10.4ms
+                                 $techmap2426246$abc$2423749$lut$aiger2423748$16664.A[3]      1 10.3ms
+                                                                                 any_bad      1 10.3ms
+                                 $techmap2425893$abc$2423749$lut$aiger2423748$18019.A[5]      1 10.3ms
+                $techmap2427478$auto$abc_ops_reintegrate.cc:611:reintegrate$2423903.A[0]     20 10.3ms
+                                 $techmap2426244$abc$2423749$lut$aiger2423748$16653.A[3]      1 10.3ms
+                                       $techmap2428658$abc$2423749$lut$aiger$o17461.A[1]     33 10.2ms
+                                            $techmap2424870$auto$ff.cc:337:slice$86406.D     33 10.1ms
+                                 $techmap2426183$abc$2423749$lut$aiger2423748$15958.A[3]      1 10.1ms
+                                 $techmap2426287$abc$2423749$lut$aiger2423748$16916.A[2]      1 10.1ms
+                $techmap2426571$auto$abc_ops_reintegrate.cc:611:reintegrate$2424270.A[1]     18 10.0ms
+                                 $techmap2425761$abc$2423749$lut$aiger2423748$19050.A[2]      1 10.0ms
+                                 $techmap2425707$abc$2423749$lut$aiger2423748$18542.A[3]      1 9.9ms
+                                                                $abc$2423749$aiger$o3106      8 9.8ms
+                                 $techmap2425648$abc$2423749$lut$aiger2423748$18803.A[3]      1 9.8ms
+                $techmap2427689$auto$abc_ops_reintegrate.cc:611:reintegrate$2423831.A[4]     18 9.8ms
+                $techmap2427434$auto$abc_ops_reintegrate.cc:611:reintegrate$2423917.A[0]     24 9.7ms
+                                 $techmap2426324$abc$2423749$lut$aiger2423748$16383.A[5]      1 9.7ms
+                                 $techmap2426285$abc$2423749$lut$aiger2423748$16906.A[2]      1 9.7ms
+                                 $techmap2425546$abc$2423749$lut$aiger2423748$19618.A[3]      1 9.7ms
+                $techmap2427581$auto$abc_ops_reintegrate.cc:611:reintegrate$2423887.A[3]     33 9.6ms
+                                 $techmap2425866$abc$2423749$lut$aiger2423748$17288.A[5]      1 9.5ms
+                                 $techmap2426132$abc$2423749$lut$aiger2423748$15414.A[5]      1 9.4ms
+                                 $techmap2426131$abc$2423749$lut$aiger2423748$15405.A[5]      1 9.4ms
+                                 $techmap2425880$abc$2423749$lut$aiger2423748$17383.A[5]      1 9.3ms
+                                 $techmap2426310$abc$2423749$lut$aiger2423748$16281.A[3]      1 9.2ms
+                $techmap2427516$auto$abc_ops_reintegrate.cc:611:reintegrate$2423898.A[0]     34 9.2ms
+                                 $techmap2426098$abc$2423749$lut$aiger2423748$15695.A[5]      1 9.2ms
+                                 $techmap2425815$abc$2423749$lut$aiger2423748$17479.A[4]      1 9.1ms
+                                 $techmap2425904$abc$2423749$lut$aiger2423748$18100.A[2]      1 8.9ms
+                $techmap2426677$auto$abc_ops_reintegrate.cc:611:reintegrate$2424199.A[1]     36 8.9ms
+                                 $techmap2425604$abc$2423749$lut$aiger2423748$20006.A[4]      1 8.7ms
+                $techmap2426448$auto$abc_ops_reintegrate.cc:611:reintegrate$2424227.A[2]     29 8.6ms
+                $techmap2426460$auto$abc_ops_reintegrate.cc:611:reintegrate$2424344.A[1]     30 8.6ms
+                $techmap2426522$auto$abc_ops_reintegrate.cc:611:reintegrate$2424302.A[1]     19 8.6ms
+                                            $techmap2424803$auto$ff.cc:337:slice$86571.D     33 8.5ms
+                                 $techmap2426010$abc$2423749$lut$aiger2423748$15071.A[3]      1 8.5ms
+                                 $techmap2425605$abc$2423749$lut$aiger2423748$20015.A[4]      1 8.4ms
+                                 $techmap2426287$abc$2423749$lut$aiger2423748$16916.A[3]      1 8.4ms
+                                 $techmap2426291$abc$2423749$lut$aiger2423748$16940.A[2]      1 8.4ms
+                                 $techmap2426260$abc$2423749$lut$aiger2423748$16758.A[4]      1 8.2ms
+                                 $techmap2426016$abc$2423749$lut$aiger2423748$15125.A[2]      1 8.2ms
+                $techmap2426487$auto$abc_ops_reintegrate.cc:611:reintegrate$2424329.A[0]     15 8.0ms
+                                 $techmap2425630$abc$2423749$lut$aiger2423748$18695.A[2]      1 8.0ms
+                                 $techmap2426292$abc$2423749$lut$aiger2423748$16949.A[4]      1 8.0ms
+                $techmap2427531$auto$abc_ops_reintegrate.cc:611:reintegrate$2423894.A[2]     33 8.0ms
+                                                                               heartbeat      2 8.0ms
+                                 $techmap2425649$abc$2423749$lut$aiger2423748$18812.A[5]      1 8.0ms
+                $techmap2427439$auto$abc_ops_reintegrate.cc:611:reintegrate$2423916.A[0]     13 8.0ms
+                                       $techmap2428813$abc$2423749$lut$aiger$o16851.A[1]     32 7.9ms
+                                 $techmap2425548$abc$2423749$lut$aiger2423748$19633.A[3]     30 7.9ms
+                                 $techmap2425867$abc$2423749$lut$aiger2423748$17297.A[5]      1 7.9ms
+                                 $techmap2425836$abc$2423749$lut$aiger2423748$17614.A[5]      1 7.9ms
+                                 $techmap2425681$abc$2423749$lut$aiger2423748$18380.A[2]      1 7.8ms
+                                 $techmap2426239$abc$2423749$lut$aiger2423748$16623.A[2]      1 7.8ms
+                $techmap2426636$auto$abc_ops_reintegrate.cc:611:reintegrate$2424222.A[1]     29 7.8ms
+                $techmap2426437$auto$abc_ops_reintegrate.cc:611:reintegrate$2424242.A[2]     29 7.7ms
+                $techmap2427474$auto$abc_ops_reintegrate.cc:611:reintegrate$2423905.A[0]     34 7.7ms
+                                 $techmap2426240$abc$2423749$lut$aiger2423748$16627.A[2]      1 7.7ms
+                $techmap2426460$auto$abc_ops_reintegrate.cc:611:reintegrate$2424344.A[2]     25 7.7ms
+                                 $techmap2425894$abc$2423749$lut$aiger2423748$18028.A[2]      1 7.6ms
+                                 $techmap2425670$abc$2423749$lut$aiger2423748$19005.A[5]      1 7.6ms
+                                 $techmap2425937$abc$2423749$lut$aiger2423748$17884.A[5]      1 7.6ms
+                                 $techmap2425726$abc$2423749$lut$aiger2423748$19218.A[3]      1 7.5ms
+                                 $techmap2425856$abc$2423749$lut$aiger2423748$17216.A[4]      1 7.5ms
+                                 $techmap2425648$abc$2423749$lut$aiger2423748$18803.A[4]      1 7.4ms
+                                 $techmap2425672$abc$2423749$lut$aiger2423748$18893.A[5]      1 7.4ms
+                                 $techmap2426199$abc$2423749$lut$aiger2423748$16083.A[2]      1 7.4ms
+                                 $techmap2426324$abc$2423749$lut$aiger2423748$16383.A[3]      1 7.4ms
+                                 $techmap2426087$abc$2423749$lut$aiger2423748$15608.A[2]      1 7.4ms
+                                 $techmap2425938$abc$2423749$lut$aiger2423748$17893.A[4]      1 7.3ms
+                $techmap2426448$auto$abc_ops_reintegrate.cc:611:reintegrate$2424227.A[1]     22 7.2ms
+                                 $techmap2426098$abc$2423749$lut$aiger2423748$15695.A[2]      1 7.1ms
+                $techmap2426469$auto$abc_ops_reintegrate.cc:611:reintegrate$2424340.A[3]     12 7.1ms
+                                 $techmap2425559$abc$2423749$lut$aiger2423748$19762.A[2]      1 7.1ms
+                                 $techmap2426243$abc$2423749$lut$aiger2423748$16644.A[5]      1 7.0ms
+                $techmap2426642$auto$abc_ops_reintegrate.cc:611:reintegrate$2424219.A[1]     21 7.0ms
+                                        $techmap2428085$abc$2423749$lut$aiger$o1830.A[3]     16 7.0ms
+                                 $techmap2426140$abc$2423749$lut$aiger2423748$15466.A[3]      1 7.0ms
+                                                                 $abc$2423749$aiger$o142      8 6.9ms
+                                 $techmap2426278$abc$2423749$lut$aiger2423748$16862.A[4]      1 6.9ms
+                                 $techmap2425744$abc$2423749$lut$aiger2423748$19344.A[5]      1 6.9ms
+                $techmap2426555$auto$abc_ops_reintegrate.cc:611:reintegrate$2424283.A[1]     17 6.9ms
+                                                                $abc$2423749$aiger$o4150      8 6.9ms
+                $techmap2426497$auto$abc_ops_reintegrate.cc:611:reintegrate$2424320.A[0]     16 6.8ms
+                $techmap2426723$auto$abc_ops_reintegrate.cc:611:reintegrate$2424175.A[0]      8 6.7ms
+                                 $techmap2425855$abc$2423749$lut$aiger2423748$17207.A[5]      1 6.7ms
+                                 $techmap2425765$abc$2423749$lut$aiger2423748$19074.A[5]      1 6.7ms
+                                 $techmap2426103$abc$2423749$lut$aiger2423748$15736.A[4]      1 6.7ms
+                                                                $abc$2423749$aiger$o2645      8 6.6ms
+                                 $techmap2426327$abc$2423749$lut$aiger2423748$16407.A[4]      1 6.6ms
+                $techmap2426716$auto$abc_ops_reintegrate.cc:611:reintegrate$2424181.A[1]     22 6.6ms
+                                                                   $abc$2423749$aiger$o7      1 6.6ms
+                $techmap2426508$auto$abc_ops_reintegrate.cc:611:reintegrate$2424312.A[1]     18 6.6ms
+                                 $techmap2427399$abc$2423749$lut$aiger2423748$13032.A[0]      9 6.6ms
+                                       $techmap2428194$abc$2423749$lut$aiger$o17760.A[2]     17 6.6ms
+                                 $techmap2426033$abc$2423749$lut$aiger2423748$14697.A[3]      1 6.5ms
+                $techmap2426427$auto$abc_ops_reintegrate.cc:611:reintegrate$2424257.A[2]     26 6.5ms
+                $techmap2427514$auto$abc_ops_reintegrate.cc:611:reintegrate$2423899.A[1]     33 6.5ms
+                $techmap2427423$auto$abc_ops_reintegrate.cc:611:reintegrate$2423921.A[1]      7 6.4ms
+                                 $techmap2425746$abc$2423749$lut$aiger2423748$19362.A[2]      1 6.4ms
+                                 $techmap2426308$abc$2423749$lut$aiger2423748$16263.A[2]      1 6.4ms
+                                                                $abc$2423749$aiger$o6917     19 6.4ms
+                                 $techmap2425851$abc$2423749$lut$aiger2423748$17173.A[2]      1 6.3ms
+                                                                                run_done      1 6.3ms
+                $techmap2426547$auto$abc_ops_reintegrate.cc:611:reintegrate$2424289.A[0]     23 6.3ms
+                                 $techmap2427400$abc$2423749$lut$aiger2423748$13054.A[1]     10 6.3ms
+                                 $techmap2426323$abc$2423749$lut$aiger2423748$16374.A[2]      1 6.2ms
+                                 $techmap2427441$abc$2423749$lut$aiger2423748$20921.A[3]      1 6.2ms
+                $techmap2426559$auto$abc_ops_reintegrate.cc:611:reintegrate$2424280.A[0]     22 6.2ms
+                                 $techmap2425895$abc$2423749$lut$aiger2423748$18037.A[2]      1 6.2ms
+                                 $techmap2426227$abc$2423749$lut$aiger2423748$16533.A[3]      1 6.1ms
+                                 $techmap2426199$abc$2423749$lut$aiger2423748$16083.A[4]      1 6.1ms
+                                                                $abc$2423749$aiger$o4151      8 6.1ms
+                                 $techmap2426122$abc$2423749$lut$aiger2423748$15327.A[3]      1 6.0ms
+                                 $techmap2425866$abc$2423749$lut$aiger2423748$17288.A[3]      1 6.0ms
+                                 $techmap2426051$abc$2423749$lut$aiger2423748$14845.A[2]      1 6.0ms
+                                 $techmap2426084$abc$2423749$lut$aiger2423748$15593.A[3]      1 6.0ms
+                                 $techmap2425767$abc$2423749$lut$aiger2423748$19092.A[5]      1 6.0ms
+                                 $techmap2425880$abc$2423749$lut$aiger2423748$17383.A[2]      1 6.0ms
+                                 $techmap2425628$abc$2423749$lut$aiger2423748$18677.A[5]      1 6.0ms
+                                                                $abc$2423749$aiger$o3107      8 6.0ms
+                                 $techmap2427399$abc$2423749$lut$aiger2423748$13032.A[1]      9 6.0ms
+                                 $techmap2425836$abc$2423749$lut$aiger2423748$17614.A[4]      1 5.9ms
+                                                                $abc$2423749$aiger$o2178      8 5.9ms
+                                 $techmap2425744$abc$2423749$lut$aiger2423748$19344.A[2]      1 5.9ms
+                                 $techmap2425674$abc$2423749$lut$aiger2423748$18911.A[4]      1 5.8ms
+                                 $techmap2425938$abc$2423749$lut$aiger2423748$17893.A[5]      1 5.8ms
+                $techmap2426601$auto$abc_ops_reintegrate.cc:611:reintegrate$2424248.A[1]     21 5.8ms
+                                 $techmap2425650$abc$2423749$lut$aiger2423748$18821.A[4]      1 5.8ms
+                                 $techmap2425623$abc$2423749$lut$aiger2423748$18634.A[2]      1 5.8ms
+                                 $techmap2426248$abc$2423749$lut$aiger2423748$16674.A[3]      1 5.8ms
+                $techmap2426684$auto$abc_ops_reintegrate.cc:611:reintegrate$2424196.A[1]     22 5.7ms
+                $techmap2426516$auto$abc_ops_reintegrate.cc:611:reintegrate$2424305.A[1]     16 5.7ms
+                                 $techmap2425585$abc$2423749$lut$aiger2423748$19872.A[2]      1 5.7ms
+                $techmap2426437$auto$abc_ops_reintegrate.cc:611:reintegrate$2424242.A[1]     22 5.7ms
+                                 $techmap2425556$abc$2423749$lut$aiger2423748$19735.A[3]      1 5.7ms
+                                 $techmap2427343$abc$2423749$lut$aiger2423748$13514.A[1]     11 5.6ms
+                                                                $abc$2423749$aiger$o2181      8 5.6ms
+                $techmap2425677$auto$abc_ops_reintegrate.cc:611:reintegrate$2424432.A[2]     33 5.6ms
+                                 $techmap2427372$abc$2423749$lut$aiger2423748$13988.A[0]     10 5.5ms
+                                 $techmap2425737$abc$2423749$lut$aiger2423748$19295.A[3]      1 5.5ms
+                                 $techmap2426187$abc$2423749$lut$aiger2423748$15992.A[3]      1 5.5ms
+                                 $techmap2425880$abc$2423749$lut$aiger2423748$17383.A[3]      1 5.5ms
+                               $abc$2423749$auto$simple.cc:210:make_patterns_logic$45132     31 5.4ms
+                                 $techmap2426207$abc$2423749$lut$aiger2423748$16129.A[3]      1 5.4ms
+                                 $techmap2426033$abc$2423749$lut$aiger2423748$14697.A[4]      1 5.3ms
+                                 $techmap2426222$abc$2423749$lut$aiger2423748$16498.A[3]      1 5.3ms
+                                        $techmap2428053$abc$2423749$lut$aiger$o4150.A[2]     12 5.3ms
+                $techmap2426704$auto$abc_ops_reintegrate.cc:611:reintegrate$2424186.A[1]     20 5.3ms
+                                 $techmap2426228$abc$2423749$lut$aiger2423748$16542.A[2]      1 5.3ms
+                $techmap2427394$auto$abc_ops_reintegrate.cc:611:reintegrate$2423931.A[1]     13 5.3ms
+                                 $techmap2426017$abc$2423749$lut$aiger2423748$15134.A[2]      1 5.2ms
+                                 $techmap2425816$abc$2423749$lut$aiger2423748$17488.A[5]      1 5.2ms
+                                 $techmap2426140$abc$2423749$lut$aiger2423748$15466.A[5]      1 5.2ms
+                $techmap2427817$auto$abc_ops_reintegrate.cc:611:reintegrate$2423776.A[1]      6 5.2ms
+                                 $techmap2425819$abc$2423749$lut$aiger2423748$17512.A[5]      1 5.2ms
+                $techmap2427403$auto$abc_ops_reintegrate.cc:611:reintegrate$2423928.A[0]      7 5.2ms
+                $techmap2426672$auto$abc_ops_reintegrate.cc:611:reintegrate$2424202.A[2]     22 5.2ms
+                                                                $abc$2423749$aiger$o1830      8 5.2ms
+                                                                $abc$2423749$aiger$o7973     11 5.1ms
+                                 $techmap2425766$abc$2423749$lut$aiger2423748$19083.A[5]      1 5.1ms
+                                 $techmap2426229$abc$2423749$lut$aiger2423748$16551.A[4]      1 5.1ms
+                                 $techmap2425951$abc$2423749$lut$aiger2423748$17719.A[2]      1 5.1ms
+                                 $techmap2426235$abc$2423749$lut$aiger2423748$16597.A[3]      1 5.0ms
+                                 $techmap2425892$abc$2423749$lut$aiger2423748$18010.A[5]      1 5.0ms
+                                 $techmap2425678$abc$2423749$lut$aiger2423748$18353.A[2]      1 5.0ms
+                                 $techmap2426005$abc$2423749$lut$aiger2423748$15035.A[2]      1 5.0ms
+                                 $techmap2426266$abc$2423749$lut$aiger2423748$16784.A[2]      1 5.0ms
+                $techmap2426568$auto$abc_ops_reintegrate.cc:611:reintegrate$2424273.A[1]     20 5.0ms
+                $techmap2427839$auto$abc_ops_reintegrate.cc:611:reintegrate$2423756.A[1]      7 5.0ms
+                                 $techmap2425941$abc$2423749$lut$aiger2423748$17917.A[2]      1 5.0ms
+                                 $techmap2425627$abc$2423749$lut$aiger2423748$18668.A[4]      1 5.0ms
+                $techmap2426509$auto$abc_ops_reintegrate.cc:611:reintegrate$2424311.A[0]     16 5.0ms
+                $techmap2426469$auto$abc_ops_reintegrate.cc:611:reintegrate$2424340.A[2]     13 4.9ms
+                $techmap2426015$auto$abc_ops_reintegrate.cc:611:reintegrate$2424388.A[3]     15 4.9ms
+                                                                $abc$2423749$aiger$o7120      8 4.9ms
+                                 $techmap2426034$abc$2423749$lut$aiger2423748$14706.A[4]      1 4.9ms
+                                       $techmap2428859$abc$2423749$lut$aiger$o17353.A[1]     19 4.9ms
+                                                                $abc$2423749$aiger$o4152      8 4.9ms
+                                 $techmap2426078$abc$2423749$lut$aiger2423748$15555.A[4]      1 4.9ms
+                                 $techmap2425855$abc$2423749$lut$aiger2423748$17207.A[4]      1 4.9ms
+                                 $techmap2425765$abc$2423749$lut$aiger2423748$19074.A[3]      1 4.8ms
+                                 $techmap2426005$abc$2423749$lut$aiger2423748$15035.A[5]      1 4.8ms
+                                 $techmap2427341$abc$2423749$lut$aiger2423748$13492.A[0]     10 4.8ms
+                                 $techmap2425606$abc$2423749$lut$aiger2423748$20024.A[3]      1 4.8ms
+                $techmap2426528$auto$abc_ops_reintegrate.cc:611:reintegrate$2424299.A[1]     15 4.8ms
+                $techmap2427473$auto$abc_ops_reintegrate.cc:611:reintegrate$2423906.A[0]     10 4.7ms
+                                        $techmap2428046$abc$2423749$lut$aiger$o1482.A[3]     16 4.7ms
+                $techmap2426581$auto$abc_ops_reintegrate.cc:611:reintegrate$2424263.A[2]     18 4.7ms
+                $techmap2426541$auto$abc_ops_reintegrate.cc:611:reintegrate$2424292.A[1]     15 4.7ms
+                $techmap2427345$auto$abc_ops_reintegrate.cc:611:reintegrate$2423950.A[3]      8 4.6ms
+                                 $techmap2426444$abc$2423749$lut$aiger2423748$19463.A[1]     12 4.6ms
+                $techmap2427345$auto$abc_ops_reintegrate.cc:611:reintegrate$2423950.A[2]      8 4.6ms
+                                 $techmap2425945$abc$2423749$lut$aiger2423748$17695.A[2]      1 4.6ms
+                                 $techmap2425814$abc$2423749$lut$aiger2423748$17470.A[2]      1 4.6ms
+                                                                $abc$2423749$aiger$o4498      8 4.5ms
+                $techmap2427840$auto$abc_ops_reintegrate.cc:611:reintegrate$2423755.A[0]      6 4.5ms
+                $techmap2426504$auto$abc_ops_reintegrate.cc:611:reintegrate$2424316.A[1]     15 4.5ms
+                                 $techmap2425868$abc$2423749$lut$aiger2423748$17306.A[3]      1 4.5ms
+                                 $techmap2425629$abc$2423749$lut$aiger2423748$18686.A[3]      1 4.5ms
+                $techmap2427772$auto$abc_ops_reintegrate.cc:611:reintegrate$2423799.A[1]      6 4.5ms
+                                 $techmap2426120$abc$2423749$lut$aiger2423748$15315.A[3]      1 4.5ms
+                                 $techmap2425679$abc$2423749$lut$aiger2423748$18362.A[4]      1 4.4ms
+                                 $techmap2425602$abc$2423749$lut$aiger2423748$19991.A[3]      1 4.4ms
+                                 $techmap2426052$abc$2423749$lut$aiger2423748$14854.A[5]      1 4.3ms
+                                 $techmap2425727$abc$2423749$lut$aiger2423748$19227.A[5]      1 4.3ms
+                                 $techmap2427400$abc$2423749$lut$aiger2423748$13054.A[0]     10 4.3ms
+                                 $techmap2426389$abc$2423749$lut$aiger2423748$15916.A[3]     15 4.3ms
+                                 $techmap2425652$abc$2423749$lut$aiger2423748$18836.A[2]      1 4.3ms
+                                 $techmap2425706$abc$2423749$lut$aiger2423748$18533.A[2]      1 4.3ms
+                $techmap2426512$auto$abc_ops_reintegrate.cc:611:reintegrate$2424308.A[1]     16 4.3ms
+                $techmap2427608$auto$abc_ops_reintegrate.cc:611:reintegrate$2423875.A[0]      5 4.3ms
+                                 $techmap2426132$abc$2423749$lut$aiger2423748$15414.A[2]      1 4.3ms
+                $techmap2426404$auto$abc_ops_reintegrate.cc:611:reintegrate$2424339.A[4]      8 4.3ms
+                $techmap2425789$auto$abc_ops_reintegrate.cc:611:reintegrate$2424422.A[0]     11 4.2ms
+                                 $techmap2426078$abc$2423749$lut$aiger2423748$15555.A[2]      1 4.2ms
+                $techmap2426535$auto$abc_ops_reintegrate.cc:611:reintegrate$2424295.A[1]     17 4.2ms
+                $techmap2425791$auto$abc_ops_reintegrate.cc:611:reintegrate$2424421.A[0]     12 4.2ms
+                                 $techmap2425814$abc$2423749$lut$aiger2423748$17470.A[5]      1 4.2ms
+                                                                 $abc$2423749$aiger$o143      8 4.2ms
+                                 $techmap2425697$abc$2423749$lut$aiger2423748$18467.A[3]      1 4.2ms
+                                 $techmap2427483$abc$2423749$lut$aiger2423748$13972.A[2]     13 4.1ms
+                                                                $abc$2423749$aiger$o4153      8 4.1ms
+                                 $techmap2427398$abc$2423749$lut$aiger2423748$13047.A[1]      8 4.1ms
+                                                                $abc$2423749$aiger$o1833      8 4.1ms
+                                 $techmap2426374$abc$2423749$lut$aiger2423748$17067.A[4]     11 4.0ms
+                $techmap2426510$auto$abc_ops_reintegrate.cc:611:reintegrate$2424310.A[2]      4 4.0ms
+                                 $techmap2426022$abc$2423749$lut$aiger2423748$15175.A[3]      1 4.0ms
+                $techmap2427376$auto$abc_ops_reintegrate.cc:611:reintegrate$2423938.A[0]      8 4.0ms
+                                 $techmap2426210$abc$2423749$lut$aiger2423748$16148.A[3]      1 4.0ms
+                $techmap2427587$auto$abc_ops_reintegrate.cc:611:reintegrate$2423886.A[1]      5 4.0ms
+                                                                $abc$2423749$aiger$o1832      8 4.0ms
+                                 $techmap2426025$abc$2423749$lut$aiger2423748$15196.A[4]      1 4.0ms
+                                 $techmap2426329$abc$2423749$lut$aiger2423748$16425.A[2]      1 4.0ms
+                                 $techmap2426018$abc$2423749$lut$aiger2423748$15143.A[5]      1 4.0ms
+                $techmap2426350$auto$abc_ops_reintegrate.cc:611:reintegrate$2424355.A[0]      9 4.0ms
+                                 $techmap2425745$abc$2423749$lut$aiger2423748$19353.A[4]      1 4.0ms
+                $techmap2427403$auto$abc_ops_reintegrate.cc:611:reintegrate$2423928.A[3]      8 3.9ms
+                                 $techmap2425675$abc$2423749$lut$aiger2423748$18920.A[3]      1 3.9ms
+                                                                              line_b[35]      1 3.9ms
+                                 $techmap2425544$abc$2423749$lut$aiger2423748$19600.A[2]      1 3.9ms
+                $techmap2427759$auto$abc_ops_reintegrate.cc:611:reintegrate$2423804.A[2]      7 3.9ms
+                $techmap2426400$auto$abc_ops_reintegrate.cc:611:reintegrate$2424332.A[2]      8 3.9ms
+                                 $techmap2426007$abc$2423749$lut$aiger2423748$15047.A[3]      1 3.9ms
+                                 $techmap2426039$abc$2423749$lut$aiger2423748$14747.A[2]      1 3.9ms
+                                 $techmap2426116$abc$2423749$lut$aiger2423748$15283.A[5]      1 3.9ms
+                $techmap2427837$auto$abc_ops_reintegrate.cc:611:reintegrate$2423758.A[0]      9 3.8ms
+                                 $techmap2426001$abc$2423749$lut$aiger2423748$15003.A[2]      1 3.8ms
+                $techmap2427840$auto$abc_ops_reintegrate.cc:611:reintegrate$2423755.A[2]      7 3.8ms
+                                 $techmap2426080$abc$2423749$lut$aiger2423748$15573.A[2]      1 3.8ms
+                                 $techmap2426235$abc$2423749$lut$aiger2423748$16597.A[4]      1 3.8ms
+                $techmap2427345$auto$abc_ops_reintegrate.cc:611:reintegrate$2423950.A[0]     13 3.8ms
+                                 $techmap2426313$abc$2423749$lut$aiger2423748$16305.A[4]      1 3.8ms
+                                 $techmap2425547$abc$2423749$lut$aiger2423748$19627.A[2]      1 3.8ms
+                $techmap2426806$auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.A[1]      6 3.8ms
+                $techmap2427345$auto$abc_ops_reintegrate.cc:611:reintegrate$2423950.A[1]     13 3.8ms
+                                 $techmap2425898$abc$2423749$lut$aiger2423748$18061.A[4]      1 3.8ms
+                                                                $abc$2423749$aiger$o1831      8 3.8ms
+                $techmap2425493$auto$abc_ops_reintegrate.cc:611:reintegrate$2424471.A[0]      5 3.7ms
+                                                                 $abc$2423749$aiger$o902      8 3.7ms
+                $techmap2426352$auto$abc_ops_reintegrate.cc:611:reintegrate$2424354.A[0]     12 3.7ms
+                $techmap2427322$auto$abc_ops_reintegrate.cc:611:reintegrate$2423959.A[1]      7 3.7ms
+                                 $techmap2426289$abc$2423749$lut$aiger2423748$16926.A[3]      1 3.7ms
+                                 $techmap2426250$abc$2423749$lut$aiger2423748$16688.A[3]      1 3.7ms
+                                                     genblk2.slot0_d5d2.eng.mem_b3[0][4]      1 3.7ms
+                                 $techmap2426230$abc$2423749$lut$aiger2423748$16560.A[2]      1 3.7ms
+                $techmap2427376$auto$abc_ops_reintegrate.cc:611:reintegrate$2423938.A[2]      5 3.7ms
+                                 $techmap2425893$abc$2423749$lut$aiger2423748$18019.A[4]      1 3.7ms
+                $techmap2426015$auto$abc_ops_reintegrate.cc:611:reintegrate$2424388.A[2]     24 3.7ms
+                                                                $abc$2423749$aiger$o2643      8 3.7ms
+                                        $techmap2428085$abc$2423749$lut$aiger$o1830.A[2]     12 3.7ms
+                                                                $abc$2423749$aiger$o6919      5 3.7ms
+                                 $techmap2425936$abc$2423749$lut$aiger2423748$17875.A[2]      1 3.6ms
+                $techmap2427322$auto$abc_ops_reintegrate.cc:611:reintegrate$2423959.A[5]      2 3.6ms
+                                                                $abc$2423749$aiger$o2642      8 3.6ms
+                                             $auto$alumacc.cc:548:replace_alu$55745.Y[4]      2 3.6ms
+                                 $techmap2425646$abc$2423749$lut$aiger2423748$18789.A[3]      1 3.6ms
+                $techmap2427837$auto$abc_ops_reintegrate.cc:611:reintegrate$2423758.A[1]      9 3.6ms
+                $techmap2427473$auto$abc_ops_reintegrate.cc:611:reintegrate$2423906.A[1]     10 3.6ms
+                                                       genblk2.slot0_d5d2.eng.r_addr[13]      4 3.6ms
+                                 $techmap2426051$abc$2423749$lut$aiger2423748$14845.A[3]      1 3.6ms
+                                 $techmap2425697$abc$2423749$lut$aiger2423748$18467.A[5]      1 3.6ms
+                                 $techmap2426133$abc$2423749$lut$aiger2423748$15423.A[5]      1 3.5ms
+                                 $techmap2426052$abc$2423749$lut$aiger2423748$14854.A[2]      1 3.5ms
+                                 $techmap2426099$abc$2423749$lut$aiger2423748$15704.A[2]      1 3.5ms
+                                 $techmap2425840$abc$2423749$lut$aiger2423748$17647.A[3]      1 3.5ms
+                $techmap2427321$auto$abc_ops_reintegrate.cc:611:reintegrate$2423960.A[0]      9 3.5ms
+                $techmap2427806$auto$abc_ops_reintegrate.cc:611:reintegrate$2423787.A[4]      8 3.5ms
+                $techmap2426015$auto$abc_ops_reintegrate.cc:611:reintegrate$2424388.A[4]     16 3.5ms
+                                 $techmap2426292$abc$2423749$lut$aiger2423748$16949.A[3]      1 3.5ms
+                $techmap2426557$auto$abc_ops_reintegrate.cc:611:reintegrate$2424281.A[0]      8 3.5ms
+                $techmap2427551$auto$abc_ops_reintegrate.cc:611:reintegrate$2423893.A[0]      7 3.5ms
+                $techmap2426797$auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.A[1]      4 3.5ms
+                                                                $abc$2423749$aiger$o3108      8 3.5ms
+                                 $techmap2427557$abc$2423749$lut$aiger2423748$21413.A[0]      3 3.5ms
+                                 $techmap2426327$abc$2423749$lut$aiger2423748$16407.A[5]      1 3.5ms
+                                 $techmap2426446$abc$2423749$lut$aiger2423748$19469.A[3]     11 3.5ms
+                $techmap2427832$auto$abc_ops_reintegrate.cc:611:reintegrate$2423761.A[0]      7 3.5ms
+                $techmap2427394$auto$abc_ops_reintegrate.cc:611:reintegrate$2423931.A[0]     13 3.5ms
+                                 $techmap2427373$abc$2423749$lut$aiger2423748$14003.A[1]      9 3.5ms
+                $techmap2426576$auto$abc_ops_reintegrate.cc:611:reintegrate$2424266.A[1]     19 3.4ms
+                                                                $abc$2423749$aiger$o8694      3 3.4ms
+                                 $techmap2427493$abc$2423749$lut$aiger2423748$20121.A[3]      3 3.4ms
+                $techmap2426963$auto$abc_ops_reintegrate.cc:611:reintegrate$2424078.A[0]      3 3.4ms
+                                                                $abc$2423749$aiger$o2180      8 3.4ms
+                $techmap2425985$auto$abc_ops_reintegrate.cc:611:reintegrate$2424397.A[0]      9 3.4ms
+                $techmap2426347$auto$abc_ops_reintegrate.cc:611:reintegrate$2424356.A[0]     10 3.4ms
+                $techmap2427819$auto$abc_ops_reintegrate.cc:611:reintegrate$2423774.A[0]      6 3.4ms
+                                                                $abc$2423749$aiger$o4846      8 3.4ms
+                                 $techmap2425750$abc$2423749$lut$aiger2423748$19395.A[2]      1 3.4ms
+                                 $techmap2426004$abc$2423749$lut$aiger2423748$15026.A[2]      1 3.4ms
+                                 $techmap2427368$abc$2423749$lut$aiger2423748$13851.A[1]      6 3.4ms
+                                                                $abc$2423749$aiger$o2179      8 3.4ms
+                $techmap2427807$auto$abc_ops_reintegrate.cc:611:reintegrate$2423786.A[3]      8 3.4ms
+                                 $techmap2426080$abc$2423749$lut$aiger2423748$15573.A[5]      1 3.4ms
+                $techmap2427833$auto$abc_ops_reintegrate.cc:611:reintegrate$2423760.A[0]      8 3.4ms
+                $techmap2427473$auto$abc_ops_reintegrate.cc:611:reintegrate$2423906.A[2]     11 3.4ms
+                                 $techmap2425672$abc$2423749$lut$aiger2423748$18893.A[4]      1 3.4ms
+                $techmap2427801$auto$abc_ops_reintegrate.cc:611:reintegrate$2423789.A[0]      8 3.4ms
+                                 $techmap2426024$abc$2423749$lut$aiger2423748$15187.A[3]      1 3.4ms
+                $techmap2427723$auto$abc_ops_reintegrate.cc:611:reintegrate$2423818.A[0]      4 3.3ms
+                $techmap2427754$auto$abc_ops_reintegrate.cc:611:reintegrate$2423806.A[1]      5 3.3ms
+                                 $techmap2426375$abc$2423749$lut$aiger2423748$17141.A[0]      9 3.3ms
+                                 $techmap2425725$abc$2423749$lut$aiger2423748$19209.A[4]      1 3.3ms
+                $techmap2427759$auto$abc_ops_reintegrate.cc:611:reintegrate$2423804.A[0]      8 3.3ms
+                                 $techmap2426000$abc$2423749$lut$aiger2423748$14994.A[4]      1 3.3ms
+                $techmap2426489$auto$abc_ops_reintegrate.cc:611:reintegrate$2424328.A[0]      9 3.3ms
+                $techmap2427826$auto$abc_ops_reintegrate.cc:611:reintegrate$2423767.A[1]      7 3.3ms
+                                 $techmap2426196$abc$2423749$lut$aiger2423748$16066.A[5]      1 3.3ms
+                                 $techmap2425679$abc$2423749$lut$aiger2423748$18362.A[2]      1 3.3ms
+                                 $techmap2426140$abc$2423749$lut$aiger2423748$15466.A[2]      1 3.3ms
+                                 $techmap2425680$abc$2423749$lut$aiger2423748$18371.A[2]      1 3.3ms
+                                                                $abc$2423749$aiger$o3109      8 3.3ms
+                                            $auto$alumacc.cc:548:replace_alu$55745.Y[24]      2 3.3ms
+                                 $techmap2425741$abc$2423749$lut$aiger2423748$19320.A[5]      1 3.2ms
+                $techmap2425514$auto$abc_ops_reintegrate.cc:611:reintegrate$2424450.A[0]      4 3.2ms
+                $techmap2426520$auto$abc_ops_reintegrate.cc:611:reintegrate$2424303.A[0]      9 3.2ms
+                               $abc$2423749$auto$simple.cc:210:make_patterns_logic$44883      2 3.2ms
+                                 $techmap2426454$abc$2423749$lut$aiger2423748$19504.A[2]     10 3.2ms
+                                                                $abc$2423749$aiger$o4962      8 3.2ms
+                                 $techmap2428224$abc$2423749$lut$aiger2423748$20625.A[2]      1 3.2ms
+                                 $techmap2426326$abc$2423749$lut$aiger2423748$16398.A[5]      1 3.2ms
+                                 $techmap2426077$abc$2423749$lut$aiger2423748$15546.A[5]      1 3.2ms
+                $techmap2426498$auto$abc_ops_reintegrate.cc:611:reintegrate$2424319.A[0]      9 3.2ms
+                                 $techmap2425905$abc$2423749$lut$aiger2423748$18104.A[2]      1 3.2ms
+                $techmap2426576$auto$abc_ops_reintegrate.cc:611:reintegrate$2424266.A[3]      3 3.2ms
+                                 $techmap2426265$abc$2423749$lut$aiger2423748$16779.A[2]      1 3.1ms
+                                 $techmap2426369$abc$2423749$lut$aiger2423748$20710.A[2]     11 3.1ms
+                                 $techmap2426369$abc$2423749$lut$aiger2423748$20710.A[0]     10 3.1ms
+                                 $techmap2425862$abc$2423749$lut$aiger2423748$17262.A[5]      1 3.1ms
+                                                                $abc$2423749$aiger$o1250      8 3.1ms
+                $techmap2427814$auto$abc_ops_reintegrate.cc:611:reintegrate$2423779.A[0]      6 3.1ms
+                                 $techmap2425545$abc$2423749$lut$aiger2423748$19609.A[2]      1 3.1ms
+                                 $techmap2426224$abc$2423749$lut$aiger2423748$16509.A[4]      1 3.1ms
+                                 $techmap2426004$abc$2423749$lut$aiger2423748$15026.A[4]      1 3.1ms
+                                                                $abc$2423749$aiger$o7230      7 3.1ms
+                                                       genblk2.slot0_d5d2.eng.r_addr[27]      4 3.1ms
+                                 $techmap2426008$abc$2423749$lut$aiger2423748$15056.A[4]      1 3.1ms
+                                 $techmap2427341$abc$2423749$lut$aiger2423748$13492.A[1]     10 3.1ms
+                                 $techmap2425674$abc$2423749$lut$aiger2423748$18911.A[3]      1 3.1ms
+                                 $techmap2425867$abc$2423749$lut$aiger2423748$17297.A[2]      1 3.1ms
+                                 $techmap2425546$abc$2423749$lut$aiger2423748$19618.A[4]      1 3.1ms
+                $techmap2426828$auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.A[1]      3 3.1ms
+                $techmap2427279$auto$abc_ops_reintegrate.cc:611:reintegrate$2423993.A[3]     16 3.1ms
+                                 $techmap2426028$abc$2423749$lut$aiger2423748$15220.A[2]      1 3.1ms
+                                 $techmap2426136$abc$2423749$lut$aiger2423748$15442.A[4]      1 3.1ms
+                                                                $abc$2423749$aiger$o7670      7 3.1ms
+                                 $techmap2426452$abc$2423749$lut$aiger2423748$21279.A[3]      5 3.1ms
+                                                                $abc$2423749$aiger$o1018      8 3.1ms
+                                                                 $abc$2423749$aiger$o438      8 3.1ms
+                                        $techmap2426409$abc$2423749$lut$aiger$o7319.A[1]      2 3.1ms
+                                 $techmap2427909$abc$2423749$lut$not$aiger2423748$8969.A      4 3.1ms
+                                 $techmap2427342$abc$2423749$lut$aiger2423748$13507.A[1]      9 3.0ms
+                $techmap2426578$auto$abc_ops_reintegrate.cc:611:reintegrate$2424265.A[2]      4 3.0ms
+                                        $techmap2426863$abc$2423749$lut$aiger$o8985.A[2]      1 3.0ms
+                                 $techmap2426001$abc$2423749$lut$aiger2423748$15003.A[5]      1 3.0ms
+                                 $techmap2425562$abc$2423749$lut$aiger2423748$19700.A[4]      1 3.0ms
+                $techmap2425783$auto$abc_ops_reintegrate.cc:611:reintegrate$2424424.A[0]      9 3.0ms
+                $techmap2427751$auto$abc_ops_reintegrate.cc:611:reintegrate$2423808.A[1]      7 3.0ms
+                $techmap2427322$auto$abc_ops_reintegrate.cc:611:reintegrate$2423959.A[0]      7 3.0ms
+                                 $techmap2425601$abc$2423749$lut$aiger2423748$19982.A[3]      1 3.0ms
+                                 $techmap2425816$abc$2423749$lut$aiger2423748$17488.A[2]      1 3.0ms
+                                 $techmap2426390$abc$2423749$lut$aiger2423748$15932.A[0]      9 3.0ms
+                                 $techmap2426261$abc$2423749$lut$aiger2423748$16762.A[3]      1 3.0ms
+                                 $techmap2426328$abc$2423749$lut$aiger2423748$16416.A[4]      1 3.0ms
+                                 $techmap2426133$abc$2423749$lut$aiger2423748$15423.A[3]      1 3.0ms
+                                 $techmap2426027$abc$2423749$lut$aiger2423748$15211.A[4]      1 3.0ms
+                                 $techmap2425565$abc$2423749$lut$aiger2423748$19720.A[3]      1 3.0ms
+                                 $techmap2426707$abc$2423749$lut$aiger2423748$20492.A[0]      6 3.0ms
+                                 $techmap2426043$abc$2423749$lut$aiger2423748$14776.A[3]      1 2.9ms
+                                 $techmap2426309$abc$2423749$lut$aiger2423748$16272.A[4]      1 2.9ms
+                                 $techmap2425558$abc$2423749$lut$aiger2423748$19753.A[5]      1 2.9ms
+                $techmap2427209$auto$abc_ops_reintegrate.cc:611:reintegrate$2424026.A[2]      1 2.9ms
+                                                                $abc$2423749$aiger$o4034      8 2.9ms
+                                                     genblk2.slot0_d5d2.eng.mem_b3[0][8]      1 2.9ms
+                                 $techmap2426047$abc$2423749$lut$aiger2423748$14809.A[4]      1 2.9ms
+                $techmap2425514$auto$abc_ops_reintegrate.cc:611:reintegrate$2424450.A[1]      6 2.9ms
+                $techmap2425801$auto$abc_ops_reintegrate.cc:611:reintegrate$2424416.A[2]      9 2.9ms
+                                 $techmap2425816$abc$2423749$lut$aiger2423748$17488.A[3]      1 2.9ms
+                $techmap2427843$auto$abc_ops_reintegrate.cc:611:reintegrate$2423753.A[1]      2 2.9ms
+                                                                $abc$2423749$aiger$o2644      8 2.9ms
+                $techmap2427339$auto$abc_ops_reintegrate.cc:611:reintegrate$2423952.A[1]      9 2.9ms
+                $techmap2427321$auto$abc_ops_reintegrate.cc:611:reintegrate$2423960.A[1]      9 2.9ms
+                                 $techmap2427372$abc$2423749$lut$aiger2423748$13988.A[1]     10 2.9ms
+                                 $techmap2426321$abc$2423749$lut$aiger2423748$16362.A[3]      1 2.9ms
+                $techmap2427322$auto$abc_ops_reintegrate.cc:611:reintegrate$2423959.A[3]      8 2.9ms
+                                                       genblk2.slot0_d5d2.eng.r_addr[25]      4 2.9ms
+                                 $techmap2426279$abc$2423749$lut$aiger2423748$16871.A[4]      1 2.9ms
+                $techmap2426510$auto$abc_ops_reintegrate.cc:611:reintegrate$2424310.A[0]      9 2.9ms
+                                 $techmap2425759$abc$2423749$lut$aiger2423748$19040.A[3]      1 2.9ms
+                                 $techmap2425541$abc$2423749$lut$aiger2423748$19576.A[5]      1 2.9ms
+                $techmap2426918$auto$abc_ops_reintegrate.cc:611:reintegrate$2424105.A[0]      9 2.9ms
+                                 $techmap2425542$abc$2423749$lut$aiger2423748$19585.A[5]      1 2.8ms
+                                 $techmap2427483$abc$2423749$lut$aiger2423748$13972.A[3]     13 2.8ms
+                $techmap2427817$auto$abc_ops_reintegrate.cc:611:reintegrate$2423776.A[0]      6 2.8ms
+                                                                $abc$2423749$aiger$o7974      5 2.8ms
+                                 $techmap2425747$abc$2423749$lut$aiger2423748$19371.A[2]      1 2.8ms
+                                 $techmap2425656$abc$2423749$lut$aiger2423748$18867.A[3]      1 2.8ms
+                $techmap2426545$auto$abc_ops_reintegrate.cc:611:reintegrate$2424290.A[0]      6 2.8ms
+                                 $techmap2426249$abc$2423749$lut$aiger2423748$16679.A[3]      1 2.8ms
+                                 $techmap2426024$abc$2423749$lut$aiger2423748$15187.A[5]      1 2.8ms
+                                 $techmap2426434$abc$2423749$lut$aiger2423748$18337.A[1]      3 2.8ms
+                                 $techmap2425679$abc$2423749$lut$aiger2423748$18362.A[5]      1 2.8ms
+                                 $techmap2425541$abc$2423749$lut$aiger2423748$19576.A[4]      1 2.8ms
+                $techmap2426448$auto$abc_ops_reintegrate.cc:611:reintegrate$2424227.A[4]      4 2.8ms
+                $techmap2426630$auto$abc_ops_reintegrate.cc:611:reintegrate$2424228.A[2]      4 2.8ms
+                                            $auto$alumacc.cc:548:replace_alu$55819.Y[15]      1 2.8ms
+                                 $techmap2426138$abc$2423749$lut$aiger2423748$15452.A[4]      1 2.8ms
+                $techmap2426460$auto$abc_ops_reintegrate.cc:611:reintegrate$2424344.A[4]      5 2.8ms
+                                 $techmap2425620$abc$2423749$lut$aiger2423748$18619.A[4]      1 2.8ms
+                                 $techmap2425537$abc$2423749$lut$aiger2423748$19551.A[3]      1 2.8ms
+                                 $techmap2425741$abc$2423749$lut$aiger2423748$19320.A[2]      1 2.8ms
+                $techmap2425509$auto$abc_ops_reintegrate.cc:611:reintegrate$2424455.A[1]      6 2.7ms
+                                 $techmap2426222$abc$2423749$lut$aiger2423748$16498.A[2]      1 2.7ms
+                                                                $abc$2423749$aiger$o7353     11 2.7ms
+                $techmap2427376$auto$abc_ops_reintegrate.cc:611:reintegrate$2423938.A[1]      9 2.7ms
+                                 $techmap2426040$abc$2423749$lut$aiger2423748$14756.A[5]      1 2.7ms
+                                 $techmap2427313$abc$2423749$lut$aiger2423748$12886.A[0]      9 2.7ms
+                                 $techmap2426105$abc$2423749$lut$aiger2423748$15748.A[4]      1 2.7ms
+                                 $techmap2426303$abc$2423749$lut$aiger2423748$16218.A[4]      1 2.7ms
+                                 $techmap2425862$abc$2423749$lut$aiger2423748$17262.A[3]      1 2.7ms
+                $techmap2427363$auto$abc_ops_reintegrate.cc:611:reintegrate$2423944.A[0]      6 2.7ms
+                                 $techmap2426440$abc$2423749$lut$aiger2423748$21246.A[2]      4 2.7ms
+                                 $techmap2425628$abc$2423749$lut$aiger2423748$18677.A[4]      1 2.7ms
+                                 $techmap2425577$abc$2423749$lut$aiger2423748$19834.A[3]      1 2.7ms
+                $techmap2427472$auto$abc_ops_reintegrate.cc:611:reintegrate$2423907.A[1]      9 2.7ms
+                $techmap2425513$auto$abc_ops_reintegrate.cc:611:reintegrate$2424451.A[1]      6 2.7ms
+                                 $techmap2425645$abc$2423749$lut$aiger2423748$18784.A[3]      1 2.7ms
+                                 $techmap2425643$abc$2423749$lut$aiger2423748$18774.A[3]      1 2.7ms
+                                 $techmap2425937$abc$2423749$lut$aiger2423748$17884.A[4]      1 2.7ms
+                $techmap2426925$auto$abc_ops_reintegrate.cc:611:reintegrate$2424094.A[0]      5 2.7ms
+                $techmap2426580$auto$abc_ops_reintegrate.cc:611:reintegrate$2424264.A[2]      4 2.7ms
+                $techmap2427720$auto$abc_ops_reintegrate.cc:611:reintegrate$2423820.A[0]      7 2.7ms
+                $techmap2425524$auto$abc_ops_reintegrate.cc:611:reintegrate$2424440.A[1]      6 2.7ms
+                $techmap2427806$auto$abc_ops_reintegrate.cc:611:reintegrate$2423787.A[2]     13 2.7ms
+                                 $techmap2425745$abc$2423749$lut$aiger2423748$19353.A[2]      1 2.6ms
+                                 $techmap2425680$abc$2423749$lut$aiger2423748$18371.A[4]      1 2.6ms
+Info: Router2 time 223.51s
+Info: Running router1 to check that route is legal...
+
+Info: Routing..
+Info: Setting up routing queue.
+Info: Routing 0 arcs.
+Info:            |   (re-)routed arcs  |   delta    | remaining|       time spent     |
+Info:    IterCnt |  w/ripup   wo/ripup |  w/r  wo/r |      arcs| batch(sec) total(sec)|
+Info:          0 |        0          0 |    0     0 |         0|       0.13       0.13|
+Info: Routing complete.
+Info: Router1 time 0.13s
+Info: Checksum: 0xc84df8e7
+
+Info: Critical path report for clock 'clk' (posedge -> posedge):
+Info: curr total
+Info:  0.1  0.1  Source $auto$ff.cc:337:slice$81780.Q
+Info:  0.9  1.0    Net $techmap2425544$abc$2423749$lut$aiger2423748$19600.A[0] budget -17.325001 ns (53,27) -> (53,30)
+Info:                Sink $abc$2423749$lut$aiger2423748$14697.A1
+Info:  0.1  1.2  Source $abc$2423749$lut$aiger2423748$14697.O6
+Info:  0.5  1.7    Net $techmap2426036$abc$2423749$lut$aiger2423748$14724.A[5] budget -17.895000 ns (53,30) -> (53,30)
+Info:                Sink $abc$2423749$lut$aiger2423748$14724.A6
+Info:  0.1  1.8  Source $abc$2423749$lut$aiger2423748$14724.O6
+Info:  1.2  3.0    Net $techmap2426037$abc$2423749$lut$aiger2423748$14729.A[1] budget -16.618999 ns (53,30) -> (44,23)
+Info:                Sink $abc$2423749$lut$aiger2423748$14729.A2
+Info:  0.1  3.2  Source $abc$2423749$lut$aiger2423748$14729.O6
+Info:  0.6  3.8    Net $techmap2426050$auto$abc_ops_reintegrate.cc:611:reintegrate$2424386.A[5] budget -17.893999 ns (44,23) -> (44,23)
+Info:                Sink $abc$2423749$lut$aiger$o6983.A6
+Info:  0.1  3.9  Source $abc$2423749$lut$aiger$o6983.O6
+Info:  1.0  4.9    Net $techmap2426389$abc$2423749$lut$aiger2423748$15916.A[3] budget -6.479000 ns (44,23) -> (37,32)
+Info:                Sink $techmap2426389$abc$2423749$lut$aiger2423748$15916.A[3]$LUT$5124.A1
+Info:  0.1  5.0  Source $techmap2426389$abc$2423749$lut$aiger2423748$15916.A[3]$LUT$5124.O6
+Info:  0.0  5.0    Net $techmap2426389$abc$2423749$lut$aiger2423748$15916.A[3]$legal$5123 budget -7.874000 ns (37,32) -> (37,32)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141482.$auto$alumacc.cc:548:replace_alu$153654.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S0
+Info:  0.5  5.5  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141482.$auto$alumacc.cc:548:replace_alu$153654.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1  5.6    Net $abc$2423749$aiger$i9139 budget -7.334000 ns (37,32) -> (37,31)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141482.$auto$alumacc.cc:548:replace_alu$153654.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.1  5.7  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141482.$auto$alumacc.cc:548:replace_alu$153654.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1  5.8    Net $abc$2423749$aiger$i9147 budget -7.334000 ns (37,31) -> (37,30)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141482.$auto$alumacc.cc:548:replace_alu$153654.genblk1.slice[2].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.2  6.1  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141482.$auto$alumacc.cc:548:replace_alu$153654.genblk1.slice[2].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O0
+Info:  0.6  6.6    Net $techmap2427958$abc$2423749$lut$not$aiger2423748$9148.A budget -5.788000 ns (37,30) -> (37,33)
+Info:                Sink $abc$2423749$lut$aiger$o7021.A2
+Info:  0.1  6.8  Source $abc$2423749$lut$aiger$o7021.O6
+Info:  0.3  7.0    Net $techmap2426152$auto$abc_ops_reintegrate.cc:611:reintegrate$2424381.A[1] budget -6.018000 ns (37,33) -> (37,33)
+Info:                Sink $techmap2426152$auto$abc_ops_reintegrate.cc:611:reintegrate$2424381.A[1]$LUT$5196.A1
+Info:  0.1  7.2  Source $techmap2426152$auto$abc_ops_reintegrate.cc:611:reintegrate$2424381.A[1]$LUT$5196.O6
+Info:  0.0  7.2    Net $techmap2426152$auto$abc_ops_reintegrate.cc:611:reintegrate$2424381.A[1]$legal$5195 budget -6.018000 ns (37,33) -> (37,33)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141486.$auto$alumacc.cc:548:replace_alu$153709.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.3  7.5  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141486.$auto$alumacc.cc:548:replace_alu$153709.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.4  7.9    Net $techmap2426152$auto$abc_ops_reintegrate.cc:611:reintegrate$2424381.A[2] budget -5.251000 ns (37,33) -> (37,33)
+Info:                Sink $abc$2423749$lut$aiger$o7040.A2
+Info:  0.1  8.1  Source $abc$2423749$lut$aiger$o7040.O6
+Info:  0.6  8.6    Net $techmap2426156$auto$abc_ops_reintegrate.cc:611:reintegrate$2424379.A[1] budget -4.285000 ns (37,33) -> (34,30)
+Info:                Sink $techmap2426156$auto$abc_ops_reintegrate.cc:611:reintegrate$2424379.A[1]$LUT$5220.A1
+Info:  0.1  8.8  Source $techmap2426156$auto$abc_ops_reintegrate.cc:611:reintegrate$2424379.A[1]$LUT$5220.O6
+Info:  0.0  8.8    Net $techmap2426156$auto$abc_ops_reintegrate.cc:611:reintegrate$2424379.A[1]$legal$5219 budget -4.990000 ns (34,30) -> (34,30)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141490.$auto$alumacc.cc:548:replace_alu$153763.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.6  9.3  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141490.$auto$alumacc.cc:548:replace_alu$153763.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6  9.9    Net $techmap2426154$auto$abc_ops_reintegrate.cc:611:reintegrate$2424380.A[1] budget -4.054000 ns (34,30) -> (33,31)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424380.A2
+Info:  0.1 10.0  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424380.O6
+Info:  0.8 10.8    Net $techmap2426158$auto$abc_ops_reintegrate.cc:611:reintegrate$2424378.A[1] budget -3.473000 ns (33,31) -> (33,37)
+Info:                Sink $techmap2426158$auto$abc_ops_reintegrate.cc:611:reintegrate$2424378.A[1]$LUT$5244.A1
+Info:  0.1 10.9  Source $techmap2426158$auto$abc_ops_reintegrate.cc:611:reintegrate$2424378.A[1]$LUT$5244.O6
+Info:  0.0 10.9    Net $techmap2426158$auto$abc_ops_reintegrate.cc:611:reintegrate$2424378.A[1]$legal$5243 budget -4.463000 ns (33,37) -> (33,37)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S0
+Info:  0.4 11.3  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O1
+Info:  0.7 12.1    Net $techmap2426158$auto$abc_ops_reintegrate.cc:611:reintegrate$2424378.A[2] budget -3.183000 ns (33,37) -> (33,32)
+Info:                Sink $abc$2423749$lut$aiger$o7072.A2
+Info:  0.2 12.2  Source $abc$2423749$lut$aiger$o7072.O5
+Info:  0.4 12.6    Net $techmap2426161$auto$abc_ops_reintegrate.cc:611:reintegrate$2424377.A[1] budget -3.624000 ns (33,32) -> (33,32)
+Info:                Sink $techmap2426161$auto$abc_ops_reintegrate.cc:611:reintegrate$2424377.A[1]$LUT$5268.A1
+Info:  0.1 12.8  Source $techmap2426161$auto$abc_ops_reintegrate.cc:611:reintegrate$2424377.A[1]$LUT$5268.O6
+Info:  0.0 12.8    Net $techmap2426161$auto$abc_ops_reintegrate.cc:611:reintegrate$2424377.A[1]$legal$5267 budget -3.624000 ns (33,32) -> (33,32)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.4 13.1  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 13.2    Net $abc$2423749$aiger$i9211 budget -3.234000 ns (33,32) -> (33,31)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.2 13.4  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O0
+Info:  0.8 14.2    Net $techmap2426161$auto$abc_ops_reintegrate.cc:611:reintegrate$2424377.A[2] budget -2.366000 ns (33,31) -> (33,40)
+Info:                Sink $abc$2423749$lut$aiger$o7091.A2
+Info:  0.1 14.4  Source $abc$2423749$lut$aiger$o7091.O6
+Info:  0.7 15.1    Net $techmap2426165$auto$abc_ops_reintegrate.cc:611:reintegrate$2424375.A[1] budget -2.508000 ns (33,40) -> (33,35)
+Info:                Sink $techmap2426165$auto$abc_ops_reintegrate.cc:611:reintegrate$2424375.A[1]$LUT$5292.A1
+Info:  0.1 15.2  Source $techmap2426165$auto$abc_ops_reintegrate.cc:611:reintegrate$2424375.A[1]$LUT$5292.O6
+Info:  0.0 15.2    Net $techmap2426165$auto$abc_ops_reintegrate.cc:611:reintegrate$2424375.A[1]$legal$5291 budget -3.258000 ns (33,35) -> (33,35)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141502.$auto$alumacc.cc:548:replace_alu$153919.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.3 15.5  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141502.$auto$alumacc.cc:548:replace_alu$153919.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.8 16.3    Net $techmap2426163$auto$abc_ops_reintegrate.cc:611:reintegrate$2424376.A[1] budget -2.167000 ns (33,35) -> (33,40)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424376.A2
+Info:  0.2 16.4  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424376.O5
+Info:  0.3 16.7    Net $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[1] budget -2.917000 ns (33,40) -> (33,40)
+Info:                Sink $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[1]$LUT$5300.A1
+Info:  0.1 16.8  Source $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[1]$LUT$5300.O6
+Info:  0.0 16.8    Net $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[1]$legal$5299 budget -2.917000 ns (33,40) -> (33,40)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141506.$auto$alumacc.cc:548:replace_alu$153969.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.6 17.4  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2290.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141506.$auto$alumacc.cc:548:replace_alu$153969.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.8 18.2    Net $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[2] budget -1.799000 ns (33,40) -> (33,34)
+Info:                Sink $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[2]$LUT$5308.A1
+Info:  0.1 18.3  Source $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[2]$LUT$5308.O6
+Info:  0.0 18.3    Net $techmap2426392$abc$2423749$lut$aiger2423748$15921.A[2]$legal$5307 budget -2.788000 ns (33,34) -> (33,34)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141490.$auto$alumacc.cc:548:replace_alu$153763.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S0
+Info:  0.5 18.8  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141490.$auto$alumacc.cc:548:replace_alu$153763.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 18.9    Net $abc$2423749$aiger$i9259 budget -2.248000 ns (33,34) -> (33,33)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141490.$auto$alumacc.cc:548:replace_alu$153763.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.2 19.1  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141490.$auto$alumacc.cc:548:replace_alu$153763.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 19.8    Net $techmap2427964$abc$2423749$lut$not$aiger2423748$9262.A budget -1.625000 ns (33,33) -> (34,38)
+Info:                Sink $abc$2423749$lut$aiger$o7159.A3
+Info:  0.1 19.9  Source $abc$2423749$lut$aiger$o7159.O5
+Info:  0.8 20.7    Net $techmap2426169$auto$abc_ops_reintegrate.cc:611:reintegrate$2424373.A[1] budget -1.410000 ns (34,38) -> (33,46)
+Info:                Sink $techmap2426169$auto$abc_ops_reintegrate.cc:611:reintegrate$2424373.A[1]$LUT$5354.A1
+Info:  0.1 20.8  Source $techmap2426169$auto$abc_ops_reintegrate.cc:611:reintegrate$2424373.A[1]$LUT$5354.O6
+Info:  0.0 20.8    Net $techmap2426169$auto$abc_ops_reintegrate.cc:611:reintegrate$2424373.A[1]$legal$5353 budget -2.505000 ns (33,46) -> (33,46)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S0
+Info:  0.4 21.2  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O1
+Info:  0.6 21.9    Net $techmap2426169$auto$abc_ops_reintegrate.cc:611:reintegrate$2424373.A[2] budget -1.346000 ns (33,46) -> (34,39)
+Info:                Sink $abc$2423749$lut$aiger$o7172.A2
+Info:  0.1 22.0  Source $abc$2423749$lut$aiger$o7172.O6
+Info:  0.3 22.3    Net $techmap2426171$auto$abc_ops_reintegrate.cc:611:reintegrate$2424372.A[1] budget -2.145000 ns (34,39) -> (34,39)
+Info:                Sink $techmap2426171$auto$abc_ops_reintegrate.cc:611:reintegrate$2424372.A[1]$LUT$5378.A1
+Info:  0.1 22.4  Source $techmap2426171$auto$abc_ops_reintegrate.cc:611:reintegrate$2424372.A[1]$LUT$5378.O6
+Info:  0.0 22.4    Net $techmap2426171$auto$abc_ops_reintegrate.cc:611:reintegrate$2424372.A[1]$legal$5377 budget -2.145000 ns (34,39) -> (34,39)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.4 22.8  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 22.9    Net $abc$2423749$aiger$i9291 budget -1.755000 ns (34,39) -> (34,38)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.2 23.1  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O0
+Info:  0.3 23.4    Net $techmap2426171$auto$abc_ops_reintegrate.cc:611:reintegrate$2424372.A[2] budget -2.065000 ns (34,38) -> (34,38)
+Info:                Sink $abc$2423749$lut$aiger$o7191.A4
+Info:  0.1 23.5  Source $abc$2423749$lut$aiger$o7191.O6
+Info:  0.9 24.5    Net $techmap2426173$auto$abc_ops_reintegrate.cc:611:reintegrate$2424371.A[1] budget -1.031000 ns (34,38) -> (34,49)
+Info:                Sink $techmap2426173$auto$abc_ops_reintegrate.cc:611:reintegrate$2424371.A[1]$LUT$5402.A1
+Info:  0.1 24.6  Source $techmap2426173$auto$abc_ops_reintegrate.cc:611:reintegrate$2424371.A[1]$LUT$5402.O6
+Info:  0.0 24.6    Net $techmap2426173$auto$abc_ops_reintegrate.cc:611:reintegrate$2424371.A[1]$legal$5401 budget -2.021000 ns (34,49) -> (34,49)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141502.$auto$alumacc.cc:548:replace_alu$153919.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.3 24.9  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141502.$auto$alumacc.cc:548:replace_alu$153919.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.4 25.3    Net $techmap2426173$auto$abc_ops_reintegrate.cc:611:reintegrate$2424371.A[2] budget -1.912000 ns (34,49) -> (34,49)
+Info:                Sink $abc$2423749$lut$aiger$o7200.A2
+Info:  0.2 25.5  Source $abc$2423749$lut$aiger$o7200.O5
+Info:  0.6 26.1    Net $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[1] budget -1.206000 ns (34,49) -> (33,53)
+Info:                Sink $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[1]$LUT$5410.A1
+Info:  0.1 26.2  Source $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[1]$LUT$5410.O6
+Info:  0.0 26.2    Net $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[1]$legal$5409 budget -1.911000 ns (33,53) -> (33,53)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141506.$auto$alumacc.cc:548:replace_alu$153969.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.6 26.7  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2298.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141506.$auto$alumacc.cc:548:replace_alu$153969.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 27.4    Net $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[2] budget -0.980000 ns (33,53) -> (34,48)
+Info:                Sink $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[2]$LUT$5418.A1
+Info:  0.1 27.5  Source $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[2]$LUT$5418.O6
+Info:  0.0 27.5    Net $techmap2426398$abc$2423749$lut$aiger2423748$15912.A[2]$legal$5417 budget -1.925000 ns (34,48) -> (34,48)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S0
+Info:  0.5 28.0  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 28.1    Net $abc$2423749$aiger$i9347 budget -1.385000 ns (34,48) -> (34,47)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.3 28.4  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141494.$auto$alumacc.cc:548:replace_alu$153816.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O1
+Info:  0.4 28.9    Net $techmap2427968$abc$2423749$lut$not$aiger2423748$9349.A budget -1.677000 ns (34,47) -> (34,47)
+Info:                Sink $abc$2423749$lut$aiger$o7262.A2
+Info:  0.1 29.0  Source $abc$2423749$lut$aiger$o7262.O6
+Info:  0.9 29.9    Net $techmap2426176$auto$abc_ops_reintegrate.cc:611:reintegrate$2424369.A[1] budget -0.766000 ns (34,47) -> (34,54)
+Info:                Sink $techmap2426176$auto$abc_ops_reintegrate.cc:611:reintegrate$2424369.A[1]$LUT$5462.A1
+Info:  0.1 30.0  Source $techmap2426176$auto$abc_ops_reintegrate.cc:611:reintegrate$2424369.A[1]$LUT$5462.O6
+Info:  0.0 30.0    Net $techmap2426176$auto$abc_ops_reintegrate.cc:611:reintegrate$2424369.A[1]$legal$5461 budget -1.636000 ns (34,54) -> (34,54)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.4 30.4  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 30.5    Net $abc$2423749$aiger$i9363 budget -1.246000 ns (34,54) -> (34,53)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.2 30.7  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141498.$auto$alumacc.cc:548:replace_alu$153868.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O0
+Info:  0.6 31.3    Net $techmap2426176$auto$abc_ops_reintegrate.cc:611:reintegrate$2424369.A[2] budget -0.865000 ns (34,53) -> (33,49)
+Info:                Sink $abc$2423749$lut$aiger$o7281.A2
+Info:  0.2 31.5  Source $abc$2423749$lut$aiger$o7281.O5
+Info:  0.4 31.9    Net $techmap2426178$auto$abc_ops_reintegrate.cc:611:reintegrate$2424368.A[1] budget -1.539000 ns (33,49) -> (33,49)
+Info:                Sink $techmap2426178$auto$abc_ops_reintegrate.cc:611:reintegrate$2424368.A[1]$LUT$5486.A1
+Info:  0.1 32.0  Source $techmap2426178$auto$abc_ops_reintegrate.cc:611:reintegrate$2424368.A[1]$LUT$5486.O6
+Info:  0.0 32.0    Net $techmap2426178$auto$abc_ops_reintegrate.cc:611:reintegrate$2424368.A[1]$legal$5485 budget -1.539000 ns (33,49) -> (33,49)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141502.$auto$alumacc.cc:548:replace_alu$153919.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.3 32.4  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141502.$auto$alumacc.cc:548:replace_alu$153919.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.4 32.8    Net $techmap2426178$auto$abc_ops_reintegrate.cc:611:reintegrate$2424368.A[2] budget -1.071000 ns (33,49) -> (34,50)
+Info:                Sink $abc$2423749$lut$aiger$o7290.A2
+Info:  0.2 32.9  Source $abc$2423749$lut$aiger$o7290.O5
+Info:  0.6 33.5    Net $techmap2426404$auto$abc_ops_reintegrate.cc:611:reintegrate$2424339.A[2] budget -0.774000 ns (34,50) -> (33,54)
+Info:                Sink $techmap2426404$auto$abc_ops_reintegrate.cc:611:reintegrate$2424339.A[2]$LUT$5494.A1
+Info:  0.1 33.6  Source $techmap2426404$auto$abc_ops_reintegrate.cc:611:reintegrate$2424339.A[2]$LUT$5494.O6
+Info:  0.0 33.6    Net $techmap2426404$auto$abc_ops_reintegrate.cc:611:reintegrate$2424339.A[2]$legal$5493 budget -1.479000 ns (33,54) -> (33,54)
+Info:                Sink $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141506.$auto$alumacc.cc:548:replace_alu$153969.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.6 34.2  Source $techmap$techmap$flatten\genblk2.slot0_d5d2.dec_c.$mod$build/t27/specs/rtl/bram_trit_codec.v:177$2306.div_mod.div_mod_u.$ge$/opt/homebrew/bin/../share/yosys/techmap.v:339$141506.$auto$alumacc.cc:548:replace_alu$153969.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 34.8    Net $techmap2426404$auto$abc_ops_reintegrate.cc:611:reintegrate$2424339.A[4] budget -0.667000 ns (33,54) -> (34,50)
+Info:                Sink $abc$2423749$lut$aiger2423748$15908.A5
+Info:  0.1 34.9  Source $abc$2423749$lut$aiger2423748$15908.O6
+Info:  0.6 35.5    Net $techmap2426469$auto$abc_ops_reintegrate.cc:611:reintegrate$2424340.A[3] budget -0.442000 ns (34,50) -> (34,59)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424325.A1
+Info:  0.1 35.7  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424325.O5
+Info:  0.7 36.4    Net $techmap2426495$auto$abc_ops_reintegrate.cc:611:reintegrate$2424322.A[1] budget -0.752000 ns (34,59) -> (34,62)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424322.A1
+Info:  0.1 36.5  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424322.O6
+Info:  0.0 36.5    Net $abc$2423749$aiger$o7326 budget -1.322000 ns (34,62) -> (34,62)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55891.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.4 36.9  Source $auto$alumacc.cc:548:replace_alu$55891.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 37.0    Net $abc$2423749$aiger$i9411 budget -0.829000 ns (34,62) -> (34,61)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55891.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.2 37.2  Source $auto$alumacc.cc:548:replace_alu$55891.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O0
+Info:  0.8 38.0    Net $techmap2426726$auto$abc_ops_reintegrate.cc:611:reintegrate$2424173.A[2] budget -0.361000 ns (34,61) -> (34,55)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424173.A3
+Info:  0.1 38.1  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424173.O6
+Info:  0.9 39.0    Net $techmap2426729$auto$abc_ops_reintegrate.cc:611:reintegrate$2424171.A[1] budget -0.310000 ns (34,55) -> (33,63)
+Info:                Sink $techmap2426729$auto$abc_ops_reintegrate.cc:611:reintegrate$2424171.A[1]$LUT$2004.A1
+Info:  0.1 39.2  Source $techmap2426729$auto$abc_ops_reintegrate.cc:611:reintegrate$2424171.A[1]$LUT$2004.O6
+Info:  0.0 39.2    Net $techmap2426729$auto$abc_ops_reintegrate.cc:611:reintegrate$2424171.A[1]$legal$2003 budget -1.328000 ns (33,63) -> (33,63)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57247.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S0
+Info:  0.4 39.6  Source $auto$alumacc.cc:548:replace_alu$57247.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O1
+Info:  0.8 40.3    Net $techmap2426730$auto$abc_ops_reintegrate.cc:611:reintegrate$2424170.A[2] budget -0.301000 ns (33,63) -> (34,55)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424170.A3
+Info:  0.1 40.5  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424170.O6
+Info:  0.6 41.0    Net $abc$2423749$aiger$o8714 budget -0.524000 ns (34,55) -> (33,58)
+Info:                Sink $abc$2423749$aiger$o8714$LUT$1698.A2
+Info:  0.1 41.2  Source $abc$2423749$aiger$o8714$LUT$1698.O6
+Info:  0.0 41.2    Net $abc$2423749$aiger$o8714$legal$1697 budget -1.139000 ns (33,58) -> (33,58)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55885.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.2 41.4  Source $auto$alumacc.cc:548:replace_alu$55885.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O1
+Info:  0.4 41.8    Net $techmap2426735$abc$2423749$lut$aiger$o8724.A[2] budget -1.139000 ns (33,58) -> (33,58)
+Info:                Sink $abc$2423749$lut$aiger$o8724.A3
+Info:  0.1 41.9  Source $abc$2423749$lut$aiger$o8724.O6
+Info:  0.8 42.7    Net $techmap2426736$auto$abc_ops_reintegrate.cc:611:reintegrate$2424168.A[1] budget -0.293000 ns (33,58) -> (33,67)
+Info:                Sink $techmap2426736$auto$abc_ops_reintegrate.cc:611:reintegrate$2424168.A[1]$LUT$2032.A1
+Info:  0.1 42.8  Source $techmap2426736$auto$abc_ops_reintegrate.cc:611:reintegrate$2424168.A[1]$LUT$2032.O6
+Info:  0.0 42.8    Net $techmap2426736$auto$abc_ops_reintegrate.cc:611:reintegrate$2424168.A[1]$legal$2031 budget -1.103000 ns (33,67) -> (33,67)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57250.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.2 43.1  Source $auto$alumacc.cc:548:replace_alu$57250.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O1
+Info:  0.8 43.8    Net $techmap2426736$auto$abc_ops_reintegrate.cc:611:reintegrate$2424168.A[2] budget -0.285000 ns (33,67) -> (33,58)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424168.A3
+Info:  0.2 44.0  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424168.O5
+Info:  0.8 44.8    Net $abc$2423749$aiger$o8734 budget -0.285000 ns (33,58) -> (34,67)
+Info:                Sink $abc$2423749$aiger$o8734$LUT$1802.A2
+Info:  0.1 44.9  Source $abc$2423749$aiger$o8734$LUT$1802.O6
+Info:  0.0 44.9    Net $abc$2423749$aiger$o8734$legal$1801 budget -1.070000 ns (34,67) -> (34,67)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55909.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.2 45.1  Source $auto$alumacc.cc:548:replace_alu$55909.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O1
+Info:  0.8 45.9    Net $techmap2426741$abc$2423749$lut$aiger$o8744.A[2] budget -0.285000 ns (34,67) -> (33,61)
+Info:                Sink $abc$2423749$lut$aiger$o8744.A3
+Info:  0.1 46.0  Source $abc$2423749$lut$aiger$o8744.O6
+Info:  0.8 46.9    Net $techmap2426742$auto$abc_ops_reintegrate.cc:611:reintegrate$2424166.A[1] budget -0.278000 ns (33,61) -> (33,70)
+Info:                Sink $techmap2426742$auto$abc_ops_reintegrate.cc:611:reintegrate$2424166.A[1]$LUT$2056.A1
+Info:  0.1 47.0  Source $techmap2426742$auto$abc_ops_reintegrate.cc:611:reintegrate$2424166.A[1]$LUT$2056.O6
+Info:  0.0 47.0    Net $techmap2426742$auto$abc_ops_reintegrate.cc:611:reintegrate$2424166.A[1]$legal$2055 budget -1.039000 ns (33,70) -> (33,70)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57253.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S1
+Info:  0.6 47.5  Source $auto$alumacc.cc:548:replace_alu$57253.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.8 48.3    Net $techmap2426743$auto$abc_ops_reintegrate.cc:611:reintegrate$2424165.A[2] budget -0.271000 ns (33,70) -> (33,61)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424165.A5
+Info:  0.1 48.4  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424165.O5
+Info:  0.8 49.3    Net $abc$2423749$aiger$o8755 budget -0.271000 ns (33,61) -> (33,72)
+Info:                Sink $abc$2423749$aiger$o8755$LUT$1768.A2
+Info:  0.1 49.4  Source $abc$2423749$aiger$o8755$LUT$1768.O6
+Info:  0.0 49.4    Net $abc$2423749$aiger$o8755$legal$1767 budget -1.009000 ns (33,72) -> (33,72)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55900.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 49.6  Source $auto$alumacc.cc:548:replace_alu$55900.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.9 50.5    Net $techmap2426751$abc$2423749$lut$aiger$o8765.A[2] budget -0.271000 ns (33,72) -> (33,61)
+Info:                Sink $abc$2423749$lut$aiger$o8765.A3
+Info:  0.1 50.7  Source $abc$2423749$lut$aiger$o8765.O6
+Info:  0.6 51.2    Net $techmap2426752$auto$abc_ops_reintegrate.cc:611:reintegrate$2424162.A[1] budget -0.367000 ns (33,61) -> (30,63)
+Info:                Sink $techmap2426752$auto$abc_ops_reintegrate.cc:611:reintegrate$2424162.A[1]$LUT$2084.A1
+Info:  0.1 51.4  Source $techmap2426752$auto$abc_ops_reintegrate.cc:611:reintegrate$2424162.A[1]$LUT$2084.O6
+Info:  0.0 51.4    Net $techmap2426752$auto$abc_ops_reintegrate.cc:611:reintegrate$2424162.A[1]$legal$2083 budget -0.982000 ns (30,63) -> (30,63)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57256.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 51.6  Source $auto$alumacc.cc:548:replace_alu$57256.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.3 51.9    Net $techmap2426752$auto$abc_ops_reintegrate.cc:611:reintegrate$2424162.A[2] budget -0.956000 ns (30,63) -> (30,63)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424162.A3
+Info:  0.1 52.0  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424162.O6
+Info:  0.7 52.7    Net $abc$2423749$aiger$o8775 budget -0.258000 ns (30,63) -> (30,58)
+Info:                Sink $abc$2423749$aiger$o8775$LUT$1748.A2
+Info:  0.1 52.9  Source $abc$2423749$aiger$o8775$LUT$1748.O6
+Info:  0.0 52.9    Net $abc$2423749$aiger$o8775$legal$1747 budget -0.956000 ns (30,58) -> (30,58)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55897.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 53.1  Source $auto$alumacc.cc:548:replace_alu$55897.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 53.7    Net $techmap2426760$abc$2423749$lut$aiger$o8785.A[2] budget -0.258000 ns (30,58) -> (30,63)
+Info:                Sink $abc$2423749$lut$aiger$o8785.A3
+Info:  0.1 53.9  Source $abc$2423749$lut$aiger$o8785.O6
+Info:  0.6 54.4    Net $techmap2426761$auto$abc_ops_reintegrate.cc:611:reintegrate$2424159.A[1] budget -0.271000 ns (30,63) -> (30,67)
+Info:                Sink $techmap2426761$auto$abc_ops_reintegrate.cc:611:reintegrate$2424159.A[1]$LUT$2108.A1
+Info:  0.1 54.6  Source $techmap2426761$auto$abc_ops_reintegrate.cc:611:reintegrate$2424159.A[1]$LUT$2108.O6
+Info:  0.0 54.6    Net $techmap2426761$auto$abc_ops_reintegrate.cc:611:reintegrate$2424159.A[1]$legal$2107 budget -0.931000 ns (30,67) -> (30,67)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57259.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 54.8  Source $auto$alumacc.cc:548:replace_alu$57259.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 55.4    Net $techmap2426761$auto$abc_ops_reintegrate.cc:611:reintegrate$2424159.A[2] budget -0.247000 ns (30,67) -> (24,64)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424159.A3
+Info:  0.1 55.5  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424159.O6
+Info:  0.6 56.1    Net $abc$2423749$aiger$o8795 budget -0.248000 ns (24,64) -> (30,65)
+Info:                Sink $abc$2423749$aiger$o8795$LUT$1648.A2
+Info:  0.1 56.2  Source $abc$2423749$aiger$o8795$LUT$1648.O6
+Info:  0.0 56.2    Net $abc$2423749$aiger$o8795$legal$1647 budget -0.908000 ns (30,65) -> (30,65)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55873.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 56.4  Source $auto$alumacc.cc:548:replace_alu$55873.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 57.0    Net $techmap2426769$abc$2423749$lut$aiger$o8805.A[2] budget -0.248000 ns (30,65) -> (24,64)
+Info:                Sink $abc$2423749$lut$aiger$o8805.A3
+Info:  0.1 57.2  Source $abc$2423749$lut$aiger$o8805.O5
+Info:  0.8 57.9    Net $techmap2426770$auto$abc_ops_reintegrate.cc:611:reintegrate$2424156.A[1] budget -0.242000 ns (24,64) -> (30,69)
+Info:                Sink $techmap2426770$auto$abc_ops_reintegrate.cc:611:reintegrate$2424156.A[1]$LUT$2132.A1
+Info:  0.1 58.0  Source $techmap2426770$auto$abc_ops_reintegrate.cc:611:reintegrate$2424156.A[1]$LUT$2132.O6
+Info:  0.0 58.0    Net $techmap2426770$auto$abc_ops_reintegrate.cc:611:reintegrate$2424156.A[1]$legal$2131 budget -0.886000 ns (30,69) -> (30,69)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57262.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 58.3  Source $auto$alumacc.cc:548:replace_alu$57262.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.8 59.0    Net $techmap2426770$auto$abc_ops_reintegrate.cc:611:reintegrate$2424156.A[2] budget -0.237000 ns (30,69) -> (24,64)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424156.A3
+Info:  0.2 59.2  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424156.O5
+Info:  0.6 59.8    Net $abc$2423749$aiger$o8815 budget -0.237000 ns (24,64) -> (24,58)
+Info:                Sink $abc$2423749$aiger$o8815$LUT$1580.A2
+Info:  0.1 59.9  Source $abc$2423749$aiger$o8815$LUT$1580.O6
+Info:  0.0 59.9    Net $abc$2423749$aiger$o8815$legal$1579 budget -0.865000 ns (24,58) -> (24,58)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55861.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 60.2  Source $auto$alumacc.cc:548:replace_alu$55861.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.4 60.6    Net $techmap2426778$abc$2423749$lut$aiger$o8825.A[2] budget -0.385000 ns (24,58) -> (24,60)
+Info:                Sink $abc$2423749$lut$aiger$o8825.A3
+Info:  0.2 60.8  Source $abc$2423749$lut$aiger$o8825.O5
+Info:  0.4 61.2    Net $techmap2426779$auto$abc_ops_reintegrate.cc:611:reintegrate$2424153.A[1] budget -0.845000 ns (24,60) -> (24,60)
+Info:                Sink $techmap2426779$auto$abc_ops_reintegrate.cc:611:reintegrate$2424153.A[1]$LUT$2156.A1
+Info:  0.1 61.3  Source $techmap2426779$auto$abc_ops_reintegrate.cc:611:reintegrate$2424153.A[1]$LUT$2156.O6
+Info:  0.0 61.3    Net $techmap2426779$auto$abc_ops_reintegrate.cc:611:reintegrate$2424153.A[1]$legal$2155 budget -0.845000 ns (24,60) -> (24,60)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57265.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 61.6  Source $auto$alumacc.cc:548:replace_alu$57265.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 62.1    Net $techmap2426779$auto$abc_ops_reintegrate.cc:611:reintegrate$2424153.A[2] budget -0.228000 ns (24,60) -> (30,61)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424153.A3
+Info:  0.2 62.3  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424153.O5
+Info:  0.6 62.9    Net $abc$2423749$aiger$o8835 budget -0.228000 ns (30,61) -> (24,62)
+Info:                Sink $abc$2423749$aiger$o8835$LUT$1560.A2
+Info:  0.1 63.0  Source $abc$2423749$aiger$o8835$LUT$1560.O6
+Info:  0.0 63.0    Net $abc$2423749$aiger$o8835$legal$1559 budget -0.826000 ns (24,62) -> (24,62)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55855.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 63.2  Source $auto$alumacc.cc:548:replace_alu$55855.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.8 64.0    Net $techmap2426787$abc$2423749$lut$aiger$o8845.A[2] budget -0.228000 ns (24,62) -> (24,68)
+Info:                Sink $abc$2423749$lut$aiger$o8845.A3
+Info:  0.2 64.1  Source $abc$2423749$lut$aiger$o8845.O5
+Info:  0.4 64.6    Net $techmap2426788$auto$abc_ops_reintegrate.cc:611:reintegrate$2424150.A[1] budget -0.808000 ns (24,68) -> (24,68)
+Info:                Sink $techmap2426788$auto$abc_ops_reintegrate.cc:611:reintegrate$2424150.A[1]$LUT$2180.A1
+Info:  0.1 64.7  Source $techmap2426788$auto$abc_ops_reintegrate.cc:611:reintegrate$2424150.A[1]$LUT$2180.O6
+Info:  0.0 64.7    Net $techmap2426788$auto$abc_ops_reintegrate.cc:611:reintegrate$2424150.A[1]$legal$2179 budget -0.808000 ns (24,68) -> (24,68)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57268.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 64.9  Source $auto$alumacc.cc:548:replace_alu$57268.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 65.5    Net $techmap2426788$auto$abc_ops_reintegrate.cc:611:reintegrate$2424150.A[2] budget -0.221000 ns (24,68) -> (24,71)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424150.A3
+Info:  0.2 65.6  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424150.O5
+Info:  0.4 66.1    Net $abc$2423749$aiger$o8855 budget -0.791000 ns (24,71) -> (24,71)
+Info:                Sink $abc$2423749$aiger$o8855$LUT$1674.A2
+Info:  0.1 66.2  Source $abc$2423749$aiger$o8855$LUT$1674.O6
+Info:  0.0 66.2    Net $abc$2423749$aiger$o8855$legal$1673 budget -0.791000 ns (24,71) -> (24,71)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55879.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 66.4  Source $auto$alumacc.cc:548:replace_alu$55879.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 67.0    Net $techmap2426796$abc$2423749$lut$aiger$o8865.A[2] budget -0.266000 ns (24,71) -> (23,73)
+Info:                Sink $abc$2423749$lut$aiger$o8865.A5
+Info:  0.1 67.1  Source $abc$2423749$lut$aiger$o8865.O6
+Info:  0.6 67.7    Net $techmap2426797$auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.A[1] budget -0.774000 ns (23,73) -> (23,73)
+Info:                Sink $techmap2426797$auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.A[1]$LUT$2204.A1
+Info:  0.1 67.8  Source $techmap2426797$auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.A[1]$LUT$2204.O6
+Info:  0.0 67.8    Net $techmap2426797$auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.A[1]$legal$2203 budget -0.774000 ns (23,73) -> (23,73)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57271.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 68.1  Source $auto$alumacc.cc:548:replace_alu$57271.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.3 68.4    Net $techmap2426797$auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.A[2] budget -0.758000 ns (23,73) -> (23,73)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.A5
+Info:  0.1 68.5  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424147.O6
+Info:  0.6 69.1    Net $abc$2423749$aiger$o8875 budget -0.212000 ns (23,73) -> (23,76)
+Info:                Sink $abc$2423749$aiger$o8875$LUT$1628.A2
+Info:  0.1 69.2  Source $abc$2423749$aiger$o8875$LUT$1628.O6
+Info:  0.0 69.2    Net $abc$2423749$aiger$o8875$legal$1627 budget -0.758000 ns (23,76) -> (23,76)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55870.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 69.4  Source $auto$alumacc.cc:548:replace_alu$55870.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.8 70.2    Net $techmap2426805$abc$2423749$lut$aiger$o8885.A[2] budget -0.212000 ns (23,76) -> (24,66)
+Info:                Sink $abc$2423749$lut$aiger$o8885.A3
+Info:  0.1 70.4  Source $abc$2423749$lut$aiger$o8885.O6
+Info:  0.6 70.9    Net $techmap2426806$auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.A[1] budget -0.218000 ns (24,66) -> (23,68)
+Info:                Sink $techmap2426806$auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.A[1]$LUT$2228.A1
+Info:  0.1 71.1  Source $techmap2426806$auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.A[1]$LUT$2228.O6
+Info:  0.0 71.1    Net $techmap2426806$auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.A[1]$legal$2227 budget -0.743000 ns (23,68) -> (23,68)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57274.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 71.3  Source $auto$alumacc.cc:548:replace_alu$57274.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 71.9    Net $techmap2426806$auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.A[2] budget -0.211000 ns (23,68) -> (24,66)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.A3
+Info:  0.1 72.0  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424144.O6
+Info:  0.0 72.0    Net $abc$2423749$aiger$o8895 budget -0.736000 ns (24,66) -> (24,66)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55867.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 72.2  Source $auto$alumacc.cc:548:replace_alu$55867.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.3 72.5    Net $techmap2426815$abc$2423749$lut$aiger$o8905.A[2] budget -0.730000 ns (24,66) -> (24,66)
+Info:                Sink $abc$2423749$lut$aiger$o8905.A5
+Info:  0.1 72.6  Source $abc$2423749$lut$aiger$o8905.O6
+Info:  0.8 73.4    Net $techmap2426816$auto$abc_ops_reintegrate.cc:611:reintegrate$2424140.A[1] budget -0.204000 ns (24,66) -> (23,62)
+Info:                Sink $techmap2426816$auto$abc_ops_reintegrate.cc:611:reintegrate$2424140.A[1]$LUT$2252.A1
+Info:  0.1 73.5  Source $techmap2426816$auto$abc_ops_reintegrate.cc:611:reintegrate$2424140.A[1]$LUT$2252.O6
+Info:  0.0 73.5    Net $techmap2426816$auto$abc_ops_reintegrate.cc:611:reintegrate$2424140.A[1]$legal$2251 budget -0.722000 ns (23,62) -> (23,62)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57277.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 73.7  Source $auto$alumacc.cc:548:replace_alu$57277.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.4 74.2    Net $techmap2426816$auto$abc_ops_reintegrate.cc:611:reintegrate$2424140.A[2] budget -0.235000 ns (23,62) -> (23,60)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424140.A3
+Info:  0.1 74.3  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424140.O6
+Info:  0.0 74.3    Net $abc$2423749$aiger$o8915 budget -0.715000 ns (23,60) -> (23,60)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55843.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 74.5  Source $auto$alumacc.cc:548:replace_alu$55843.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 75.2    Net $techmap2426827$abc$2423749$lut$aiger$o8925.A[2] budget -0.201000 ns (23,60) -> (17,57)
+Info:                Sink $abc$2423749$lut$aiger$o8925.A3
+Info:  0.2 75.3  Source $abc$2423749$lut$aiger$o8925.O5
+Info:  0.6 75.9    Net $techmap2426828$auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.A[1] budget -0.199000 ns (17,57) -> (17,53)
+Info:                Sink $techmap2426828$auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.A[1]$LUT$2276.A1
+Info:  0.1 76.0  Source $techmap2426828$auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.A[1]$LUT$2276.O6
+Info:  0.0 76.0    Net $techmap2426828$auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.A[1]$legal$2275 budget -0.701000 ns (17,53) -> (17,53)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57280.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 76.2  Source $auto$alumacc.cc:548:replace_alu$57280.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.6 76.8    Net $techmap2426828$auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.A[2] budget -0.197000 ns (17,53) -> (17,50)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.A3
+Info:  0.1 76.9  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424136.O6
+Info:  0.0 76.9    Net $abc$2423749$aiger$o8935 budget -0.695000 ns (17,50) -> (17,50)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55831.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.2 77.2  Source $auto$alumacc.cc:548:replace_alu$55831.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.9 78.1    Net $techmap2426839$abc$2423749$lut$aiger$o8945.A[2] budget -0.196000 ns (17,50) -> (17,63)
+Info:                Sink $abc$2423749$lut$aiger$o8945.A3
+Info:  0.1 78.2  Source $abc$2423749$lut$aiger$o8945.O6
+Info:  1.1 79.4    Net $techmap2426840$auto$abc_ops_reintegrate.cc:611:reintegrate$2424132.A[1] budget -0.194000 ns (17,63) -> (14,49)
+Info:                Sink $techmap2426840$auto$abc_ops_reintegrate.cc:611:reintegrate$2424132.A[1]$LUT$2300.A1
+Info:  0.1 79.5  Source $techmap2426840$auto$abc_ops_reintegrate.cc:611:reintegrate$2424132.A[1]$LUT$2300.O6
+Info:  0.0 79.5    Net $techmap2426840$auto$abc_ops_reintegrate.cc:611:reintegrate$2424132.A[1]$legal$2299 budget -0.682000 ns (14,49) -> (14,49)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57283.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.3 79.8  Source $auto$alumacc.cc:548:replace_alu$57283.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.8 80.6    Net $techmap2426843$auto$abc_ops_reintegrate.cc:611:reintegrate$2424131.A[2] budget -0.193000 ns (14,49) -> (17,43)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424131.A3
+Info:  0.1 80.7  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424131.O6
+Info:  0.0 80.7    Net $abc$2423749$aiger$o8956 budget -0.676000 ns (17,43) -> (17,43)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55825.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 80.9  Source $auto$alumacc.cc:548:replace_alu$55825.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  1.0 82.0    Net $techmap2426854$abc$2423749$lut$aiger$o8966.A[2] budget -0.193000 ns (17,43) -> (17,55)
+Info:                Sink $abc$2423749$lut$aiger$o8966.A3
+Info:  0.1 82.1  Source $abc$2423749$lut$aiger$o8966.O6
+Info:  0.7 82.8    Net $techmap2426855$auto$abc_ops_reintegrate.cc:611:reintegrate$2424127.A[1] budget -0.190000 ns (17,55) -> (24,53)
+Info:                Sink $techmap2426855$auto$abc_ops_reintegrate.cc:611:reintegrate$2424127.A[1]$LUT$2328.A1
+Info:  0.1 82.9  Source $techmap2426855$auto$abc_ops_reintegrate.cc:611:reintegrate$2424127.A[1]$LUT$2328.O6
+Info:  0.0 82.9    Net $techmap2426855$auto$abc_ops_reintegrate.cc:611:reintegrate$2424127.A[1]$legal$2327 budget -0.664000 ns (24,53) -> (24,53)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57286.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 83.2  Source $auto$alumacc.cc:548:replace_alu$57286.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.6 83.8    Net $techmap2426855$auto$abc_ops_reintegrate.cc:611:reintegrate$2424127.A[2] budget -0.189000 ns (24,53) -> (23,49)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424127.A3
+Info:  0.1 83.9  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424127.O6
+Info:  0.0 83.9    Net $abc$2423749$aiger$o8976 budget -0.659000 ns (23,49) -> (23,49)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55849.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 84.1  Source $auto$alumacc.cc:548:replace_alu$55849.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.4 84.6    Net $techmap2426866$abc$2423749$lut$aiger$o8986.A[2] budget -0.314000 ns (23,49) -> (24,49)
+Info:                Sink $abc$2423749$lut$aiger$o8986.A3
+Info:  0.1 84.7  Source $abc$2423749$lut$aiger$o8986.O6
+Info:  0.3 85.0    Net $techmap2426867$auto$abc_ops_reintegrate.cc:611:reintegrate$2424123.A[1] budget -0.648000 ns (24,49) -> (24,49)
+Info:                Sink $techmap2426867$auto$abc_ops_reintegrate.cc:611:reintegrate$2424123.A[1]$LUT$2352.A1
+Info:  0.1 85.1  Source $techmap2426867$auto$abc_ops_reintegrate.cc:611:reintegrate$2424123.A[1]$LUT$2352.O6
+Info:  0.0 85.1    Net $techmap2426867$auto$abc_ops_reintegrate.cc:611:reintegrate$2424123.A[1]$legal$2351 budget -0.648000 ns (24,49) -> (24,49)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57289.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 85.3  Source $auto$alumacc.cc:548:replace_alu$57289.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.8 86.2    Net $techmap2426867$auto$abc_ops_reintegrate.cc:611:reintegrate$2424123.A[2] budget -0.185000 ns (24,49) -> (23,45)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424123.A3
+Info:  0.1 86.3  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424123.O6
+Info:  0.0 86.3    Net $abc$2423749$aiger$o8996 budget -0.642000 ns (23,45) -> (23,45)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55840.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 86.6  Source $auto$alumacc.cc:548:replace_alu$55840.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.7 87.2    Net $techmap2426878$abc$2423749$lut$aiger$o9006.A[2] budget -0.185000 ns (23,45) -> (30,46)
+Info:                Sink $abc$2423749$lut$aiger$o9006.A3
+Info:  0.1 87.4  Source $abc$2423749$lut$aiger$o9006.O6
+Info:  0.4 87.8    Net $techmap2426879$auto$abc_ops_reintegrate.cc:611:reintegrate$2424119.A[1] budget -0.182000 ns (30,46) -> (24,46)
+Info:                Sink $techmap2426879$auto$abc_ops_reintegrate.cc:611:reintegrate$2424119.A[1]$LUT$2376.A1
+Info:  0.1 87.9  Source $techmap2426879$auto$abc_ops_reintegrate.cc:611:reintegrate$2424119.A[1]$LUT$2376.O6
+Info:  0.0 87.9    Net $techmap2426879$auto$abc_ops_reintegrate.cc:611:reintegrate$2424119.A[1]$legal$2375 budget -0.632000 ns (24,46) -> (24,46)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57292.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 88.2  Source $auto$alumacc.cc:548:replace_alu$57292.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.6 88.7    Net $techmap2426879$auto$abc_ops_reintegrate.cc:611:reintegrate$2424119.A[2] budget -0.181000 ns (24,46) -> (24,43)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424119.A3
+Info:  0.1 88.9  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424119.O6
+Info:  0.0 88.9    Net $abc$2423749$aiger$o9016 budget -0.626000 ns (24,43) -> (24,43)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55837.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 89.1  Source $auto$alumacc.cc:548:replace_alu$55837.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.6 89.7    Net $techmap2426890$abc$2423749$lut$aiger$o9026.A[2] budget -0.181000 ns (24,43) -> (23,47)
+Info:                Sink $abc$2423749$lut$aiger$o9026.A5
+Info:  0.1 89.8  Source $abc$2423749$lut$aiger$o9026.O5
+Info:  0.4 90.3    Net $techmap2426891$auto$abc_ops_reintegrate.cc:611:reintegrate$2424115.A[1] budget -0.616000 ns (23,47) -> (23,47)
+Info:                Sink $techmap2426891$auto$abc_ops_reintegrate.cc:611:reintegrate$2424115.A[1]$LUT$2400.A1
+Info:  0.1 90.4  Source $techmap2426891$auto$abc_ops_reintegrate.cc:611:reintegrate$2424115.A[1]$LUT$2400.O6
+Info:  0.0 90.4    Net $techmap2426891$auto$abc_ops_reintegrate.cc:611:reintegrate$2424115.A[1]$legal$2399 budget -0.616000 ns (23,47) -> (23,47)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57295.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 90.6  Source $auto$alumacc.cc:548:replace_alu$57295.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  1.0 91.6    Net $techmap2426891$auto$abc_ops_reintegrate.cc:611:reintegrate$2424115.A[2] budget -0.178000 ns (23,47) -> (24,40)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424115.A3
+Info:  0.1 91.7  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424115.O6
+Info:  0.0 91.7    Net $abc$2423749$aiger$o9036 budget -0.611000 ns (24,40) -> (24,40)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55813.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 92.0  Source $auto$alumacc.cc:548:replace_alu$55813.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.6 92.6    Net $techmap2426902$abc$2423749$lut$aiger$o9046.A[2] budget -0.178000 ns (24,40) -> (23,43)
+Info:                Sink $abc$2423749$lut$aiger$o9046.A3
+Info:  0.2 92.7  Source $abc$2423749$lut$aiger$o9046.O5
+Info:  0.3 93.0    Net $techmap2426903$auto$abc_ops_reintegrate.cc:611:reintegrate$2424111.A[1] budget -0.602000 ns (23,43) -> (23,43)
+Info:                Sink $techmap2426903$auto$abc_ops_reintegrate.cc:611:reintegrate$2424111.A[1]$LUT$2424.A1
+Info:  0.1 93.1  Source $techmap2426903$auto$abc_ops_reintegrate.cc:611:reintegrate$2424111.A[1]$LUT$2424.O6
+Info:  0.0 93.1    Net $techmap2426903$auto$abc_ops_reintegrate.cc:611:reintegrate$2424111.A[1]$legal$2423 budget -0.602000 ns (23,43) -> (23,43)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57298.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 93.4  Source $auto$alumacc.cc:548:replace_alu$57298.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.6 94.0    Net $techmap2426903$auto$abc_ops_reintegrate.cc:611:reintegrate$2424111.A[2] budget -0.174000 ns (23,43) -> (24,38)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424111.A3
+Info:  0.1 94.1  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424111.O6
+Info:  0.0 94.1    Net $abc$2423749$aiger$o9056 budget -0.597000 ns (24,38) -> (24,38)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55801.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 94.3  Source $auto$alumacc.cc:548:replace_alu$55801.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.8 95.1    Net $techmap2426914$abc$2423749$lut$aiger$o9066.A[2] budget -0.174000 ns (24,38) -> (23,45)
+Info:                Sink $abc$2423749$lut$aiger$o9066.A4
+Info:  0.1 95.2  Source $abc$2423749$lut$aiger$o9066.O6
+Info:  0.6 95.9    Net $techmap2426915$auto$abc_ops_reintegrate.cc:611:reintegrate$2424107.A[1] budget -0.172000 ns (23,45) -> (17,41)
+Info:                Sink $techmap2426915$auto$abc_ops_reintegrate.cc:611:reintegrate$2424107.A[1]$LUT$2448.A1
+Info:  0.1 96.0  Source $techmap2426915$auto$abc_ops_reintegrate.cc:611:reintegrate$2424107.A[1]$LUT$2448.O6
+Info:  0.0 96.0    Net $techmap2426915$auto$abc_ops_reintegrate.cc:611:reintegrate$2424107.A[1]$legal$2447 budget -0.588000 ns (17,41) -> (17,41)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57301.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 96.2  Source $auto$alumacc.cc:548:replace_alu$57301.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  0.8 97.0    Net $techmap2426915$auto$abc_ops_reintegrate.cc:611:reintegrate$2424107.A[2] budget -0.171000 ns (17,41) -> (14,33)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2424107.A4
+Info:  0.1 97.2  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2424107.O6
+Info:  0.0 97.2    Net $abc$2423749$aiger$o9076 budget -0.584000 ns (14,33) -> (14,33)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55795.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S3
+Info:  0.2 97.4  Source $auto$alumacc.cc:548:replace_alu$55795.genblk1.slice[1].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O3
+Info:  1.5 98.9    Net $techmap2427279$auto$abc_ops_reintegrate.cc:611:reintegrate$2423993.A[3] budget -0.171000 ns (14,33) -> (17,44)
+Info:                Sink $abc$2423749$lut$aiger$o10880.A3
+Info:  0.1 99.0  Source $abc$2423749$lut$aiger$o10880.O5
+Info:  1.2 100.2    Net $techmap2427295$auto$abc_ops_reintegrate.cc:611:reintegrate$2423978.A[1] budget -0.168000 ns (17,44) -> (17,34)
+Info:                Sink $auto$abc_ops_reintegrate.cc:611:reintegrate$2423978.A1
+Info:  0.1 100.3  Source $auto$abc_ops_reintegrate.cc:611:reintegrate$2423978.O6
+Info:  0.0 100.3    Net $abc$2423749$aiger$o10955 budget -0.567000 ns (17,34) -> (17,34)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[5].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S2
+Info:  0.4 100.7  Source $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[5].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 100.8    Net $abc$2423749$aiger$i12231 budget -0.165000 ns (17,34) -> (17,33)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[6].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.1 100.9  Source $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[6].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 101.0    Net $abc$2423749$aiger$i12243 budget -0.165000 ns (17,33) -> (17,32)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[7].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.1 101.1  Source $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[7].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 101.2    Net $abc$2423749$aiger$i12255 budget -0.165000 ns (17,32) -> (17,31)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[8].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.1 101.3  Source $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[8].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CO3
+Info:  0.1 101.5    Net $abc$2423749$aiger$i12267 budget -0.165000 ns (17,31) -> (17,30)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[9].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.CIN
+Info:  0.2 101.7  Source $auto$alumacc.cc:548:replace_alu$57343.genblk1.slice[9].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O0
+Info:  1.1 102.8    Net $techmap2428685$abc$2423749$lut$aiger$o18305.A[1] budget -0.164000 ns (17,30) -> (17,46)
+Info:                Sink $auto$xilinx_dffopt.cc:338:execute$2430046.A5
+Info:  0.1 102.9  Source $auto$xilinx_dffopt.cc:338:execute$2430046.O5
+Info:  0.0 102.9    Net $auto$xilinx_dffopt.cc:347:execute$2430047 budget -0.704000 ns (17,46) -> (17,46)
+Info:                Sink $auto$ff.cc:337:slice$86157.D
+Info:  0.1 103.0  Setup $auto$ff.cc:337:slice$86157.D
+Info: 32.9 ns logic, 70.1 ns routing
+
+Info: Critical path report for clock 'clk200' (posedge -> posedge):
+Info: curr total
+Info:  0.1  0.1  Source $auto$ff.cc:337:slice$87097.Q
+Info:  0.3  0.4    Net tickgen.count[0] budget 0.836000 ns (141,105) -> (141,105)
+Info:                Sink $abc$2423749$lut$not$aiger2423748$1021.A1
+Info:  0.1  0.5  Source $abc$2423749$lut$not$aiger2423748$1021.O6
+Info:  0.4  0.9    Net $auto$alumacc.cc:548:replace_alu$55807.Y[0] budget 1.008000 ns (141,105) -> (141,106)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55807.Y[0]$LUT$1158.A1
+Info:  0.1  1.1  Source $auto$alumacc.cc:548:replace_alu$55807.Y[0]$LUT$1158.O6
+Info:  0.0  1.1    Net $auto$alumacc.cc:548:replace_alu$55807.Y[0]$legal$1157 budget 0.835000 ns (141,106) -> (141,106)
+Info:                Sink $auto$alumacc.cc:548:replace_alu$55807.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.S0
+Info:  0.5  1.6  Source $auto$alumacc.cc:548:replace_alu$55807.genblk1.slice[0].genblk1.carry4$split$muxcy0$PACKED_CARRY4$.O2
+Info:  0.0  1.6    Net $auto$alumacc.cc:548:replace_alu$55807.Y[2] budget 0.985000 ns (141,106) -> (141,106)
+Info:                Sink $auto$ff.cc:337:slice$87099.D
+Info:  0.1  1.7  Setup $auto$ff.cc:337:slice$87099.D
+Info: 1.0 ns logic, 0.7 ns routing
+
+Warning: Max frequency for clock    'clk': 9.70 MHz (FAIL at 200.00 MHz)
+Info: Max frequency for clock 'clk200': 588.93 MHz (PASS at 200.00 MHz)
+
+Info: Slack histogram:
+Info:  legend: * represents 15 endpoint(s)
+Info:          + represents [1,15) endpoint(s)
+Info: [-98048, -92924) |**+
+Info: [-92924, -87800) |+
+Info: [-87800, -82676) |+
+Info: [-82676, -77552) | 
+Info: [-77552, -72428) |+
+Info: [-72428, -67304) |**+
+Info: [-67304, -62180) |+
+Info: [-62180, -57056) |+
+Info: [-57056, -51932) |+
+Info: [-51932, -46808) |+
+Info: [-46808, -41684) |**+
+Info: [-41684, -36560) |*+
+Info: [-36560, -31436) | 
+Info: [-31436, -26312) | 
+Info: [-26312, -21188) | 
+Info: [-21188, -16064) | 
+Info: [-16064, -10940) | 
+Info: [-10940,  -5816) |************************************************************ 
+Info: [ -5816,   -692) |************************************************+
+Info: [  -692,   4432) |************************************************+
+Info: Running post-routing legalisation...
+
+1 warning, 0 errors

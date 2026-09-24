@@ -1,0 +1,32 @@
+{
+ "schema": "trinity.bram-activations.v1",
+ "model": "BitNet b1.58 2B4T",
+ "token": 128000,
+ "elements": 2560,
+ "steps": "embedding row (bf16) -> RMSNorm (float32, eps 1e-5, bf16) * input_layernorm weight (bf16) -> absmax int8 (scale = 127 / max|x|, round half to even, clamp [-128, 127])",
+ "source": {
+  "repo": "microsoft/bitnet-b1.58-2B-4T",
+  "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+  "file": "model.safetensors",
+  "size": 1178623988
+ },
+ "ranges": {
+  "embedding_row": [
+   655421008,
+   655426128
+  ],
+  "input_layernorm": [
+   656731728,
+   656736848
+  ]
+ },
+ "rms_variance": 1.0787872076034546,
+ "peak": 0.0810546875,
+ "scale": 1566.8433837890625,
+ "counts": {
+  "zero": 75,
+  "min": -86,
+  "max": 127
+ },
+ "sha256": "22a1e1cce68dae99d61062af7fd7b89408561d4fd849ed2b50553ff6b47c2650"
+}

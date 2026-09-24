@@ -31,6 +31,11 @@ module tms_bram_ooc #(
         TrinityBramTritEngineD5T27 eng (.clk(clk), .rst_n(rst_n), .en(1'b1), .ready(), .start(start), .enc_word(word), .dec_out(dec),
             .rdata(rdata), .enc_lanes(lanes), .done(done), .write_ticks(write_ticks), .read_ticks(read_ticks),
             .bad_words(bad_words), .invalid_groups(invalid_groups), .pos(pos), .neg(neg), .dot(dot), .chk(chk));
+    end else if (FORMAT == 3) begin : d5p
+        // d5p (read-only store only): the codec decodes format 3 as d5 bytes; the store adds the pair's parity byte.
+        TrinityBramTritEngineD5PT27 eng (.clk(clk), .rst_n(rst_n), .en(1'b1), .ready(), .start(start), .enc_word(word), .dec_out(dec),
+            .rdata(rdata), .enc_lanes(lanes), .done(done), .write_ticks(write_ticks), .read_ticks(read_ticks),
+            .bad_words(bad_words), .invalid_groups(invalid_groups), .pos(pos), .neg(neg), .dot(dot), .chk(chk));
     end else begin : d5d2
         TrinityBramTritEngineD5D2T27 eng (.clk(clk), .rst_n(rst_n), .en(1'b1), .ready(), .start(start), .enc_word(word), .dec_out(dec),
             .rdata(rdata), .enc_lanes(lanes), .done(done), .write_ticks(write_ticks), .read_ticks(read_ticks),
