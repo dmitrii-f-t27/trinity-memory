@@ -30,7 +30,9 @@
 //       [2] PLL locked, [3] the controller returned to IDLE at least once since
 //       reset (`recalibrated`: a wrong self-test read or a failed alignment step).
 // UART (N15, 115200 8N1): see t27/rtl/fpga_ddr3_status.t27 for the H and S lines
-// and t27/rtl/fpga_ddr3_pattern.t27 for the pattern test's lines.
+// and t27/rtl/fpga_ddr3_pattern.t27 for the pattern test's lines. UBER_UART 1
+// hands N15 to ddr3_top's debug UART instead (9600 8N1, UberDDR3's own text; only
+// with UberDDR3 read under `define UART_DEBUG_BIST`, make DDR3_UART_DEBUG_BIST=1).
 //
 // Pattern test (PATTERN_TEST 1): after o_calib_complete, rounds of a write of
 // every burst address below PATTERN_BURSTS with address-unique data, a read-back
@@ -53,7 +55,9 @@ module tms_ddr3_ax7203 #(
     parameter [31:0] PATTERN_HOLD = 32'd0,      // controller clocks between a pass's last write ack and its first read
     parameter [31:0] PATTERN_ROUNDS = 32'd0,    // rounds (true + complement pass), 0 = until reset
     parameter [31:0] PATTERN_WATCHDOG = 32'd16777216, // clocks without progress after which the test stops
-    parameter integer UART_DIV = 0              // clocks per UART bit; 0 = 115200 baud from the controller clock
+    parameter integer UART_DIV = 0,             // clocks per UART bit; 0 = 115200 baud from the controller clock
+    parameter integer UBER_UART = 0             // 1: N15 carries ddr3_top's own debug UART (9600 baud; synthesize
+                                                // UberDDR3 with UART_DEBUG_BIST) instead of our H/S lines
 ) (
     input  wire                      clk200_p,
     input  wire                      clk200_n,
@@ -124,6 +128,7 @@ module tms_ddr3_ax7203 #(
     // ---- UberDDR3 ----
     wire        calib_complete;
     wire [31:0] debug1;
+    wire        uber_uart_tx, our_uart_tx;
     // User Wishbone port: 25-bit burst address, 64 * BYTE_LANES data bits (beat k,
     // lane l at [8*(BYTE_LANES*k+l) +: 8]), one select bit per byte. The t27 test
     // has four 64-bit data words; words at or above BYTE_LANES are unused.
@@ -173,7 +178,7 @@ module tms_ddr3_ax7203 #(
         .io_ddr3_dq(ddr3_dq), .io_ddr3_dqs(ddr3_dqs_p), .io_ddr3_dqs_n(ddr3_dqs_n), .o_ddr3_dm(ddr3_dm),
         .o_ddr3_odt(ddr3_odt),
         .o_calib_complete(calib_complete), .o_debug1(debug1),
-        .i_user_self_refresh(1'b0), .uart_tx()
+        .i_user_self_refresh(1'b0), .uart_tx(uber_uart_tx)
     );
 
     // ---- status line and pattern test: reporter, test, line emitter, UART transmitter ----
@@ -234,8 +239,12 @@ module tms_ddr3_ax7203 #(
     TrinityFpgaUartTxT27 uart (
         .clk(clk_ctrl), .rst_n(!rst), .en(1'b1), .ready(),
         .start(tx_start), .data(tx_byte), .baud_div(BAUD_DIV),
-        .busy(tx_busy), .shift(), .count(), .bits(), .tx(uart_tx)
+        .busy(tx_busy), .shift(), .count(), .bits(), .tx(our_uart_tx)
     );
+    // UBER_UART 1 (the UART_DEBUG_BIST build of #61): UberDDR3's self-test text at
+    // 9600 baud replaces our lines on N15; our reporter still runs but is not heard.
+    // Without UART_DEBUG defined, ddr3_top drives no uart_tx, so UBER_UART stays 0.
+    assign uart_tx = UBER_UART != 0 ? uber_uart_tx : our_uart_tx;
 
     assign led = {recalibrated, pll_locked, calib_complete, heartbeat};
 endmodule
