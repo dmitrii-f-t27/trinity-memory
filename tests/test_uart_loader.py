@@ -657,3 +657,98 @@ class ProtocolModel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FakePort:
+    """A serial port whose far end is tools/uart_loader_protocol.DeviceModel: what the host
+    writes is fed to the model, what the model sends comes back on read. A pause of more
+    than the board's inter-byte timeout after the last write is the model's timeout."""
+
+    def __init__(self, model, timeout_s):
+        # The time of the last byte lives with the model (the device), not the port object:
+        # a port closed and opened again does not reset the device's timeout.
+        self.model, self.timeout_s = model, timeout_s
+        self.sent = 0
+        self.baudrate = 115200
+        if not hasattr(model, "last_write"):
+            model.last_write = None
+
+    @property
+    def in_waiting(self):
+        return len(self._pending())
+
+    def _pending(self):
+        out = b"".join(proto.expected_bytes(item) for item in self.model.out)
+        return out[self.sent:]
+
+    def write(self, data):
+        for x in data:
+            self.model.rx(x)
+        self.model.last_write = __import__("time").monotonic()
+        return len(data)
+
+    def flush(self):
+        pass
+
+    def read(self, n=1):
+        import time
+        if self.model.last_write is not None and time.monotonic() - self.model.last_write > self.timeout_s:
+            self.model.timeout()
+            self.model.last_write = None
+        data = self._pending()[:n]
+        if not data:
+            time.sleep(0.001)
+        self.sent += len(data)
+        return data
+
+    def close(self):
+        pass
+
+
+class HostTool(unittest.TestCase):
+    """tools/fpga-uart-loader.py against the protocol model: retransmission after every
+    injected fault, duplicate handling, read-back and the record's statistics."""
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("fpga_uart_loader_tool", ROOT / "tools/fpga-uart-loader.py")
+        cls.tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.tool)
+
+    def test_faults_are_retransmitted_and_the_data_reads_back(self):
+        import time
+        tool = self.tool
+        model = proto.DeviceModel()
+        model.out.clear()
+        ports = []
+
+        def opener(_name, _baud):
+            ports.append(FakePort(model, tool.DEVICE_TIMEOUT_S))
+            if len(ports) > 1:
+                ports[-1].sent = ports[-2].sent
+            return ports[-1]
+
+        rng = random.Random(7)
+        data = bytes(rng.getrandbits(8) for _ in range(5000))
+        args = argparse_namespace(ack_timeout=0.2, guard=0.12, max_attempts=4, first_seq=1, garbage_bytes=16)
+        link = tool.Link("fake", 115200, time.monotonic(), opener=opener)
+        loader = tool.Loader(link, args, random.Random(3))
+        faults = {"corrupt": {0}, "drop": {1}, "abort": {2}, "garbage": {3}, "duplicate": {4}}
+        result = tool.transfer(loader, data, 0x100, 1000, faults)
+        self.assertTrue(result["identical"])
+        self.assertEqual((result["chunks"], result["acked"]), (5, 5))
+        self.assertEqual(result["retransmits"], {"crc": 1, "timeout": 2})
+        dup = result["per_chunk"][4]["duplicate"]["reply"]
+        self.assertEqual(dup["reason_name"], "duplicate")
+        self.assertEqual(model.c["frames_duplicate"], 1)
+        self.assertEqual(model.frames_ok, 5)
+        self.assertEqual(bytes(model.store[0x100:0x100 + 5000]), data)
+        status = loader.status()
+        self.assertEqual(status["nak_crc"], 1)
+        self.assertEqual(status["nak_timeout"], 2)
+
+
+def argparse_namespace(**kwargs):
+    import argparse
+    return argparse.Namespace(**kwargs)
