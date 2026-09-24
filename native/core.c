@@ -20,6 +20,7 @@
 #include "tensorpack_json.h"
 #include "tensorpack_cli.h"
 #include "http.h"
+#include "fpga_link.h"
 #include "bridge.h"
 #include "client.h"
 #include "random.h"

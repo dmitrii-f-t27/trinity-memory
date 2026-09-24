@@ -9,6 +9,13 @@ TMRuntime *tm_runtime_new(int32_t port, size_t max_request, size_t max_object,
 int32_t tm_runtime_start(TMRuntime *runtime);
 int32_t tm_runtime_port(TMRuntime *runtime);
 void tm_runtime_close(TMRuntime *runtime);
+/* Select the fpga backend before start: the UART link of t27/fpga_link.t27 to the device at
+ * path (path_size bytes) and its configured evidence. Returns 0, or -1 (bad arguments, already
+ * running or configured, allocation failure). */
+int32_t tm_runtime_fpga(TMRuntime *runtime, uint8_t *path, size_t path_size, uint32_t baud,
+                        uint32_t reply_ms, uint32_t quiet_ms, uint32_t attempts, uint32_t min_protocol,
+                        uint32_t region, uint8_t *bitstream_sha256, uint32_t idcode, uint64_t dna,
+                        uint32_t build_id);
 size_t tm_runtime_stored_bytes(TMRuntime *runtime);
 size_t tm_runtime_object_count(TMRuntime *runtime);
 struct TMTPJSONWorkspace *tm_runtime_tensor_new(size_t json_bytes, size_t max_trits);

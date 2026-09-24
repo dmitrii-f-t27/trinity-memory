@@ -17,18 +17,32 @@ double tm_json_strtod(uint8_t *);
 size_t tm_float_shortest(double, uint8_t *, size_t);
 int32_t tm_os_random(uint8_t *, size_t);
 int32_t tm_os_sha256(uint8_t *, size_t, uint8_t *);
+uint64_t tm_os_monotonic_ns(void);
+int32_t tm_os_serial_open(uint8_t *, size_t, uint32_t);
+int64_t tm_os_serial_read(int32_t, uint8_t *, size_t, uint32_t);
+int64_t tm_os_serial_write(int32_t, uint8_t *, size_t, uint32_t);
+int32_t tm_os_serial_drain(int32_t);
+int32_t tm_os_serial_close(int32_t);
 #include "codecs.h"
 #include "container.h"
 #include "tensorpack.h"
 #include "json.h"
 #include "json_writer.h"
 #include "tensorpack_json.h"
+#include "fpga_link.h"
 #include "bridge.h"
 
-typedef struct { TMBridgeState state; TMTPJSONWorkspace tensor; } BridgeHarness;
+typedef struct { TMBridgeState state; TMTPJSONWorkspace tensor; TMLink link; } BridgeHarness;
 
+static void link_free(TMLink *l) {
+    if (l->configured) tl_close(l);
+    free(l->path); free(l->bitstream); free(l->rx); free(l->frame); free(l->capture); free(l->image);
+    free(l->x); free(l->act); free(l->acc); free(l->seen); free(l->status); free(l->z);
+    free(l->loaded_digest); free(l->image_digest);
+}
 void bridge_test_free(BridgeHarness *h) {
     if (!h) return;
+    link_free(&h->link);
     free(h->state.slots); free(h->state.pool); free(h->state.temporary);
     free(h->state.values); free(h->state.json_tokens); free(h->state.json_arena);
     free(h->tensor.tokens); free(h->tensor.arena); free(h->tensor.items);
@@ -60,6 +74,30 @@ BridgeHarness *bridge_test_new(size_t request, size_t object, size_t storage, si
         !h->tensor.tokens || !h->tensor.arena || !h->tensor.items || !h->tensor.shapes || !h->tensor.scales || !h->tensor.axes ||
         tm_bridge_init(s) != 0) { bridge_test_free(h); return NULL; }
     return h;
+}
+/* The fpga backend on the harness: the link's buffers, as native/runtime.c's tm_runtime_fpga. */
+int32_t bridge_test_fpga(BridgeHarness *h, uint8_t *path, size_t path_size, uint32_t baud, uint32_t reply_ms,
+                         uint32_t quiet_ms, uint32_t attempts, uint32_t min_protocol, uint32_t region,
+                         uint8_t *bitstream, uint32_t idcode, uint64_t dna, uint32_t build_id) {
+    TMLink *l = &h->link;
+    if (l->configured || !path || !path_size || path_size > 1023 || !attempts) return -1;
+    size_t trits = h->state.max_trits;
+    l->image_capacity = trits / 2 + 65536; l->capture_capacity = l->image_capacity * 2 + 1048576;
+    l->rx_capacity = 16384; l->frame_capacity = 8192; l->x_capacity = trits; l->act_capacity = 1024 * 80;
+    l->acc_capacity = trits;
+    l->path = malloc(path_size); l->bitstream = malloc(32); l->rx = malloc(l->rx_capacity);
+    l->frame = malloc(l->frame_capacity); l->capture = malloc(l->capture_capacity); l->image = malloc(l->image_capacity);
+    l->x = malloc(l->x_capacity); l->act = calloc(l->act_capacity, 1); l->acc = calloc(trits, sizeof(*l->acc));
+    l->seen = calloc(1024, 1); l->status = calloc(23, sizeof(*l->status)); l->z = calloc(11, sizeof(*l->z));
+    l->loaded_digest = calloc(32, 1); l->image_digest = calloc(32, 1);
+    if (!l->path || !l->bitstream || !l->rx || !l->frame || !l->capture || !l->image || !l->x || !l->act || !l->acc ||
+        !l->seen || !l->status || !l->z || !l->loaded_digest || !l->image_digest) return -1;
+    memcpy(l->path, path, path_size); memcpy(l->bitstream, bitstream, 32);
+    l->path_size = path_size; l->baud = baud; l->reply_ms = reply_ms; l->quiet_ms = quiet_ms;
+    l->max_attempts = attempts; l->min_protocol = min_protocol; l->region = region;
+    l->idcode = idcode; l->dna = dna; l->build_id = build_id; l->fd = -1; l->configured = true;
+    h->state.backend = 1; h->state.transport = 1; h->state.link = l;
+    return 0;
 }
 int64_t bridge_test_call(BridgeHarness *h, uint8_t *request, size_t length,
                          uint8_t *output, size_t capacity, int32_t *status) {

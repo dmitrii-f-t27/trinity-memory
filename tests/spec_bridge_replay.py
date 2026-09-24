@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCUMENT_PATH = ROOT / "conformance" / "memory_bridge.json"
 HANDLE = re.compile(r"^[0-9a-f]{32}$")
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 def load_document():
@@ -66,6 +67,9 @@ def check_format(kind, value, path):
     if kind == "uuid4-hex32":
         if not (isinstance(value, str) and HANDLE.match(value) and value[12] == "4" and value[16] in "89ab"):
             raise VectorFailure(f"{path}: {value!r} is not a version-4 UUID in 32 lowercase hex characters")
+    elif kind == "sha256-hex64":
+        if not (isinstance(value, str) and SHA256.match(value)):
+            raise VectorFailure(f"{path}: {value!r} is not a sha256 in 64 lowercase hex characters")
     else:
         raise VectorFailure(f"{path}: unknown format {kind!r}")
 
@@ -98,7 +102,10 @@ def check(name, status, body, expect, request=None):
         if not isinstance(result, dict) or key not in result:
             raise VectorFailure(f"{name}.result.{key}: missing")
     for key, kind in expect.get("result_format", {}).items():
-        check_format(kind, result.get(key) if isinstance(result, dict) else None, f"{name}.result.{key}")
+        value = result
+        for part in key.split("."):          # a dotted key is a path into the result
+            value = value.get(part) if isinstance(value, dict) else None
+        check_format(kind, value, f"{name}.result.{key}")
     return result
 
 
@@ -114,7 +121,9 @@ def replay(document, session_factory, *, transport=False, only=None):
             skipped.append(identifier)
             continue
         limits = dict(vector.get("limits", {}))
-        with session_factory(limits) as session:
+        # A vector with a backend (fpga) needs a session on that backend and its device double.
+        context = session_factory(limits, vector["backend"]) if "backend" in vector else session_factory(limits)
+        with context as session:
             if kind == "rpc":
                 request = vector.get("request")
                 body = json.dumps(request).encode() if request is not None else vector["request_text"].encode()
@@ -144,3 +153,32 @@ def replay(document, session_factory, *, transport=False, only=None):
             else:
                 raise VectorFailure(f"{identifier}: unknown kind {kind!r}")
     return run, steps, skipped
+
+
+def fpga_double(backend):
+    """Context manager for a vector's fpga backend: yields (serial path, FpgaDevice options). The device
+    double is tests/fake_fpga_device.py on a pseudo-terminal with the vector's `double` options, or a
+    path that does not exist when `double` is {"absent": true}."""
+    import contextlib
+    import sys
+
+    @contextlib.contextmanager
+    def run():
+        if backend.get("name") != "fpga":
+            raise VectorFailure(f"unknown backend {backend!r}")
+        device = backend["device"]
+        options = dict(device["evidence"], **{k: v for k, v in device.items() if k != "evidence"})
+        double = backend.get("double", {})
+        if double.get("absent"):
+            yield "/nonexistent/trinity-memory-device", options
+            return
+        sys.path.insert(0, str(ROOT / "tests"))
+        from fake_fpga_device import FakeDevice
+        fake = FakeDevice(build_id=int(double.get("build_id", "1d474000"), 16), protocol=double.get("protocol"),
+                          faults=double.get("faults", ()),
+                          result_faults={int(k): v for k, v in double.get("result_faults", {}).items()})
+        try:
+            yield fake.path, options
+        finally:
+            fake.close()
+    return run()
