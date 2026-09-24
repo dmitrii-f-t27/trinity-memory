@@ -19,10 +19,20 @@ Faults act on the byte streams, each once:
   {"kind": "reset", "after_frames": n}                      after the host's nth frame: the reset button
                                                             (the H line; the store keeps its data)
 `result_faults` {row: delta} make the device's accumulator of that row wrong by delta.
+`run_faults` [{"status": 2} | {"stray": n} | {"invalid": n}, ...]: the device's next runs, one
+entry each, end early (status 2, only the Z lines) or report n stray words or n invalid codes.
 Everything the device sent is in `tx_log`, everything it received in `rx_log`.
+
+`pace_baud`: without it the fake answers as fast as the pty takes bytes. With it, the host's
+bytes reach the model one per 10 / pace_baud seconds (the UART line into the device) and the
+device's bytes leave on the same schedule (the line out), so the host's deadlines meet a line of
+that rate: the wire-time terms and the per-line deadline extension of t27/fpga_link.t27 matter.
+The pacing is Python time.monotonic() scheduling, not a UART: it is only as exact as the thread
+wakes up.
 """
 from __future__ import annotations
 
+import collections
 import ctypes as C
 import os
 import select
@@ -51,9 +61,10 @@ def t27_compute(trits, rows, cols, x):
 
 class FakeDevice:
     def __init__(self, *, build_id: int = 0x1D474000, store_log2: int = 20, compute=t27_compute, faults=(),
-                 result_faults=None, byte_timeout: float = 0.05, protocol: int | None = None):
+                 result_faults=None, byte_timeout: float = 0.05, protocol: int | None = None,
+                 run_faults=(), pace_baud: int | None = None):
         self.model = link.MatvecDevice(store_log2=store_log2, build_id=build_id, compute=compute,
-                                       result_faults=dict(result_faults or {}))
+                                       result_faults=dict(result_faults or {}), run_faults=list(run_faults))
         if protocol is not None:
             self.model.c["config"] = (protocol << 24) | (self.model.c["config"] & 0xFFFFFF)
         self.model.out.clear()            # powered up long ago: no H line is waiting
@@ -71,7 +82,11 @@ class FakeDevice:
         self.lock = threading.Lock()
         self._frame = None                # (cmd, start position, expected length) of the frame being received
         self._stop = False
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.byte_time = 10.0 / pace_baud if pace_baud else 0.0
+        self.inq = collections.deque()   # paced: (arrival time, byte) of the host's bytes on the line
+        self.rx_free = self.tx_free = 0.0
+        self.tx_idle = True
+        self.thread = threading.Thread(target=self._run_paced if pace_baud else self._run, daemon=True)
         self.thread.start()
 
     # ---- the host's byte stream ----
@@ -185,6 +200,61 @@ class FakeDevice:
                     self.model.timeout()
                     self._flush()
                     last = time.monotonic()
+
+    def _run_paced(self):
+        last = time.monotonic()
+        while not self._stop:
+            now = time.monotonic()
+            with self.lock:
+                batch = bytearray()
+                while self.inq and self.inq[0][0] <= now:
+                    arrival, byte = self.inq.popleft()
+                    batch.append(byte)
+                    last = arrival
+                if batch:
+                    self._receive(bytes(batch))
+                if not self.inq and self.model.state != "hunt" and now - last >= self.byte_timeout:
+                    self.model.timeout()
+                    self._flush()
+                    last = now
+            waits = [0.02]
+            if self.inq:
+                waits.append(max(0.0, self.inq[0][0] - now))
+            elif self.model.state != "hunt":
+                waits.append(max(0.0, self.byte_timeout - (now - last)))
+            want_write = bool(self.pending)
+            if want_write and not self.tx_idle and self.tx_free > now + self.byte_time:
+                waits.append(self.tx_free - now - self.byte_time)
+                want_write = False
+            try:
+                readable, writable, _ = select.select([self.master], [self.master] if want_write else [], [], min(waits))
+            except (OSError, ValueError):
+                return
+            now = time.monotonic()
+            if readable:
+                try:
+                    data = os.read(self.master, 65536)
+                except OSError:
+                    data = b""
+                for byte in data:
+                    self.rx_free = max(self.rx_free, now) + self.byte_time
+                    self.inq.append((self.rx_free, byte))
+            if writable:
+                with self.lock:
+                    if self.pending:
+                        if self.tx_idle:
+                            self.tx_free = max(self.tx_free, now)
+                            self.tx_idle = False
+                        due = int((now - self.tx_free) / self.byte_time) + 1
+                        count = max(1, min(len(self.pending), due, 512))
+                        try:
+                            sent = os.write(self.master, bytes(self.pending[:count]))
+                        except OSError:
+                            sent = 0
+                        del self.pending[:sent]
+                        self.tx_free += sent * self.byte_time
+                    if not self.pending:
+                        self.tx_idle = True
 
     def close(self):
         self._stop = True

@@ -148,12 +148,15 @@ module TrinityMemoryBridgeSpec {
     //     fpga identity only with all five present and well formed, and hardware is true
     //     exactly for fpga. The device matvec takes rows padded to 16-byte words of 64
     //     (baseline2) or 80 (dense5) lanes, at most 1024 rows per run and 1024 words per
-    //     row, 32-bit signed accumulators. Wire extension of the loader (protocol 2 -> 3):
+    //     row, 32-bit signed accumulators. Wire extension of the loader (protocol 4: the DDR3
+    //     loader's protocol 3 of #63 part 2 plus these):
     //     frames 'X' activations (addr = first 80-byte block, len = bytes, a multiple of 8,
     //     at most 51 blocks) and 'M' matvec (addr = region, a multiple of 16; len 12:
     //     rows, cols, format as u32), acknowledged with command indices 5 and 6; the device
     //     answers a run with one Y line per row (a = seq << 24 | row, v = y) and eleven Z
-    //     lines (a = seq << 24 | 11 << 16 | index).
+    //     lines (a = seq << 24 | 11 << 16 | index); Z line 0 is the run status: 0 ran, 1 refused
+    //     (only the Z lines: a configuration outside the limits, or a region past the store),
+    //     2 ended early (only the Z lines: the bus words stopped coming, or the run was aborted).
     pub const TMS_BRIDGE_EVIDENCE_BITSTREAM: u32 = 1;
     pub const TMS_BRIDGE_EVIDENCE_CAPTURE: u32 = 2;
     pub const TMS_BRIDGE_EVIDENCE_IDCODE: u32 = 4;
@@ -175,7 +178,10 @@ module TrinityMemoryBridgeSpec {
     pub const TMS_DEVICE_CHUNK_BYTES: u32 = 4096;
     pub const TMS_DEVICE_MATVEC_PAYLOAD_BYTES: u32 = 12;
     pub const TMS_DEVICE_Z_COUNT: u32 = 11;
-    pub const TMS_DEVICE_PROTOCOL_MATVEC: u32 = 3;
+    pub const TMS_DEVICE_PROTOCOL_MATVEC: u32 = 4;
+    // Z line 0: 1 the run was refused (named REJECTED: the spec gate reserves the word REFUSED).
+    pub const TMS_DEVICE_RUN_REJECTED: u32 = 1;
+    pub const TMS_DEVICE_RUN_SHORT: u32 = 2;
     pub const TMS_WIRE_CMD_ACTIVATIONS: u32 = 88;
     pub const TMS_WIRE_CMD_MATVEC: u32 = 77;
     pub const TMS_WIRE_INDEX_ACTIVATIONS: u32 = 5;
@@ -374,6 +380,12 @@ module TrinityMemoryBridgeSpec {
         return len == (TMS_DEVICE_MATVEC_PAYLOAD_BYTES as u64) && addr % (TMS_DEVICE_WORD_BYTES as u64) == 0 && addr < store_bytes;
     }
 
+    // The run's region addr .. addr + image bytes lies in the store; otherwise the device refuses
+    // the run (status 1). The M handler checks it: the header check bounds only the start address.
+    pub fn tms_device_region_fits(addr: u64, rows: u64, cols: u64, codec: u32, store_bytes: u64) -> bool {
+        return addr <= store_bytes && tms_device_image_bytes(rows, cols, codec) <= store_bytes - addr;
+    }
+
     pub fn tms_device_y_word(seq: u32, row: u32) -> u32 {
         return ((seq & 255) << 24) | (row & 16777215);
     }
@@ -473,7 +485,8 @@ module TrinityMemoryBridgeSpec {
     }
     invariant wire_extension_codes_are_new {
         assert TMS_WIRE_CMD_ACTIVATIONS == 88 && TMS_WIRE_CMD_MATVEC == 77 && TMS_WIRE_TAG_Y == 89 && TMS_WIRE_TAG_Z == 90
-            && TMS_WIRE_INDEX_ACTIVATIONS == 5 && TMS_WIRE_INDEX_MATVEC == 6 && TMS_DEVICE_PROTOCOL_MATVEC == 3;
+            && TMS_WIRE_INDEX_ACTIVATIONS == 5 && TMS_WIRE_INDEX_MATVEC == 6 && TMS_DEVICE_PROTOCOL_MATVEC == 4
+            && TMS_DEVICE_RUN_REJECTED == 1 && TMS_DEVICE_RUN_SHORT == 2;
     }
 
     // Tests execute in the generated C test runner.
@@ -598,6 +611,9 @@ module TrinityMemoryBridgeSpec {
         assert !tms_device_act_frame_valid(1023, 88);
         assert tms_device_matvec_frame_valid(0, 12, 536870912) && !tms_device_matvec_frame_valid(8, 12, 536870912);
         assert !tms_device_matvec_frame_valid(0, 0, 536870912) && !tms_device_matvec_frame_valid(536870912, 12, 536870912);
+        assert tms_device_matvec_frame_valid(4080, 12, 4096) && !tms_device_region_fits(4080, 1, 2560, 0, 4096);
+        assert tms_device_region_fits(3456, 1, 2560, 0, 4096) && !tms_device_region_fits(3472, 1, 2560, 0, 4096);
+        assert tms_device_region_fits(0, 320, 2560, 1, 163840) && !tms_device_region_fits(16, 320, 2560, 1, 163840);
         assert tms_device_y_word(64, 319) == 1073742143 && tms_device_z_word(64, 10) == 1074462730;
         assert tms_device_checksum_step(0, 5) == 5 && tms_device_checksum_step(2147483648, 0) == 1;
         assert tms_device_accumulator_fits(6912) && tms_device_accumulator_fits(81920) && !tms_device_accumulator_fits(16777216);

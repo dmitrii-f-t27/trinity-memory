@@ -7,11 +7,13 @@
     inputs and on random byte streams with corrupted lines, read-back frames with bad CRCs and
     bad lengths, stray A5 bytes, garbage and a stream cut off at the end.
 (c) The serial OS hooks of native/platform.c on a pseudo-terminal: refusals (no path, not a
-    terminal, unsupported rate), a read that times out (0 after the timeout, also when a signal
-    arrives meanwhile), partial reads, a write larger than the pty's buffer against a slow reader
-    (every byte arrives, in order), a write that cannot finish in time (-1), hang-up (-1),
-    drain and close. The WebAssembly stubs of the same hooks compile for wasm32 and return -1
-    (when zig or a wasm clang and node are available).
+    terminal, unsupported rate), the rates this host can set, the exclusive open (a second open
+    of the same device fails on Linux; macOS pseudo-terminals ignore TIOCEXCL, so there it is not
+    asserted), a read that times out (0 after the timeout, also when a signal arrives meanwhile),
+    partial reads, a write larger than the pty's buffer against a slow reader (every byte
+    arrives, in order), a write that cannot finish in time (-1), hang-up (-1), drain and close.
+    The WebAssembly stubs of the same hooks compile for wasm32 and return -1 (when zig or a wasm
+    clang, a wasm linker and node are available).
 """
 from __future__ import annotations
 
@@ -231,6 +233,37 @@ class SerialHooks(unittest.TestCase):
             os.close(master)
             os.close(slave)
 
+    def test_rates_and_exclusive_open(self):
+        rate_ok = [n.call("tm_os_serial_rate_ok", I32, [U32], b) for b in (9600, 19200, 38400, 57600, 115200, 230400)]
+        self.assertEqual(rate_ok, [1] * 6)
+        self.assertEqual(n.call("tm_os_serial_rate_ok", I32, [U32], 12345), 0)
+        high = [n.call("tm_os_serial_rate_ok", I32, [U32], b) for b in (460800, 921600)]
+        if sys.platform == "darwin":
+            self.assertEqual(high, [0, 0])                     # <sys/termios.h> stops at B230400
+        elif sys.platform.startswith("linux"):
+            self.assertEqual(high, [1, 1])
+        master, slave, path = pty_pair()
+        try:
+            for baud, ok in zip((460800, 921600), high):
+                fd = open_port(path, baud)
+                self.assertEqual(fd >= 0, bool(ok), baud)
+                if fd >= 0:
+                    n.call("tm_os_serial_close", I32, [I32], fd)
+            first = open_port(path)
+            self.assertGreaterEqual(first, 0)
+            second = open_port(path)
+            if sys.platform.startswith("linux"):
+                self.assertEqual(second, -1)                   # TIOCEXCL: EBUSY for the second opener
+            if second >= 0:
+                n.call("tm_os_serial_close", I32, [I32], second)
+            self.assertEqual(n.call("tm_os_serial_close", I32, [I32], first), 0)
+            third = open_port(path)                            # closing released the exclusive open
+            self.assertGreaterEqual(third, 0)
+            n.call("tm_os_serial_close", I32, [I32], third)
+        finally:
+            os.close(master)
+            os.close(slave)
+
     def test_reads_time_out_and_return_partial_data(self):
         master, slave, path = pty_pair()
         fd = open_port(path)
@@ -341,24 +374,38 @@ def wasm_compiler():
     return None
 
 
-@unittest.skipUnless(wasm_compiler() and shutil.which("node"), "zig or a wasm clang, and node, required")
+def wasm_linker():
+    """zig's wasm-ld, WASM_LD, wasm-ld, or a versioned wasm-ld-NN (Ubuntu's lld-NN packages
+    install only /usr/bin/wasm-ld-NN; /usr/bin/wasm-ld comes with the unversioned lld)."""
+    if shutil.which("zig"):
+        return ["zig", "wasm-ld"]
+    for name in (os.environ.get("WASM_LD"), "wasm-ld"):
+        if name and shutil.which(name):
+            return [shutil.which(name)]
+    versioned = sorted({Path(d) / f for d in os.environ.get("PATH", "").split(os.pathsep) if d and Path(d).is_dir()
+                        for f in os.listdir(d) if f.startswith("wasm-ld-") and f[8:].isdigit()},
+                       key=lambda p: int(p.name[8:]), reverse=True)
+    return [str(versioned[0])] if versioned else None
+
+
+@unittest.skipUnless(wasm_compiler() and wasm_linker() and shutil.which("node"),
+                     "zig or a wasm clang, a wasm linker, and node, required")
 class WasmStubs(unittest.TestCase):
     def test_serial_hooks_fail_cleanly_in_wasm(self):
         with tempfile.TemporaryDirectory() as work:
             obj, wasm = Path(work) / "platform.o", Path(work) / "platform.wasm"
             subprocess.run([*wasm_compiler(), "-std=c11", "-O2", "-ffreestanding", "-nostdlib", "-c",
                             str(ROOT / "native/platform.c"), "-o", str(obj)], check=True, capture_output=True)
-            exports = ["tm_os_serial_open", "tm_os_serial_read", "tm_os_serial_write", "tm_os_serial_drain",
-                       "tm_os_serial_close", "tm_os_monotonic_ns"]
-            linker = ["zig", "wasm-ld"] if shutil.which("zig") else ["wasm-ld"]
-            subprocess.run([*linker, "--no-entry", *[f"--export={name}" for name in exports], str(obj), "-o", str(wasm)],
+            exports = ["tm_os_serial_rate_ok", "tm_os_serial_open", "tm_os_serial_read", "tm_os_serial_write",
+                       "tm_os_serial_drain", "tm_os_serial_close", "tm_os_monotonic_ns"]
+            subprocess.run([*wasm_linker(), "--no-entry", *[f"--export={name}" for name in exports], str(obj), "-o", str(wasm)],
                            check=True, capture_output=True)
             script = ("const m=new WebAssembly.Instance(new WebAssembly.Module(require('fs').readFileSync(process.argv[1]))).exports;"
-                      "console.log(JSON.stringify([m.tm_os_serial_open(0,0,115200),Number(m.tm_os_serial_read(0,0,1,1)),"
+                      "console.log(JSON.stringify([m.tm_os_serial_rate_ok(115200),m.tm_os_serial_open(0,0,115200),Number(m.tm_os_serial_read(0,0,1,1)),"
                       "Number(m.tm_os_serial_write(0,0,1,1)),m.tm_os_serial_drain(0),m.tm_os_serial_close(0),"
                       "Number(m.tm_os_monotonic_ns())]))")
             result = subprocess.run(["node", "-e", script, str(wasm)], capture_output=True, text=True, check=True)
-            self.assertEqual(result.stdout.strip(), "[-1,-1,-1,-1,-1,0]")
+            self.assertEqual(result.stdout.strip(), "[0,-1,-1,-1,-1,-1,0]")
 
 
 if __name__ == "__main__":

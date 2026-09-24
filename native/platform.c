@@ -5,6 +5,7 @@
  * cleanly (-1) and the clock reads 0. The crypto hooks are not built for wasm. */
 #include <stddef.h>
 #include <stdint.h>
+int32_t tm_os_serial_rate_ok(uint32_t baud) { (void)baud; return 0; }
 int32_t tm_os_serial_open(uint8_t *path, size_t size, uint32_t baud) { (void)path; (void)size; (void)baud; return -1; }
 int64_t tm_os_serial_read(int32_t fd, uint8_t *output, size_t capacity, uint32_t timeout_ms) {
     (void)fd; (void)output; (void)capacity; (void)timeout_ms; return -1;
@@ -17,7 +18,10 @@ int32_t tm_os_serial_close(int32_t fd) { (void)fd; return -1; }
 uint64_t tm_os_monotonic_ns(void) { return 0; }
 #else
 #define _POSIX_C_SOURCE 200809L
-/* The termios rates above 38400 (B57600 .. B921600) are extensions: visible with these. */
+/* The termios rates above 38400 are extensions, visible with these macros. Linux defines
+ * B57600 .. B921600 (and more); macOS's <sys/termios.h> stops at B230400 (a higher rate needs
+ * the IOSSIOSPEED ioctl, which these hooks do not use), so there tm_os_serial_rate_ok refuses
+ * 460800 and 921600. TIOCEXCL (exclusive open) needs them too. */
 #if defined(__APPLE__)
 #define _DARWIN_C_SOURCE
 #else
@@ -30,6 +34,7 @@ uint64_t tm_os_monotonic_ns(void) { return 0; }
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <time.h>
 #include <unistd.h>
@@ -99,9 +104,17 @@ static int baud_constant(uint32_t baud, speed_t *speed) {
     }
 }
 
+/* 1 when this host's termios can set `baud` (a rate constant exists for it), else 0. */
+int32_t tm_os_serial_rate_ok(uint32_t baud) {
+    speed_t speed;
+    return baud_constant(baud, &speed) == 0 ? 1 : 0;
+}
+
 /* Open a serial device (path: size bytes, no NUL inside) at `baud`, 8N1, raw, no flow
- * control, non-blocking; pending input is discarded. Returns the descriptor or -1 (no such
- * path, not a terminal, unsupported rate, or a driver that refuses the settings). */
+ * control, non-blocking, exclusive (TIOCEXCL: a later open of the same device by another
+ * process fails with EBUSY on a real serial driver; macOS pseudo-terminals ignore it); pending
+ * input is discarded. Returns the descriptor or -1 (no such path, busy, not a terminal, a rate
+ * this host cannot set, or a driver that refuses the settings). */
 int32_t tm_os_serial_open(uint8_t *path, size_t size, uint32_t baud) {
     char name[1024];
     speed_t speed;
@@ -112,7 +125,7 @@ int32_t tm_os_serial_open(uint8_t *path, size_t size, uint32_t baud) {
     do { fd = open(name, O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC); } while (fd < 0 && errno == EINTR);
     if (fd < 0) return -1;
     struct termios t;
-    if (tcgetattr(fd, &t) != 0) { close(fd); return -1; }
+    if (tcgetattr(fd, &t) != 0 || ioctl(fd, TIOCEXCL) != 0) { close(fd); return -1; }
     t.c_iflag &= ~(tcflag_t)(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON | IXOFF | IXANY | INPCK);
     t.c_oflag &= ~(tcflag_t)OPOST;
     t.c_lflag &= ~(tcflag_t)(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
@@ -193,8 +206,11 @@ int32_t tm_os_serial_drain(int32_t fd) {
     }
 }
 
+/* Release the exclusive open (TIOCNXCL; the flag belongs to the device, not the descriptor)
+ * and close. */
 int32_t tm_os_serial_close(int32_t fd) {
     if (fd < 0) return -1;
+    (void)ioctl(fd, TIOCNXCL);
     return close(fd) == 0 ? 0 : -1;
 }
 #endif

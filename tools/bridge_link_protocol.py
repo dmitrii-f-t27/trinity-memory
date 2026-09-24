@@ -23,7 +23,7 @@ import uart_loader_protocol as proto
 CMD_ACT, CMD_MATVEC = 0x58, 0x4D                      # 'X' 'M'
 CMD_INDEX = {**proto.CMD_INDEX, CMD_ACT: 5, CMD_MATVEC: 6}
 TAG_Y, TAG_Z = "Y", "Z"
-PROTO = 3                                            # the loader's protocol 2 plus this extension
+PROTO = 4                                            # the DDR3 loader's protocol 3 (#63 part 2) plus this extension
 WORD_BYTES = 16
 ACT_BLOCK_BYTES = 80                                 # one activation block per word, both formats
 ACT_BANKS = 10                                       # eight activations (a u64) per bank
@@ -35,6 +35,7 @@ MATVEC_PAYLOAD = 12                                  # rows u32, cols u32, fmt u
 Z_NAMES = ["status", "rows", "words_per_row", "words", "cycles", "idle_clocks", "latency",
            "invalid_codes", "stray_words", "consumer_stalls", "checksum"]
 Z_COUNT = len(Z_NAMES)
+Z_RAN, Z_REFUSED, Z_SHORT = 0, 1, 2                  # Z line 0: ran, refused, ended early (words stopped or aborted)
 M32 = proto.M32
 
 
@@ -148,11 +149,14 @@ class MatvecDevice(proto.DeviceModel):
 
     compute(trits, rows, cols, x) -> list of int accumulators (default: exact Python sums).
     result_faults: row -> value added to that row's accumulator (a wrong device result).
+    run_faults: one entry per coming run, popped in order: {"status": 2} ends it early (only the
+    Z lines, status 2), {"stray": n} / {"invalid": n} report n stray words / invalid codes.
     The Z counters of a run are those of an ideal device (one word per clock, no idle clock,
     no latency): this is a model of the protocol, not of the timing.
     """
     compute: object = None
     result_faults: dict = field(default_factory=dict)
+    run_faults: list = field(default_factory=list)
 
     def __post_init__(self):
         self.act = bytearray(ACT_ENTRIES * ACT_BLOCK_BYTES)
@@ -209,13 +213,22 @@ class MatvecDevice(proto.DeviceModel):
         self.run_matvec(self.seq, self.addr, rows, cols, fmt)
 
     def run_matvec(self, seq, addr, rows, cols, fmt):
+        """Status 1 (refused, only the Z lines) for rows outside 1..1024, cols 0, a format other
+        than 0 or 1, more than 1024 words per row, or a region addr .. addr + rows * wpr * 16 that
+        runs past the store. The last rule is the device's M handler's (it knows the store size;
+        the matvec module's own configuration check cannot see it): docs/bridge.md, spec
+        tms_device_region_fits. The header check only bounds the start address."""
         wpr = words_per_row(cols, fmt) if cols else 0
         refused = not (1 <= rows <= MAX_ROWS and cols >= 1 and fmt in (0, 1) and wpr <= MAX_WPR
                        and addr + rows * wpr * WORD_BYTES <= len(self.store))
         z = [0] * Z_COUNT
+        fault = self.run_faults.pop(0) if self.run_faults and not refused else {}
         if refused:
-            z[0] = 1
+            z[0] = Z_REFUSED
             self.runs.append({"seq": seq, "refused": True})
+        elif fault.get("status") == Z_SHORT:
+            z[0], z[2] = Z_SHORT, wpr
+            self.runs.append({"seq": seq, "short": True})
         else:
             n = lanes(fmt)
             trits, invalid = [], 0
@@ -237,7 +250,8 @@ class MatvecDevice(proto.DeviceModel):
                 self.out.append(("Y", y_word(seq, r), v & M32))
             z[1:4] = [rows, wpr, rows * wpr]
             z[4] = rows * wpr
-            z[7] = invalid
+            z[7] = invalid + fault.get("invalid", 0)
+            z[8] = fault.get("stray", 0)
             z[10] = result_checksum(y)
             self.runs.append({"seq": seq, "rows": rows, "cols": cols, "fmt": fmt, "addr": addr, "y": y})
         for i, v in enumerate(z):

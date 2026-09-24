@@ -19,8 +19,13 @@ fake AX7203 that speaks the UART loader's protocol plus the matvec extension byt
 - faults: a corrupted load chunk (crc nak), a dropped byte (timeout nak), a lost ack (the
   retransmission is answered duplicate), a corrupted Y line (the run is repeated with a new seq),
   a lost matvec ack (its Y lines are taken), garbage before a line, a device whose result is wrong
-  in one row (reported under reference, not hidden), a device with another build id or protocol, a
-  port that does not exist, a codec the device does not decode and an empty row.
+  in one row (reported under reference, not hidden; the next dot uploads and reads back again), a
+  device store changed behind the host's back (invalid codes: uploaded again within the call), a
+  run that ended early or saw stray words (repeated), a refused run (fails at once), a device with
+  another build id or protocol (distinct messages), a port that does not exist, a codec the device
+  does not decode and an empty row;
+- a paced fake device (bytes at 10 / baud seconds each way, as on a UART line) with the default
+  reply timeout and quiet time, at 115200 and 9600 baud: the wire-time terms of the deadlines.
 """
 from __future__ import annotations
 
@@ -28,6 +33,7 @@ import hashlib
 import os
 import random
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -113,6 +119,11 @@ class FpgaBackend(unittest.TestCase):
             bad = dict(good, evidence=dict(good["evidence"], **{key: good["evidence"][key].upper() + "0"}))
             with self.assertRaises(BridgeError):
                 check_identity(bad)
+            for suffix in ("\n", " ", "\r"):          # `$` would accept a final newline; fullmatch does not
+                trailing = dict(good, evidence=dict(good["evidence"], **{key: good["evidence"][key] + suffix}))
+                self.assertFalse(evidence_complete(trailing["evidence"]), (key, suffix))
+                with self.assertRaises(BridgeError):
+                    check_identity(trailing)
         for info in (dict(good, hardware=False), dict(good, backend="emulator", hardware=True), dict(good, backend="asic"),
                      dict(good, evidence=None)):
             with self.assertRaises(BridgeError):
@@ -129,10 +140,25 @@ class FpgaBackend(unittest.TestCase):
             BridgeServer(device=device("/dev/null"))
         for key, value in (("bitstream_sha256", "AB" * 32), ("bitstream_sha256", "ab" * 31), ("idcode", "0x3636093"),
                            ("dna", "0x389c0c2d85e85c"), ("build_id", "1d47400"), ("baud", 12345), ("region", 8),
-                           ("attempts", 0), ("reply_timeout", 0)):
-            with self.subTest(key=key):
+                           ("attempts", 0), ("reply_timeout", 0), ("bitstream_sha256", "ab" * 32 + "\n"),
+                           ("idcode", "0x13636093\n"), ("dna", "0x00389c0c2d85e85c\n"), ("build_id", "1d474000\n"),
+                           ("min_protocol", 3), ("min_protocol", 2), ("min_protocol", 0), ("min_protocol", 1 << 32),
+                           ("min_protocol", (1 << 32) + 4), ("min_protocol", True)):
+            with self.subTest(key=key, value=value):
                 with self.assertRaises(ValueError):
                     BridgeServer(backend="fpga", device=device("/dev/null", **{key: value}))
+        self.assertEqual(device("/dev/null", min_protocol=(1 << 32) - 1).native_arguments()[6], (1 << 32) - 1)
+        # A rate is accepted only when this host's termios can set it (macOS stops at 230400).
+        for baud in (9600, 115200, 230400, 460800, 921600):
+            with self.subTest(baud=baud):
+                if n.call("tm_os_serial_rate_ok", n.C.c_int32, [n.C.c_uint32], baud):
+                    self.assertEqual(device("/dev/null", baud=baud).native_arguments()[2], baud)
+                else:
+                    with self.assertRaisesRegex(ValueError, "cannot be set on this host"):
+                        device("/dev/null", baud=baud).native_arguments()
+        if sys.platform == "darwin":
+            self.assertEqual([n.call("tm_os_serial_rate_ok", n.C.c_int32, [n.C.c_uint32], b) for b in (230400, 460800, 921600)],
+                             [1, 0, 0])
         with BridgeServer() as server:
             from trinity_memory.bridge import BridgeClient
             caps = BridgeClient(server.url).capabilities()
@@ -237,11 +263,78 @@ class FpgaBackend(unittest.TestCase):
         tensor, _ = matrix(rng, 6, 300)
         data = encode_tensors([tensor])
         x = [rng.randint(-128, 127) for _ in range(300)]
-        result = client.dot(client.upload(data), "w", x)
+        handle = client.upload(data)
+        result = client.dot(handle, "w", x)
         want = self.emulator_dot(data, "w", x)["accumulators"]
         self.assertEqual(result["reference"], {"backend": "emulator", "mismatches": 1, "first_mismatch": 3})
         self.assertEqual(result["accumulators"][3], want[3] + 1)
         self.assertEqual(result["accumulators"][:3] + result["accumulators"][4:], want[:3] + want[4:])
+        # A mismatch forgets the upload cache: the next dot uploads and reads back again.
+        again = client.dot(handle, "w", x)
+        self.assertEqual((again["transfer"]["uploaded"], again["transfer"]["readback_bytes"]), (True, 6 * 4 * 16))
+
+    def test_a_changed_device_store_is_uploaded_again(self):
+        from trinity_memory.tensorpack import encode_tensors
+        rng = random.Random(1)
+        fake = self.fake()
+        client = self.serve(fake)
+        tensor, _ = matrix(rng, 4, 200)                     # dense5, 3 words (48 bytes) per row
+        data = encode_tensors([tensor])
+        handle = client.upload(data)
+        x = [rng.randint(-128, 127) for _ in range(200)]
+        want = self.emulator_dot(data, "w", x)["accumulators"]
+        first = client.dot(handle, "w", x)
+        self.assertEqual((first["accumulators"], first["transfer"]["uploaded"]), (want, True))
+        # An invalid dense5 code appears in row 2 behind the host's back (the cache says "same image").
+        with fake.lock:
+            fake.model.store[2 * 48] = 250
+        result = client.dot(handle, "w", x)
+        self.assertEqual(result["accumulators"], want)
+        self.assertEqual(result["reference"]["mismatches"], 0)
+        transfer = result["transfer"]
+        self.assertEqual((transfer["store_reloads"], transfer["uploaded"], transfer["readback_bytes"]), (1, True, 4 * 48))
+        self.assertEqual((transfer["matvec_runs"], transfer["device_counters"]["invalid_codes"]), (1, 0))
+        self.assertEqual([run.get("rows") for run in fake.model.runs[-2:]], [4, 4])
+        # A change to another valid code cannot show in the device's counters: the reference shows
+        # the wrong row, and the next dot uploads again.
+        with fake.lock:
+            fake.model.store[2 * 48] ^= 1
+        wrong = client.dot(handle, "w", x)
+        self.assertEqual((wrong["reference"]["mismatches"], wrong["reference"]["first_mismatch"]), (1, 2))
+        self.assertEqual((wrong["transfer"]["uploaded"], wrong["transfer"]["store_reloads"]), (False, 0))
+        fixed = client.dot(handle, "w", x)
+        self.assertEqual((fixed["accumulators"], fixed["transfer"]["uploaded"]), (want, True))
+
+    def test_short_stray_and_refused_runs(self):
+        import bridge_link_protocol as link
+        from trinity_memory.bridge import BridgeError
+        from trinity_memory.tensorpack import encode_tensors
+        rng = random.Random(11)
+        tensor, _ = matrix(rng, 3, 100)
+        data = encode_tensors([tensor])
+        x = [rng.randint(-128, 127) for _ in range(100)]
+        want = self.emulator_dot(data, "w", x)["accumulators"]
+        # Status 2 (the bus words stopped) and stray words: the run is repeated with a new seq.
+        fake = self.fake(run_faults=[{"status": 2}, {"stray": 1}])
+        client = self.serve(fake)
+        result = client.dot(client.upload(data), "w", x)
+        self.assertEqual(result["accumulators"], want)
+        self.assertEqual((result["transfer"]["matvec_attempts"], result["transfer"]["matvec_runs"]), (3, 1))
+        self.assertEqual(result["transfer"]["device_counters"]["stray_words"], 0)
+        self.assertEqual([("short" in r, r.get("rows")) for r in fake.model.runs], [(True, None), (False, 3), (False, 3)])
+        # A refused run (status 1) fails at once: repeating it would not help.
+        fake = self.fake()
+        client = self.serve(fake)
+        handle = client.upload(data)
+        saved = link.MAX_WPR
+        link.MAX_WPR = 1                                    # this device takes one word per row only
+        try:
+            with self.assertRaises(BridgeError) as caught:
+                client.dot(handle, "w", x)
+        finally:
+            link.MAX_WPR = saved
+        self.assertEqual((caught.exception.code, str(caught.exception)), (-32000, "device refused the matvec run"))
+        self.assertEqual([r.get("refused") for r in fake.model.runs], [True])
 
     def test_refusals_and_device_failures(self):
         from trinity_memory.bridge import BridgeError
@@ -250,15 +343,18 @@ class FpgaBackend(unittest.TestCase):
         tensor, _ = matrix(rng, 3, 100)
         data = encode_tensors([tensor, Tensor("d17", (2, 17), tuple([1] * 34), codec="dense17")])
         x = [1] * 100
-        for fake_options, message in (({"build_id": 0x12345678}, "build id"), ({"protocol": 2}, "protocol")):
-            with self.subTest(message=message):
+        for fake_options, message in (({"build_id": 0x12345678}, "device build id does not match the configured evidence"),
+                                      ({"protocol": 3}, "device protocol is below the configured minimum"),
+                                      ({"protocol": 2}, "device protocol is below the configured minimum")):
+            with self.subTest(message=message, options=fake_options):
                 client = self.serve(self.fake(**fake_options))
                 with self.assertRaises(BridgeError) as caught:
                     client.dot(client.upload(data), "w", x)
-                self.assertEqual(caught.exception.code, -32000)
-                self.assertIn(message, str(caught.exception))
-                with self.assertRaises(BridgeError):
-                    client.call("trinity_chipInfo")
+                self.assertEqual((caught.exception.code, str(caught.exception)), (-32000, message))
+                for method in ("trinity_chipInfo", "chip_info"):
+                    with self.assertRaises(BridgeError) as caught:
+                        client.call(method)
+                    self.assertEqual((caught.exception.code, str(caught.exception)), (-32000, message))
         from trinity_memory.bridge import BridgeClient, BridgeServer
         server = BridgeServer(backend="fpga", device=device("/nonexistent/cu.usbserial-110")).start()
         self.addCleanup(server.close)
@@ -275,6 +371,39 @@ class FpgaBackend(unittest.TestCase):
                 with self.assertRaises(BridgeError) as caught:
                     client.dot(target, name, activations)
                 self.assertEqual(caught.exception.code, -32602)
+
+    def paced_dot(self, baud, rows, cols, seed):
+        """One dot against a fake device paced at `baud`, with FpgaDevice's default reply timeout
+        (0.5 s), quiet time (0.15 s) and attempts (8)."""
+        from trinity_memory.bridge import BridgeClient, BridgeServer, FpgaDevice
+        from trinity_memory.tensorpack import encode_tensors
+        rng = random.Random(seed)
+        tensor, _ = matrix(rng, rows, cols)
+        data = encode_tensors([tensor])
+        x = [rng.randint(-128, 127) for _ in range(cols)]
+        fake = self.fake(pace_baud=baud, byte_timeout=0.1)
+        server = BridgeServer(backend="fpga", device=FpgaDevice(port=fake.path, baud=baud, **EVIDENCE)).start()
+        self.addCleanup(server.close)
+        client = BridgeClient(server.url, timeout=120)
+        handle = client.upload(data)
+        start = time.monotonic()
+        result = client.dot(handle, "w", x)
+        elapsed = time.monotonic() - start
+        self.assertEqual(result["accumulators"], self.emulator_dot(data, "w", x)["accumulators"])
+        transfer = result["transfer"]
+        # The line takes 10 / baud s per byte: the call cannot be faster than its bytes on the wire.
+        self.assertGreaterEqual(elapsed, (transfer["tx_bytes"] + transfer["rx_bytes"]) * 10 / baud * 0.5)
+        return transfer
+
+    def test_paced_line_meets_the_default_deadlines(self):
+        # 115200: a 64 x 1100 dense5 image (14,336 bytes, four L frames of up to 4110 bytes, 0.36 s
+        # each on the wire) and 76 lines of the run. 9600: 16 x 640 (2,048 bytes: one L frame of
+        # 2,062 bytes, 2.1 s on the wire, far longer than the 0.5 s reply timeout alone).
+        for baud, rows, cols in ((115200, 64, 1100), (9600, 16, 640)):
+            with self.subTest(baud=baud):
+                transfer = self.paced_dot(baud, rows, cols, seed=baud)
+                self.assertEqual((transfer["retransmits"], transfer["timeouts"], transfer["naks"]), (0, 0, 0), transfer)
+                self.assertEqual((transfer["matvec_attempts"], transfer["uploaded"]), (1, True))
 
     def test_real_chunk_through_the_fake_device(self):
         import stage1_chunk

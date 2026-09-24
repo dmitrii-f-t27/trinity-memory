@@ -141,9 +141,10 @@ fn tm_bridge_hex_fixed(w: *TMJsonWriter, value: u64, digits: u32) -> void {
     var d: u32 = digits;
     while (d > 0) { d = d - 1; tm_bridge_put(w, tm_bridge_hex_digit(((value >> ((d * 4) as u64)) & 15) as u8)); }
 }
-// The device evidence block: the configured identity (bitstream sha256, IDCODE, DNA, build id,
-// the last two checked against the device) and, when with_capture, the sha256 and size of every
-// byte received from the device during this call.
+// The device evidence block: the configured identity (bitstream sha256, IDCODE, DNA, build id;
+// of these only the build id is checked against the device, with the protocol of its config
+// word) and, when with_capture, the sha256 and size of every byte received from the device
+// during this call.
 fn tm_bridge_evidence(w: *TMJsonWriter, l: *TMLink, with_capture: bool) -> i32 {
     tm_bridge_text(w, "\"evidence\":{\"bitstream_sha256\":\""); tm_bridge_hex(w, l.bitstream, 32);
     tm_bridge_text(w, "\",\"idcode\":\"0x"); tm_bridge_hex_fixed(w, l.idcode as u64, 8);
@@ -171,11 +172,14 @@ fn tm_bridge_link_error(e: *TMBridgeError, status: i32) -> i32 {
     if (status == -1) { return tm_bridge_error(e, -32000, "cannot open the device serial port"); }
     if (status == -2) { return tm_bridge_error(e, -32000, "device serial I/O failed"); }
     if (status == -3) { return tm_bridge_error(e, -32000, "device did not acknowledge a frame"); }
-    if (status == -5) { return tm_bridge_error(e, -32000, "device build id or protocol does not match the configured evidence"); }
+    if (status == -5) { return tm_bridge_error(e, -32000, "device build id does not match the configured evidence"); }
     if (status == -6) { return tm_bridge_error(e, -32000, "device read-back differs from the uploaded image"); }
     if (status == -7) { return tm_bridge_error(e, -32000, "device matvec result incomplete or inconsistent"); }
     if (status == -8) { return tm_bridge_error(e, -32010, "tensor exceeds the device limits"); }
     if (status == -9) { return tm_bridge_error(e, -32010, "device capture exceeds its buffer"); }
+    if (status == -12) { return tm_bridge_error(e, -32000, "device protocol is below the configured minimum"); }
+    if (status == -13) { return tm_bridge_error(e, -32000, "device store does not hold the uploaded image"); }
+    if (status == -14) { return tm_bridge_error(e, -32000, "device refused the matvec run"); }
     return tm_bridge_error(e, -32603, "internal RPC error");
 }
 fn tm_bridge_init(s: *TMBridgeState) -> i32 {
@@ -402,7 +406,9 @@ fn tm_bridge_tp_info(s: *TMBridgeState, w: *TMJsonWriter, data: []u8, size: usiz
 }
 // compute.dot on the device: the tensor's trits (already decoded into s.values) go to the link as a
 // row-padded image, the activations as int8 bytes. The accumulators are the device's; the same
-// exact sums are computed in process and any row that differs is counted under "reference".
+// exact sums are computed in process and any row that differs is counted under "reference"
+// (the numbers themselves are not returned). A difference also forgets the link's upload cache,
+// so the next dot uploads the image again and reads it back.
 fn tm_bridge_dot_fpga(s: *TMBridgeState, l: *TMLink, name: i64, activations: i64, rows: usize, width: usize,
                       weight_offset: usize, codec: i32, shape: []u64, rank: usize, scales: []f64, scale_axis: i32,
                       w: *TMJsonWriter, e: *TMBridgeError) -> i32 {
@@ -425,6 +431,7 @@ fn tm_bridge_dot_fpga(s: *TMBridgeState, l: *TMLink, name: i64, activations: i64
         if (sum != l.acc[row]) { if (mismatches == 0) { first_mismatch = row as i64; } mismatches = mismatches + 1; }
         if (row > 0) { tm_bridge_put(w, 44); } tm_bridge_integer(w, l.acc[row]); row = row + 1;
     }
+    if (mismatches > 0) { tl_forget(l); }
     tm_bridge_text(w, "],\"scales\":["); row = 0;
     while (row < rows) {
         if (row > 0) { tm_bridge_put(w, 44); }
@@ -457,6 +464,7 @@ fn tm_bridge_dot_fpga(s: *TMBridgeState, l: *TMLink, name: i64, activations: i64
     tm_bridge_text(w, ",\"rx_bytes\":"); tm_bridge_unsigned(w, l.rx_bytes);
     tm_bridge_text(w, ",\"matvec_runs\":"); tm_bridge_unsigned(w, l.runs as u64);
     tm_bridge_text(w, ",\"matvec_attempts\":"); tm_bridge_unsigned(w, l.matvec_attempts as u64);
+    tm_bridge_text(w, ",\"store_reloads\":"); tm_bridge_unsigned(w, l.store_reloads as u64);
     tm_bridge_text(w, ",\"device_counters\":{\"words\":"); tm_bridge_unsigned(w, l.words);
     tm_bridge_text(w, ",\"cycles\":"); tm_bridge_unsigned(w, l.cycles);
     tm_bridge_text(w, ",\"idle_clocks\":"); tm_bridge_unsigned(w, l.idle_clocks);

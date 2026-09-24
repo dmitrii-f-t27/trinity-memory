@@ -342,7 +342,9 @@ def step(name, method, params=None, *, request_id=1, capture=None, description="
 
 FPGA_EVIDENCE = {"bitstream_sha256": "bcf6e804" + "0" * 56, "idcode": "0x13636093",
                  "dna": "0x00389c0c2d85e85c", "build_id": "1d474000"}
-FPGA_DEVICE = {"evidence": FPGA_EVIDENCE, "baud": 115200, "reply_timeout": 1.0, "quiet": 0.08, "attempts": 8}
+# quiet (the host's silence before a retransmission) is longer than the double's inter-byte
+# timeout (byte_timeout below), as on the board, so a partial frame is dropped before the resend.
+FPGA_DEVICE = {"evidence": FPGA_EVIDENCE, "baud": 115200, "reply_timeout": 1.0, "quiet": 0.3, "attempts": 8}
 FPGA_CONSTANTS = {
     "backends": {"emulator": {"id": 0, "transport": "in-process", "hardware": False},
                  "fpga": {"id": 1, "transport": "uart", "hardware": True}},
@@ -351,19 +353,22 @@ FPGA_CONSTANTS = {
     "device": {"word_bytes": 16, "lanes": {"baseline2": 64, "dense5": 80}, "max_rows_per_run": 1024,
                "max_words_per_row": 1024, "accumulator_bits": 32, "codecs": ["baseline2", "dense5"],
                "row_layout": "row-padded: every row starts at a 16-byte word; padding lanes are zero trits"},
-    "wire": {"protocol": 3, "frames": {"X": {"cmd": 88, "index": 5, "addr": "first 80-byte activation block",
+    "wire": {"protocol": 4, "frames": {"X": {"cmd": 88, "index": 5, "addr": "first 80-byte activation block",
                                              "len": "multiple of 8, at most 51 * 80 = 4080"},
                                        "M": {"cmd": 77, "index": 6, "addr": "region byte address, multiple of 16",
                                              "len": 12, "payload": "rows u32, cols u32, format u32 (0 baseline2, 1 dense5)"}},
              "lines": {"Y": "a = seq << 24 | row, v = y (32-bit two's complement)",
                        "Z": "a = seq << 24 | 11 << 16 | index, v = counter"},
              "z": ["status", "rows", "words_per_row", "words", "cycles", "idle_clocks", "latency",
-                   "invalid_codes", "stray_words", "consumer_stalls", "checksum"]},
+                   "invalid_codes", "stray_words", "consumer_stalls", "checksum"],
+             "z_status": {"0": "ran", "1": "refused (configuration, or a region past the store)",
+                          "2": "ended early (bus words stopped, or aborted)"}},
 }
 
 
 def fpga_backend(**double):
-    return {"name": "fpga", "device": FPGA_DEVICE, "double": {"build_id": "1d474000", "protocol": 3, **double}}
+    return {"name": "fpga", "device": FPGA_DEVICE,
+            "double": {"build_id": "1d474000", "protocol": 4, "byte_timeout": 0.2, **double}}
 
 
 def exact_rows(values, rows, cols, x):
@@ -392,7 +397,7 @@ def fpga_vectors():
     return [
         dict(rpc("fpga_capabilities_name_the_device", "trinity.capabilities",
                  result={"backend": "fpga", "hardware": True, "transport": "uart", "version": 1,
-                         "device": {"baud": 115200, "protocol_min": 3, "region": 0, "max_rows_per_run": 1024,
+                         "device": {"baud": 115200, "protocol_min": 4, "region": 0, "max_rows_per_run": 1024,
                                     "max_words_per_row": 1024, "codecs": ["baseline2", "dense5"], "evidence": FPGA_EVIDENCE}},
                  description="Backend fpga: hardware true, transport uart and the configured evidence; the device is not asked"),
              backend=fpga_backend()),
@@ -404,12 +409,16 @@ def fpga_vectors():
                              "synthetic constants and the evidence block identifies the device"),
              backend=fpga_backend()),
         dict(rpc("fpga_chip_info_refuses_another_build", "chip_info", error_code=-32000,
+                 error_message_contains="build id",
                  description="The device reports a build id other than the configured evidence"),
              backend=fpga_backend(build_id="12345678")),
-        dict(rpc("fpga_chip_info_refuses_protocol_2", "trinity_chipInfo", error_code=-32000,
-                 description="A loader without the matvec extension (protocol 2) is not an fpga backend device"),
-             backend=fpga_backend(protocol=2)),
+        dict(rpc("fpga_chip_info_refuses_protocol_3", "trinity_chipInfo", error_code=-32000,
+                 error_message_contains="protocol",
+                 description="A loader without the matvec extension (protocol 3, the DDR3 loader) is not an fpga "
+                             "backend device"),
+             backend=fpga_backend(protocol=3)),
         dict(rpc("fpga_chip_info_without_a_device", "trinity_chipInfo", error_code=-32000,
+                 error_message_contains="cannot open",
                  description="The configured serial port does not exist"),
              backend={"name": "fpga", "device": FPGA_DEVICE, "double": {"absent": True}}),
         {
@@ -426,9 +435,12 @@ def fpga_vectors():
                              "reference": {"backend": "emulator", "mismatches": 0, "first_mismatch": -1},
                              "evidence": FPGA_EVIDENCE,
                              "transfer": {"codec": "dense5", "image_bytes": a_rows * 2 * 16, "uploaded": True,
-                                          "readback_bytes": a_rows * 2 * 16, "matvec_runs": 1, "matvec_attempts": 1,
-                                          "retransmits": 0, "device_counters": {"words": a_rows * 2, "consumer_stalls": 0}}},
-                     result_format=evidence_format),
+                                          "readback_bytes": a_rows * 2 * 16, "matvec_runs": 1, "store_reloads": 0,
+                                          "device_counters": {"words": a_rows * 2, "consumer_stalls": 0}}},
+                     result_at_least={"transfer.matvec_attempts": 1},
+                     result_format=evidence_format,
+                     description="Retransmissions and repeated runs depend on timing (a stalled host process can "
+                                 "cause one), so they are not fixed here; tests/test_bridge_fpga.py checks them"),
                 step("dot_dense5_again", "compute.dot", {"handle": "$handle", "tensor_name": "a", "activations": xa2},
                      result={"accumulators": exact_rows(a_values, a_rows, a_cols, xa2),
                              "transfer": {"uploaded": False, "readback_bytes": 0}},
@@ -457,9 +469,12 @@ def fpga_vectors():
                 step("dot", "compute.dot", {"handle": "$handle", "tensor_name": "w", "activations": xw},
                      result={"accumulators": [y + (5 if r == 1 else 0) for r, y in enumerate(exact_rows(wide_values, 4, 1100, xw))],
                              "reference": {"backend": "emulator", "mismatches": 1, "first_mismatch": 1},
-                             "transfer": {"image_bytes": 4 * 14 * 16, "matvec_attempts": 2, "matvec_runs": 1, "naks": 1,
-                                          "timeouts": 1, "retransmits": 3, "bad_lines": 1}},
-                     result_format=evidence_format),
+                             "transfer": {"image_bytes": 4 * 14 * 16, "matvec_runs": 1}},
+                     result_at_least={"transfer.matvec_attempts": 2, "transfer.naks": 1, "transfer.timeouts": 1,
+                                      "transfer.retransmits": 3, "transfer.bad_lines": 1},
+                     result_format=evidence_format,
+                     description="Each fault forces at least one retransmission or repeated run; a stalled host "
+                                 "process can add more, never fewer, so these are lower bounds"),
             ],
         },
         {
@@ -468,7 +483,8 @@ def fpga_vectors():
             "description": "uploads are held in process memory; the dot fails with a transport error",
             "steps": [
                 step("upload", "memory.upload", {"data": b64(pack)}, capture={"handle": "handle"}, result={"backend": "fpga"}),
-                step("dot", "compute.dot", {"handle": "$handle", "tensor_name": "a", "activations": xa}, error_code=-32000),
+                step("dot", "compute.dot", {"handle": "$handle", "tensor_name": "a", "activations": xa}, error_code=-32000,
+                     error_message_contains="cannot open"),
             ],
         },
     ]
@@ -743,6 +759,10 @@ def build_bridge():
                               "pseudo-terminal with the vector's `double` options, or a port that does not exist "
                               "when `double` is {\"absent\": true}",
                    "result_format": "keys may be dotted paths into the result",
+                   "result_at_least": "dotted paths to integer counters and their lower bounds (counters that "
+                                      "timing can raise, such as retransmissions)",
+                   "error_message_contains": "with error_code: a substring the error message must contain (which "
+                                             "refusal it was, when several share one code)",
                    "kinds": {"rpc": "one request body, default or per-vector limits",
                              "transport": "raw HTTP framing (TCP replay only)",
                              "sequence": "ordered steps on one server; $name substitutes a captured result field"}},

@@ -320,6 +320,7 @@ static void device_backend(void) {
     assert(TL_CMD_ACT == TMS_WIRE_CMD_ACTIVATIONS && TL_CMD_MATVEC == TMS_WIRE_CMD_MATVEC);
     assert(TL_IX_ACT == TMS_WIRE_INDEX_ACTIVATIONS && TL_IX_MATVEC == TMS_WIRE_INDEX_MATVEC);
     assert(TL_PROTO_MATVEC == TMS_DEVICE_PROTOCOL_MATVEC);
+    assert(TL_RUN_REJECTED == TMS_DEVICE_RUN_REJECTED && TL_RUN_SHORT == TMS_DEVICE_RUN_SHORT);
     assert(tl_lanes(0) == tms_device_lanes(0) && tl_lanes(1) == tms_device_lanes(1));
     static int32_t trits[3 * 6912];
     static uint8_t image[8192];

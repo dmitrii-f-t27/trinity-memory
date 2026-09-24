@@ -6,7 +6,7 @@
 // tools/uart_loader_protocol.py) plus the matvec extension of docs/bridge.md,
 // "Wire protocol extension" (tools/bridge_link_protocol.py states it in Python).
 // Only raw serial I/O and the clock are OS hooks (native/platform.c):
-// tm_os_serial_open/read/write/drain/close and tm_os_monotonic_ns; sha256 is
+// tm_os_serial_rate_ok/open/read/write/drain/close and tm_os_monotonic_ns; sha256 is
 // tm_os_sha256. Caller-owned buffers in TMLink; no allocation here.
 // Include codecs.h and container.h first (tm_read_u32, tm_write_u32).
 module TrinityMemoryFpgaLink;
@@ -33,7 +33,13 @@ const TL_MAX_WPR: u32 = 1024;
 const TL_STATUS_COUNT: u32 = 23;
 const TL_Z_COUNT: u32 = 11;
 const TL_Z_ALL: u32 = 2047;
-const TL_PROTO_MATVEC: u32 = 3;
+// The matvec extension's protocol number: 4, one above the DDR3 loader's 3 (#63 part 2: its
+// not_ready nak and 14 more status lines), which the matvec build sits on.
+const TL_PROTO_MATVEC: u32 = 4;
+// Z line 0 (run status): 0 ran, 1 refused (configuration or region), 2 ended early (the bus
+// words stopped coming, or the run was aborted).
+const TL_RUN_REJECTED: u32 = 1;          // refused
+const TL_RUN_SHORT: u32 = 2;
 // Tag masks for the decoder: bit 0 H, 1 A, 2 N, 3 C (the loader's lines), 4 Y, 5 Z.
 const TL_TAGS_LOADER: u32 = 15;
 const TL_TAGS_LINK: u32 = 63;
@@ -61,6 +67,9 @@ const TL_ERR_LIMIT: i32 = -8;
 const TL_ERR_CAPTURE: i32 = -9;
 const TL_ERR_CONFIG: i32 = -10;
 const TL_ERR_TRIT: i32 = -11;
+const TL_ERR_PROTOCOL: i32 = -12;
+const TL_ERR_STORE: i32 = -13;
+const TL_ERR_REFUSED: i32 = -14;
 
 struct TLEvent {
     kind: u32, tag: u32, a: u32, v: u32, check_ok: bool,
@@ -88,7 +97,7 @@ struct TMLink {
     device_config: u32, device_build: u32, store_bytes: u64,
     frames: u32, retransmits: u32, naks: u32, timeouts: u32, bad_lines: u32,
     late: u32, garbage: u64, tx_bytes: u64, rx_bytes: u64,
-    uploaded: bool, readback_bytes: u64, matvec_attempts: u32, runs: u32,
+    uploaded: bool, readback_bytes: u64, matvec_attempts: u32, runs: u32, store_reloads: u32,
     words: u64, cycles: u64, idle_clocks: u64, latency: u64, invalid: u64, stray: u64, stalls: u64,
 }
 
@@ -307,7 +316,7 @@ fn tl_begin(l: *TMLink) -> void {
     l.capture_used = 0; l.capture_overflow = false;
     l.frames = 0; l.retransmits = 0; l.naks = 0; l.timeouts = 0; l.bad_lines = 0;
     l.late = 0; l.garbage = 0; l.tx_bytes = 0; l.rx_bytes = 0;
-    l.uploaded = false; l.readback_bytes = 0; l.matvec_attempts = 0; l.runs = 0;
+    l.uploaded = false; l.readback_bytes = 0; l.matvec_attempts = 0; l.runs = 0; l.store_reloads = 0;
     l.words = 0; l.cycles = 0; l.idle_clocks = 0; l.latency = 0; l.invalid = 0; l.stray = 0; l.stalls = 0;
 }
 
@@ -326,6 +335,10 @@ fn tl_open(l: *TMLink) -> i32 {
     l.loaded = false;
     return TL_OK;
 }
+
+// Forget the upload cache: the next dot uploads its image again and reads it back. The Bridge
+// calls it when a dot's accumulators differ from the in-process sums.
+fn tl_forget(l: *TMLink) -> void { l.loaded = false; }
 
 fn tl_next_seq(l: *TMLink) -> u32 {
     l.seq = (l.seq + 1) & 255;
@@ -481,7 +494,8 @@ fn tl_exchange(l: *TMLink, cmd: u32, addr: u32, payload: []u8, plen: usize, len:
     return TL_ERR_NO_REPLY;
 }
 
-// Status exchange: the 23 counters; checks the protocol of the config word and the build id.
+// Status exchange: the 23 counters; checks the protocol of the config word (TL_ERR_PROTOCOL)
+// and the build id (TL_ERR_IDENTITY).
 fn tl_handshake(l: *TMLink) -> i32 {
     var none: [1]u8 = [0];
     var status: i32 = tl_exchange(l, TL_CMD_STATUS, 0, none, 0, 0, 3, 3, false, none);
@@ -491,7 +505,8 @@ fn tl_handshake(l: *TMLink) -> i32 {
     if (store_log2 > 40) { return TL_ERR_IDENTITY; }
     var one: u64 = 1;
     l.store_bytes = one << (store_log2 as u64);
-    if ((l.device_config >> 24) < l.min_protocol || l.device_build != l.build_id) { return TL_ERR_IDENTITY; }
+    if ((l.device_config >> 24) < l.min_protocol) { return TL_ERR_PROTOCOL; }
+    if (l.device_build != l.build_id) { return TL_ERR_IDENTITY; }
     // Loads are the only frames counted in bytes_committed (status 14): if it moved since our last
     // upload, someone else loaded or the device was reset; either way upload again.
     if (l.loaded && l.status[14] != l.loaded_committed) { l.loaded = false; }
@@ -560,8 +575,13 @@ fn tl_send_activations(l: *TMLink, cols: usize, fmt: u32) -> i32 {
 
 // One matvec run of rows (<= 1024) rows at region byte address addr: the M frame, then the Y
 // line of every row and the eleven Z lines of its seq. A run is repeated (new seq) when its nak
-// comes, nothing of it arrives in time, a line of it fails its check, a row is missing or the Z
-// counters disagree with the request. acc[first ..] receives the rows.
+// comes, nothing of it arrives in time, a line of it fails its check, a row is missing, the Z
+// counters disagree with the request, the device reports status 2 (its words stopped coming or
+// it was aborted) or stray words (the reader delivered words the run did not expect). Status 1
+// (refused) fails at once with TL_ERR_REFUSED: repeating would not help. Invalid codes (Z7)
+// cannot come from a host-built image, so the device's store is not what was uploaded: the
+// upload cache is forgotten and TL_ERR_STORE returned (tl_dot uploads again, once).
+// acc[first ..] receives the rows.
 fn tl_matvec_run(l: *TMLink, addr: u32, rows: u32, cols: u32, fmt: u32, first: usize) -> i32 {
     var payload: [12]u8 = [0];
     tm_write_u32(payload, 0, rows); tm_write_u32(payload, 4, cols); tm_write_u32(payload, 8, fmt);
@@ -625,11 +645,14 @@ fn tl_matvec_run(l: *TMLink, addr: u32, rows: u32, cols: u32, fmt: u32, first: u
             }
         }
         if (!nak && !bad && l.z_mask == TL_Z_ALL) {
+            if (l.z[0] == TL_RUN_REJECTED) { return TL_ERR_REFUSED; }
             var all: bool = true; var i: u32 = 0;
             while (i < rows) { if (l.seen[i] == 0) { all = false; } i = i + 1; }
             var ok: bool = all && l.z[0] == 0 && l.z[1] == rows && (l.z[2] as u64) == wpr
                 && (l.z[3] as u64) == (rows as u64) * wpr
                 && l.z[10] == tl_result_checksum(&l.acc[first], rows as usize);
+            if (ok && l.z[7] != 0) { l.loaded = false; return TL_ERR_STORE; }
+            if (ok && l.z[8] != 0) { ok = false; }
             if (ok) {
                 l.frames = l.frames + 1; l.runs = l.runs + 1;
                 l.words = l.words + (l.z[3] as u64); l.cycles = l.cycles + (l.z[4] as u64);
@@ -638,7 +661,6 @@ fn tl_matvec_run(l: *TMLink, addr: u32, rows: u32, cols: u32, fmt: u32, first: u
                 l.stalls = l.stalls + (l.z[9] as u64);
                 return TL_OK;
             }
-            if (l.z[0] != 0) { return TL_ERR_RESULT; }
         }
         if (!heard && !nak) { l.timeouts = l.timeouts + 1; }
         attempt = attempt + 1;
@@ -646,21 +668,10 @@ fn tl_matvec_run(l: *TMLink, addr: u32, rows: u32, cols: u32, fmt: u32, first: u
     return TL_ERR_RESULT;
 }
 
-// y = W x on the device for rows x cols trits values[offset ..] (fmt 0 baseline2, 1 dense5) and
-// the activations l.x[0 .. cols): check the device, upload the row-padded image (unless the
-// same image is there), send the activations, run the matvec in runs of at most 1024 rows and
-// collect the accumulators into l.acc[0 .. rows). The capture of every byte received is in
-// l.capture[0 .. capture_used); a capture that did not fit fails the call.
-fn tl_dot(l: *TMLink, values: []i32, offset: usize, rows: usize, cols: usize, fmt: u32) -> i32 {
-    var status: i32 = tl_identify(l);
-    if (status != 0) { return status; }
-    if (rows == 0 || cols == 0 || rows > l.acc_capacity || cols > l.x_capacity) { return TL_ERR_LIMIT; }
-    var wpr: u64 = tl_words_per_row(cols as u64, fmt);
-    if (wpr > (TL_MAX_WPR as u64)) { return TL_ERR_LIMIT; }
-    var size: i64 = tl_image(values, offset, rows, cols, fmt, l.image, l.image_capacity);
-    if (size < 0) { return size as i32; }
-    if ((l.region as u64) % 16 != 0 || (l.region as u64) + (size as u64) > l.store_bytes) { return TL_ERR_LIMIT; }
-    status = tl_upload(l, size as usize);
+// Upload (unless cached), activations and the runs of one dot: TL_ERR_STORE when a run reports
+// invalid codes (the cache is then forgotten).
+fn tl_dot_pass(l: *TMLink, size: usize, rows: usize, cols: usize, fmt: u32, wpr: u64) -> i32 {
+    var status: i32 = tl_upload(l, size);
     if (status != 0) { return status; }
     status = tl_send_activations(l, cols, fmt);
     if (status != 0) { return status; }
@@ -673,6 +684,32 @@ fn tl_dot(l: *TMLink, values: []i32, offset: usize, rows: usize, cols: usize, fm
         if (status != 0) { return status; }
         first = first + n;
     }
+    return TL_OK;
+}
+
+// y = W x on the device for rows x cols trits values[offset ..] (fmt 0 baseline2, 1 dense5) and
+// the activations l.x[0 .. cols): check the device, upload the row-padded image (unless the
+// same image is there), send the activations, run the matvec in runs of at most 1024 rows and
+// collect the accumulators into l.acc[0 .. rows). A run that reports invalid codes means the
+// store does not hold the uploaded image: the image is uploaded and read back again and the
+// whole dot repeated, once (store_reloads); a second such run fails with TL_ERR_STORE. The
+// capture of every byte received is in l.capture[0 .. capture_used); a capture that did not
+// fit fails the call.
+fn tl_dot(l: *TMLink, values: []i32, offset: usize, rows: usize, cols: usize, fmt: u32) -> i32 {
+    var status: i32 = tl_identify(l);
+    if (status != 0) { return status; }
+    if (rows == 0 || cols == 0 || rows > l.acc_capacity || cols > l.x_capacity) { return TL_ERR_LIMIT; }
+    var wpr: u64 = tl_words_per_row(cols as u64, fmt);
+    if (wpr > (TL_MAX_WPR as u64)) { return TL_ERR_LIMIT; }
+    var size: i64 = tl_image(values, offset, rows, cols, fmt, l.image, l.image_capacity);
+    if (size < 0) { return size as i32; }
+    if ((l.region as u64) % 16 != 0 || (l.region as u64) + (size as u64) > l.store_bytes) { return TL_ERR_LIMIT; }
+    status = tl_dot_pass(l, size as usize, rows, cols, fmt, wpr);
+    if (status == TL_ERR_STORE) {
+        l.store_reloads = l.store_reloads + 1;
+        status = tl_dot_pass(l, size as usize, rows, cols, fmt, wpr);
+    }
+    if (status != 0) { return status; }
     if (l.capture_overflow) { return TL_ERR_CAPTURE; }
     return TL_OK;
 }

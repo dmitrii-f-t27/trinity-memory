@@ -99,7 +99,7 @@
           "Y": "a = seq << 24 | row, v = y (32-bit two's complement)",
           "Z": "a = seq << 24 | 11 << 16 | index, v = counter"
         },
-        "protocol": 3,
+        "protocol": 4,
         "z": [
           "status",
           "rows",
@@ -112,7 +112,12 @@
           "stray_words",
           "consumer_stalls",
           "checksum"
-        ]
+        ],
+        "z_status": {
+          "0": "ran",
+          "1": "refused (configuration, or a region past the store)",
+          "2": "ended early (bus words stopped, or aborted)"
+        }
       }
     },
     "handle": {
@@ -288,12 +293,14 @@
   "module": "TrinityMemoryBridgeSpec",
   "replay": {
     "backend": "a vector with `backend` runs on that backend; for fpga the replay starts the device double of tests/fake_fpga_device.py (tools/bridge_link_protocol.MatvecDevice) on a pseudo-terminal with the vector's `double` options, or a port that does not exist when `double` is {\"absent\": true}",
+    "error_message_contains": "with error_code: a substring the error message must contain (which refusal it was, when several share one code)",
     "kinds": {
       "rpc": "one request body, default or per-vector limits",
       "sequence": "ordered steps on one server; $name substitutes a captured result field",
       "transport": "raw HTTP framing (TCP replay only)"
     },
     "native": "tests/native/test_spec_bridge_vectors.py",
+    "result_at_least": "dotted paths to integer counters and their lower bounds (counters that timing can raise, such as retransmissions)",
     "result_format": "keys may be dotted paths into the result",
     "tcp": "tests/test_spec_bridge.py"
   },
@@ -2048,12 +2055,13 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
           "build_id": "1d474000",
-          "protocol": 3
+          "byte_timeout": 0.2,
+          "protocol": 4
         },
         "name": "fpga"
       },
@@ -2075,7 +2083,7 @@
             },
             "max_rows_per_run": 1024,
             "max_words_per_row": 1024,
-            "protocol_min": 3,
+            "protocol_min": 4,
             "region": 0
           },
           "hardware": true,
@@ -2102,12 +2110,13 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
           "build_id": "1d474000",
-          "protocol": 3
+          "byte_timeout": 0.2,
+          "protocol": 4
         },
         "name": "fpga"
       },
@@ -2153,18 +2162,20 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
           "build_id": "12345678",
-          "protocol": 3
+          "byte_timeout": 0.2,
+          "protocol": 4
         },
         "name": "fpga"
       },
       "description": "The device reports a build id other than the configured evidence",
       "expect": {
-        "error_code": -32000
+        "error_code": -32000,
+        "error_message_contains": "build id"
       },
       "id": "fpga_chip_info_refuses_another_build",
       "kind": "rpc",
@@ -2185,20 +2196,22 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
           "build_id": "1d474000",
-          "protocol": 2
+          "byte_timeout": 0.2,
+          "protocol": 3
         },
         "name": "fpga"
       },
-      "description": "A loader without the matvec extension (protocol 2) is not an fpga backend device",
+      "description": "A loader without the matvec extension (protocol 3, the DDR3 loader) is not an fpga backend device",
       "expect": {
-        "error_code": -32000
+        "error_code": -32000,
+        "error_message_contains": "protocol"
       },
-      "id": "fpga_chip_info_refuses_protocol_2",
+      "id": "fpga_chip_info_refuses_protocol_3",
       "kind": "rpc",
       "request": {
         "id": 1,
@@ -2217,7 +2230,7 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
@@ -2227,7 +2240,8 @@
       },
       "description": "The configured serial port does not exist",
       "expect": {
-        "error_code": -32000
+        "error_code": -32000,
+        "error_message_contains": "cannot open"
       },
       "id": "fpga_chip_info_without_a_device",
       "kind": "rpc",
@@ -2248,12 +2262,13 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
           "build_id": "1d474000",
-          "protocol": 3
+          "byte_timeout": 0.2,
+          "protocol": 4
         },
         "name": "fpga"
       },
@@ -2285,6 +2300,7 @@
           }
         },
         {
+          "description": "Retransmissions and repeated runs depend on timing (a stalled host process can cause one), so they are not fixed here; tests/test_bridge_fpga.py checks them",
           "expect": {
             "result": {
               "accumulators": [
@@ -2327,12 +2343,14 @@
                   "words": 6
                 },
                 "image_bytes": 96,
-                "matvec_attempts": 1,
                 "matvec_runs": 1,
                 "readback_bytes": 96,
-                "retransmits": 0,
+                "store_reloads": 0,
                 "uploaded": true
               }
+            },
+            "result_at_least": {
+              "transfer.matvec_attempts": 1
             },
             "result_format": {
               "evidence.capture_sha256": "sha256-hex64"
@@ -2761,11 +2779,12 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
           "build_id": "1d474000",
+          "byte_timeout": 0.2,
           "faults": [
             {
               "cmd": "L",
@@ -2785,7 +2804,7 @@
               "tag": "Y"
             }
           ],
-          "protocol": 3,
+          "protocol": 4,
           "result_faults": {
             "1": 5
           }
@@ -2816,6 +2835,7 @@
           }
         },
         {
+          "description": "Each fault forces at least one retransmission or repeated run; a stalled host process can add more, never fewer, so these are lower bounds",
           "expect": {
             "result": {
               "accumulators": [
@@ -2830,14 +2850,16 @@
                 "mismatches": 1
               },
               "transfer": {
-                "bad_lines": 1,
                 "image_bytes": 896,
-                "matvec_attempts": 2,
-                "matvec_runs": 1,
-                "naks": 1,
-                "retransmits": 3,
-                "timeouts": 1
+                "matvec_runs": 1
               }
+            },
+            "result_at_least": {
+              "transfer.bad_lines": 1,
+              "transfer.matvec_attempts": 2,
+              "transfer.naks": 1,
+              "transfer.retransmits": 3,
+              "transfer.timeouts": 1
             },
             "result_format": {
               "evidence.capture_sha256": "sha256-hex64"
@@ -3969,7 +3991,7 @@
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
-          "quiet": 0.08,
+          "quiet": 0.3,
           "reply_timeout": 1.0
         },
         "double": {
@@ -4002,7 +4024,8 @@
         },
         {
           "expect": {
-            "error_code": -32000
+            "error_code": -32000,
+            "error_message_contains": "cannot open"
           },
           "name": "dot",
           "request": {

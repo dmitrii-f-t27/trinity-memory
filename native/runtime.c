@@ -3,6 +3,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "api.h"
 #include "runtime.h"
+#include "ffi.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -343,6 +344,8 @@ int32_t tm_runtime_fpga(TMRuntime *runtime, uint8_t *path, size_t path_size, uin
                         uint32_t build_id) {
     if (!runtime || runtime->running || runtime->link.configured || !path || path_size == 0 || path_size > 1023 ||
         !bitstream_sha256 || !attempts || attempts > 64 || region % 16 != 0) return -1;
+    /* The device must speak the matvec extension, and the host must be able to set the rate. */
+    if (min_protocol < TL_PROTO_MATVEC || !tm_os_serial_rate_ok(baud)) return -1;
     TMBridgeState *s = &runtime->state;
     TMLink *l = &runtime->link;
     size_t trits = s->max_trits;
