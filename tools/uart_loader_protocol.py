@@ -24,10 +24,10 @@ COMMANDS = {CMD_LOAD: "load", CMD_READ: "read", CMD_STATUS: "status", CMD_BAUD: 
 CMD_INDEX = {CMD_LOAD: 1, CMD_READ: 2, CMD_STATUS: 3, CMD_BAUD: 4}
 INDEX_CMD = {v: k for k, v in CMD_INDEX.items()}
 
-REASONS = ["ok", "duplicate", "crc", "length", "timeout", "framing", "command", "overflow"]
-R_OK, R_DUP, R_CRC, R_LENGTH, R_TIMEOUT, R_FRAMING, R_COMMAND, R_OVERFLOW = range(8)
+REASONS = ["ok", "duplicate", "crc", "length", "timeout", "framing", "command", "overflow", "port"]
+R_OK, R_DUP, R_CRC, R_LENGTH, R_TIMEOUT, R_FRAMING, R_COMMAND, R_OVERFLOW, R_PORT = range(9)
 
-PROTO = 1
+PROTO = 2
 MAX_LEN = 4096
 FIFO_DEPTH = 1024
 MIN_DIV, MAX_DIV = 16, 65535
@@ -38,10 +38,10 @@ STATUS_NAMES = [
     "rx_bytes", "rx_framing_errors", "rx_false_starts", "fifo_overflow_bytes", "fifo_high_water",
     "ignored_bytes", "frames_committed", "frames_duplicate", "nak_crc", "nak_length", "nak_timeout",
     "nak_framing", "nak_command", "nak_overflow", "bytes_committed", "readbacks", "baud_div",
-    "baud_reverts", "last_seq", "config", "clocks", "build_id",
+    "baud_reverts", "last_seq", "config", "clocks", "build_id", "nak_port",
 ]
 NAK_COUNTERS = {R_CRC: "nak_crc", R_LENGTH: "nak_length", R_TIMEOUT: "nak_timeout", R_FRAMING: "nak_framing",
-                R_COMMAND: "nak_command", R_OVERFLOW: "nak_overflow"}
+                R_COMMAND: "nak_command", R_OVERFLOW: "nak_overflow", R_PORT: "nak_port"}
 M32 = 0xFFFFFFFF
 
 
@@ -86,7 +86,8 @@ def resp_word(seq: int, known: bool, reason: int, cmd: int, length: int) -> int:
 
 def decode_resp_word(a: int) -> dict:
     index = (a >> 17) & 7
-    return {"seq": a >> 24, "reason": (a >> 20) & 15, "reason_name": REASONS[(a >> 20) & 7] if (a >> 20) & 15 < 8 else "?",
+    reason = (a >> 20) & 15
+    return {"seq": a >> 24, "reason": reason, "reason_name": REASONS[reason] if reason < len(REASONS) else "?",
             "cmd": INDEX_CMD.get(index), "seq_known": bool((a >> 16) & 1), "len": a & 0xFFFF}
 
 
@@ -134,8 +135,17 @@ class StreamDecoder:
     """Incremental decoder of the device's byte stream.
 
     A byte A5 starts a binary read-back frame (A5 5A 'r' seq addr len data crc);
-    a byte in "HANCZ" starts a 20-byte line. Anything else is garbage, reported
+    a byte in "HANC" starts a 20-byte line. Anything else is garbage, reported
     as one event per run of such bytes. feed(data, t) returns the completed events.
+
+    The device never sends a read-back longer than MAX_LEN, so a header whose length
+    is 0 or above MAX_LEN (a bit error in the length field) is not a frame: its A5
+    is garbage and decoding resumes at the next byte. A frame whose CRC does not
+    match is reported (crc_ok False) and its bytes after the A5 are decoded again,
+    so that lines inside it are not lost: a read-back cut short by a device reset is
+    completed with the bytes that followed it (the H line and later responses), and
+    those are recovered this way. A stall can therefore last at most one frame of
+    MAX_LEN + FRAME_OVERHEAD bytes.
     """
 
     TAGS = b"HANC"
@@ -161,6 +171,9 @@ class StreamDecoder:
                     self.garbage.append(self.buf.pop(0))
                     continue
                 length = struct.unpack_from("<H", self.buf, 8)[0]
+                if length == 0 or length > MAX_LEN:
+                    self.garbage.append(self.buf.pop(0))
+                    continue
                 total = FRAME_OVERHEAD + length
                 if len(self.buf) < total:
                     break
@@ -171,6 +184,8 @@ class StreamDecoder:
                 seq, addr = raw[3], struct.unpack_from("<I", raw, 4)[0]
                 ok = crc32(body) == struct.unpack_from("<I", raw, total - 4)[0]
                 out.append(Event("readback", t=t, seq=seq, addr=addr, data=raw[HEADER_BYTES:-4], crc_ok=ok, raw=raw))
+                if not ok:
+                    self.buf[0:0] = raw[1:]
             elif first in self.TAGS:
                 if len(self.buf) < LINE_BYTES:
                     break
@@ -226,6 +241,7 @@ class DeviceModel:
         self.state = "hunt"
         self.last = None
         self.div = self.default_div
+        self.probation = False
         self.frames_ok = 0
         self.naks = 0
         self.out.append(("H", self.build_id, config_word(self.store_log2)))
@@ -320,6 +336,7 @@ class DeviceModel:
         if crc32(body) != got:
             return self._nak(R_CRC)
         self.state = "hunt"
+        self.probation = False          # a good frame confirms the rate
         if self.cmd == CMD_LOAD:
             key = (self.seq, self.addr, self.len, got)
             if self.last == key:
@@ -342,6 +359,7 @@ class DeviceModel:
         else:
             self.out.append(("A", resp_word(self.seq, True, R_OK, self.cmd, self.len), self.counts()))
             self.div = self.addr
+            self.probation = self.addr != self.default_div
 
     def status_values(self) -> dict:
         values = dict(self.c)
@@ -359,8 +377,35 @@ class DeviceModel:
             self._nak(R_TIMEOUT)
 
     def revert_baud(self):
+        """The probation time ran out without a good frame at the new rate."""
+        assert self.probation, "the device reverts only a rate still on probation"
         self.div = self.default_div
+        self.probation = False
         self.c["baud_reverts"] += 1
+
+    def port_failed_commit(self, previous_last):
+        """The last load's commit was ended by the port watchdog: a PORT nak instead of
+        its ack, nothing counted as committed (the store holds whatever the port wrote;
+        callers reload the chunk before they read it)."""
+        tag, _a, _v = self.out.pop()
+        assert tag == "A"
+        self.frames_ok -= 1
+        self.c["frames_committed"] -= 1
+        self.c["bytes_committed"] -= self.len
+        self.last = previous_last
+        self._nak(R_PORT)
+
+    def port_failed_read(self, good: int):
+        """The last read-back's port stopped answering after `good` data bytes: the rest
+        of the frame is zeros, the CRC has bit 0 flipped, and a PORT nak follows."""
+        tag, raw = self.out.pop()
+        assert tag == "r"
+        data = raw[HEADER_BYTES:HEADER_BYTES + self.len][:good] + bytes(self.len - good)
+        frame_bytes = bytearray(readback_frame(self.seq, self.addr, data))
+        frame_bytes[-4] ^= 1
+        self.out.append(("r", bytes(frame_bytes)))
+        self.c["readbacks"] -= 1
+        self._nak(R_PORT)
 
 
 def expected_bytes(item) -> bytes:

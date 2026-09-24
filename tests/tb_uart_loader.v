@@ -12,25 +12,36 @@
 //   t <n> <ps>      wait until n bytes have been received in total, at most <ps>
 //   l <ps>          hold the line low for <ps> (a glitch, a break, a port that opens)
 //   r <ps>          hold the reset button (rst_n) low for <ps>
+//   x <ps>          the same, for a reset that cuts off what the device is sending:
+//                   before the button is released the received-byte count restarts
+//                   at 0 and "X <ps>" goes to the capture (hold it for more than one
+//                   character, so that a character cut short is complete by then)
+//   h <n>           port faults of loader_stall_sink (tb_uart_loader_ports only), a bit
+//                   mask: 1 holds wr_ready low, 2 holds wr_idle low (a write that never
+//                   finishes), 4 holds rd_ready low; h 0 ends them
 //   m <id>          write a marker with the current time to the capture
 //   e               end
 // Capture lines: "R <ps> <hex>" per byte received (time of its stop-bit sample),
-// "M <ps> <id>" per marker, "T <ps> <n>" when a wait gave up with n bytes received.
+// "M <ps> <id>" per marker, "T <ps> <n>" when a wait gave up with n bytes received,
+// "X <ps>" per x command.
 //
 // tb_uart_loader runs the board top (fpga/ax7203/tms_uart_loader.v, 200 MHz
 // differential clock, the t27 store); tb_uart_loader_ports runs the t27 receiver,
 // loader, line emitter and transmitter on a 25 MHz clock with loader_stall_sink
-// behind the write and read ports: a behavioural memory whose wr_ready and
-// rd_ready are pseudo-random, whose read data comes back 1-16 clocks after the
+// behind the write and read ports. SINK_MODE 0: a behavioural memory whose wr_ready
+// and rd_ready are pseudo-random, whose read data comes back 1-16 clocks after the
 // request and whose wr_idle stays low for up to 15 clocks after each write (the
-// backpressure a DDR3 Wishbone master will put on the loader).
+// backpressure a DDR3 Wishbone master will put on the loader). SINK_MODE 1: a memory
+// without latency, always ready, whose rd_valid and rd_data answer a request in the
+// clock that accepts it (combinationally), the earliest the port contract allows.
 `timescale 1ps/1ps
 `default_nettype none
 
 module uart_host_model (
-    output reg  rx_line,
-    input  wire tx_line,
-    output reg  button_n
+    output reg       rx_line,
+    input  wire      tx_line,
+    output reg       button_n,
+    output reg [2:0] hang
 );
     reg [8*8:1]  cmd;
     reg [63:0]   arg, arg2;
@@ -43,6 +54,7 @@ module uart_host_model (
     initial begin
         rx_line = 1'b1;
         button_n = 1'b1;
+        hang = 3'd0;
         tx_bit = 64'd640000;
         dec_bit = 64'd640000;
         gap = 0;
@@ -116,7 +128,16 @@ module uart_host_model (
                 end
                 "l": begin status = $fscanf(fd, "%d", arg); rx_line = 1'b0; #(arg); rx_line = 1'b1; end
                 "r": begin status = $fscanf(fd, "%d", arg); button_n = 1'b0; #(arg); button_n = 1'b1; end
+                "x": begin
+                    status = $fscanf(fd, "%d", arg);
+                    button_n = 1'b0;
+                    #(arg);
+                    rx_count = 0;
+                    $fdisplay(cap, "X %0d", $time);
+                    button_n = 1'b1;
+                end
                 "m": begin status = $fscanf(fd, "%d", arg); $fdisplay(cap, "M %0d %0d", $time, arg); end
+                "h": begin status = $fscanf(fd, "%d", arg); hang = arg[2:0]; end
                 "e": begin
                     $fclose(cap);
                     $display("TB_PASS script done at %0d ps, %0d bytes received", $time, rx_count);
@@ -136,7 +157,7 @@ module tb_uart_loader;
     always #2500 clk200 = ~clk200;
     wire rx_line, tx_line, button_n;
     wire [3:0] led;
-    uart_host_model host (.rx_line(rx_line), .tx_line(tx_line), .button_n(button_n));
+    uart_host_model host (.rx_line(rx_line), .tx_line(tx_line), .button_n(button_n), .hang());
     tms_uart_loader_ax7203 #(
         .CLOCK_MODE(1), .BAUD_DIV(BAUD_DIV), .TIMEOUT_CLOCKS(TIMEOUT_CLOCKS),
         .PROBATION_CLOCKS(PROBATION_CLOCKS), .BUILD_ID(32'h5eed1063)
@@ -146,19 +167,22 @@ module tb_uart_loader;
     );
 endmodule
 
-module loader_stall_sink (
+module loader_stall_sink #(
+    parameter integer MODE = 0
+) (
     input  wire        clk,
+    input  wire [2:0]  hang,
     input  wire        wr_valid,
     input  wire [31:0] wr_addr,
     input  wire [31:0] wr_data,
     input  wire        wr_last,
     input  wire        rd_req,
     input  wire [31:0] rd_addr,
-    output reg         wr_ready,
+    output wire        wr_ready,
     output wire        wr_idle,
-    output reg         rd_ready,
-    output reg         rd_valid,
-    output reg  [31:0] rd_data,
+    output wire        rd_ready,
+    output wire        rd_valid,
+    output wire [31:0] rd_data,
     output reg  [31:0] writes,
     output reg  [31:0] stalls
 );
@@ -168,34 +192,45 @@ module loader_stall_sink (
     reg [4:0]  latency = 0;
     reg        rd_busy = 1'b0;
     reg [31:0] rd_hold = 0;
-    assign wr_idle = pending == 0;
+    reg        wr_ready_q = 1'b0, rd_ready_q = 1'b0, rd_valid_q = 1'b0;
+    reg [31:0] rd_data_q = 0;
+    wire       wr_ready_raw = MODE == 1 ? 1'b1 : wr_ready_q;
+    wire       rd_ready_raw = MODE == 1 ? 1'b1 : rd_ready_q;
+    assign wr_ready = wr_ready_raw && !hang[0];
+    assign rd_ready = rd_ready_raw && !hang[2];
+    assign wr_idle  = pending == 0;
+    assign rd_valid = MODE == 1 ? (rd_req && rd_ready) : rd_valid_q;
+    assign rd_data  = MODE == 1 ? {24'd0, mem[rd_addr[17:0]]} : rd_data_q;
     initial begin
-        wr_ready = 1'b0; rd_ready = 1'b0; rd_valid = 1'b0; rd_data = 0; writes = 0; stalls = 0;
+        writes = 0; stalls = 0;
     end
     always @(posedge clk) begin
         lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
-        wr_ready <= lfsr[3] & lfsr[7];
-        rd_ready <= lfsr[5];
-        rd_valid <= 1'b0;
+        wr_ready_q <= lfsr[3] & lfsr[7];
+        rd_ready_q <= lfsr[5];
+        rd_valid_q <= 1'b0;
         if (wr_valid && !wr_ready) stalls <= stalls + 1;
         if (wr_valid && wr_ready) begin
             mem[wr_addr[17:0]] <= wr_data[7:0];
             writes <= writes + 1;
-            pending <= {1'b0, lfsr[11:8]};
-        end else if (pending != 0) begin
+            // MODE 1: the write is done at this edge. hang[1]: it never finishes.
+            pending <= (MODE == 1 && !hang[1]) ? 5'd0 : {1'b0, lfsr[11:8]} | {4'd0, hang[1]};
+        end else if (pending != 0 && !hang[1]) begin
             pending <= pending - 1;
         end
-        if (rd_req && rd_ready && !rd_busy) begin
-            rd_busy <= 1'b1;
-            latency <= {1'b0, lfsr[15:12]};
-            rd_hold <= rd_addr;
-        end else if (rd_busy) begin
-            if (latency == 0) begin
-                rd_valid <= 1'b1;
-                rd_data <= {24'd0, mem[rd_hold[17:0]]};
-                rd_busy <= 1'b0;
-            end else begin
-                latency <= latency - 1;
+        if (MODE == 0) begin
+            if (rd_req && rd_ready && !rd_busy) begin
+                rd_busy <= 1'b1;
+                latency <= {1'b0, lfsr[15:12]};
+                rd_hold <= rd_addr;
+            end else if (rd_busy) begin
+                if (latency == 0) begin
+                    rd_valid_q <= 1'b1;
+                    rd_data_q <= {24'd0, mem[rd_hold[17:0]]};
+                    rd_busy <= 1'b0;
+                end else begin
+                    latency <= latency - 1;
+                end
             end
         end
     end
@@ -205,10 +240,12 @@ module tb_uart_loader_ports;
     parameter integer BAUD_DIV = 16;
     parameter integer TIMEOUT_CLOCKS = 3840;
     parameter integer PROBATION_CLOCKS = 48000;
+    parameter integer SINK_MODE = 0;
     reg clk = 1'b0;
     always #20000 clk = ~clk;
     wire rx_line, tx_line, button_n;
-    uart_host_model host (.rx_line(rx_line), .tx_line(tx_line), .button_n(button_n));
+    wire [2:0] hang;
+    uart_host_model host (.rx_line(rx_line), .tx_line(tx_line), .button_n(button_n), .hang(hang));
 
     wire rst;
     TrinityFpgaResetT27 resetgen (
@@ -238,8 +275,8 @@ module tb_uart_loader_ports;
     );
     wire        wr_valid, wr_last, wr_ready, wr_idle, rd_req, rd_ready, rd_valid;
     wire [31:0] wr_addr, wr_data, rd_addr, rd_data, sink_writes, sink_stalls;
-    loader_stall_sink sink (
-        .clk(clk), .wr_valid(wr_valid), .wr_addr(wr_addr), .wr_data(wr_data), .wr_last(wr_last),
+    loader_stall_sink #(.MODE(SINK_MODE)) sink (
+        .clk(clk), .hang(hang), .wr_valid(wr_valid), .wr_addr(wr_addr), .wr_data(wr_data), .wr_last(wr_last),
         .rd_req(rd_req), .rd_addr(rd_addr), .wr_ready(wr_ready), .wr_idle(wr_idle), .rd_ready(rd_ready),
         .rd_valid(rd_valid), .rd_data(rd_data), .writes(sink_writes), .stalls(sink_stalls)
     );
