@@ -345,6 +345,17 @@ def fabric_clocks(fasm_text, routed=None, sdf_text=None):
                     if direct:
                         entry["buffer_to_leaf_clock_pins_ps"] = [min(direct), max(direct)]
                 luts.append(entry)
+    # A LUT6 and a LUT5 in one LUT site share the pins A1-A5: a LUT whose loads are all in the
+    # fabric can show a clock net only because its site partner (the inverter) uses that pin.
+    sites = defaultdict(list)
+    for entry in luts:
+        if entry["bel"]:
+            sites[entry["bel"][:-4]].append(entry)
+    for entry in luts:
+        partners = [e["lut"] for e in sites.get((entry["bel"] or "")[:-4], []) if e is not entry]
+        if partners and all(k.startswith("SLICE_") for k in entry["loads"]):
+            entry["note"] = (f"shares its LUT site's input pins with {partners[0]}; the clock reaches this LUT's "
+                             "pin only through that shared pin")
     record["luts_on_clock_nets"] = luts
     return record
 
