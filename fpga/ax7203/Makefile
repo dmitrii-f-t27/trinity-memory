@@ -388,6 +388,8 @@ $(DDR3_TOOLS)/.source-$(NEXTPNR_DDR3_COMMIT):
 $(DDR3_NEXTPNR_DEP): | $(DDR3_TOOLS)/.source-$(NEXTPNR_DDR3_COMMIT)
 	@rev=$$(sh $(ROOT)/tools/git-revision.sh $(DDR3_TOOLS)); [ "$$rev" = "$(NEXTPNR_DDR3_COMMIT)" ] || \
 	  { echo "$(DDR3_TOOLS) is at $$rev, not $(NEXTPNR_DDR3_COMMIT): remove it and run ddr3-nextpnr again"; exit 1; }
+	@# build/ is made on the host: made by the image (root on a Linux runner), the host could not write the stamp.
+	mkdir -p $(DDR3_TOOLS)/build
 	cd $(ROOT) && $(DDR3_TOOLS_RUN) bash -c "cd $(call REL,$(DDR3_TOOLS)) && cmake -S . -B build -DARCH=xilinx -DBUILD_GUI=OFF -DBUILD_PYTHON=OFF \
 	  -DUSE_OPENMP=OFF -DCMAKE_BUILD_TYPE=Release $(DDR3_CMAKE_FLAGS) && cmake --build build -j$(DDR3_JOBS)"
 	rm -f $(DDR3_TOOLS)/build/built-from-*; touch $@
