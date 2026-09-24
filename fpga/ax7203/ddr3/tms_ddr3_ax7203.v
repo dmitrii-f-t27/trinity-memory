@@ -56,8 +56,8 @@ module tms_ddr3_ax7203 #(
     parameter [31:0] PATTERN_ROUNDS = 32'd0,    // rounds (true + complement pass), 0 = until reset
     parameter [31:0] PATTERN_WATCHDOG = 32'd16777216, // clocks without progress after which the test stops
     parameter integer UART_DIV = 0,             // clocks per UART bit; 0 = 115200 baud from the controller clock
-    parameter integer UBER_UART = 0             // 1: N15 carries ddr3_top's own debug UART (9600 baud; synthesize
-                                                // UberDDR3 with UART_DEBUG_BIST) instead of our H/S lines
+    parameter integer UBER_UART = 0             // 1: N15 carries ddr3_top's own debug UART (9600 baud) instead of
+                                                // our H/S lines; read only when UART_DEBUG_BIST is defined
 ) (
     input  wire                      clk200_p,
     input  wire                      clk200_n,
@@ -128,7 +128,12 @@ module tms_ddr3_ax7203 #(
     // ---- UberDDR3 ----
     wire        calib_complete;
     wire [31:0] debug1;
+`ifdef UART_DEBUG_BIST
+    // Only in the UART_DEBUG_BIST build: without the define these two nets are not
+    // declared, so the netlist of the other builds keeps the net names of 7deeef16
+    // (two more public wire names alone change nextpnr's placement of the same cells).
     wire        uber_uart_tx, our_uart_tx;
+`endif
     // User Wishbone port: 25-bit burst address, 64 * BYTE_LANES data bits (beat k,
     // lane l at [8*(BYTE_LANES*k+l) +: 8]), one select bit per byte. The t27 test
     // has four 64-bit data words; words at or above BYTE_LANES are unused.
@@ -178,7 +183,11 @@ module tms_ddr3_ax7203 #(
         .io_ddr3_dq(ddr3_dq), .io_ddr3_dqs(ddr3_dqs_p), .io_ddr3_dqs_n(ddr3_dqs_n), .o_ddr3_dm(ddr3_dm),
         .o_ddr3_odt(ddr3_odt),
         .o_calib_complete(calib_complete), .o_debug1(debug1),
+`ifdef UART_DEBUG_BIST
         .i_user_self_refresh(1'b0), .uart_tx(uber_uart_tx)
+`else
+        .i_user_self_refresh(1'b0), .uart_tx()
+`endif
     );
 
     // ---- status line and pattern test: reporter, test, line emitter, UART transmitter ----
@@ -239,12 +248,17 @@ module tms_ddr3_ax7203 #(
     TrinityFpgaUartTxT27 uart (
         .clk(clk_ctrl), .rst_n(!rst), .en(1'b1), .ready(),
         .start(tx_start), .data(tx_byte), .baud_div(BAUD_DIV),
+`ifdef UART_DEBUG_BIST
         .busy(tx_busy), .shift(), .count(), .bits(), .tx(our_uart_tx)
     );
-    // UBER_UART 1 (the UART_DEBUG_BIST build of #61): UberDDR3's self-test text at
-    // 9600 baud replaces our lines on N15; our reporter still runs but is not heard.
-    // Without UART_DEBUG defined, ddr3_top drives no uart_tx, so UBER_UART stays 0.
+    // UBER_UART 1 (the UART_DEBUG_BIST build of #61, `make DDR3_UART_DEBUG_BIST=1`,
+    // which reads every source with -DUART_DEBUG_BIST): UberDDR3's self-test text
+    // at 9600 baud replaces our lines on N15; our reporter still runs but is not heard.
     assign uart_tx = UBER_UART != 0 ? uber_uart_tx : our_uart_tx;
+`else
+        .busy(tx_busy), .shift(), .count(), .bits(), .tx(uart_tx)
+    );
+`endif
 
     assign led = {recalibrated, pll_locked, calib_complete, heartbeat};
 endmodule
