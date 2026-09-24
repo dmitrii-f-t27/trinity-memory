@@ -1,0 +1,171 @@
+// Testbench of the DDR3 UART loader (issue #63 part 2), driven by tests/test_ddr3_loader.py.
+//
+// The whole top fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v with its t27 cores, UberDDR3's
+// ddr3_top replaced by the behavioural Wishbone memory of tests/sim_ddr3_loader_model.v
+// (folded 512 MiB store with a background pattern, byte selects, random stalls and ack
+// latency, calibration delay; our code, not UberDDR3's) and the PLL by a pass-through stub
+// (the controller clock is the 200 MHz input here). The host is uart_host_model of
+// tests/tb_uart_loader.v (a script of bytes, waits, glitches, resets; every received byte to
+// +capture=); its `h` command drives the model's bench controls: bit 0 holds o_wb_stall
+// high (the port takes no request), bit 1 freezes the ack queue (acks withheld).
+//
+// Monitors (each prints one line at the end, or stops the run with $fatal):
+// - TBWB: requests taken and acks per master at the arbiter; an ack reaching a master with
+//   none of its own requests outstanding, or reaching the master that does not own the port,
+//   is counted (misrouted, must be 0); owner changes; the most requests outstanding.
+// - TBKEPT: every read the Wishbone master answers from its kept word is compared with the
+//   memory model's word at that clock (hits, mismatches: must be 0), so the kept word is shown
+//   to be coherent with every write, the other master's included.
+// - MODEL: the memory model's writes, partial writes (fewer than 16 selects), reads, acks.
+// With `define DDR3_LOADER_READER the #62 reader is master 1; its report lines (uart_tx2)
+// are decoded into +capture2= as "<time in ns>\t<line>", for tools/fpga-ddr3-capture.py.
+`timescale 1ps/1ps
+`default_nettype none
+
+// Simulation stand-in for the PLL: every output is the input clock, LOCKED after 16 cycles.
+module PLLE2_ADV #(
+    parameter BANDWIDTH = "OPTIMIZED", parameter COMPENSATION = "INTERNAL", parameter STARTUP_WAIT = "FALSE",
+    parameter real CLKIN1_PERIOD = 5.0, parameter integer DIVCLK_DIVIDE = 1, parameter integer CLKFBOUT_MULT = 5,
+    parameter real CLKFBOUT_PHASE = 0.0,
+    parameter integer CLKOUT0_DIVIDE = 1, parameter real CLKOUT0_PHASE = 0.0, parameter real CLKOUT0_DUTY_CYCLE = 0.5,
+    parameter integer CLKOUT1_DIVIDE = 1, parameter real CLKOUT1_PHASE = 0.0, parameter real CLKOUT1_DUTY_CYCLE = 0.5,
+    parameter integer CLKOUT2_DIVIDE = 1, parameter real CLKOUT2_PHASE = 0.0, parameter real CLKOUT2_DUTY_CYCLE = 0.5,
+    parameter integer CLKOUT3_DIVIDE = 1, parameter real CLKOUT3_PHASE = 0.0, parameter real CLKOUT3_DUTY_CYCLE = 0.5
+) (
+    input wire CLKIN1, CLKIN2, CLKINSEL, CLKFBIN, RST, PWRDWN, DCLK, DEN, DWE,
+    input wire [6:0] DADDR, input wire [15:0] DI,
+    output wire CLKFBOUT, CLKOUT0, CLKOUT1, CLKOUT2, CLKOUT3, CLKOUT4, CLKOUT5,
+    output reg LOCKED, output wire [15:0] DO, output wire DRDY
+);
+    integer n = 0;
+    initial LOCKED = 1'b0;
+    always @(posedge CLKIN1) begin
+        n = n + 1;
+        if (n == 16) LOCKED <= 1'b1;
+    end
+    assign {CLKFBOUT, CLKOUT0, CLKOUT1, CLKOUT2, CLKOUT3} = {5{CLKIN1}};
+    assign {CLKOUT4, CLKOUT5, DRDY} = 3'b000;
+    assign DO = 16'd0;
+endmodule
+
+module tb_ddr3_loader;
+    parameter integer BAUD_DIV = 16;
+    parameter integer TIMEOUT_CLOCKS = 3840;
+    parameter integer PROBATION_CLOCKS = 48000;
+    parameter integer READER_TRITS = 1237;
+    parameter integer READER_RUNS = 0;
+    parameter integer READER_UART_DIV = 4;
+    reg clk200 = 1'b0;
+    always #2500 clk200 = ~clk200;
+    wire rx_line, tx_line, button_n, tx2;
+    wire [2:0] hang;
+    wire [3:0] led;
+    wire ck_p, ck_n, reset_n, cke, cs_n, ras_n, cas_n, we_n, odt;
+    wire [14:0] addr;
+    wire [2:0] ba;
+    wire [15:0] dq;
+    wire [1:0] dqs_p, dqs_n, dm;
+    uart_host_model host (.rx_line(rx_line), .tx_line(tx_line), .button_n(button_n), .hang(hang));
+    tms_ddr3_loader_ax7203 #(
+        .BUILD_ID(32'h5eed1063), .UART_DIV(BAUD_DIV), .TIMEOUT_CLOCKS(TIMEOUT_CLOCKS),
+        .PROBATION_CLOCKS(PROBATION_CLOCKS)
+`ifdef DDR3_LOADER_READER
+        , .READER_TRITS(READER_TRITS), .READER_RUNS(READER_RUNS), .READER_UART_DIV(READER_UART_DIV)
+`endif
+    ) dut (
+        .clk200_p(clk200), .clk200_n(~clk200), .rst_n(button_n), .led(led), .uart_tx(tx_line), .uart_rx(rx_line),
+`ifdef DDR3_LOADER_READER
+        .uart_tx2(tx2),
+`endif
+        .ddr3_ck_p(ck_p), .ddr3_ck_n(ck_n), .ddr3_reset_n(reset_n), .ddr3_cke(cke), .ddr3_cs_n(cs_n),
+        .ddr3_ras_n(ras_n), .ddr3_cas_n(cas_n), .ddr3_we_n(we_n), .ddr3_odt(odt), .ddr3_addr(addr), .ddr3_ba(ba),
+        .ddr3_dq(dq), .ddr3_dqs_p(dqs_p), .ddr3_dqs_n(dqs_n), .ddr3_dm(dm)
+    );
+`ifndef DDR3_LOADER_READER
+    assign tx2 = 1'b1;
+`endif
+    always @(hang) begin
+        dut.ddr3.bench_stall = hang[0];
+        dut.ddr3.bench_hold = hang[1];
+    end
+
+    // ---- monitors ----
+    wire mclk = dut.clk_ctrl;
+    integer taken0 = 0, taken1 = 0, acks0 = 0, acks1 = 0, misrouted = 0, owner_changes = 0, max_out = 0;
+    integer out0 = 0, out1 = 0, kept_hits = 0, kept_bad = 0, drops = 0;
+    reg last_owner = 1'b0;
+    always @(posedge mclk) begin
+        // An owner change (seen one clock after the arbiter's edge) with requests in flight.
+        if (dut.arbiter.owner[0] != last_owner) begin
+            owner_changes = owner_changes + 1;
+            if (out0 != 0 || out1 != 0) misrouted = misrouted + 1000;
+            last_owner = dut.arbiter.owner[0];
+        end
+        if (dut.m0_stb && !dut.m0_stall) begin taken0 = taken0 + 1; out0 = out0 + 1; end
+        if (dut.m1_stb && !dut.m1_stall) begin taken1 = taken1 + 1; out1 = out1 + 1; end
+        if (dut.wb_ack) begin
+            // The ack belongs to the master whose request is oldest; only one owner has any.
+            if (dut.m0_ack) begin
+                if (out0 == 0 || out1 != 0) misrouted = misrouted + 1;
+                acks0 = acks0 + 1; out0 = out0 - 1;
+            end else if (dut.m1_ack) begin
+                if (out1 == 0 || out0 != 0) misrouted = misrouted + 1;
+                acks1 = acks1 + 1; out1 = out1 - 1;
+            end else begin
+                misrouted = misrouted + 1;
+            end
+        end
+        if (out0 + out1 > max_out) max_out = out0 + out1;
+        if (dut.master.read_ack && dut.master.drop_now) drops = drops + 1;
+    end
+    // Hits are decided before the clock edge: sampled at the falling edge, the model holds every
+    // write taken so far and the kept word must equal it.
+    always @(negedge mclk) begin
+        if (dut.app_rst_n && dut.master.accept_r && dut.master.hit) begin
+            kept_hits = kept_hits + 1;
+            if ({dut.master.kept_hi, dut.master.kept_lo} !== dut.ddr3.peek(dut.master.kept_addr)) begin
+                kept_bad = kept_bad + 1;
+                $display("TBKEPT_MISMATCH t=%0t burst=%0d kept=%032h mem=%032h", $time, dut.master.kept_addr,
+                         {dut.master.kept_hi, dut.master.kept_lo}, dut.ddr3.peek(dut.master.kept_addr));
+            end
+        end
+    end
+    final begin
+        $display("TBWB taken0=%0d acks0=%0d taken1=%0d acks1=%0d misrouted=%0d owner_changes=%0d max_outstanding=%0d drops=%0d",
+                 taken0, acks0, taken1, acks1, misrouted, owner_changes, max_out, drops);
+        $display("TBKEPT hits=%0d mismatches=%0d", kept_hits, kept_bad);
+        $display("MODEL writes=%0d partial=%0d reads=%0d acks=%0d", dut.ddr3.writes, dut.ddr3.partial,
+                 dut.ddr3.reads, dut.ddr3.acks);
+    end
+
+    // ---- the reader's report lines (master 1), "<ns>\t<line>" per line ----
+    localparam integer R_BIT_PS = 5000 * READER_UART_DIV;
+    integer fd2 = 0;
+    reg [4095:0] path2;
+    reg [7:0] rbyte;
+    reg at_start = 1'b1;
+    initial if ($value$plusargs("capture2=%s", path2)) fd2 = $fopen(path2, "w");
+    always begin : reader_lines
+        integer b;
+        @(negedge tx2);
+        #(R_BIT_PS * 3 / 2);
+        rbyte = 8'd0;
+        for (b = 0; b < 8; b = b + 1) begin
+            rbyte[b] = tx2;
+            #(R_BIT_PS);
+        end
+        if (tx2 !== 1'b1) $fatal(1, "reader UART: stop bit low");
+        if (fd2 != 0) begin
+            if (at_start) begin
+                $fwrite(fd2, "%0d\t", $time / 1000);
+                at_start = 1'b0;
+            end
+            $fwrite(fd2, "%c", rbyte);
+            if (rbyte == 8'h0a) begin
+                at_start = 1'b1;
+                $fflush(fd2);
+            end
+        end
+    end
+endmodule
+`default_nettype wire
