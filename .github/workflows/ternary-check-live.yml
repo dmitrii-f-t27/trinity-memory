@@ -100,7 +100,8 @@ jobs:
           s = report["summary"]
           print("## Ternary Check Live\n")
           print(f"{s['repositories']} repositories ({s['states']}), {s['models']} models in {s['files']} files "
-                f"({s['split_models']} split models; {s['models_not_checked']} models of these repositories not checked), "
+                f"({s['split_models']} split models; not checked: {s['named_models_not_checked']} ternary-named models past "
+                f"the limit of 12 per repository and {s['other_models_not_checked']} other models of these repositories), "
                 f"{s['downloads_30d_scanned']} downloads over 30 days in the scanned repositories.\n")
           print("| Model verdict | Models |\n|---|---|")
           for verdict, count in s["verdicts"].items():

@@ -7,7 +7,9 @@
 # Only ggml-base is built: it holds gguf.cpp and the type traits, all the
 # replay needs. bitnet.cpp's llama.cpp lists kernel sources from its parent
 # repository (../../../../src/ggml-bitnet-*.cpp) in the CPU backend; they are
-# not part of the reader, so empty stand-ins let CMake configure. A runtime
+# not part of the reader, so empty stand-ins let CMake configure, and
+# tests/upstream/gguf_replay_bitnet_stubs.c stands in for the two functions
+# its ggml-base takes from them. A runtime
 # that fails to build is reported and skipped (its old binary is removed
 # first, so a stale one is never replayed); the script fails only when none
 # builds.
@@ -37,7 +39,12 @@ build() {
     cmake --build "$src/build" --target ggml-base -j 4 > "$out/$name-build.log" 2>&1 || { tail -40 "$out/$name-build.log" >&2; return 1; }
     lib="$src/build/bin"
     [ -f "$lib/libggml-base.so" ] || [ -f "$lib/libggml-base.dylib" ] || lib="$src/build/ggml/src"
-    ${CC:-cc} -O1 -I "$src/ggml/include" tests/upstream/gguf_replay.c -L "$lib" -lggml-base \
+    # bitnet.cpp's ggml-base refers to two I2_S functions of its CPU kernels:
+    # stand-ins, exported from the program, let the library resolve them.
+    extra=
+    if [ "$name" = bitnet_cpp ]; then extra="tests/upstream/gguf_replay_bitnet_stubs.c -rdynamic"; fi
+    # shellcheck disable=SC2086
+    ${CC:-cc} -O1 -I "$src/ggml/include" tests/upstream/gguf_replay.c $extra -L "$lib" -lggml-base \
         -Wl,-rpath,"$(cd "$lib" && pwd)" -o "$out/gguf_replay_$name" || return 1
     echo "built $out/gguf_replay_$name"
 }

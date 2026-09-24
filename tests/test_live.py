@@ -191,8 +191,8 @@ class SplitModelTest(unittest.TestCase):
             {"rfilename": "Q2_0/m-Q2_0-00001-of-00002.gguf", "size": 7, "lfs": {"sha256": "a" * 64}},
             {"rfilename": "m-TQ1_0.gguf", "size": 3, "lfs": {"sha256": "c" * 64}},
             {"rfilename": "m-Q4_K_M-00001-of-00003.gguf", "size": 3}]}
-        models, files, total = live.gguf_models(info)
-        self.assertEqual((files, total), (4, 3))
+        models, files, total, named = live.gguf_models(info)
+        self.assertEqual((files, total, named), (4, 3, 2))
         self.assertEqual([[name for name, _, _ in model] for model in models],
                          [["Q2_0/m-Q2_0-00001-of-00002.gguf", "Q2_0/m-Q2_0-00002-of-00002.gguf"], ["m-TQ1_0.gguf"]])
 
@@ -313,9 +313,9 @@ class DiscoveryTest(unittest.TestCase):
             {"rfilename": "mmproj-PQ2_0.gguf", "size": 1},
             {"rfilename": "Flora-7B.gguf", "size": 1},
             {"rfilename": "README.md", "size": 1}]}
-        models, files, total = live.gguf_models(info)
+        models, files, total, named = live.gguf_models(info)
         self.assertEqual([model[0][0] for model in models], ["Ternary-Bonsai-27B-PQ2_0.gguf", "Ternary-Bonsai-27B-Q2_g64.gguf"])
-        self.assertEqual((files, total), (4, 4))
+        self.assertEqual((files, total, named), (4, 4, 2))
         untagged = {"siblings": [{"rfilename": "big.gguf", "size": 9}, {"rfilename": "model.gguf", "size": 3},
                                  {"rfilename": "model-F16.gguf", "size": 1}, {"rfilename": "model-fp32.gguf", "size": 1},
                                  {"rfilename": "doctors/x.lora.gguf", "size": 1},

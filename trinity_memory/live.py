@@ -389,8 +389,9 @@ def discover(hub: Hub, queries=QUERIES, min_downloads: int = 100, gguf_pages: in
     return found, seen
 
 
-def gguf_models(info: dict) -> tuple[list, int, int]:
-    """(models worth a header read, GGUF files, GGUF models in the repository).
+def gguf_models(info: dict) -> tuple[list, int, int, int]:
+    """(models worth a header read, GGUF files, GGUF models in the repository,
+    models named after a ternary layout).
     A model is a list of (name, size, sha256): one file, or the files of a
     split model (<prefix>-KKKKK-of-NNNNN.gguf with the same prefix and count)
     in part order. Models named after a layout with a contract, up to
@@ -422,10 +423,10 @@ def gguf_models(info: dict) -> tuple[list, int, int]:
 
     named = [model for model in models if LAYOUT_FILE.search(label(model))]
     if named:
-        return sorted(named, key=label)[:MODELS_PER_REPO], len(files), len(models)
+        return sorted(named, key=label)[:MODELS_PER_REPO], len(files), len(models), len(named)
     by_size = sorted(models, key=lambda model: (sum(entry[1] for entry in model), label(model)))
     quantized = [model for model in by_size if not FLOAT_FILE.search(label(model))]
-    return sorted(quantized[:UNTAGGED_MODELS] or by_size[:1], key=label), len(files), len(models)
+    return sorted(quantized[:UNTAGGED_MODELS] or by_size[:1], key=label), len(files), len(models), 0
 
 
 # ---- one header ------------------------------------------------------------------------
@@ -627,8 +628,8 @@ def scan(hub: Hub, repos: dict, cache: Path | None = HEADERS, log=None, save=Non
             if info.get("gated"):
                 entry["state"] = "gated"
             else:
-                models, files, total = gguf_models(info)
-                entry.update(gguf_files=files, gguf_models=total, models_checked=len(models))
+                models, files, total, named = gguf_models(info)
+                entry.update(gguf_files=files, gguf_models=total, models_named=named, models_checked=len(models))
                 entry["state"] = "scanned" if models else "no_gguf"
                 if models:
                     entry["models"] = []
@@ -795,7 +796,12 @@ def summary(entries: list) -> dict:
     return {"repositories": len(entries), "states": dict(sorted(states.items(), key=lambda kv: str(kv[0]))),
             "models": len(models), "files": sum(len(item.get("files") or []) for item in models),
             "split_models": sum(1 for item in models if item.get("split")),
-            "models_not_checked": sum(e.get("gguf_models", 0) - e.get("models_checked", 0) for e in entries),
+            # Models named after a ternary layout past MODELS_PER_REPO, and the
+            # other GGUF models of these repositories (other quantizations).
+            "named_models_not_checked": sum(max(0, e.get("models_named", 0) - e.get("models_checked", 0))
+                                            for e in entries if e.get("models_named")),
+            "other_models_not_checked": sum(e.get("gguf_models", 0) - max(e.get("models_named", 0), e.get("models_checked", 0))
+                                            for e in entries),
             "verdicts": dict(sorted(verdicts.items(), key=lambda kv: str(kv[0]))),
             "runtimes": {k: dict(sorted(v.items())) for k, v in runtimes.items()},
             "repositories_with_refused_models": len(refused),
