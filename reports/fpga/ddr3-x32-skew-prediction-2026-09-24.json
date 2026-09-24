@@ -1,0 +1,110 @@
+{
+ "schema": "trinity.ddr3-x32-skew-prediction.v1",
+ "written_utc": "2026-09-24T12:32:19Z",
+ "written_before_board_runs_of": [
+  "seed19",
+  "seed10",
+  "seed12",
+  "seed9"
+ ],
+ "netlist": "7deeef16 x32 (PATTERN_TEST 1), nextpnr-xilinx 0.9.7 heap/router2",
+ "observed_so_far": {
+  "skew_definition": "nextpnr's delay model: clock buffer -> fabric inverter LUT -> CK OBUFDS input, minus buffer -> LUT -> DQS OSERDES CLK of byte lane n (ps); not silicon",
+  "pass_full_pattern_test": {
+   "seed6": [
+    -234,
+    86,
+    107,
+    595
+   ],
+   "seed8": [
+    -548,
+    -237,
+    74,
+    718
+   ]
+  },
+  "calibrates_no_pattern_test": {
+   "f07e91cd x32 seed1": [
+    -107,
+    482,
+    478,
+    992
+   ]
+  },
+  "calibrates_after_retries_with_U5_bit_errors": {
+   "seed2": [
+    1271,
+    1671,
+    1808,
+    1037
+   ]
+  },
+  "fails_bist_reads": {
+   "seed5": [
+    922,
+    1384,
+    1857,
+    1445
+   ]
+  },
+  "fails_alignment": {
+   "seed1": [
+    2303,
+    2368,
+    1960,
+    1544
+   ],
+   "seed7": [
+    -1186,
+    -876,
+    -275,
+    19
+   ]
+  }
+ },
+ "hypothesis": "x32 calibrates and passes the pattern test when every lane's CK-DQS skew in nextpnr's model lies in roughly [-0.6, +0.8] ns, and fails when a lane is near or beyond -0.9 or +1.0 ns",
+ "predictions": {
+  "seed19": {
+   "skew_ps": [
+    -316,
+    -9,
+    146,
+    638
+   ],
+   "fmax_mhz": 83.72,
+   "predict": "calibrates, pattern test clean"
+  },
+  "seed10": {
+   "skew_ps": [
+    -197,
+    163,
+    374,
+    886
+   ],
+   "fmax_mhz": 87.08,
+   "predict": "calibrates (lane 3 at +0.89 ns, like f07e91cd seed 1); pattern test uncertain"
+  },
+  "seed12": {
+   "skew_ps": [
+    -424,
+    -16,
+    384,
+    784
+   ],
+   "fmax_mhz": 84.77,
+   "predict": "calibrates, pattern test clean (lane 3 +0.78 ns, at the edge)"
+  },
+  "seed9": {
+   "skew_ps": [
+    1115,
+    1505,
+    1698,
+    1302
+   ],
+   "fmax_mhz": 84.47,
+   "predict": "fails (calibration retries or errors on U5), like seeds 2 and 5"
+  }
+ },
+ "note": "five pass/fail observations and one delay model; a correlation, not a mechanism"
+}

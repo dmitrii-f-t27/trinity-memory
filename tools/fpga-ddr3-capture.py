@@ -334,41 +334,56 @@ BIST1_CHECKED_READS = (1 << 23) + (1 << 24) + (1 << 23) - 1
 
 
 def decode_bist_debug(raw: bytes, entries, *, load_end_s=None, expect_reads=BIST1_CHECKED_READS) -> dict:
-    """The UART_DEBUG_BIST text of one load (raw bytes as received, entries with host times)."""
-    start = 0
+    """The UART_DEBUG_BIST text of one load (raw bytes as received, entries with host times).
+
+    The design loaded before may still be sending when the port opens (this build repeats its final
+    message), so the load's own text starts at its first phase message, which a design prints once
+    per calibration; everything is read from there on."""
+    first = raw.find(BIST_PHASES[0])
+    own = raw[first:] if first >= 0 else raw
+    after = [e for e in entries if load_end_s is None or e["t_s"] >= load_end_s]
+    start, lookup = 0, 0
     phases, order_ok = [], True
     for mark in BIST_PHASES:
-        at = raw.find(mark, start)
+        at = own.find(mark, start)
         if at < 0:
             order_ok = False
             break
-        end = raw.find(b"\n", at)
-        text = raw[at:end if end >= 0 else len(raw)].decode("ascii", "replace")
-        t_s = next((e["t_s"] for e in entries if text[:24] in e["line"]), None)
+        end = own.find(b"\n", at)
+        text = own[at:end if end >= 0 else len(own)].decode("ascii", "replace")
+        t_s = None
+        for k in range(lookup, len(after)):
+            if text[:24] in after[k]["line"]:
+                t_s, lookup = after[k]["t_s"], k + 1
+                break
         phases.append({"message": text, "t_s": t_s,
                        "since_load_end_s": round(t_s - load_end_s, 3) if t_s is not None and load_end_s is not None
                        else None})
         start = at + len(mark)
-    count = None
-    at = raw.find(BIST_COUNT_MARK)
-    if at >= 0 and len(raw) >= at + len(BIST_COUNT_MARK) + 4:
-        count = int.from_bytes(raw[at + len(BIST_COUNT_MARK):at + len(BIST_COUNT_MARK) + 4], "big")
-    resets = raw.count(b"RESET")
+    counts, at = [], own.find(BIST_COUNT_MARK)
+    while at >= 0 and len(own) >= at + len(BIST_COUNT_MARK) + 4:
+        counts.append(int.from_bytes(own[at + len(BIST_COUNT_MARK):at + len(BIST_COUNT_MARK) + 4], "big"))
+        at = own.find(BIST_COUNT_MARK, at + 1)
+    count = counts[0] if counts else None
+    resets = own.count(b"RESET")
     last_t = entries[-1]["t_s"] if entries else None
     done_t = phases[-1]["t_s"] if len(phases) == len(BIST_PHASES) else None
     checks = {
         "all_phases_in_order": order_ok and len(phases) == len(BIST_PHASES),
         "correct_read_data_reported": count is not None,
         "correct_read_data_as_modelled": count == expect_reads if count is not None else False,
+        "correct_read_data_same_in_every_repeat": len(set(counts)) == 1 if counts else False,
         "no_reset_report": resets == 0,
-        "phases_after_load": all(p["since_load_end_s"] is None or p["since_load_end_s"] > 0 for p in phases)
+        "phases_after_load": all(p["since_load_end_s"] is not None and p["since_load_end_s"] > 0 for p in phases)
         if load_end_s is not None else None,
     }
     return {
         "phases": phases,
         "correct_read_data": count,
+        "done_message_repeats": len(counts),
         "expected_correct_read_data": expect_reads,
         "reset_reports": resets,
+        "bytes_before_this_load_text": first if first >= 0 else None,
         "capture_after_done_s": round(last_t - done_t, 3) if done_t is not None and last_t is not None else None,
         "checks": checks,
         "pass": all(v for v in checks.values() if v is not None),
@@ -376,6 +391,8 @@ def decode_bist_debug(raw: bytes, entries, *, load_end_s=None, expect_reads=BIST
                   "reset, not even by a recalibration",
                   "wrong_read_data is printed only in RESET reports, which the controller sends from the first "
                   "wrong read on; no RESET report in the capture means wrong_read_data stayed 0 while it ran",
+                  "the DONE message comes from FINISH_READ, in the clock that sets final_calibration_done "
+                  "(= o_calib_complete); on the board it then repeated about every 0.12 s with the same count",
                   "the expected count is the BIST_MODE 1 model's number of checked reads; the self-test covers "
                   "3/4 of the bursts and cannot see some address faults (docs/hardware.md, self-test coverage)"],
     }
@@ -576,6 +593,20 @@ def main() -> int:
             t_s, _utc, line = raw.split("\t", 2)
             entries.append({"t_s": float(t_s), "line": line})
         rec_expect = record["expect"]
+        if rec_expect.get("uart_debug_bist"):
+            raw_bytes = read_kept(args.redecode / record["uart_transcript"]["raw_file"])
+            result = decode_bist_debug(raw_bytes, entries, load_end_s=record["run"].get("load_end_s"))
+            before = record.get("decoded_bist", {})
+            record.setdefault("redecoded", []).append({
+                "utc": utc(), "reason": args.reason, "checks_before": before.get("checks"),
+                "pass_before": before.get("pass"), "exit_status_before": record.get("exit_status")})
+            record["decoded_bist"] = result
+            if record.get("exit_status") in (0, 1):
+                record["exit_status"] = 0 if result["pass"] else 1
+            path.write_text(json.dumps(record, indent=1) + "\n")
+            print(json.dumps({"pass": result["pass"], "checks": result["checks"],
+                              "correct_read_data": result["correct_read_data"]}, indent=1))
+            return 0 if result["pass"] else 1
         result = decode(entries, expect_build_id=rec_expect["build_id"], expect_lanes=rec_expect["lanes"],
                         expect_period_ps=rec_expect["period_ps"], load_end_s=record["run"].get("load_end_s"),
                         nominal_hz=rec_expect["nominal_hz"], expect_pattern=rec_expect.get("pattern"))
