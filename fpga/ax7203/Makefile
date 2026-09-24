@@ -359,6 +359,16 @@ loader-clean:
 # DDR3_PATTERN_ROUNDS (0 = until reset) are baked into the netlist and named in
 # the report's variant. Simulation: tests/test_ddr3_pattern.py (Icarus, a
 # behavioural Wishbone memory in place of UberDDR3, with injected faults).
+# DDR3_APP picks what drives the user port: pattern (default, the #61 builds
+# above) or reader, the read path of issue #62 (t27/rtl/fpga_ddr3_reader.t27 and
+# ddr3/tms_ddr3_reader.v, x16 only): yosys reads every source with
+# `define DDR3_READER, the pattern test is not built, DDR3_READER_TRITS (logical
+# trits per run, default 17694720 = 2560 x 6912), DDR3_READER_SEED, DDR3_READER_CAP
+# (Wishbone requests outstanding at most, default 64) and DDR3_READER_RUNS (0 =
+# until reset) are baked into the netlist and named in the variant (READER ...),
+# and the build and report directories end in -reader, so the pattern-test builds
+# keep their names and netlists. Simulation: tests/test_ddr3_reader.py.
+#   make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_APP=reader
 # Two place-and-route lines (DDR3_PNR_LINE):
 #   release (default)  nextpnr-xilinx $(NEXTPNR_DDR3_REV), built from its release tag, with a chip
 #                      database from its own bbaexport and prjxray-db; fasm2frames reads that same
@@ -415,9 +425,16 @@ DDR3_DIR       := $(CURDIR)/ddr3
 DDR3_LOCK      := $(DDR3_DIR)/uberddr3.lock
 DDR3_SRC       := $(ROOT)/build/uberddr3
 DDR3_SUFFIX    := $(if $(filter image,$(DDR3_PNR_LINE)),-nextpnr-45a986b8)
-DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)
+DDR3_APP       ?= pattern
+override DDR3_APP := $(strip $(DDR3_APP))
+ifneq ($(words $(DDR3_APP)) $(filter pattern reader,$(DDR3_APP)),1 $(DDR3_APP))
+$(error DDR3_APP must be pattern or reader, not '$(DDR3_APP)')
+endif
+DDR3_READER    := $(filter reader,$(DDR3_APP))
+DDR3_APP_SUFFIX := $(if $(DDR3_READER),-reader)
+DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)$(DDR3_APP_SUFFIX)
 DDR3_TOP       := tms_ddr3_ax7203
-DDR3_CORES     := fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status fpga_ddr3_pattern
+DDR3_CORES     := fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status $(if $(DDR3_READER),fpga_ddr3_reader,fpga_ddr3_pattern)
 DDR3_PATTERN   ?= 1
 DDR3_PATTERN_BURSTS ?= 33554432
 DDR3_PATTERN_HOLD   ?= 0
@@ -446,11 +463,43 @@ endif
 ifeq ($(DDR3_UART_DEBUG_BIST)$(DDR3_PATTERN),11)
 $(error DDR3_UART_DEBUG_BIST=1 needs DDR3_PATTERN=0)
 endif
+# The read path (#62): x16 only, no pattern test, no UberDDR3 debug UART.
+DDR3_READER_TRITS ?= 17694720
+DDR3_READER_SEED  ?= 98
+DDR3_READER_CAP   ?= 64
+DDR3_READER_RUNS  ?= 0
+ifneq ($(DDR3_READER),)
+ifneq ($(DDR3_WIDTH),16)
+$(error DDR3_APP=reader is built for x16 only (a 128-bit Wishbone word), not DDR3_WIDTH=$(DDR3_WIDTH))
+endif
+ifeq ($(origin DDR3_PATTERN),command line)
+ifeq ($(DDR3_PATTERN),1)
+$(error DDR3_APP=reader replaces the pattern test: leave DDR3_PATTERN unset)
+endif
+endif
+override DDR3_PATTERN := 0
+ifeq ($(DDR3_UART_DEBUG_BIST),1)
+$(error DDR3_APP=reader needs DDR3_UART_DEBUG_BIST=0)
+endif
+# trits 1 .. 2^31-1 (the region arithmetic adds 79 in 32 bits), cap 1 .. 2^24-1 (the q line
+# carries 24 bits), runs 0 .. 2^31-1, seed 0 .. 2^32-1, all decimal.
+ifneq ($(shell awk 'BEGIN { t = "$(strip $(DDR3_READER_TRITS))"; c = "$(strip $(DDR3_READER_CAP))"; r = "$(strip $(DDR3_READER_RUNS))"; s = "$(strip $(DDR3_READER_SEED))"; \
+  print (t ~ /^[0-9]+$$/ && t + 0 >= 1 && t + 0 < 2147483648 && c ~ /^[0-9]+$$/ && c + 0 >= 1 && c + 0 < 16777216 && \
+         r ~ /^[0-9]+$$/ && r + 0 < 2147483648 && s ~ /^[0-9]+$$/ && s + 0 < 4294967296) ? "ok" : "bad" }'),ok)
+$(error DDR3_READER_TRITS (1 .. 2^31-1), DDR3_READER_CAP (1 .. 2^24-1), DDR3_READER_RUNS (0 .. 2^31-1) and DDR3_READER_SEED must be decimal)
+endif
+endif
+DDR3_READER_TAG := $(if $(DDR3_READER),$(DDR3_READER_TRITS)-$(DDR3_READER_SEED)-$(DDR3_READER_CAP)-$(DDR3_READER_RUNS))
+DDR3_READER_DEFINE := $(if $(DDR3_READER),-DDDR3_READER )
+DDR3_READER_CHPARAM := $(if $(DDR3_READER),-set READER_TRITS $(DDR3_READER_TRITS) -set READER_SEED $(DDR3_READER_SEED) -set READER_CAP $(DDR3_READER_CAP) -set READER_RUNS $(DDR3_READER_RUNS) )
 DDR3_PATTERN_TAG := $(DDR3_PATTERN)-$(DDR3_PATTERN_BURSTS)-$(DDR3_PATTERN_HOLD)-$(DDR3_PATTERN_ROUNDS)-uart$(DDR3_UART_DEBUG_BIST)
 DDR3_PATTERN_VARIANT := PATTERN_TEST $(DDR3_PATTERN)$(if $(filter 1,$(DDR3_PATTERN)), (bursts $(DDR3_PATTERN_BURSTS)$(comma) hold $(DDR3_PATTERN_HOLD) clocks$(comma) rounds $(DDR3_PATTERN_ROUNDS)))$(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(comma) UART_DEBUG_BIST 1 (ddr3_top uart_tx on N15$(comma) 9600 baud))
+# The reader's variant names READER (tools/fpga-ddr3-capture.py reads it) and no PATTERN_TEST.
+DDR3_APP_VARIANT := $(if $(DDR3_READER),READER (trits $(DDR3_READER_TRITS)$(comma) seed $(DDR3_READER_SEED)$(comma) cap $(DDR3_READER_CAP)$(comma) runs $(DDR3_READER_RUNS)),$(DDR3_PATTERN_VARIANT))
 DDR3_UBER      := $(DDR3_SRC)/rtl/ddr3_top.v $(DDR3_SRC)/rtl/ddr3_controller.v $(DDR3_SRC)/rtl/ddr3_phy.v
 DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v \
-                  $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(DDR3_DIR)/uart_tx_t27.v)
+                  $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(DDR3_DIR)/uart_tx_t27.v) \
+                  $(if $(DDR3_READER),$(DDR3_DIR)/tms_ddr3_reader.v)
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
 DDR3_YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -arch xc7
 ifeq ($(DDR3_PNR_LINE),image)
@@ -496,8 +545,8 @@ DDR3_PNR_ARGS  ?= --router router2 --timing-allow-fail
 # Image digest recorded in the report (docker image inspect on the host that pulled it).
 IMAGE_DIGEST   ?= $(shell docker image inspect --format '{{index .RepoDigests 0}}' $(IMAGE) 2>/dev/null)
 DDR3_REPORT_ROOT ?= $(ROOT)/reports/fpga
-DDR3_REPORT    ?= $(DDR3_REPORT_ROOT)/ddr3-build-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)-x$(DDR3_WIDTH)$(DDR3_SUFFIX)
-DDR3_SWEEP_REPORT ?= $(DDR3_REPORT_ROOT)/ddr3-seed-sweep-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)-x$(DDR3_WIDTH)$(DDR3_SUFFIX).json
+DDR3_REPORT    ?= $(DDR3_REPORT_ROOT)/ddr3-build-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)-x$(DDR3_WIDTH)$(DDR3_SUFFIX)$(DDR3_APP_SUFFIX)
+DDR3_SWEEP_REPORT ?= $(DDR3_REPORT_ROOT)/ddr3-seed-sweep-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)-x$(DDR3_WIDTH)$(DDR3_SUFFIX)$(DDR3_APP_SUFFIX).json
 DDR3_SOURCE_LABEL ?= local
 DDR3_CABLE     ?= $(CABLE)
 OPENFPGALOADER ?= openFPGALoader
@@ -571,6 +620,8 @@ $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)build-id-*.stamp; touch $@
 $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)pattern-*.stamp; touch $@
+$(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG).stamp:
+	mkdir -p $(dir $@); rm -f $(dir $@)app-*.stamp; touch $@
 
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
 # the four PLL outputs by net name.
@@ -586,16 +637,16 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 # Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
 # and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG).stamp
 	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
 	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
-	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),-DUART_DEBUG_BIST )$(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
+	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),-DUART_DEBUG_BIST )$(DDR3_READER_DEFINE)$(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) \
 	    -set UBER_UART $(DDR3_UART_DEBUG_BIST) \
 	    -set PATTERN_TEST $(DDR3_PATTERN) -set PATTERN_BURSTS $(DDR3_PATTERN_BURSTS) -set PATTERN_HOLD $(DDR3_PATTERN_HOLD) \
-	    -set PATTERN_ROUNDS $(DDR3_PATTERN_ROUNDS) $(DDR3_TOP); \
+	    -set PATTERN_ROUNDS $(DDR3_PATTERN_ROUNDS) $(DDR3_READER_CHPARAM)$(DDR3_TOP); \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP); setundef -zero -params; tee -o $(call REL,$(DDR3_BUILD))/yosys_stat.txt stat; \
 	  write_json $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).json"
 	grep -c "multiple conflicting drivers" $(DDR3_BUILD)/yosys.log > $(DDR3_BUILD)/yosys_conflicting_drivers.txt || true
@@ -660,7 +711,7 @@ ddr3-report: $(DDR3_BUILD)/$(DDR3_TOP).bit
 	  --source "$(DDR3_SOURCE_LABEL)" --output $(DDR3_REPORT) \
 	  --flow "yosys $(DDR3_YOSYS_SYNTH); nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer/seed search over '$(DDR3_PLACERS)' x '$(DDR3_SEEDS)' $(DDR3_PNR_ARGS); prjxray fasm2frames + xc7frames2bit ($(IMAGE))" \
 	  --ddr3 --uberddr3-dir $(DDR3_SRC) --lock $(DDR3_LOCK) --image-digest "$(IMAGE_DIGEST)" --chipdb $(DDR3_CHIPDB) \
-	  --variant "x$(DDR3_WIDTH) BYTE_LANES $(DDR3_LANES), PLL CLKFBOUT_MULT $(DDR3_PLL_MULT), DDR3 clock VCO/$(DDR3_DDR_DIV) ($(DDR3_DDR_NS) ns), controller $(DDR3_CTRL_NS) ns, $(DDR3_PATTERN_VARIANT)"
+	  --variant "x$(DDR3_WIDTH) BYTE_LANES $(DDR3_LANES), PLL CLKFBOUT_MULT $(DDR3_PLL_MULT), DDR3 clock VCO/$(DDR3_DDR_DIV) ($(DDR3_DDR_NS) ns), controller $(DDR3_CTRL_NS) ns, $(DDR3_APP_VARIANT)"
 
 # Both widths with one command. Each width is its own make run, so
 # DDR3_WIDTH, DDR3_BUILD and DDR3_REPORT cannot be set here: DDR3_REPORT_ROOT
