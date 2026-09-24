@@ -1,0 +1,522 @@
+{
+ "schema": "trinity.ddr3-reader-summary.v2",
+ "written_utc": "2026-09-24T16:48:51Z",
+ "written_by": {
+  "tool": "tools/ddr3-reader-summary.py",
+  "repository_head": "42b6f5a9c026527066269532c1553250c562ad9c"
+ },
+ "netlist": "42b6f5a9 x16, DDR3_APP=reader (READER trits 17694720, seed 98, cap 64, runs 0), READER_FORMAT 2 (x line: stray and all acks since calibration); yosys netlist sha256 084b4e88... (the sweep's netlist_sha256, equal to the seed-11 build's)",
+ "sweep": "reports/fpga/ddr3-seed-sweep-2026-09-24-42b6f5a9-x16-reader.json",
+ "skew_note": "nextpnr-xilinx 0.9.7's delay model (the sweep's luts_on_clock_nets): clock buffer -> fabric inverter LUT -> CK OBUFDS input (ck_ps, the later of its P and N inputs) and -> each lane's DQS OSERDES CLK. Not measured on silicon.",
+ "seed_rank_metric": "largest |CK - DQS| over the byte lanes (largest_abs_ck_minus_dqs_ps), among the seeds whose controller clock meets 83.33 MHz; smaller first",
+ "seed_rank": [
+  11,
+  12,
+  7,
+  6,
+  3,
+  4
+ ],
+ "seed_choice": "Seed 11 was chosen from the sweep (written 16:38:43 UTC) before any load of this netlist, as the first of seed_rank: among the 6 seeds of 12 meeting 83.33 MHz, the smallest largest |CK - DQS| over the two lanes (109 ps: +109 / -12 ps; seed 12 next at 659 ps). It was built on its own (DDR3_SEEDS=11, FASM equal to the sweep's seed 11; build.json 16:42:00 UTC) and loaded three times; no other seed of this netlist was loaded. Ranking by this skew is a rule taken from #61's correlation, not a timing analysis.",
+ "seeds": [
+  {
+   "seed": 1,
+   "routed": true,
+   "fmax_mhz": 72.55,
+   "meets_83_33": false,
+   "fasm_sha256": "d6bea03a3327b6398c1758a9b9a9b3e3b5852cf263e62f061998209d82be8403",
+   "inverter_lut": "SLICE_X162Y154/D6LUT",
+   "ck_ps": 3313,
+   "dqs_clk_ps_by_lane": [
+    3421,
+    3494
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -108,
+    -181
+   ],
+   "largest_abs_ck_minus_dqs_ps": 181
+  },
+  {
+   "seed": 2,
+   "routed": true,
+   "fmax_mhz": 81.16,
+   "meets_83_33": false,
+   "fasm_sha256": "85c70d9dead5fabb83f52c3dba13bdbd74c2f27993980b429fc28c24c9325a49",
+   "inverter_lut": "SLICE_X162Y147/B6LUT",
+   "ck_ps": 3314,
+   "dqs_clk_ps_by_lane": [
+    3870,
+    3559
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -556,
+    -245
+   ],
+   "largest_abs_ck_minus_dqs_ps": 556
+  },
+  {
+   "seed": 3,
+   "routed": true,
+   "fmax_mhz": 83.96,
+   "meets_83_33": true,
+   "fasm_sha256": "86b43792804b923668d3aacfd9375f77f8ab18843d8a78e902fcf86d1c53429b",
+   "inverter_lut": "SLICE_X162Y171/B6LUT",
+   "ck_ps": 3923,
+   "dqs_clk_ps_by_lane": [
+    2990,
+    2597
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    933,
+    1326
+   ],
+   "largest_abs_ck_minus_dqs_ps": 1326
+  },
+  {
+   "seed": 4,
+   "routed": true,
+   "fmax_mhz": 92.62,
+   "meets_83_33": true,
+   "fasm_sha256": "47bb9cd0d1c54c0b34ba5eb4c3a8b165da8691c63af2c4f5551af5dd5b1b056f",
+   "inverter_lut": "SLICE_X162Y171/C6LUT",
+   "ck_ps": 4128,
+   "dqs_clk_ps_by_lane": [
+    3001,
+    2601
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    1127,
+    1527
+   ],
+   "largest_abs_ck_minus_dqs_ps": 1527
+  },
+  {
+   "seed": 5,
+   "routed": true,
+   "fmax_mhz": 79.33,
+   "meets_83_33": false,
+   "fasm_sha256": "0159effea84a9a4fd6a143064b20ef26911b565b2b1679c13d8bb93081981051",
+   "inverter_lut": "SLICE_X162Y157/A6LUT",
+   "ck_ps": 3710,
+   "dqs_clk_ps_by_lane": [
+    3544,
+    3285
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    166,
+    425
+   ],
+   "largest_abs_ck_minus_dqs_ps": 425
+  },
+  {
+   "seed": 6,
+   "routed": true,
+   "fmax_mhz": 89.65,
+   "meets_83_33": true,
+   "fasm_sha256": "dcde53488680e92da5bf03b2d949c85c9db6651f98b61879814c3b82e9f1c698",
+   "inverter_lut": "SLICE_X162Y166/A6LUT",
+   "ck_ps": 3711,
+   "dqs_clk_ps_by_lane": [
+    3148,
+    2656
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    563,
+    1055
+   ],
+   "largest_abs_ck_minus_dqs_ps": 1055
+  },
+  {
+   "seed": 7,
+   "routed": true,
+   "fmax_mhz": 84.54,
+   "meets_83_33": true,
+   "fasm_sha256": "8fdb691e3ea4c97275780fa84bbbb6c14649903d96a9711caf400cad5c9d60c1",
+   "inverter_lut": "SLICE_X162Y168/A6LUT",
+   "ck_ps": 3934,
+   "dqs_clk_ps_by_lane": [
+    3272,
+    2920
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    662,
+    1014
+   ],
+   "largest_abs_ck_minus_dqs_ps": 1014
+  },
+  {
+   "seed": 8,
+   "routed": true,
+   "fmax_mhz": 81.37,
+   "meets_83_33": false,
+   "fasm_sha256": "529bfa422efc7ac5bfdd3eed62aefe52de37e968005f692fb7fdf16b635fc535",
+   "inverter_lut": "SLICE_X162Y144/B6LUT",
+   "ck_ps": 3039,
+   "dqs_clk_ps_by_lane": [
+    3721,
+    3444
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -682,
+    -405
+   ],
+   "largest_abs_ck_minus_dqs_ps": 682
+  },
+  {
+   "seed": 9,
+   "routed": true,
+   "fmax_mhz": 83.21,
+   "meets_83_33": false,
+   "fasm_sha256": "8d59d8c83b36525c142819e71da32697237bc8063eec1abd18b9a74f0ca39faf",
+   "inverter_lut": "SLICE_X163Y148/B6LUT",
+   "ck_ps": 3250,
+   "dqs_clk_ps_by_lane": [
+    3947,
+    3557
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -697,
+    -307
+   ],
+   "largest_abs_ck_minus_dqs_ps": 697
+  },
+  {
+   "seed": 10,
+   "routed": true,
+   "fmax_mhz": 80.13,
+   "meets_83_33": false,
+   "fasm_sha256": "e77a728f777fa2cb79385803d3fc77f1e84ee7132b1be12d8ce2aa62a7a58f70",
+   "inverter_lut": "SLICE_X163Y162/B6LUT",
+   "ck_ps": 3958,
+   "dqs_clk_ps_by_lane": [
+    3299,
+    2946
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    659,
+    1012
+   ],
+   "largest_abs_ck_minus_dqs_ps": 1012
+  },
+  {
+   "seed": 11,
+   "routed": true,
+   "fmax_mhz": 87.44,
+   "meets_83_33": true,
+   "fasm_sha256": "832a48721d657bb7ba920ed3143978af7b538e012cf09e0cb83c0b70a55aca33",
+   "inverter_lut": "SLICE_X162Y151/C6LUT",
+   "ck_ps": 3383,
+   "dqs_clk_ps_by_lane": [
+    3274,
+    3395
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    109,
+    -12
+   ],
+   "largest_abs_ck_minus_dqs_ps": 109
+  },
+  {
+   "seed": 12,
+   "routed": true,
+   "fmax_mhz": 87.51,
+   "meets_83_33": true,
+   "fasm_sha256": "df740c687ce62704577a4cb7f7a4e56d51b7afb3b34c3a8606ea7e9df01abe91",
+   "inverter_lut": "SLICE_X162Y147/B6LUT",
+   "ck_ps": 3314,
+   "dqs_clk_ps_by_lane": [
+    3973,
+    3669
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -659,
+    -355
+   ],
+   "largest_abs_ck_minus_dqs_ps": 659
+  }
+ ],
+ "builds": {
+  "seed11": "reports/fpga/ddr3-build-2026-09-24-42b6f5a9-x16-reader-seed11"
+ },
+ "board": {
+  "seed11": [
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load1",
+    "label": "x16 read path (#62), 42b6f5a9 seed 11, load 1",
+    "bitstream_sha256": "6629220763cca38297d4a35aeb746e41570264a20e821a6cb290ead7ac7c030a",
+    "t0_utc": "2026-09-24T16:42:26.283Z",
+    "load_end_utc": "2026-09-24T16:42:41.106Z",
+    "seconds_captured": 20.0,
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.702,
+    "s_lines_since_reset": 29,
+    "s_lines_before_calib_complete": 10,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.501,
+    "calib_complete_s_after_reset": [
+     5.1956,
+     5.1956
+    ],
+    "clock_ppm_from_nominal": 17.4,
+    "die_c": [
+     37.6548,
+     39.8926
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
+    "runs": 515,
+    "passing_runs": 515,
+    "model_checked_runs": 515,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "stray_acks": 0,
+    "all_acks_last": 256352256,
+    "complete_pairs": 257,
+    "per_format": {
+     "baseline2": {
+      "runs": 258,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292653,
+      "words_per_clock_min": 0.944737,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16164,
+      "wait_stalls_max": 3422,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292610,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 257,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234116,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944762,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234081,
+      "fill_cycles_max": 234120
+     }
+    },
+    "first_report_s_after_load_end": 5.233,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 129,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 257
+    }
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load2",
+    "label": "x16 read path (#62), 42b6f5a9 seed 11, load 2",
+    "bitstream_sha256": "6629220763cca38297d4a35aeb746e41570264a20e821a6cb290ead7ac7c030a",
+    "t0_utc": "2026-09-24T16:44:42.523Z",
+    "load_end_utc": "2026-09-24T16:44:57.208Z",
+    "seconds_captured": 20.0,
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.714,
+    "s_lines_since_reset": 29,
+    "s_lines_before_calib_complete": 10,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.511,
+    "calib_complete_s_after_reset": [
+     5.1968,
+     5.1968
+    ],
+    "clock_ppm_from_nominal": -219.9,
+    "die_c": [
+     44.3759,
+     44.7412
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993164
+    ],
+    "runs": 516,
+    "passing_runs": 516,
+    "model_checked_runs": 516,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "stray_acks": 0,
+    "all_acks_last": 256794624,
+    "complete_pairs": 258,
+    "per_format": {
+     "baseline2": {
+      "runs": 258,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292653,
+      "words_per_clock_min": 0.944737,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16164,
+      "wait_stalls_max": 3422,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292610,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 258,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234116,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944762,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234081,
+      "fill_cycles_max": 234120
+     }
+    },
+    "first_report_s_after_load_end": 5.23,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 129,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 258
+    }
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load3",
+    "label": "x16 read path (#62), 42b6f5a9 seed 11, load 3",
+    "bitstream_sha256": "6629220763cca38297d4a35aeb746e41570264a20e821a6cb290ead7ac7c030a",
+    "t0_utc": "2026-09-24T16:46:39.547Z",
+    "load_end_utc": "2026-09-24T16:46:54.207Z",
+    "seconds_captured": 20.0,
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.705,
+    "s_lines_since_reset": 29,
+    "s_lines_before_calib_complete": 10,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.504,
+    "calib_complete_s_after_reset": [
+     5.1958,
+     5.1958
+    ],
+    "clock_ppm_from_nominal": -16.7,
+    "die_c": [
+     46.6906,
+     46.5945
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
+    "runs": 518,
+    "passing_runs": 518,
+    "model_checked_runs": 518,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "stray_acks": 0,
+    "all_acks_last": 257789952,
+    "complete_pairs": 259,
+    "per_format": {
+     "baseline2": {
+      "runs": 259,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292653,
+      "words_per_clock_min": 0.944737,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16164,
+      "wait_stalls_max": 3422,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292610,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 259,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234116,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944762,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234081,
+      "fill_cycles_max": 234120
+     }
+    },
+    "first_report_s_after_load_end": 5.245,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 129,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 259
+    }
+   }
+  ]
+ },
+ "load_order": [
+  {
+   "build": "seed11",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load1",
+   "t0_utc": "2026-09-24T16:42:26.283Z",
+   "load_end_utc": "2026-09-24T16:42:41.106Z",
+   "die_c_before": 37.6548,
+   "calibrated": true
+  },
+  {
+   "build": "seed11",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load2",
+   "t0_utc": "2026-09-24T16:44:42.523Z",
+   "load_end_utc": "2026-09-24T16:44:57.208Z",
+   "die_c_before": 44.3759,
+   "calibrated": true
+  },
+  {
+   "build": "seed11",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load3",
+   "t0_utc": "2026-09-24T16:46:39.547Z",
+   "load_end_utc": "2026-09-24T16:46:54.207Z",
+   "die_c_before": 46.6906,
+   "calibrated": true
+  }
+ ],
+ "notes": []
+}

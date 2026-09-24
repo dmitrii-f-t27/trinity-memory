@@ -539,6 +539,32 @@ class ReaderModelPaths(unittest.TestCase):
                     self.assertEqual(model.run_results(fmt, key, trits), model.run_results_fast(fmt, key, trits),
                                      (fmt, trits, hex(key)))
 
+    @unittest.skipUnless(have_numpy(), "numpy not installed")
+    def test_baseline2_checksum_of_the_board_region_is_zero_for_every_key(self):
+        """docs/hardware.md, "DDR3 read path (#62)", Limits: the 2560 x 6912 region in baseline2 has
+        552,960 64-bit halves (a multiple of 64), so a half's rotation in the checksum depends only on
+        its block index mod 128; lane j of a block is f(K's lane j, lane j of post(lin(mix(b)))), and
+        every (block mod 128, lane, lane value) cell holds an even number of blocks, so every
+        rotation class xors to 0 whatever the key."""
+        import numpy as np
+        trits = 17694720
+        blocks = model.words_of(0, trits) * model.BLOCKS_PER_WORD[0]
+        self.assertEqual((blocks // 2) % 64, 0)
+        x = np.arange(blocks, dtype=np.uint64)
+        x ^= (x << np.uint64(3)) & (x << np.uint64(7))
+        for left, right, left2 in ((13, 7, 17), (21, 35, 4), (9, 29, 25)):
+            x ^= x << np.uint64(left)
+            x ^= x >> np.uint64(right)
+            x ^= x << np.uint64(left2)
+        x ^= (x >> np.uint64(1)) & (x >> np.uint64(2))
+        self.assertEqual(model.post(pattern_model.lin(model.mix(12345))) & M32, int(x[12345] & np.uint64(M32)))
+        cls = np.arange(blocks, dtype=np.int64) % 128
+        for j in range(16):
+            v = ((x >> np.uint64(2 * j)) & np.uint64(3)).astype(np.int64)
+            self.assertFalse((np.bincount(cls * 4 + v, minlength=512) % 2).any(), j)
+        for key in self.keys():
+            self.assertEqual(model.run_results_fast(0, key, trits)["chk"], 0)
+
     def test_definitions_are_the_block_ram_models(self):
         import bram_trit_model as bram
         for trits in self.TRITS:
@@ -592,7 +618,7 @@ class ReaderBoardRecords(unittest.TestCase):
 
     def test_records_decode_again(self):
         model_runs = 3 if have_numpy() else 0
-        self.assertEqual(len(self.records()), 5)      # seed 1: loads 1-2; seed 6: loads 1-3
+        self.assertEqual(len(self.records()), 8)      # a6d9745f seed 1: 2 loads, seed 6: 3; 42b6f5a9 seed 11: 3
         for directory in self.records():
             import json
             record = json.loads(capture.read_kept(directory / "capture.json"))
@@ -612,8 +638,9 @@ class ReaderBoardRecords(unittest.TestCase):
             self.assertEqual(again["final"], kept["final"], directory)
             self.assertEqual(again["pass"], kept["pass"], directory)
             self.assertEqual(again["checks"], kept["checks"], directory)
-            got = [{k: r[k] for k in self.RUN_FIELDS} for r in again["reader"]["runs"]]
-            want = [{k: r[k] for k in self.RUN_FIELDS} for r in kept["reader"]["runs"]]
+            fields = self.RUN_FIELDS + (("stray_acks", "all_acks") if "42b6f5a9" in str(directory) else ())
+            got = [{k: r[k] for k in fields} for r in again["reader"]["runs"]]
+            want = [{k: r[k] for k in fields} for r in kept["reader"]["runs"]]
             self.assertEqual(got, want, directory)
             self.assertEqual(kept["reader"]["totals"]["model_checked_runs"], len(kept["reader"]["runs"]), directory)
             for r in again["reader"]["runs"][:model_runs]:
@@ -639,6 +666,27 @@ class ReaderBoardRecords(unittest.TestCase):
         seed1 = summary["board"]["seed1"]
         self.assertTrue(all((x["calib_complete"], x["highest_state"], x["returns_to_idle"], x["runs"]) == (0, 14, 255, 0)
                             for x in seed1))
+        # The order of the a6d9745f loads: seed 1's second load came after seed 6's three.
+        self.assertEqual([x["build"] for x in summary["load_order"]], ["seed1", "seed6", "seed6", "seed6", "seed1"])
+        self.assertEqual([x["s_lines_after_calib_complete"] for x in seed6], [19, 19, 19])
+        self.assertEqual(summary["seed_rank"][0], 6)
+
+    def test_pinned_board_results_of_the_build_of_record(self):
+        """42b6f5a9 seed 11, with the ack counts (docs/hardware.md, "DDR3 read path (#62)")."""
+        import json
+        summary = json.loads((ROOT / "reports/fpga/ddr3-reader-summary-2026-09-24-42b6f5a9-x16.json").read_text())
+        self.assertEqual(summary["seed_rank"][0], 11)
+        loads = summary["board"]["seed11"]
+        self.assertEqual([x["runs"] for x in loads], [515, 516, 518])
+        for x in loads:
+            self.assertTrue(x["passing_runs"] == x["runs"] == x["model_checked_runs"])
+            self.assertEqual((x["bad_words"], x["invalid_groups"], x["stray_acks"], x["checks_failed"]), (0, 0, 0, []))
+            self.assertEqual((x["calib_complete"], x["state"], x["returns_to_idle"]), (1, 23, 0))
+            self.assertEqual((x["s_lines_before_calib_complete"], x["s_lines_after_calib_complete"]), (10, 19))
+            self.assertTrue(x["after_calib_all_done_calibrate"])
+            self.assertEqual(x["per_format"]["baseline2"]["words"], [276480])
+            self.assertEqual(x["per_format"]["dense5"]["words"], [221184])
+        self.assertEqual([x["all_acks_last"] for x in loads], [256352256, 256794624, 257789952])
 
 
 class ReaderDecoder(unittest.TestCase):
