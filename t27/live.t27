@@ -1046,7 +1046,10 @@ module TrinityMemoryLive {
     fn tlv_loaded(data: []u8, total: usize, parts: []u64, count: usize) -> u64 {
         if (!tlv_parts_ok(total, parts, count)) { return 0; }
         var n_split: u64 = tlv_u16_key(data, tlv_part_end(parts, 0) as usize, "split.count", 11);
-        if (n_split > 1 && n_split != 0x10000) { return count as u64; }
+        if (n_split > 1 && n_split != 0x10000) {
+            if (n_split < (count as u64)) { return n_split; }
+            return count as u64;
+        }
         return 1;
     }
 
@@ -1062,6 +1065,22 @@ module TrinityMemoryLive {
             i = i + 1;
         }
         return true;
+    }
+
+    // Sets the bits of the names of `tensors` records from `records` in `seen`
+    // (8192 u64: a bit per hash, as tlv_walk keeps them).
+    fn tlv_mark_names(data: []u8, records: u64, tensors: u64, seen: []u64) {
+        var pos: u64 = records;
+        var t: u64 = 0;
+        while (t < tensors) {
+            var length: u64 = tf_read_u64(data, pos as usize);
+            var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+            var hash: u64 = tlv_hash(data, pos + 8, tlv_cstr(data, pos + 8, length));
+            var slot: usize = ((hash >> 6) & 8191) as usize;
+            seen[slot] = seen[slot] | ((1 as u64) << (hash & 63));
+            pos = pos + 12 + length + 8 * dims + 12;
+            t = t + 1;
+        }
     }
 
     // Whether a record of the first `upto` parts is named data[name_at ..
@@ -1439,6 +1458,7 @@ module TrinityMemoryLive {
         var none_s: [1]u64 = [0];
         var records: [1024]u64;
         var tensors: [1024]u64;
+        var seen: [8192]u64 = [0];
         var walk: TLVWalk;
         var key: TLVKey;
         var budget: TLVBudget;
@@ -1474,6 +1494,7 @@ module TrinityMemoryLive {
             }
             records[0] = walk.records_at;
             tensors[0] = walk.tensors;
+            tlv_mark_names(data, walk.records_at, walk.tensors, seen);
             var loaded: u64 = walk.tensors;
             var k: u64 = 1;
             while (k < n_split) {
@@ -1503,10 +1524,14 @@ module TrinityMemoryLive {
                 while (t < walk.tensors) {
                     var length: u64 = tf_read_u64(data, pos as usize);
                     var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
-                    var seen: i32 = tlv_name_loaded(data, records, tensors, k, pos + 8, tlv_cstr(data, pos + 8, length),
-                                                    &budget);
-                    if (seen == TLV_ERR_LIMIT) { return tlv_undecided(out, TLV_ERR_LIMIT, k); }
-                    if (seen == 1) { return tlv_refuse(out, TLV_ERR_NAME, k, t, 0, 0); }
+                    var cname: u64 = tlv_cstr(data, pos + 8, length);
+                    var hash: u64 = tlv_hash(data, pos + 8, cname);
+                    var loaded_name: i32 = 0;
+                    if ((seen[((hash >> 6) & 8191) as usize] & ((1 as u64) << (hash & 63))) != 0) {
+                        loaded_name = tlv_name_loaded(data, records, tensors, k, pos + 8, cname, &budget);
+                    }
+                    if (loaded_name == TLV_ERR_LIMIT) { return tlv_undecided(out, TLV_ERR_LIMIT, k); }
+                    if (loaded_name == 1) { return tlv_refuse(out, TLV_ERR_NAME, k, t, 0, 0); }
                     if (walk.status == TLV_ERR_BOUNDS && walk.record == t) {
                         return tlv_refuse(out, TLV_ERR_BOUNDS, k, t, walk.expected, walk.found);
                     }
@@ -1515,6 +1540,7 @@ module TrinityMemoryLive {
                 }
                 records[k as usize] = walk.records_at;
                 tensors[k as usize] = walk.tensors;
+                tlv_mark_names(data, walk.records_at, walk.tensors, seen);
                 loaded = loaded + walk.tensors;
                 k = k + 1;
             }
@@ -1534,7 +1560,7 @@ module TrinityMemoryLive {
             return tlv_refuse(out, TLV_ERR_ARCH, 0, 0xffffffffffffffff, 0, 0);
         }
         var rows: usize = 1;
-        if (n_split > 1) { rows = count; }
+        if (n_split > 1) { rows = n_split as usize; }
         var rotation: TLVHadamard;
         var status: i32 = tlv_hadamard(data, total, parts, rows, &rotation);
         if (trt_hadamard(runtime)) {
