@@ -1139,11 +1139,13 @@ of the #60 builds). How it meets the list above:
   clocks, default 2^24, about 0.2 s), which aborts the requests in flight; `sel`
   is all ones from reset. The data of the next two bursts is precomputed
   (registered), so the path into `i_wb_data` starts at a flip-flop. The test's
-  flip-flops take their reset from the two-flip-flop stage of a second
-  `fpga_reset` instance fed by `rst`, not from the comparator behind `rst`: in a
+  flip-flops (and the status reporter's, so that both leave reset on the same
+  clock and the test sees the reporter's `H` line) take their reset from the
+  two-flip-flop stage of a second `fpga_reset` instance fed by `rst`, not from
+  the comparator behind `rst`: in a
   trial place and route of the x16 top with the test on the reset net directly,
-  the routed critical path of two of the first three seeds ran from that
-  comparator to a flip-flop's SR pin.
+  the routed critical path of seeds 1 and 3 of four ran from that comparator to
+  a flip-flop's SR pin, and no seed met the controller clock.
 - *Counting.* A four-stage compare pipeline counts, per pass, the bursts and the
   64-bit words with a wrong bit, the wrong bits, the DQ bits ever wrong (bit j of
   the mask = DQ j: byte b of a word is byte lane `b % BYTE_LANES`) and the first
