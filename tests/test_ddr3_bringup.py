@@ -147,12 +147,17 @@ class CaptureDecoder(unittest.TestCase):
                  b"DONE RANDOM WRITE: BIST_MODE=1\n", b"DONE RANDOM READ: BIST_MODE=1\n",
                  b"DONE ALTERNATING WRITE-READ\n",
                  b"DONE BIST_MODE=1, correct_read_data=\n\n" + count.to_bytes(4, "big") + b"\n\n\n\n"]
-        raw = b"".join(message(t) for t in texts)
-        entries = [{"t_s": 20.0 + i, "line": line.decode("ascii", "replace")}
-                   for i, line in enumerate(raw.split(b"\n"))]
+        # The design loaded before repeats its own final message until the load (another count here).
+        stale = message(b"DONE BIST_MODE=1, correct_read_data=\n\n" + (5).to_bytes(4, "big") + b"\n\n\n\n")
+        raw = stale + b"".join(message(t) for t in texts)
+        entries = [{"t_s": 0.5, "line": "DONE BIST_MODE=1, correct_read_data="}]
+        entries += [{"t_s": 20.0 + i, "line": line.decode("ascii", "replace")}
+                    for i, line in enumerate(b"".join(message(t) for t in texts).split(b"\n"))]
         result = capture.decode_bist_debug(raw, entries, load_end_s=15.0)
         self.assertTrue(result["pass"], result["checks"])
         self.assertEqual(result["correct_read_data"], 33_554_431)
+        self.assertEqual(result["done_message_repeats"], 1)
+        self.assertGreater(result["phases"][-1]["since_load_end_s"], 0)
         self.assertEqual(len(result["phases"]), 6)
         # A wrong read: RESET reports and no DONE line.
         bad = capture.decode_bist_debug(raw[:-101] + message(b"RESET, # correct(ascii)=0x123456\n"), entries)
@@ -198,6 +203,11 @@ class CommittedEvidence(unittest.TestCase):
                 t_s, _utc, text = line.split("\t", 2)
                 entries.append({"t_s": float(t_s), "line": text})
             expect = record["expect"]
+            self.assertEqual(record["board"]["dna"], "0x00389c0c2d85e85c")
+            if expect.get("uart_debug_bist"):
+                again = capture.decode_bist_debug(raw, entries, load_end_s=record["run"].get("load_end_s"))
+                self.assertEqual(again, record["decoded_bist"], path)
+                continue
             again = capture.decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                                    expect_period_ps=expect["period_ps"], load_end_s=record["run"].get("load_end_s"),
                                    nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
