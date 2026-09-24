@@ -24,12 +24,13 @@ DOCUMENT = replay.load_document()
 
 
 class TcpSession:
-    def __init__(self, server):
+    def __init__(self, server, timeout=5):
         self.server = server
         self.port = int(server.url.split(":")[-1].strip("/"))
+        self.timeout = timeout
 
     def send(self, body, headers=None):
-        connection = HTTPConnection("127.0.0.1", self.port, timeout=5)
+        connection = HTTPConnection("127.0.0.1", self.port, timeout=self.timeout)
         try:
             connection.request("POST", "/", body, headers or {"Content-Type": "application/json"})
             response = connection.getresponse()
@@ -49,9 +50,15 @@ class TcpSession:
 
 
 @contextlib.contextmanager
-def tcp_session(limits):
-    with BridgeServer(**limits) as server:
-        yield TcpSession(server)
+def tcp_session(limits, backend=None):
+    if backend is None:
+        with BridgeServer(**limits) as server:
+            yield TcpSession(server)
+        return
+    with replay.fpga_double(backend) as (path, options):
+        from trinity_memory.bridge import FpgaDevice
+        with BridgeServer(**limits, backend="fpga", device=FpgaDevice(port=path, **options)) as server:
+            yield TcpSession(server, timeout=60)
 
 
 class SpecBridgeTcpReplay(unittest.TestCase):

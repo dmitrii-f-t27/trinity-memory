@@ -1,0 +1,678 @@
+// Host side of the Bridge's fpga backend (issue #64): the AX7203 UART link.
+// Frames, CRC-32, the device's byte stream (response lines and read-back frames),
+// stop-and-wait with retransmission, the chunk upload with read-back verification,
+// the activation upload, the matvec command, the Y and Z lines and the assembly of
+// the accumulators. The wire protocol is the UART loader's (docs/uart-loader.md,
+// tools/uart_loader_protocol.py) plus the matvec extension of docs/bridge.md,
+// "Wire protocol extension" (tools/bridge_link_protocol.py states it in Python).
+// Only raw serial I/O and the clock are OS hooks (native/platform.c):
+// tm_os_serial_open/read/write/drain/close and tm_os_monotonic_ns; sha256 is
+// tm_os_sha256. Caller-owned buffers in TMLink; no allocation here.
+// Include codecs.h and container.h first (tm_read_u32, tm_write_u32).
+module TrinityMemoryFpgaLink;
+
+const TL_MAGIC0: u32 = 165;
+const TL_MAGIC1: u32 = 90;
+const TL_CMD_LOAD: u32 = 76;
+const TL_CMD_READ: u32 = 82;
+const TL_CMD_STATUS: u32 = 83;
+const TL_CMD_BAUD: u32 = 66;
+const TL_CMD_ACT: u32 = 88;
+const TL_CMD_MATVEC: u32 = 77;
+const TL_RESP_READ: u32 = 114;
+const TL_MAX_LEN: u32 = 4096;
+const TL_HEADER_BYTES: u32 = 10;
+const TL_FRAME_OVERHEAD: u32 = 14;
+const TL_LINE_BYTES: u32 = 20;
+const TL_WORD_BYTES: u32 = 16;
+const TL_ACT_BLOCK_BYTES: u32 = 80;
+const TL_ACT_FRAME_BLOCKS: u32 = 51;
+const TL_MATVEC_PAYLOAD: u32 = 12;
+const TL_MAX_ROWS: u32 = 1024;
+const TL_MAX_WPR: u32 = 1024;
+const TL_STATUS_COUNT: u32 = 23;
+const TL_Z_COUNT: u32 = 11;
+const TL_Z_ALL: u32 = 2047;
+const TL_PROTO_MATVEC: u32 = 3;
+// Tag masks for the decoder: bit 0 H, 1 A, 2 N, 3 C (the loader's lines), 4 Y, 5 Z.
+const TL_TAGS_LOADER: u32 = 15;
+const TL_TAGS_LINK: u32 = 63;
+// Event kinds.
+const TL_EV_LINE: u32 = 1;
+const TL_EV_READBACK: u32 = 2;
+const TL_EV_GARBAGE: u32 = 3;
+// Command indices in the A/N word: 1 load, 2 read, 3 status, 4 baud, 5 activations, 6 matvec.
+const TL_IX_LOAD: u32 = 1;
+const TL_IX_ACT: u32 = 5;
+const TL_IX_MATVEC: u32 = 6;
+// Results of one exchange.
+const TL_GOT_NONE: i32 = 0;
+const TL_GOT_OK: i32 = 1;
+const TL_GOT_RETRY: i32 = 2;
+// Link statuses.
+const TL_OK: i32 = 0;
+const TL_ERR_OPEN: i32 = -1;
+const TL_ERR_IO: i32 = -2;
+const TL_ERR_NO_REPLY: i32 = -3;
+const TL_ERR_IDENTITY: i32 = -5;
+const TL_ERR_READBACK: i32 = -6;
+const TL_ERR_RESULT: i32 = -7;
+const TL_ERR_LIMIT: i32 = -8;
+const TL_ERR_CAPTURE: i32 = -9;
+const TL_ERR_CONFIG: i32 = -10;
+const TL_ERR_TRIT: i32 = -11;
+
+struct TLEvent {
+    kind: u32, tag: u32, a: u32, v: u32, check_ok: bool,
+    seq: u32, addr: u32, data_offset: usize, data_size: usize, crc_ok: bool,
+}
+
+struct TMLink {
+    configured: bool, fd: i32, open: bool,
+    path: []u8, path_size: usize, baud: u32,
+    reply_ms: u32, quiet_ms: u32, max_attempts: u32, min_protocol: u32, region: u32,
+    bitstream: []u8, idcode: u32, dna: u64, build_id: u32,
+    seq: u32,
+    rx: []u8, rx_capacity: usize, rx_pos: usize, rx_used: usize,
+    frame: []u8, frame_capacity: usize,
+    capture: []u8, capture_capacity: usize, capture_used: usize, capture_overflow: bool,
+    image: []u8, image_capacity: usize,
+    x: []u8, x_capacity: usize,
+    act: []u8, act_capacity: usize,
+    acc: []i64, acc_capacity: usize,
+    seen: []u8,
+    status: []u32, status_mask: u32,
+    z: []u32, z_mask: u32,
+    loaded: bool, loaded_digest: []u8, loaded_size: usize, loaded_region: u32, loaded_committed: u32,
+    image_digest: []u8,
+    device_config: u32, device_build: u32, store_bytes: u64,
+    frames: u32, retransmits: u32, naks: u32, timeouts: u32, bad_lines: u32,
+    late: u32, garbage: u64, tx_bytes: u64, rx_bytes: u64,
+    uploaded: bool, readback_bytes: u64, matvec_attempts: u32, runs: u32,
+    words: u64, cycles: u64, idle_clocks: u64, latency: u64, invalid: u64, stray: u64, stalls: u64,
+}
+
+// ---- pure protocol functions (differentially tested against tools/uart_loader_protocol.py) ----
+
+fn tl_crc_byte(c: u32, b: u32) -> u32 {
+    var x: u32 = c ^ (b & 255);
+    var i: u32 = 0;
+    while (i < 8) {
+        if ((x & 1) != 0) { x = (x >> 1) ^ 3988292384; } else { x = x >> 1; }
+        i = i + 1;
+    }
+    return x;
+}
+
+// zlib CRC-32 of data[offset .. offset + size).
+fn tl_crc32(data: []u8, offset: usize, size: usize) -> u32 {
+    var c: u32 = 4294967295;
+    var i: usize = 0;
+    while (i < size) { c = tl_crc_byte(c, data[offset + i] as u32); i = i + 1; }
+    return c ^ 4294967295;
+}
+
+// Check byte of a response line: low byte of the CRC-32 of tag, a (4 bytes LE), v (4 bytes LE).
+fn tl_line_check(tag: u32, a: u32, v: u32) -> u32 {
+    var c: u32 = tl_crc_byte(4294967295, tag);
+    c = tl_crc_byte(c, a); c = tl_crc_byte(c, a >> 8); c = tl_crc_byte(c, a >> 16); c = tl_crc_byte(c, a >> 24);
+    c = tl_crc_byte(c, v); c = tl_crc_byte(c, v >> 8); c = tl_crc_byte(c, v >> 16); c = tl_crc_byte(c, v >> 24);
+    return (c ^ 4294967295) & 255;
+}
+
+// A5 5A cmd seq addr[4] len[2] payload[plen] crc32[4]; the CRC covers cmd .. payload.
+// len is the length field (for a load, activations and matvec it equals plen).
+// Returns the frame size or -1 when out does not hold it.
+fn tl_frame(cmd: u32, seq: u32, addr: u32, len: u32, payload: []u8, plen: usize, out: []u8, capacity: usize) -> i64 {
+    var total: usize = plen + 14;
+    if (plen > 65535 || total > capacity) { return -1; }
+    out[0] = 165; out[1] = 90;
+    out[2] = (cmd & 255) as u8; out[3] = (seq & 255) as u8;
+    tm_write_u32(out, 4, addr);
+    out[8] = (len & 255) as u8; out[9] = ((len >> 8) & 255) as u8;
+    var i: usize = 0;
+    while (i < plen) { out[10 + i] = payload[i]; i = i + 1; }
+    tm_write_u32(out, 10 + plen, tl_crc32(out, 2, plen + 8));
+    return total as i64;
+}
+
+fn tl_tag_bit(tag: u32) -> u32 {
+    if (tag == 72) { return 1; }
+    if (tag == 65) { return 2; }
+    if (tag == 78) { return 4; }
+    if (tag == 67) { return 8; }
+    if (tag == 89) { return 16; }
+    if (tag == 90) { return 32; }
+    return 0;
+}
+
+fn tl_hex_value(c: u8) -> i32 {
+    if (c >= 48 && c <= 57) { return (c - 48) as i32; }
+    if (c >= 97 && c <= 102) { return (c - 87) as i32; }
+    return -1;
+}
+
+// Decode one event at the start of data[0 .. used). Returns the bytes consumed (> 0) with ev
+// filled, or 0 when more bytes are needed. The rules of StreamDecoder
+// (tools/uart_loader_protocol.py): A5 starts a read-back frame A5 5A 'r' seq addr[4] len[2]
+// data crc32 with 1 <= len <= 4096 (else the A5 is one garbage byte); a byte whose tag is in
+// `tags` starts a 20-byte line (tag, 8 + 10 lowercase hex digits, LF; else one garbage byte);
+// anything else is one garbage byte. A read-back frame whose CRC does not match consumes only
+// its A5 (ev.crc_ok false): its other bytes are decoded again, as the Python decoder does.
+fn tl_decode(data: []u8, used: usize, tags: u32, ev: *TLEvent) -> i64 {
+    ev.kind = TL_EV_GARBAGE; ev.tag = 0; ev.a = 0; ev.v = 0; ev.check_ok = false;
+    ev.seq = 0; ev.addr = 0; ev.data_offset = 0; ev.data_size = 0; ev.crc_ok = false;
+    if (used == 0) { return 0; }
+    var first: u8 = data[0];
+    if (first == 165) {
+        if (used < 10) { return 0; }
+        if (data[1] != 90 || data[2] != 114) { return 1; }
+        var length: usize = (data[8] as usize) | ((data[9] as usize) << 8);
+        if (length == 0 || length > 4096) { return 1; }
+        var total: usize = length + 14;
+        if (used < total) { return 0; }
+        var crc: u32 = tm_read_u32(data, total - 4);
+        ev.kind = TL_EV_READBACK;
+        ev.seq = data[3] as u32;
+        ev.addr = tm_read_u32(data, 4);
+        ev.data_offset = 10; ev.data_size = length;
+        ev.crc_ok = tl_crc32(data, 2, length + 8) == crc;
+        if (ev.crc_ok) { return total as i64; }
+        return 1;
+    }
+    var bit: u32 = tl_tag_bit(first as u32);
+    if (bit != 0 && (bit & tags) != 0) {
+        if (used < 20) { return 0; }
+        if (data[19] != 10) { return 1; }
+        var a: u32 = 0; var b: u64 = 0; var i: usize = 1;
+        while (i < 19) {
+            var h: i32 = tl_hex_value(data[i]);
+            if (h < 0) { return 1; }
+            if (i < 9) { a = (a << 4) | (h as u32); } else { b = (b << 4) | (h as u64); }
+            i = i + 1;
+        }
+        ev.kind = TL_EV_LINE; ev.tag = first as u32; ev.a = a; ev.v = (b & 4294967295) as u32;
+        ev.check_ok = (b >> 32) == (tl_line_check(first as u32, a, ev.v) as u64);
+        return 20;
+    }
+    return 1;
+}
+
+fn tl_resp_seq(a: u32) -> u32 { return a >> 24; }
+fn tl_resp_reason(a: u32) -> u32 { return (a >> 20) & 15; }
+fn tl_resp_index(a: u32) -> u32 { return (a >> 17) & 7; }
+fn tl_resp_len(a: u32) -> u32 { return a & 65535; }
+
+// Words per row: ceil(cols / 64) (baseline2, fmt 0) or ceil(cols / 80) (dense5, fmt 1).
+fn tl_lanes(fmt: u32) -> u64 {
+    if (fmt == 1) { return 80; }
+    return 64;
+}
+fn tl_words_per_row(cols: u64, fmt: u32) -> u64 {
+    var lanes: u64 = tl_lanes(fmt);
+    return (cols + lanes - 1) / lanes;
+}
+
+// Row-padded device image of rows x cols trits (values[offset ..], C order), fmt 0 baseline2
+// (four 2-bit lane codes per byte, 00 = 0, 01 = +1, 10 = -1, earliest lane lowest) or 1 dense5
+// (five trits per byte, sum of (t + 1) * 3^i); every row starts at a 16-byte word and its
+// padding lanes are zero trits. Returns the image size, TL_ERR_LIMIT when out is too small,
+// TL_ERR_TRIT for a value outside -1 .. 1.
+fn tl_image(values: []i32, offset: usize, rows: usize, cols: usize, fmt: u32, out: []u8, capacity: usize) -> i64 {
+    var wpr: u64 = tl_words_per_row(cols as u64, fmt);
+    var row_bytes: u64 = wpr * 16;
+    if (rows > 0 && row_bytes > (capacity as u64) / (rows as u64)) { return TL_ERR_LIMIT as i64; }
+    var group: usize = 4;
+    if (fmt == 1) { group = 5; }
+    var r: usize = 0;
+    while (r < rows) {
+        var base: usize = r * (row_bytes as usize);
+        var n: usize = 0;
+        while (n < row_bytes as usize) {
+            var code: u32 = 0; var weight: u32 = 1; var i: usize = 0;
+            while (i < group) {
+                var col: usize = n * group + i;
+                var t: i32 = 0;
+                if (col < cols) { t = values[offset + r * cols + col]; }
+                if (t < -1 || t > 1) { return TL_ERR_TRIT as i64; }
+                if (fmt == 1) {
+                    code = code + ((t + 1) as u32) * weight; weight = weight * 3;
+                } else {
+                    var lane: u32 = 0;
+                    if (t == 1) { lane = 1; }
+                    if (t == -1) { lane = 2; }
+                    code = code | (lane << ((i as u32) * 2));
+                }
+                i = i + 1;
+            }
+            out[base + n] = code as u8;
+            n = n + 1;
+        }
+        r = r + 1;
+    }
+    return ((rows as u64) * row_bytes) as i64;
+}
+
+// Activation image: wpr blocks of 80 bytes; block k byte i (i < lanes) is the activation of
+// column k * lanes + i (0 past the last column), bytes lanes .. 79 are 0 (baseline2). The
+// device stores block k in entry k of its ten activation banks (bank b = bytes 8b .. 8b+7).
+fn tl_act_image(x: []u8, cols: usize, fmt: u32, out: []u8, capacity: usize) -> i64 {
+    var lanes: u64 = tl_lanes(fmt);
+    var wpr: u64 = tl_words_per_row(cols as u64, fmt);
+    var total: u64 = wpr * 80;
+    if (total > capacity as u64) { return TL_ERR_LIMIT as i64; }
+    var k: u64 = 0;
+    while (k < wpr) {
+        var i: u64 = 0;
+        while (i < 80) {
+            var col: u64 = k * lanes + i;
+            var value: u8 = 0;
+            if (i < lanes && col < cols as u64) { value = x[col as usize]; }
+            out[(k * 80 + i) as usize] = value;
+            i = i + 1;
+        }
+        k = k + 1;
+    }
+    return total as i64;
+}
+
+// Result checksum of the Z line 10: c = rotl1(c) xor y over the rows in order, 32 bits.
+fn tl_result_checksum(values: []i64, count: usize) -> u32 {
+    var c: u32 = 0; var i: usize = 0;
+    while (i < count) {
+        c = ((c << 1) | (c >> 31)) ^ ((values[i] as u64) & 4294967295) as u32;
+        i = i + 1;
+    }
+    return c;
+}
+
+// 32-bit two's complement -> i64.
+fn tl_signed32(v: u32) -> i64 {
+    if (v >= 2147483648) { return (v as i64) - 4294967296; }
+    return v as i64;
+}
+
+// ---- link state ----
+
+fn tl_now_ms() -> u64 { return tm_os_monotonic_ns() / 1000000; }
+
+// Milliseconds a byte count takes on the wire at the link's baud (10 bits per byte), rounded up.
+fn tl_wire_ms(l: *TMLink, bytes: u64) -> u64 {
+    var baud: u64 = l.baud as u64;
+    if (baud == 0) { baud = 115200; }
+    return (bytes * 10000 + baud - 1) / baud;
+}
+
+fn tl_begin(l: *TMLink) -> void {
+    l.capture_used = 0; l.capture_overflow = false;
+    l.frames = 0; l.retransmits = 0; l.naks = 0; l.timeouts = 0; l.bad_lines = 0;
+    l.late = 0; l.garbage = 0; l.tx_bytes = 0; l.rx_bytes = 0;
+    l.uploaded = false; l.readback_bytes = 0; l.matvec_attempts = 0; l.runs = 0;
+    l.words = 0; l.cycles = 0; l.idle_clocks = 0; l.latency = 0; l.invalid = 0; l.stray = 0; l.stalls = 0;
+}
+
+fn tl_close(l: *TMLink) -> void {
+    if (l.open) { tm_os_serial_close(l.fd); }
+    l.open = false; l.fd = -1; l.rx_pos = 0; l.rx_used = 0;
+}
+
+fn tl_open(l: *TMLink) -> i32 {
+    if (!l.configured) { return TL_ERR_CONFIG; }
+    if (l.open) { return TL_OK; }
+    var fd: i32 = tm_os_serial_open(l.path, l.path_size, l.baud);
+    if (fd < 0) { return TL_ERR_OPEN; }
+    l.fd = fd; l.open = true; l.rx_pos = 0; l.rx_used = 0;
+    // A freshly opened port may hold a device whose store we have not seen: forget the cache.
+    l.loaded = false;
+    return TL_OK;
+}
+
+fn tl_next_seq(l: *TMLink) -> u32 {
+    l.seq = (l.seq + 1) & 255;
+    return l.seq;
+}
+
+fn tl_send(l: *TMLink, data: []u8, size: usize) -> i32 {
+    var written: i64 = tm_os_serial_write(l.fd, data, size, 5000);
+    if (written != size as i64) { tl_close(l); return TL_ERR_IO; }
+    l.tx_bytes = l.tx_bytes + (size as u64);
+    return TL_OK;
+}
+
+// Read what the port has (waiting at most timeout_ms) into rx and the capture.
+fn tl_fill(l: *TMLink, timeout_ms: u64) -> i32 {
+    if (l.rx_pos > 0) {
+        var i: usize = 0;
+        while (l.rx_pos + i < l.rx_used) { l.rx[i] = l.rx[l.rx_pos + i]; i = i + 1; }
+        l.rx_used = l.rx_used - l.rx_pos; l.rx_pos = 0;
+    }
+    if (l.rx_used >= l.rx_capacity) { return TL_ERR_IO; }
+    var wait: u32 = 0;
+    if (timeout_ms > 60000) { wait = 60000; } else { wait = timeout_ms as u32; }
+    var got: i64 = tm_os_serial_read(l.fd, &l.rx[l.rx_used], l.rx_capacity - l.rx_used, wait);
+    if (got < 0) { tl_close(l); return TL_ERR_IO; }
+    var n: usize = got as usize;
+    var i2: usize = 0;
+    while (i2 < n) {
+        if (l.capture_used < l.capture_capacity) { l.capture[l.capture_used] = l.rx[l.rx_used + i2]; l.capture_used = l.capture_used + 1; }
+        else { l.capture_overflow = true; }
+        i2 = i2 + 1;
+    }
+    l.rx_used = l.rx_used + n; l.rx_bytes = l.rx_bytes + (n as u64);
+    return TL_OK;
+}
+
+// Next event from rx, reading from the port until the deadline. 1 event, 0 deadline passed, < 0 error.
+fn tl_event(l: *TMLink, deadline: u64, ev: *TLEvent) -> i32 {
+    while (true) {
+        var n: i64 = tl_decode(&l.rx[l.rx_pos], l.rx_used - l.rx_pos, TL_TAGS_LINK, ev);
+        if (n > 0) {
+            ev.data_offset = ev.data_offset + l.rx_pos;
+            l.rx_pos = l.rx_pos + (n as usize);
+            if (ev.kind == TL_EV_GARBAGE) { l.garbage = l.garbage + 1; }
+            else {
+                // A device reset (H line) loses nothing in the store, but the host can no longer
+                // vouch for what is there: upload again next time.
+                if (ev.kind == TL_EV_LINE && ev.tag == 72 && ev.check_ok) { l.loaded = false; }
+                return 1;
+            }
+        } else {
+            var now: u64 = tl_now_ms();
+            if (now >= deadline) { return 0; }
+            var status: i32 = tl_fill(l, deadline - now);
+            if (status != 0) { return status; }
+        }
+    }
+    return 0;
+}
+
+// Before a retransmission: let the OS send everything, then stay silent for quiet_ms so that
+// the device drops a partial frame and hunts again; replies arriving meanwhile are late.
+fn tl_quiet(l: *TMLink) -> i32 {
+    tm_os_serial_drain(l.fd);
+    var deadline: u64 = tl_now_ms() + (l.quiet_ms as u64);
+    var ev: TLEvent;
+    while (true) {
+        var got: i32 = tl_event(l, deadline, &ev);
+        if (got < 0) { return got; }
+        if (got == 0) { return TL_OK; }
+        l.late = l.late + 1;
+    }
+    return TL_OK;
+}
+
+// Does the event answer the exchange? expect 1: ack of (seq, index); 2: read-back of (seq,
+// addr, len) matching image[compare ..] (or any content when compare is false); 3: status
+// lines of seq. TL_GOT_OK, TL_GOT_RETRY (nak of seq, bad read-back, bad status line), or
+// TL_GOT_NONE (not for this exchange).
+fn tl_match(l: *TMLink, ev: *TLEvent, expect: u32, seq: u32, index: u32, addr: u32, len: u32) -> i32 {
+    if (ev.kind == TL_EV_LINE && !ev.check_ok) { l.bad_lines = l.bad_lines + 1; return TL_GOT_NONE; }
+    if (ev.kind == TL_EV_LINE && ev.tag == 78 && tl_resp_seq(ev.a) == seq) { l.naks = l.naks + 1; return TL_GOT_RETRY; }
+    if (expect == 1) {
+        if (ev.kind == TL_EV_LINE && ev.tag == 65 && tl_resp_seq(ev.a) == seq && tl_resp_index(ev.a) == index
+            && tl_resp_len(ev.a) == len && (tl_resp_reason(ev.a) == 0 || tl_resp_reason(ev.a) == 1)) { return TL_GOT_OK; }
+        return TL_GOT_NONE;
+    }
+    if (expect == 2) {
+        if (ev.kind != TL_EV_READBACK) { return TL_GOT_NONE; }
+        if (!ev.crc_ok) { if (ev.seq == seq) { return TL_GOT_RETRY; } return TL_GOT_NONE; }
+        if (ev.seq != seq || ev.addr != addr || ev.data_size != len as usize) { return TL_GOT_NONE; }
+        return TL_GOT_OK;
+    }
+    if (ev.kind == TL_EV_LINE && ev.tag == 67 && tl_resp_seq(ev.a) == seq && ((ev.a >> 16) & 255) == TL_STATUS_COUNT) {
+        var index2: u32 = ev.a & 65535;
+        if (index2 < TL_STATUS_COUNT) { l.status[index2] = ev.v; l.status_mask = l.status_mask | (1 << index2); }
+        if (l.status_mask == 8388607) { return TL_GOT_OK; }
+    }
+    return TL_GOT_NONE;
+}
+
+// One command with stop-and-wait: send, wait for its answer, retransmit after a nak or when no
+// answer came reply_ms after the later of (write start + wire time) and (write returned). For a
+// read (expect 2) the read-back must equal compare_data[0 .. len) when check is true.
+fn tl_exchange(l: *TMLink, cmd: u32, addr: u32, payload: []u8, plen: usize, len: u32, expect: u32, index: u32,
+               check: bool, compare_data: []u8) -> i32 {
+    var seq: u32 = tl_next_seq(l);
+    var size: i64 = tl_frame(cmd, seq, addr, len, payload, plen, l.frame, l.frame_capacity);
+    if (size < 0) { return TL_ERR_LIMIT; }
+    var reply_bytes: u64 = 20;
+    if (expect == 2) { reply_bytes = (len as u64) + 14; }
+    if (expect == 3) { reply_bytes = 460; }
+    var attempt: u32 = 0;
+    while (attempt < l.max_attempts) {
+        if (attempt > 0) {
+            l.retransmits = l.retransmits + 1;
+            var q: i32 = tl_quiet(l);
+            if (q != 0) { return q; }
+        }
+        if (expect == 3) { l.status_mask = 0; }
+        var start: u64 = tl_now_ms();
+        var sent: i32 = tl_send(l, l.frame, size as usize);
+        if (sent != 0) { return sent; }
+        var queued: u64 = tl_now_ms();
+        var done_at: u64 = start + tl_wire_ms(l, size as u64);
+        if (queued > done_at) { done_at = queued; }
+        var deadline: u64 = done_at + tl_wire_ms(l, reply_bytes) + (l.reply_ms as u64);
+        var outcome: i32 = TL_GOT_NONE;
+        var ev: TLEvent;
+        while (outcome == TL_GOT_NONE) {
+            var got: i32 = tl_event(l, deadline, &ev);
+            if (got < 0) { return got; }
+            if (got == 0) { outcome = -1; }
+            else {
+                // Status lines of this exchange keep coming: wait reply_ms after each one, at least.
+                if (expect == 3 && ev.kind == TL_EV_LINE && tl_resp_seq(ev.a) == seq) {
+                    var progress: u64 = tl_now_ms() + (l.reply_ms as u64);
+                    if (progress > deadline) { deadline = progress; }
+                }
+                outcome = tl_match(l, &ev, expect, seq, index, addr, len);
+                if (outcome == TL_GOT_OK && expect == 2 && check) {
+                    var i: usize = 0; var same: bool = true;
+                    while (i < ev.data_size) { if (l.rx[ev.data_offset + i] != compare_data[i]) { same = false; } i = i + 1; }
+                    l.readback_bytes = l.readback_bytes + (ev.data_size as u64);
+                    if (!same) { return TL_ERR_READBACK; }
+                }
+            }
+        }
+        if (outcome == TL_GOT_OK) { l.frames = l.frames + 1; return TL_OK; }
+        if (outcome == -1) { l.timeouts = l.timeouts + 1; }
+        attempt = attempt + 1;
+    }
+    return TL_ERR_NO_REPLY;
+}
+
+// Status exchange: the 23 counters; checks the protocol of the config word and the build id.
+fn tl_handshake(l: *TMLink) -> i32 {
+    var none: [1]u8 = [0];
+    var status: i32 = tl_exchange(l, TL_CMD_STATUS, 0, none, 0, 0, 3, 3, false, none);
+    if (status != 0) { return status; }
+    l.device_config = l.status[19]; l.device_build = l.status[21];
+    var store_log2: u32 = (l.device_config >> 8) & 255;
+    if (store_log2 > 40) { return TL_ERR_IDENTITY; }
+    var one: u64 = 1;
+    l.store_bytes = one << (store_log2 as u64);
+    if ((l.device_config >> 24) < l.min_protocol || l.device_build != l.build_id) { return TL_ERR_IDENTITY; }
+    // Loads are the only frames counted in bytes_committed (status 14): if it moved since our last
+    // upload, someone else loaded or the device was reset; either way upload again.
+    if (l.loaded && l.status[14] != l.loaded_committed) { l.loaded = false; }
+    return TL_OK;
+}
+
+// Open the port and check the device (build id, protocol). Used by chip_info and every dot.
+fn tl_identify(l: *TMLink) -> i32 {
+    tl_begin(l);
+    var status: i32 = tl_open(l);
+    if (status != 0) { return status; }
+    return tl_handshake(l);
+}
+
+// Upload image[0 .. size) to the region in chunks of 4096 bytes, each acknowledged, then read
+// every chunk back and compare. Skipped when the same image (sha256) is known to be there.
+fn tl_upload(l: *TMLink, size: usize) -> i32 {
+    if (tm_os_sha256(l.image, size, l.image_digest) != 0) { return TL_ERR_IO; }
+    if (l.loaded && l.loaded_size == size && l.loaded_region == l.region) {
+        var same: bool = true; var i: usize = 0;
+        while (i < 32) { if (l.loaded_digest[i] != l.image_digest[i]) { same = false; } i = i + 1; }
+        if (same) { return TL_OK; }
+    }
+    l.loaded = false;
+    var none: [1]u8 = [0];
+    var offset: usize = 0;
+    while (offset < size) {
+        var n: usize = size - offset;
+        if (n > 4096) { n = 4096; }
+        var status: i32 = tl_exchange(l, TL_CMD_LOAD, l.region + (offset as u32), &l.image[offset], n, n as u32, 1, TL_IX_LOAD, false, none);
+        if (status != 0) { return status; }
+        offset = offset + n;
+    }
+    offset = 0;
+    while (offset < size) {
+        var n2: usize = size - offset;
+        if (n2 > 4096) { n2 = 4096; }
+        var status2: i32 = tl_exchange(l, TL_CMD_READ, l.region + (offset as u32), none, 0, n2 as u32, 2, 2, true, &l.image[offset]);
+        if (status2 != 0) { return status2; }
+        offset = offset + n2;
+    }
+    var j: usize = 0;
+    while (j < 32) { l.loaded_digest[j] = l.image_digest[j]; j = j + 1; }
+    l.loaded = true; l.loaded_size = size; l.loaded_region = l.region; l.uploaded = true;
+    l.loaded_committed = l.status[14] + (size as u32);
+    return TL_OK;
+}
+
+// Activation image of x[0 .. cols) into the device's banks: frames of at most 51 blocks.
+fn tl_send_activations(l: *TMLink, cols: usize, fmt: u32) -> i32 {
+    var total: i64 = tl_act_image(l.x, cols, fmt, l.act, l.act_capacity);
+    if (total < 0) { return total as i32; }
+    var none: [1]u8 = [0];
+    var block: u32 = 0;
+    var blocks: u32 = ((total as u64) / 80) as u32;
+    while (block < blocks) {
+        var n: u32 = blocks - block;
+        if (n > TL_ACT_FRAME_BLOCKS) { n = TL_ACT_FRAME_BLOCKS; }
+        var bytes: usize = (n * 80) as usize;
+        var status: i32 = tl_exchange(l, TL_CMD_ACT, block, &l.act[(block * 80) as usize], bytes, bytes as u32, 1, TL_IX_ACT, false, none);
+        if (status != 0) { return status; }
+        block = block + n;
+    }
+    return TL_OK;
+}
+
+// One matvec run of rows (<= 1024) rows at region byte address addr: the M frame, then the Y
+// line of every row and the eleven Z lines of its seq. A run is repeated (new seq) when its nak
+// comes, nothing of it arrives in time, a line of it fails its check, a row is missing or the Z
+// counters disagree with the request. acc[first ..] receives the rows.
+fn tl_matvec_run(l: *TMLink, addr: u32, rows: u32, cols: u32, fmt: u32, first: usize) -> i32 {
+    var payload: [12]u8 = [0];
+    tm_write_u32(payload, 0, rows); tm_write_u32(payload, 4, cols); tm_write_u32(payload, 8, fmt);
+    var wpr: u64 = tl_words_per_row(cols as u64, fmt);
+    var attempt: u32 = 0;
+    while (attempt < l.max_attempts) {
+        l.matvec_attempts = l.matvec_attempts + 1;
+        if (attempt > 0) {
+            l.retransmits = l.retransmits + 1;
+            var q: i32 = tl_quiet(l);
+            if (q != 0) { return q; }
+        }
+        var seq: u32 = tl_next_seq(l);
+        var size: i64 = tl_frame(TL_CMD_MATVEC, seq, addr, 12, payload, 12, l.frame, l.frame_capacity);
+        if (size < 0) { return TL_ERR_LIMIT; }
+        var r: u32 = 0;
+        while (r < rows) { l.seen[r] = 0; r = r + 1; }
+        l.z_mask = 0;
+        var start: u64 = tl_now_ms();
+        var sent: i32 = tl_send(l, l.frame, size as usize);
+        if (sent != 0) { return sent; }
+        var queued: u64 = tl_now_ms();
+        var done_at: u64 = start + tl_wire_ms(l, size as u64);
+        if (queued > done_at) { done_at = queued; }
+        // The run itself takes microseconds; its lines take (rows + 12) * 20 bytes on the wire.
+        var first_deadline: u64 = done_at + tl_wire_ms(l, 20) + (l.reply_ms as u64);
+        var deadline: u64 = first_deadline + 2 * tl_wire_ms(l, ((rows as u64) + 12) * 20);
+        var heard: bool = false; var bad: bool = false; var nak: bool = false; var finished: bool = false;
+        var ev: TLEvent;
+        while (!finished) {
+            var limit: u64 = deadline;
+            if (!heard) { limit = first_deadline; }
+            var got: i32 = tl_event(l, limit, &ev);
+            if (got < 0) { return got; }
+            if (got == 0) { finished = true; }
+            else {
+                if (ev.kind == TL_EV_LINE && tl_resp_seq(ev.a) == seq) {
+                    // Lines of this run keep coming: wait reply_ms after each one, at least.
+                    var progress: u64 = tl_now_ms() + (l.reply_ms as u64);
+                    if (progress > deadline) { deadline = progress; }
+                    if (!ev.check_ok) { l.bad_lines = l.bad_lines + 1; bad = true; heard = true; }
+                    else {
+                        if (ev.tag == 78) { l.naks = l.naks + 1; nak = true; finished = true; }
+                        if (ev.tag == 65 && tl_resp_index(ev.a) == TL_IX_MATVEC) { heard = true; }
+                        if (ev.tag == 89) {
+                            heard = true;
+                            var row: u32 = ev.a & 16777215;
+                            if (row < rows) { l.acc[first + (row as usize)] = tl_signed32(ev.v); l.seen[row] = 1; }
+                            else { bad = true; }
+                        }
+                        if (ev.tag == 90 && ((ev.a >> 16) & 255) == TL_Z_COUNT) {
+                            heard = true;
+                            var index: u32 = ev.a & 65535;
+                            if (index < TL_Z_COUNT) { l.z[index] = ev.v; l.z_mask = l.z_mask | (1 << index); }
+                            if (l.z_mask == TL_Z_ALL) { finished = true; }
+                        }
+                    }
+                } else {
+                    if (ev.kind == TL_EV_LINE && !ev.check_ok) { l.bad_lines = l.bad_lines + 1; }
+                }
+            }
+        }
+        if (!nak && !bad && l.z_mask == TL_Z_ALL) {
+            var all: bool = true; var i: u32 = 0;
+            while (i < rows) { if (l.seen[i] == 0) { all = false; } i = i + 1; }
+            var ok: bool = all && l.z[0] == 0 && l.z[1] == rows && (l.z[2] as u64) == wpr
+                && (l.z[3] as u64) == (rows as u64) * wpr
+                && l.z[10] == tl_result_checksum(&l.acc[first], rows as usize);
+            if (ok) {
+                l.frames = l.frames + 1; l.runs = l.runs + 1;
+                l.words = l.words + (l.z[3] as u64); l.cycles = l.cycles + (l.z[4] as u64);
+                l.idle_clocks = l.idle_clocks + (l.z[5] as u64); l.latency = l.latency + (l.z[6] as u64);
+                l.invalid = l.invalid + (l.z[7] as u64); l.stray = l.stray + (l.z[8] as u64);
+                l.stalls = l.stalls + (l.z[9] as u64);
+                return TL_OK;
+            }
+            if (l.z[0] != 0) { return TL_ERR_RESULT; }
+        }
+        if (!heard && !nak) { l.timeouts = l.timeouts + 1; }
+        attempt = attempt + 1;
+    }
+    return TL_ERR_RESULT;
+}
+
+// y = W x on the device for rows x cols trits values[offset ..] (fmt 0 baseline2, 1 dense5) and
+// the activations l.x[0 .. cols): check the device, upload the row-padded image (unless the
+// same image is there), send the activations, run the matvec in runs of at most 1024 rows and
+// collect the accumulators into l.acc[0 .. rows). The capture of every byte received is in
+// l.capture[0 .. capture_used); a capture that did not fit fails the call.
+fn tl_dot(l: *TMLink, values: []i32, offset: usize, rows: usize, cols: usize, fmt: u32) -> i32 {
+    var status: i32 = tl_identify(l);
+    if (status != 0) { return status; }
+    if (rows == 0 || cols == 0 || rows > l.acc_capacity || cols > l.x_capacity) { return TL_ERR_LIMIT; }
+    var wpr: u64 = tl_words_per_row(cols as u64, fmt);
+    if (wpr > (TL_MAX_WPR as u64)) { return TL_ERR_LIMIT; }
+    var size: i64 = tl_image(values, offset, rows, cols, fmt, l.image, l.image_capacity);
+    if (size < 0) { return size as i32; }
+    if ((l.region as u64) % 16 != 0 || (l.region as u64) + (size as u64) > l.store_bytes) { return TL_ERR_LIMIT; }
+    status = tl_upload(l, size as usize);
+    if (status != 0) { return status; }
+    status = tl_send_activations(l, cols, fmt);
+    if (status != 0) { return status; }
+    var first: usize = 0;
+    while (first < rows) {
+        var n: usize = rows - first;
+        if (n > 1024) { n = 1024; }
+        var addr: u64 = (l.region as u64) + (first as u64) * wpr * 16;
+        status = tl_matvec_run(l, addr as u32, n as u32, cols as u32, fmt, first);
+        if (status != 0) { return status; }
+        first = first + n;
+    }
+    if (l.capture_overflow) { return TL_ERR_CAPTURE; }
+    return TL_OK;
+}

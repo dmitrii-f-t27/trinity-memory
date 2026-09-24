@@ -33,6 +33,9 @@ struct TMRuntime {
     pthread_t worker;
     pthread_mutex_t state_lock;
     bool lock_initialized;
+    TMLink link;
+    void *link_allocations[16];
+    size_t link_allocation_count;
 };
 
 static double monotonic(void) {
@@ -328,6 +331,65 @@ const char *tm_runtime_utc(void) {
     if (!gmtime_r(&now, &value) || !strftime(result, sizeof result, "%Y-%m-%dT%H:%M:%SZ", &value)) return "unknown";
     return result;
 }
+static void *link_allocate(TMRuntime *runtime, size_t count, size_t element) {
+    if (runtime->link_allocation_count >= 16 || (element && count > SIZE_MAX / element)) return NULL;
+    void *data = calloc(count ? count : 1, element);
+    if (data) runtime->link_allocations[runtime->link_allocation_count++] = data;
+    return data;
+}
+int32_t tm_runtime_fpga(TMRuntime *runtime, uint8_t *path, size_t path_size, uint32_t baud,
+                        uint32_t reply_ms, uint32_t quiet_ms, uint32_t attempts, uint32_t min_protocol,
+                        uint32_t region, uint8_t *bitstream_sha256, uint32_t idcode, uint64_t dna,
+                        uint32_t build_id) {
+    if (!runtime || runtime->running || runtime->link.configured || !path || path_size == 0 || path_size > 1023 ||
+        !bitstream_sha256 || !attempts || attempts > 64 || region % 16 != 0) return -1;
+    TMBridgeState *s = &runtime->state;
+    TMLink *l = &runtime->link;
+    size_t trits = s->max_trits;
+    if (trits > (SIZE_MAX - 65536) / 4) return -1;
+    /* Row-padded images: 2 bits per trit (baseline2) plus padding; the capture holds a whole
+     * read-back of the image, its framing and the response lines. */
+    l->image_capacity = trits / 2 + 65536;
+    l->capture_capacity = l->image_capacity * 2 + 1048576;
+    l->rx_capacity = 16384;
+    l->frame_capacity = 8192;
+    l->x_capacity = trits;
+    l->act_capacity = 1024 * 80;
+    l->acc_capacity = trits;
+    l->path = link_allocate(runtime, path_size, 1);
+    l->bitstream = link_allocate(runtime, 32, 1);
+    l->rx = link_allocate(runtime, l->rx_capacity, 1);
+    l->frame = link_allocate(runtime, l->frame_capacity, 1);
+    l->capture = link_allocate(runtime, l->capture_capacity, 1);
+    l->image = link_allocate(runtime, l->image_capacity, 1);
+    l->x = link_allocate(runtime, l->x_capacity, 1);
+    l->act = link_allocate(runtime, l->act_capacity, 1);
+    l->acc = link_allocate(runtime, l->acc_capacity, sizeof *l->acc);
+    l->seen = link_allocate(runtime, 1024, 1);
+    l->status = link_allocate(runtime, 23, sizeof *l->status);
+    l->z = link_allocate(runtime, 11, sizeof *l->z);
+    l->loaded_digest = link_allocate(runtime, 32, 1);
+    l->image_digest = link_allocate(runtime, 32, 1);
+    if (runtime->link_allocation_count != 14) return -1;
+    memcpy(l->path, path, path_size);
+    memcpy(l->bitstream, bitstream_sha256, 32);
+    l->path_size = path_size;
+    l->baud = baud;
+    l->reply_ms = reply_ms;
+    l->quiet_ms = quiet_ms;
+    l->max_attempts = attempts;
+    l->min_protocol = min_protocol;
+    l->region = region;
+    l->idcode = idcode;
+    l->dna = dna;
+    l->build_id = build_id;
+    l->fd = -1;
+    l->configured = true;
+    s->backend = 1;
+    s->transport = 1;
+    s->link = l;
+    return 0;
+}
 void tm_runtime_close(TMRuntime *runtime) {
     if (!runtime) return;
     if (runtime->running) {
@@ -339,6 +401,8 @@ void tm_runtime_close(TMRuntime *runtime) {
     if (runtime->cancel[0] >= 0) close(runtime->cancel[0]);
     if (runtime->cancel[1] >= 0) close(runtime->cancel[1]);
     for (size_t i = 0; i < runtime->allocation_count; i++) free(runtime->allocations[i]);
+    if (runtime->link.configured) tl_close(&runtime->link);
+    for (size_t i = 0; i < runtime->link_allocation_count; i++) free(runtime->link_allocations[i]);
     if (runtime->lock_initialized) pthread_mutex_destroy(&runtime->state_lock);
     free(runtime);
 }
