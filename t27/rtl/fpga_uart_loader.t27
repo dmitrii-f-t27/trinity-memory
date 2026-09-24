@@ -101,7 +101,7 @@ const TAG_C: u32 = 67;
 const PROTO: u32 = 1;
 const MAX_LEN: u32 = 4096;
 const MAX_LEN_LOG2: u32 = 12;
-const STAGE_MASK: u32 = 4095;
+const STAGE_WORD_MASK: u32 = 1023;
 const FIFO_DEPTH: u32 = 1024;
 const FIFO_LOG2: u32 = 10;
 const FIFO_MASK: u32 = 1023;
@@ -113,11 +113,15 @@ const ALL_ONES: u32 = 4294967295;
 const CRC_POLY: u32 = 3988292384;
 
 // Receive FIFO and staging buffer (block RAM; the read registers take the array
-// word directly and have no reset value).
+// word directly and have no reset value). The staging buffer holds four payload
+// bytes per 32-bit word, byte k of the chunk in bits 8 (k mod 4) + 7 .. 8 (k mod 4)
+// of word k / 4, so that it maps to the RAMB36 1K x 36 configuration: RAMB36 in the
+// narrower configurations lost every even byte on the board (docs/uart-loader.md).
 var fifo: [1024]u16;
 var fifo_rdata: u16;
-var staging: [4096]u8;
-var stage_rdata: u8;
+var staging: [1024]u32;
+var stage_rdata: u32;
+var stage_acc: u32 = 0;
 var wp: u32 = 0;
 var rp: u32 = 0;
 var gap_pending: bool = false;
@@ -316,6 +320,7 @@ var cur: u32;
 var cur_ferr: bool;
 var cur_gap: bool;
 var crc_next: u32;
+var stage_word: u32;
 var tx_crc_next: u32;
 var in_frame: bool;
 var waiting_byte: bool;
@@ -336,6 +341,7 @@ cur = (fifo_rdata as u32) & 255;
 cur_ferr = ((fifo_rdata as u32) & 256) != 0;
 cur_gap = ((fifo_rdata as u32) & 512) != 0;
 crc_next = crc_byte(crc, cur);
+stage_word = pick((pay_i & 3) == 0, 0, stage_acc) | (cur << ((pay_i & 3) << 3));
 tx_crc_next = crc_byte(tx_crc, rb_byte);
 in_frame = pstate == P_HDR || pstate == P_PAYLOAD || pstate == P_CRC;
 waiting_byte = in_frame || pstate == P_SYNC1;
@@ -435,7 +441,12 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
                 }
                 if (hdr_i == 7) { pstate = P_HDR_CHECK; } else { hdr_i = hdr_i + 1; }
             } else if (pstate == P_PAYLOAD) {
-                staging[pay_i & STAGE_MASK] = cur as u8;
+                // Bytes are gathered into a word; a word is written when it is full
+                // or the payload ends.
+                stage_acc = stage_word;
+                if ((pay_i & 3) == 3 || pay_i + 1 == h_len) {
+                    staging[(pay_i >> 2) & STAGE_WORD_MASK] = stage_word;
+                }
                 crc = crc_next;
                 if (pay_i + 1 == h_len) {
                     crc_i = 0;
@@ -538,12 +549,12 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
     } else if (pstate == P_RESP_WAIT) {
         pstate = resp_after;
     } else if (pstate == P_COMMIT_RD) {
-        stage_rdata = staging[ci & STAGE_MASK];
+        stage_rdata = staging[(ci >> 2) & STAGE_WORD_MASK];
         pstate = P_COMMIT_SET;
     } else if (pstate == P_COMMIT_SET) {
         wr_valid = true;
         wr_addr = h_addr + ci;
-        wr_data = stage_rdata as u32;
+        wr_data = (stage_rdata >> ((ci & 3) << 3)) & 255;
         wr_last = ci + 1 == h_len;
         pstate = P_COMMIT_WR;
     } else if (pstate == P_COMMIT_WR) {
@@ -658,4 +669,5 @@ test header_rules {
 }
 test readback_header { assert_eq(rb_hdr_byte(0, 1, 2, 3), 165); assert_eq(rb_hdr_byte(5, 0, 305419896, 0), 86); assert_eq(rb_hdr_byte(9, 0, 0, 4096), 16); }
 test fifo_entry_bits { assert_eq(fifo_entry(165, true, true), 933); assert_eq(fifo_entry(300, false, false), 44); }
+test staging_lanes { assert_eq(pick((5 & 3) == 0, 0, 170) | (187 << ((5 & 3) << 3)), 48042); assert_eq((48042 >> ((5 & 3) << 3)) & 255, 187); }
 endmodule
