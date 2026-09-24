@@ -18,11 +18,20 @@
   request to the last ack, requests, acks, command stalls, wait stalls, most outstanding)
   equals the reader's counters; with a cap of 3 and long ack latency at most 3 requests are
   outstanding and the cap holds are counted; the memory model's stored bursts after the last
-  fill equal the model's baseline2 and dense5 encodings byte for byte (the bit order of the
-  128-bit word and of the payload in memory). Injected faults (a stuck DQ bit, a stuck address
-  bit, a dropped write) are detected, and every run's bad words, invalid groups, +1 and -1
-  counts, dot product and checksum equal those of a Python replay of the fault; a port that
-  stops taking requests stops the reader (t line).
+  fill equal the model's baseline2 and dense5 encodings byte for byte (the byte order of the
+  128-bit Wishbone word and of the payload across words; the model stores whole words, so where
+  UberDDR3 puts each byte on the DDR3 beats and lanes is not simulated here). The stalls and
+  latencies come from the model's pseudo-random sequence: the clean runs use several seeds of
+  it (+lfsr_seed) and 75 % random stalls as well as 0 and 20 %; one configuration runs until
+  reset (RUNS 0, the board builds' mode) and is stopped after five runs. Injected faults (a
+  stuck DQ bit, a stuck address bit, a dropped write) are detected, and every run's bad words,
+  invalid groups, +1 and -1 counts, dot product and checksum equal those of a Python replay of
+  the fault; an extra ack with no request behind it, in a fill, in a read or after the last
+  ack of a read, shows as a stray ack; a port that stops taking requests or loses an ack stops
+  the reader (t line).
+- The host model's two paths (pure Python and numpy) agree, and consumer (A)'s results computed
+  with tools/bram_trit_model.py's own lane codes, codec, activation and rotate step equal the
+  DDR3 model's.
 Runs with T27_ROOT set and Icarus installed (tools/test-t27.sh); skipped otherwise.
 """
 from __future__ import annotations
@@ -97,7 +106,9 @@ class ReaderFunctions(unittest.TestCase):
                                 ("rotl1", (u64,), u64), ("rotl2", (u64,), u64), ("key_base", (u32, u32), u64),
                                 ("pick64", (b, u64, u64), u64), ("pick32", (b, u32, u32), u32),
                                 ("d5_dec", (u64,), u64), ("d5_enc", (u64,), u64), ("d5_dec4", (u64,), u64),
-                                ("d5_enc4", (u64,), u64), ("b2_dec16", (u64,), u64)):
+                                ("d5_enc4", (u64,), u64), ("b2_dec16", (u64,), u64),
+                                ("rep_tag", (u32, u32), u32), ("rep_last", (u32,), u32),
+                                ("head_b", (u32, u32), u64)):
             function = getattr(cls.lib, name)
             function.argtypes, function.restype = args, res
         cls.codec.on_comb.argtypes, cls.codec.on_comb.restype = (u32, u32, u64), u64
@@ -198,6 +209,13 @@ class ReaderFunctions(unittest.TestCase):
             want = sum(((j & 7) + 1) * (1 if c == 1 else -1 if c == 2 else 0) for j, c in enumerate(codes))
             self.assertEqual(dot, want)
 
+    def test_report_line_order(self):
+        """The run lines come in the decoder's order (READER_FORMAT 2 on the q line: x last)."""
+        order = "".join(chr(self.lib.rep_tag(1, n)) for n in range(self.lib.rep_last(1) + 1))
+        self.assertEqual(order, capture.RUN_ORDER_2)
+        self.assertEqual("".join(chr(self.lib.rep_tag(0, n)) for n in range(self.lib.rep_last(0) + 1)), "qkv")
+        self.assertEqual(self.lib.head_b(2, 64) >> 32, 2)
+
     def test_checksum_step_and_selects(self):
         rng = random.Random(67)
         for _ in range(1000):
@@ -263,9 +281,17 @@ CONFIGS = {
     "exact": {"TRITS": 160, "RUNS": 2},
     "one": {"TRITS": 1, "RUNS": 2},
     "wd": {"TRITS": 640, "RUNS": 2, "WATCHDOG": 2000},
+    "free": {"TRITS": 1237, "RUNS": 0},
 }
 CLEAN = (("base", ()), ("base", (("stall_pct", 0),)), ("base", (("ack_min", 30), ("ack_span", 40))),
-         ("cap3", (("ack_min", 40), ("ack_span", 30))), ("exact", ()), ("one", ()))
+         ("cap3", (("ack_min", 40), ("ack_span", 30))), ("exact", ()), ("one", ()),
+         ("base", (("lfsr_seed", "1234abcd"),)), ("base", (("lfsr_seed", "0badf00d"),)),
+         ("base", (("stall_pct", 75),)), ("base", (("lfsr_seed", "deadbeef"), ("stall_pct", 75))),
+         ("cap3", (("lfsr_seed", "5eed0062"), ("ack_min", 40), ("ack_span", 30))),
+         ("exact", (("lfsr_seed", "00c0ffee"), ("stall_pct", 75))))
+FREE = ("free", (("stop_runs", 5),))
+# Acks 0-19 are run 0's fill (baseline2, 20 words), 20-39 its read, 40-55 run 1's fill (dense5).
+DUP_ACKS = ((("dup_ack", 5),), (("dup_ack", 25),), (("dup_ack", 39), ("stall_pct", 0)), (("dup_ack", 45),))
 FAULTS = ((("stuck_dq", 3), ("stuck_dq_val", 1)), (("stuck_dq", 12), ("stuck_dq_val", 0)),
           (("stuck_addr_bit", 2), ("stuck_addr_val", 1)), (("drop_addr", 5), ("drop_nth", 1)),
           (("drop_addr", 17), ("drop_nth", 1)))
@@ -296,8 +322,9 @@ class ReaderSimulation(unittest.TestCase):
             subprocess.run(["iverilog", "-g2012", "-DDDR3_READER", *flags, "-s", "tb_ddr3_reader", "-o", str(out),
                             *sources], check=True, capture_output=True, text=True)
             cls.vvp[name] = out
-        cls.runs = list(CLEAN) + [("base", fault) for fault in FAULTS] + [("wd", (("hang_after", 5),)),
-                                                                           ("wd", (("hang_after", 15),))]
+        cls.runs = (list(CLEAN) + [("base", fault) for fault in FAULTS + DUP_ACKS] + [FREE]
+                    + [("wd", (("hang_after", 5),)), ("wd", (("hang_after", 15),)),
+                       ("wd", (("lose_ack", 4),)), ("wd", (("lose_ack", 12),))])
         cls.results = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
             for key, result in zip(cls.runs, pool.map(lambda k: cls.simulate(*k), cls.runs)):
@@ -342,6 +369,7 @@ class ReaderSimulation(unittest.TestCase):
             self.assertTrue(decoded["pass"], (config, plusargs, decoded["checks"]))
             reader = decoded["reader"]
             self.assertEqual(reader["header"]["trits"], p["TRITS"])
+            self.assertEqual(reader["header"]["format"], 2)
             self.assertEqual(reader["header"]["seed"], 98)
             self.assertEqual(reader["done"]["runs"], p["RUNS"])
             self.assertEqual(reader["totals"]["runs"], p["RUNS"])
@@ -355,8 +383,53 @@ class ReaderSimulation(unittest.TestCase):
                 self.assertEqual(r["padding_bytes"], r["bus_bytes"] - r["payload_bytes"])
                 self.assertEqual(r["logical_trits"], p["TRITS"])
                 self.assertLessEqual(r["max_outstanding"], p.get("CAP", 64))
+                self.assertEqual(r["stray_acks"], 0)
+                self.assertTrue(r["checks"]["all_acks_equal_the_words"], (config, r))
+            self.assertEqual(reader["runs"][-1]["all_acks"],
+                             sum(r["fill_words"] + r["words"] for r in reader["runs"]))
             for pair in reader["pairs"]:
                 self.assertTrue(pair["same_logical_trits"], pair)
+
+    def test_the_seeds_change_the_traces(self):
+        """+lfsr_seed and +stall_pct give other stall and latency sequences (not one fixed trace)."""
+        stalls = {plusargs: tuple(r["command_stalls"] for r in self.decoded(config, plusargs)["reader"]["runs"])
+                  for config, plusargs in CLEAN if config == "base"}
+        self.assertEqual(len(set(stalls.values())), len(stalls), stalls)
+        heavy = self.decoded("base", (("stall_pct", 75),))["reader"]["runs"]
+        light = self.decoded("base")["reader"]["runs"]
+        self.assertGreater(min(r["command_stalls"] for r in heavy), 2 * max(r["command_stalls"] for r in light))
+
+    def test_until_reset_mode(self):
+        """RUNS 0 (the board builds): runs go on without a z line; stopped after five runs."""
+        decoded = self.decoded(*FREE)
+        self.assertTrue(decoded["pass"], decoded["checks"])
+        reader = decoded["reader"]
+        self.assertEqual(reader["header"]["runs_configured"], 0)
+        self.assertIsNone(reader["done"])
+        self.assertIsNone(reader["timeout"])
+        self.assertEqual([r["run"] for r in reader["runs"]], [0, 1, 2, 3, 4])
+        self.assertEqual(reader["totals"]["model_checked_runs"], 5)
+        self.assertTrue(all(r["pass"] for r in reader["runs"]))
+
+    def test_an_extra_ack_shows_as_a_stray_ack(self):
+        """Words and fill words are latched at the W-th ack, so an extra ack moves the phase end and a
+        real ack lands outside FILL and READ: the stray-ack count catches it wherever it came."""
+        for plusargs in DUP_ACKS:
+            result = self.results[("base", plusargs)]
+            self.assertIn("MODEL_DUP_ACK", result["stdout"], plusargs)
+            decoded = self.decoded("base", plusargs)
+            self.assertFalse(decoded["pass"], plusargs)
+            runs = decoded["reader"]["runs"]
+            first = next(r for r in runs if r["stray_acks"])
+            self.assertEqual(first["stray_acks"], 1, plusargs)
+            self.assertFalse(first["checks"]["no_stray_ack"], plusargs)
+            self.assertTrue(first["checks"]["all_acks_equal_the_words"], plusargs)
+            # The words, bus bytes and fill words do not show it: they are fixed by the stop condition.
+            for r in runs:
+                self.assertEqual(r["words"], model.words_of(r["format"], CONFIGS["base"]["TRITS"]))
+                self.assertEqual(r["fill_words"], r["words"])
+                self.assertEqual(r["bus_bytes"], 16 * r["words"])
+            self.assertEqual(first["run"], 1 if plusargs[0][1] >= 40 else 0, plusargs)
 
     def test_padding_is_exercised(self):
         runs = {r["format"]: r for r in self.decoded("base")["reader"]["runs"]}
@@ -428,7 +501,8 @@ class ReaderSimulation(unittest.TestCase):
 
     def test_a_hung_port_stops_the_reader(self):
         # 640 trits: run 0 (baseline2) writes and reads 10 words, so the 5th request is a write, the 15th a read.
-        for fault, read_phase in (((("hang_after", 5),), False), ((("hang_after", 15),), True)):
+        for fault, read_phase in (((("hang_after", 5),), False), ((("hang_after", 15),), True),
+                                  ((("lose_ack", 4),), False), ((("lose_ack", 12),), True)):
             decoded = self.decoded("wd", fault)
             reader = decoded["reader"]
             self.assertIsNotNone(reader["timeout"], fault)
@@ -444,6 +518,63 @@ def have_numpy() -> bool:
     except ImportError:
         return False
     return True
+
+
+class ReaderModelPaths(unittest.TestCase):
+    """The host model's pure-Python statement and its numpy path agree, and both agree with consumer
+    (A)'s results recomputed from tools/bram_trit_model.py's own definitions (lane codes, dense5 and
+    baseline2 codec, activation (i mod 8) + 1, rotl1) on the DDR3 stream's lanes."""
+    TRITS = (1, 4, 5, 63, 64, 65, 79, 80, 81, 159, 160, 161, 1237, 4096, 12345)
+
+    def keys(self):
+        rng = random.Random(621)
+        return [model.pair_key(98, 0), 0, M64] + [model.pair_key(rng.getrandbits(32), rng.getrandbits(16))
+                                                  for _ in range(2)]
+
+    @unittest.skipUnless(have_numpy(), "numpy not installed")
+    def test_pure_and_numpy_paths_agree(self):
+        for trits in self.TRITS:
+            for fmt in (0, 1):
+                for key in self.keys():
+                    self.assertEqual(model.run_results(fmt, key, trits), model.run_results_fast(fmt, key, trits),
+                                     (fmt, trits, hex(key)))
+
+    def test_definitions_are_the_block_ram_models(self):
+        import bram_trit_model as bram
+        for trits in self.TRITS:
+            for fmt in (0, 1):
+                for key in self.keys()[:3]:
+                    self.assertEqual(self.via_bram_model(bram, fmt, key, trits),
+                                     {k: model.run_results(fmt, key, trits)[k] for k in ("words", "pos", "neg",
+                                                                                          "dot", "chk")},
+                                     (fmt, trits, hex(key)))
+
+    @staticmethod
+    def via_bram_model(bram, fmt, key, trits):
+        """Consumer (A) on the region with the block-RAM model's pieces: each 128-bit word as four
+        32-bit chunks of its codec (16 baseline2 lanes or four dense5 bytes of 20 lanes)."""
+        per, bfmt = (16, bram.FMT_B2) if fmt == 0 else (20, bram.FMT_D5)
+        words = model.words_of(fmt, trits)
+        pos = neg = dot = chk = 0
+        for w in range(words):
+            lanes = model.word_lanes(fmt, key, trits, w)
+            data = back = invalid = 0
+            for c in range(4):
+                chunk = (lanes >> (2 * per * c)) & ((1 << (2 * per)) - 1)
+                code = bram.encode_word(bfmt, chunk) & M32
+                data |= code << (32 * c)
+                got, bad = bram.decode_word(bfmt, code)
+                back |= (got & ((1 << (2 * per)) - 1)) << (2 * per * c)
+                invalid += bad
+            assert (back, invalid) == (lanes, 0)
+            for j in range(model.LANES[fmt]):
+                t = bram.trit_of_lane((lanes >> (2 * j)) & 3)
+                pos += t == 1
+                neg += t == -1
+                dot += t * bram.activation(model.LANES[fmt] * w + j)
+            chk = bram.rotl1(chk) ^ (data & M64)
+            chk = bram.rotl1(chk) ^ (data >> 64)
+        return {"words": words, "pos": pos, "neg": neg, "dot": dot, "chk": chk}
 
 
 class ReaderBoardRecords(unittest.TestCase):
@@ -516,13 +647,14 @@ class ReaderDecoder(unittest.TestCase):
     def line(self, tag, a, b):
         return f"{tag}{a:08x}{b:010x}"
 
-    def entries(self, trits=1237, runs=2, seed=0x62, tamper=None):
+    def entries(self, trits=1237, runs=2, seed=0x62, tamper=None, reader_format=2):
         out = [{"t_s": 1.0, "line": "H5eedc0de0102000bb8"},
                {"t_s": 1.1, "line": "S01171700" + f"{100:010x}"},
-               {"t_s": 1.2, "line": self.line("q", trits, (1 << 32) | (2 << 24) | 64)},
+               {"t_s": 1.2, "line": self.line("q", trits, (reader_format << 32) | (2 << 24) | 64)},
                {"t_s": 1.3, "line": self.line("k", seed, 433_000_000)},
                {"t_s": 1.4, "line": self.line("v", 0, 1 << 24)}]
         t = 2.0
+        acks = 0
         for run in range(runs):
             want = model.expected_run(seed, run, trits)
             fmt = run & 1
@@ -532,9 +664,11 @@ class ReaderDecoder(unittest.TestCase):
                       "p": (0, want["payload_bytes"]), "d": (0, want["padding_bytes"]), "n": (0, trits),
                       "o": (12, 4), "w": (0, 20), "u": (want["neg"], want["pos"]),
                       "s": (dot >> 40, dot & ((1 << 40) - 1)), "h": (want["chk"] >> 32, want["chk"] & M32)}
+            acks += 2 * want["words"]
+            fields["x"] = (0, acks)
             if tamper:
                 tamper(run, fields)
-            for tag in "afgcypdnowush":
+            for tag in capture.RUN_ORDER_2 if reader_format >= 2 else capture.RUN_ORDER:
                 out.append({"t_s": t, "line": self.line(tag, *fields[tag])})
                 t += 0.002
         return out
@@ -557,8 +691,15 @@ class ReaderDecoder(unittest.TestCase):
                 f["s"] = (0, 12345)
         def stall(run, f):
             f["y"] = (1, f["y"][1])
+        def stray(run, f):
+            if run == 1:
+                f["x"] = (1, f["x"][1] + 1)
+        def acks(run, f):
+            if run == 0:
+                f["x"] = (0, f["x"][1] + 1)
         for tamper, check in ((bus, "bus_bytes_is_words_x16"), (model_dot, "equals_host_model"),
-                              (stall, "no_consumer_stall")):
+                              (stall, "no_consumer_stall"), (stray, "no_stray_ack"),
+                              (acks, "all_acks_equal_the_words")):
             result = capture.decode(self.entries(tamper=tamper), nominal_hz=self.HZ, expect_reader=True)
             self.assertFalse(result["pass"], check)
             self.assertFalse(result["checks"]["reader_runs_pass"], check)
@@ -568,10 +709,24 @@ class ReaderDecoder(unittest.TestCase):
         entries = self.entries(runs=4)
         lost = [e for i, e in enumerate(entries) if i != 12]
         self.assertFalse(capture.decode(lost, nominal_hz=self.HZ, expect_reader=True)["checks"]["reader_well_formed"])
-        repeated = entries[:5 + 13] + entries[5:5 + 13] + entries[5 + 13:]
+        n = len(capture.RUN_ORDER_2)
+        repeated = entries[:5 + n] + entries[5:5 + n] + entries[5 + n:]
         result = capture.decode(repeated, nominal_hz=self.HZ, expect_reader=True)
         self.assertFalse(result["checks"]["reader_well_formed"])
         self.assertFalse(result["pass"])
+
+    def test_reader_format_1_records_have_no_x_line(self):
+        """The a6d9745f build (READER_FORMAT 1) ends a run with h; its records decode as before."""
+        result = capture.decode(self.entries(reader_format=1), nominal_hz=self.HZ, expect_reader=True)
+        self.assertTrue(result["pass"], result["checks"])
+        self.assertNotIn("no_stray_ack", result["reader"]["runs"][0]["checks"])
+        self.assertIsNone(result["reader"]["totals"]["stray_acks"])
+        # An x line in a format-1 record, or a format-2 run without one, is a malformed record.
+        entries = self.entries(reader_format=1)
+        entries.insert(5 + len(capture.RUN_ORDER), {"t_s": 2.5, "line": self.line("x", 0, 1)})
+        self.assertFalse(capture.decode(entries, nominal_hz=self.HZ, expect_reader=True)["checks"]["reader_well_formed"])
+        entries = [e for e in self.entries() if not e["line"].startswith("x")]
+        self.assertFalse(capture.decode(entries, nominal_hz=self.HZ, expect_reader=True)["checks"]["reader_well_formed"])
 
     def test_a_build_without_the_reader_has_no_reader_checks(self):
         result = capture.decode(self.entries()[:2], nominal_hz=self.HZ)

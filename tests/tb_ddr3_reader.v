@@ -15,7 +15,9 @@
 // it ends when its acks equal its requests and no request is presented.
 // At the end it writes the model's first +dump_words= stored bursts to +dump=
 // (one 128-bit word in hex per line), so the test can check the byte order in memory.
-// The run ends after a z line (all runs done) or a t line (watchdog).
+// The run ends after a z line (all runs done), a t line (watchdog) or, with +stop_runs=<n>
+// (for RUNS = 0, the until-reset mode of the board builds), right after the n-th run's last
+// line (x), before the next run sends anything.
 `timescale 1ns/1ps
 `default_nettype none
 // Simulation stand-in for the PLL: every output is the input clock, LOCKED after 16 cycles.
@@ -104,7 +106,7 @@ module tb_ddr3_reader;
     end
 
     reg [4095:0] path, dump_path;
-    integer fd, lines, dump_words, k;
+    integer fd, lines, dump_words, k, stop_runs, runs_seen;
     reg [7:0] byte_r, first;
     reg at_line_start;
     event finish_later, finish_now;
@@ -126,7 +128,8 @@ module tb_ddr3_reader;
     initial begin
         if (!$value$plusargs("capture=%s", path)) $fatal(1, "missing plusarg capture=");
         fd = $fopen(path, "w");
-        lines = 0; at_line_start = 1'b1; first = 8'd0;
+        lines = 0; at_line_start = 1'b1; first = 8'd0; runs_seen = 0;
+        if (!$value$plusargs("stop_runs=%d", stop_runs)) stop_runs = 0;
         #200 rst_n = 1'b1;
     end
     initial begin
@@ -154,6 +157,10 @@ module tb_ddr3_reader;
             lines = lines + 1;
             at_line_start = 1'b1;
             if (first == "z" || first == "t") -> finish_later;
+            if (first == "x") begin
+                runs_seen = runs_seen + 1;
+                if (stop_runs != 0 && runs_seen == stop_runs) -> finish_now;
+            end
         end
     end
 endmodule

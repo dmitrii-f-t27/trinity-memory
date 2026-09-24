@@ -50,16 +50,19 @@ A #61 run (Python with pyserial; the x16 pattern-test build of 7deeef16, 60 s af
 
 A build with the read path (`define DDR3_READER, make ... DDR3_APP=reader; t27/rtl/fpga_ddr3_reader.t27,
 issue #62; the report's variant names READER) sends q, k, v lines once after calibration and
-thirteen lines per run (a f g c y p d n o w u s h: format, fill, read cycles and words, bus,
+per run the lines a f g c y p d n o w u s h (format, fill, read cycles and words, bus,
 payload, padding and scale/metadata bytes, logical trits, bad words, invalid groups, command,
 wait and consumer stalls, the most requests outstanding, the clocks the cap held a request, the
-+1 and -1 counts, the dot product and the checksum), t when its watchdog stopped it and z after
-its last run. They are decoded into `reader`: every run with its counters checked against each
-other (bus bytes = words x 16, padding = bus - payload, ...) and against tools/ddr3_read_model.py
-(words, bytes, trits, counts, dot product and checksum of the run's format and key), the pairs of
-runs that carry the same trits in both formats, and per run the read's words per clock, which
-is a raw read-path figure (cycles from the first read request to the last ack), not the
-stage-2 weights-per-second comparison.
++1 and -1 counts, the dot product and the checksum) and, when the q line gives READER_FORMAT 2,
+x (stray acks and all acks since calibration); t when its watchdog stopped it and z after its
+last run. They are decoded into `reader`: every run checked on its own and against
+tools/ddr3_read_model.py (words, bytes, trits, counts, dot product and checksum of the run's
+format and key), the pairs of runs that carry the same trits in both formats, and per run the
+read's words per clock, which is a raw read-path figure (cycles from the first read request to
+the last ack), not the stage-2 weights-per-second comparison. Several per-run checks hold by
+construction of the design and only guard the report path and the decoder (listed in
+IDENTITY_CHECKS); the evidence about the memory is the bad words, the invalid groups, the host
+model's counts, dot product and checksum, and (format 2) the stray and all-acks counts.
 
 The record keeps the command line (`argv`) and the repository revision of the tool
 (`tool_revision`: HEAD and whether tracked files differed from it).
@@ -84,16 +87,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = "trinity.ddr3-capture.v1"
-LINE = re.compile(r"^([HSGKLWREMFTZqkvafgcypdnowushtz])([0-9a-f]{8})([0-9a-f]{10})$")
+LINE = re.compile(r"^([HSGKLWREMFTZqkvafgcypdnowushxtz])([0-9a-f]{8})([0-9a-f]{10})$")
 LINE_CHARS = 19
 PATTERN_TAGS = "GKLWREMFTZ"
 PASS_ORDER = "WREMF"
-READER_TAGS = "qkvafgcypdnowushtz"
-RUN_ORDER = "afgcypdnowush"
+READER_TAGS = "qkvafgcypdnowushxtz"
+RUN_ORDER = "afgcypdnowush"      # READER_FORMAT 1 (a6d9745f)
+RUN_ORDER_2 = RUN_ORDER + "x"      # READER_FORMAT 2: stray and all acks since calibration
 NONE32 = 0xFFFFFFFF
 WRAP = 1 << 40
 DONE_CALIBRATE = 23
 CLOCK_TOLERANCE_PPM = 5000
+# Per-run reader checks that hold by construction of t27/rtl/fpga_ddr3_reader.t27 whatever the
+# memory does (docs/hardware.md, "DDR3 read path (#62)"): words and fill words are latched at
+# the W-th ack, bus bytes count the same acks through consumer (A), padding is 16 - payload per
+# word, consumer (A)'s ready is constant. They catch a broken report path or decoder only.
+IDENTITY_CHECKS = ("bus_bytes_is_words_x16", "padding_is_bus_minus_payload", "fill_words_equal_read_words",
+                   "no_consumer_stall", "cycles_at_least_words", "words_cover_the_region")
 
 
 def utc(ts: float | None = None) -> str:
@@ -261,9 +271,11 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
     """The read path's lines (parsed, with t_s) of one reset, in arrival order.
 
     Runs must come as 0, 1, 2, ... without a gap or repeat (from 0 when the q line was seen),
-    each as the thirteen lines of RUN_ORDER. Every complete run is checked on its own (the
-    counters add up, no bad word, no invalid group, no consumer stall) and, for the first
-    model_runs runs (None: all), against tools/ddr3_read_model.py with the seed of the k line.
+    each as the lines of RUN_ORDER (READER_FORMAT 1) or RUN_ORDER_2 (format 2, from the q line).
+    Every complete run is checked on its own (the counters add up, no bad word, no invalid
+    group, no consumer stall; format 2: no stray ack, and all acks since calibration equal the
+    fill and read words of the runs so far) and, for the first model_runs runs (None: all),
+    against tools/ddr3_read_model.py with the seed of the k line.
     hz converts clocks into seconds and MB/s (the nominal controller clock when known)."""
     model = reader_model()
     header, runs, problems = {}, [], []
@@ -278,8 +290,9 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
             header.update({"seed": a, "calib_complete_clocks_low40": b})
         elif tag == "v":
             header.update({"runs_configured": a, "watchdog_clocks": b})
-        elif tag in RUN_ORDER:
-            want = RUN_ORDER[len(block["_seen"])] if block else "a"
+        elif tag in RUN_ORDER_2:
+            order = RUN_ORDER_2 if header.get("format", 1) >= 2 else RUN_ORDER
+            want = order[len(block["_seen"])] if block and len(block["_seen"]) < len(order) else "a"
             if tag != want:
                 problems.append({"t_s": ln["t_s"], "problem": f"{tag} line where {want} was expected"})
                 block = None
@@ -319,8 +332,10 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
                 block.update({"dot": _signed64((a << 40) | b)})
             elif tag == "h":
                 block.update({"checksum": f"{(a << 32) | b:#018x}", "reported_t_s": ln["t_s"]})
+            elif tag == "x":
+                block.update({"stray_acks": a, "all_acks": b})
             block["_seen"] += tag
-            if tag == "h":
+            if tag == order[-1]:
                 block.pop("_seen")
                 runs.append(block)
                 block = None
@@ -331,6 +346,7 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
             done = {"runs": a, "bad_words_all_runs": b, "t_s": ln["t_s"]}
     trits, seed = header.get("trits"), header.get("seed")
     checked = 0
+    words_so_far = 0
     for r in runs:
         fmt = r["format"]
         lanes = model.LANES[fmt]
@@ -345,6 +361,14 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
             "no_consumer_stall": r["consumer_stalls"] == 0,
             "cycles_at_least_words": r["cycles"] >= r["words"],
         }
+        if "all_acks" in r:
+            # Acks counted apart from the phases' stop condition (format 2): none outside FILL
+            # and READ, and all of them = the fill and read words of runs 0 .. r (mod 2^40).
+            words_so_far += r["fill_words"] + r["words"]
+            r["checks"].update({
+                "no_stray_ack": r["stray_acks"] == 0,
+                "all_acks_equal_the_words": r["all_acks"] == (words_so_far + r["stray_acks"]) % WRAP,
+            })
         if trits is not None:
             r["checks"].update({
                 "words_cover_the_region": r["words"] == model.words_of(fmt, trits),
@@ -369,7 +393,7 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
     if block:
         partial = {k: v for k, v in block.items() if not k.startswith("_")}
         partial["clean_so_far"] = not (partial.get("bad_words") or partial.get("invalid_groups")
-                                       or partial.get("consumer_stalls"))
+                                       or partial.get("consumer_stalls") or partial.get("stray_acks"))
     pairs = []
     by_run = {r["run"]: r for r in runs}
     for r in runs:
@@ -406,7 +430,11 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
                    "model_checked_runs": checked, "bad_words": sum(r["bad_words"] for r in runs),
                    "invalid_groups": sum(r["invalid_groups"] for r in runs),
                    "consumer_stalls": sum(r["consumer_stalls"] for r in runs),
+                   "stray_acks": max((r.get("stray_acks", 0) for r in runs), default=0)
+                   if any("stray_acks" in r for r in runs) else None,
+                   "all_acks_last": runs[-1].get("all_acks") if runs else None,
                    "complete_pairs": len(pairs)},
+        "identity_checks": list(IDENTITY_CHECKS),
         "clock_hz_used": hz,
         "notes": ["cycles: controller clocks from the first read request presented to the last ack, inclusive; "
                   "words_per_clock = words / cycles, the raw read path of this in-order single master with "
@@ -415,7 +443,12 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
                   "report gives one",
                   "runs 2p and 2p+1 hold the same logical trits (key of pair p) as baseline2 and as dense5; "
                   "pairs[].same compares their logical trits, +1 and -1 counts and dot products",
-                  "scale_metadata_bytes is 0 by construction: the region stores no scale and no metadata"],
+                  "scale_metadata_bytes is 0 by construction: the region stores no scale and no metadata",
+                  "identity_checks hold by construction of the design (words and fill words latched at the W-th "
+                  "ack, bus bytes from the same acks, padding = 16 - payload per word, consumer (A) always "
+                  "ready): they guard the report path and the decoder, not the memory",
+                  "stray_acks (format 2): acks since calibration while the reader was in neither FILL nor READ; "
+                  "all_acks: every ack since calibration, checked against the runs' fill and read words"],
     }
 
 

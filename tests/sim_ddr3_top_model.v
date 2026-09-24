@@ -25,9 +25,13 @@
 //   +drop_addr=<a> +drop_nth=<n>               the n-th write (from 0) to burst a is not stored
 //   +hang_after=<n>                            no request is taken after the n-th
 //   +lose_ack=<n>                              the n-th ack (from 0) is never raised
+//   +dup_ack=<n>                               one extra ack, with no request behind it, in the
+//                                               first clock after the n-th ack (from 0) that has
+//                                               no ack due (the read data are the last ack's)
 // and +calib_clocks=<n> (default 3000) for the calibration time, +stall_pct=<p> (default 20)
 // for the random stalls, +ack_min=<n> +ack_span=<m> (defaults 6 and 8) for the ack latency:
-// n + (a pseudo-random number mod m) clocks after the request, and never before the previous ack.
+// n + (a pseudo-random number mod m) clocks after the request, and never before the previous ack;
+// +lfsr_seed=<x> (default 32'hace1) seeds the pseudo-random sequence of stalls and latencies.
 //
 // Observation: min_gap is the smallest number of clocks between the clock a
 // write request to a burst address was taken and the clock a later read request
@@ -109,7 +113,9 @@ module ddr3_top #(
     reg [QDEPTH-1:0] q_read;
     integer q_head, q_tail, q_count, i, k;
     integer calib_clocks, stall_pct, stuck_bit, stuck_val, stuck_dq, stuck_dq_val, drop_nth, hang_after;
-    integer lose_ack, acks, ack_min, ack_span;
+    integer lose_ack, acks, ack_min, ack_span, dup_ack;
+    reg dup_pending;
+    reg [31:0] lfsr_seed;
     reg [63:0] wtime [0:(1 << MEM_BITS) - 1];
     reg [(1 << MEM_BITS) - 1:0] wvalid;
     reg [63:0] min_gap;
@@ -139,6 +145,9 @@ module ddr3_top #(
         if (!$value$plusargs("lose_ack=%d", lose_ack)) lose_ack = -1;
         if (!$value$plusargs("ack_min=%d", ack_min)) ack_min = 6;
         if (!$value$plusargs("ack_span=%d", ack_span)) ack_span = 8;
+        if (!$value$plusargs("dup_ack=%d", dup_ack)) dup_ack = -1;
+        if (!$value$plusargs("lfsr_seed=%h", lfsr_seed)) lfsr_seed = 32'hace1;
+        if (lfsr_seed == 32'd0) $fatal(1, "model: +lfsr_seed must not be 0");
         for (i = 0; i < (1 << MEM_BITS); i = i + 1) mem[i] = {WB_DATA_BITS{1'b0}};
         wvalid = {(1 << MEM_BITS){1'b0}};
         min_gap = {64{1'b1}};
@@ -173,7 +182,8 @@ module ddr3_top #(
             o_wb_ack <= 1'b0;
             o_wb_data <= {WB_DATA_BITS{1'b0}};
             q_head = 0; q_tail = 0; q_count = 0; last_due = 0;
-            lfsr <= 32'hace1;
+            lfsr <= lfsr_seed;
+            dup_pending = 1'b0;
             held <= 1'b0;
             drop_seen = 0;
             taken = 0;
@@ -231,10 +241,15 @@ module ddr3_top #(
                 q_head = q_tail; q_count = 0;
             end else if (q_count > 0 && q_due[q_head] <= now) begin
                 o_wb_ack <= acks != lose_ack;   // +lose_ack: this one is dropped, the queue moves on
+                if (acks == dup_ack) dup_pending = 1'b1;
                 acks = acks + 1;
                 o_wb_data <= q_read[q_head] ? q_data[q_head] : {WB_DATA_BITS{1'b0}};
                 q_head = (q_head + 1) % QDEPTH;
                 q_count = q_count - 1;
+            end else if (dup_pending) begin
+                o_wb_ack <= 1'b1;               // +dup_ack: an ack with no request behind it
+                $display("MODEL_DUP_ACK clock=%0d after_ack=%0d", now, dup_ack);
+                dup_pending = 1'b0;
             end
             // Stall: before calibration, when the queue is nearly full, on stall_pct percent
             // of the clocks, in a refresh-like window of 24 clocks every 700, and for ever
