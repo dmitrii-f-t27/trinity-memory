@@ -451,14 +451,14 @@ $(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$
 # of OSERDESE2, ISERDESE2, IDELAYE2 and IDELAYCTRL no timing class, so paths into
 # and out of the PHY primitives and the PHY's I/O timing are not analysed (the
 # report counts their LUT levels). The winner's SDF and routed netlist are kept
-# for the report (clock nets that leave the global network through a LUT).
+# for the report (clock nets that leave the global network through a LUT); the
+# options are the ones 45a986b8 has too (it has no --report).
 ddr3-pnr: $(DDR3_BUILD)/$(DDR3_TOP).fasm
 $(DDR3_BUILD)/$(DDR3_TOP).fasm: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(DDR3_BUILD)/$(DDR3_TOP).xdc | $(DDR3_NEXTPNR_DEP)
 	@rm -f $@ $(DDR3_BUILD)/try_*; pass=; first=; for p in $(DDR3_PLACERS); do for s in $(DDR3_SEEDS); do \
 	  t=$${p}_seed$$s; echo "nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer $$p seed $$s"; \
 	  $(DDR3_NEXTPNR) $(DDR3_PNR_OUT) --fasm $(call REL,$(DDR3_BUILD))/try_$$t.fasm \
-	    --report $(call REL,$(DDR3_BUILD))/try_$$t.json --sdf $(call REL,$(DDR3_BUILD))/try_$$t.sdf \
-	    --write $(call REL,$(DDR3_BUILD))/try_$$t.routed.json \
+	    --sdf $(call REL,$(DDR3_BUILD))/try_$$t.sdf --write $(call REL,$(DDR3_BUILD))/try_$$t.routed.json \
 	    --seed $$s --placer $$p $(DDR3_PNR_ARGS) > $(DDR3_BUILD)/nextpnr_$$t.log 2>&1; st=$$?; \
 	  if [ $$st -eq 0 ] && [ -s $(DDR3_BUILD)/try_$$t.fasm ] && ! grep -q "Failed to find a route" $(DDR3_BUILD)/nextpnr_$$t.log; then \
 	    sed -n '/Router2 time/,$$p' $(DDR3_BUILD)/nextpnr_$$t.log | grep "Max frequency" | sed 's/^/  /'; \
@@ -467,7 +467,7 @@ $(DDR3_BUILD)/$(DDR3_TOP).fasm: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(
 	  else echo "  did not route (exit $$st)"; fi; \
 	done; done; pick=$${pass:-$$first}; \
 	[ -n "$$pick" ] || { echo "no placer/seed routed"; exit 1; }; \
-	mv $(DDR3_BUILD)/try_$$pick.fasm $@; mv $(DDR3_BUILD)/try_$$pick.json $(DDR3_BUILD)/nextpnr_report.json; \
+	mv $(DDR3_BUILD)/try_$$pick.fasm $@; \
 	mv $(DDR3_BUILD)/try_$$pick.sdf $(DDR3_BUILD)/$(DDR3_TOP).sdf; mv $(DDR3_BUILD)/try_$$pick.routed.json $(DDR3_BUILD)/$(DDR3_TOP).routed.json; \
 	cp $(DDR3_BUILD)/nextpnr_$$pick.log $(DDR3_BUILD)/nextpnr.log; rm -f $(DDR3_BUILD)/try_*; \
 	if [ -n "$$pass" ]; then v="timing met"; else v="no seed met timing"; fi; \
@@ -509,13 +509,14 @@ ddr3-all:
 
 # Every placer/seed of DDR3_PLACERS x DDR3_SEEDS on the current netlist, without
 # the seed search's early stop, into $(DDR3_BUILD)/sweep/, and a summary per run
-# (routed Fmax, critical path, utilisation, PLL tables, fabric-clock pips, sha256
-# of each log and FASM) in DDR3_SWEEP_REPORT. Evidence for the seed spread; the
+# (routed Fmax, critical path, utilisation, PLL tables, the fabric-clock LUT with
+# its placement and SDF delays, sha256 of each log and FASM) in DDR3_SWEEP_REPORT. Evidence for the seed spread; the
 # build itself is untouched.
 ddr3-sweep: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(DDR3_BUILD)/$(DDR3_TOP).xdc | $(DDR3_NEXTPNR_DEP)
 	@rm -rf $(DDR3_BUILD)/sweep; mkdir -p $(DDR3_BUILD)/sweep; for p in $(DDR3_PLACERS); do for s in $(DDR3_SEEDS); do \
 	  t=$${p}_seed$$s; echo "nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer $$p seed $$s"; \
 	  $(DDR3_NEXTPNR) $(DDR3_PNR_OUT) --fasm $(call REL,$(DDR3_BUILD))/sweep/$$t.fasm \
+	    --sdf $(call REL,$(DDR3_BUILD))/sweep/$$t.sdf --write $(call REL,$(DDR3_BUILD))/sweep/$$t.routed.json \
 	    --seed $$s --placer $$p $(DDR3_PNR_ARGS) > $(DDR3_BUILD)/sweep/$$t.log 2>&1 || echo "  exit $$?"; \
 	  sed -n '/Router2 time/,$$p' $(DDR3_BUILD)/sweep/$$t.log | grep "Max frequency" | sed 's/^/  /'; \
 	done; done

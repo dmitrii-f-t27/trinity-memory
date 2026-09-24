@@ -10,9 +10,12 @@ early stop and calls this. Each LOG is one nextpnr run; its FASM is the file wit
 stem next to it, and a stem of the form <placer>_seed<n> names placer and seed. Per run:
 the routed Fmax per clock (the analysis after the router, not the placer's estimate), the
 routed critical path (start and end net, LUT and carry stages, logic and routing ns), the
-utilisation, the LUT1 cells the packer created, the PLLE2 tables checked against Vivado's
-(tools/fpga-build-report.py), the IOLOGIC clock inputs fed from the fabric, and the sha256
-of the log and the FASM. Neither file is copied.
+utilisation, the LUT1 cells the packer created (and, with --netlist, the deepest flip-flop to
+flip-flop path of the netlist in LUT levels), the PLLE2 tables checked against Vivado's
+(tools/fpga-build-report.py), the IOLOGIC clock inputs fed from the fabric and, when the
+run kept its routed netlist (<stem>.routed.json) and SDF (<stem>.sdf), every LUT on a clock
+net with its placement and nextpnr's delays to its loads, and the sha256 of the log and the
+FASM. No file is copied.
 """
 from __future__ import annotations
 
@@ -78,8 +81,21 @@ def summarise(log):
         run["fasm_sha256"] = report.sha256(fasm)
         run["pll"] = [{k: p.get(k) for k in ("clkfbout_mult", "lktable", "table", "result", "note") if p.get(k) is not None}
                       for p in report.pll_check(fasm_text)]
-        run["iologic_clock_from_fabric"] = len(report.fabric_clocks(fasm_text)["iologic_clock_from_fabric"])
+        routed, sdf = log.with_suffix(".routed.json"), log.with_suffix(".sdf")
+        clocks = report.fabric_clocks(fasm_text, json.loads(routed.read_text()) if routed.is_file() else None,
+                                      sdf.read_text(errors="replace") if sdf.is_file() else None)
+        run["iologic_clock_from_fabric"] = len(clocks["iologic_clock_from_fabric"])
+        if "luts_on_clock_nets" in clocks:
+            run["luts_on_clock_nets"] = clocks["luts_on_clock_nets"]
     return run
+
+
+def netlist_depth(path, top):
+    """Deepest flip-flop to flip-flop path of the yosys netlist in LUT levels (structure, not placement)."""
+    if not path or not path.is_file():
+        return None
+    module = report.netlist_top(json.loads(path.read_text()), top)
+    return report.phy_path_levels(module)["ff_to_ff_max_lut_levels"] if module else None
 
 
 def main(argv=None):
@@ -100,6 +116,7 @@ def main(argv=None):
               "written_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
               "label": args.label, "commit": args.commit, "top": args.top, "note": args.note,
               "netlist_sha256": report.sha256(args.netlist) if args.netlist and args.netlist.is_file() else None,
+              "netlist_ff_to_ff_max_lut_levels": netlist_depth(args.netlist, args.top),
               "chipdb_sha256": report.sha256(args.chipdb) if args.chipdb and args.chipdb.is_file() else None,
               "summary": {"runs": len(runs), "routed": sum(r["routed"] for r in runs),
                           "met_every_clock": met,
