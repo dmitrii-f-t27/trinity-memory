@@ -34,6 +34,7 @@ typedef struct {
 } Buf;
 
 static void put(Buf *b, const void *bytes, size_t n) {
+    if (n == 0) return;                       /* memcpy from a NULL buffer is undefined even for 0 bytes */
     if (b->size + n > b->capacity) {
         b->capacity = (b->size + n) * 2 + 64;
         b->data = realloc(b->data, b->capacity);
