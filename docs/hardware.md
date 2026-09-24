@@ -633,8 +633,8 @@ of each 4096-byte chunk's write, median). In run 2 the corrupt and dropped chunk
 aborted half frame were each refused with a nak (`crc`, `timeout`) and acknowledged on
 the next attempt, the 64 garbage bytes before one frame were ignored without a nak, and a
 chunk sent again after its ack was answered `duplicate` and not committed. Baud trials
-at 230400 to 1500000 (the whole payload XOR a per-trial key, twice at each of 921600,
-1000000 and 1500000) changed every byte they loaded and read them back identical; that
+at 230400 to 1500000 (16 384 bytes XOR a per-trial key at each rate, then the whole
+payload XOR a key twice at each of 921600, 1000000 and 1500000) changed every byte they loaded and read them back identical; that
 is not a reliability study
 ([`reports/fpga/uart-loader-2026-09-24-1d474000/`](../reports/fpga/README.md)). Its
 first build put the store into RAMB36 32K x 1 and the staging buffer into 4K x 9 and
