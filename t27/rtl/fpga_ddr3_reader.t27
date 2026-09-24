@@ -43,10 +43,11 @@ module TrinityFpgaDdr3ReaderT27;
 // low; cons_ready is constant true, so it is 0 by construction). The cap therefore only
 // bounds the reader; it is reported, as are the clocks it held a request back.
 //
-// Consumer (A), one 128-bit word per controller clock, eight register stages:
-// S1 the acknowledged word with its expected lanes; S2 the decoders on four 32-bit chunks
+// Consumer (A), one 128-bit word per controller clock, nine register stages:
+// S1 the acknowledged word with its expected lanes; D the decoders on four 32-bit chunks
 // (20 dense5 lanes or 16 baseline2 lanes each, invalid groups in bits 55:48, the layout of
-// the codec's decode) assembled into 80 or 64 lanes, and the checksum word; S3 the lane compare and
+// the codec's decode) and the checksum word; S2 the chunks assembled into 80 or 64 lanes and
+// the invalid groups added; S3 the lane compare and
 // per-class popcounts of the +1 and -1 lanes (class a = lane mod 8, activation a + 1);
 // S4 per-class sums; S5 pair sums and the weighted pairs; S6 the word's +1, -1 and
 // weighted sums; S7 the accumulators and the word's dot product; S8 the dot accumulator.
@@ -224,6 +225,16 @@ var s1_e0: u64 = 0;
 var s1_e1: u64 = 0;
 var s1_e2: u64 = 0;
 var s1_last: bool = false;
+var sd_v: bool = false;
+var sd_d0: u64 = 0;
+var sd_d1: u64 = 0;
+var sd_d2: u64 = 0;
+var sd_d3: u64 = 0;
+var sd_e0: u64 = 0;
+var sd_e1: u64 = 0;
+var sd_e2: u64 = 0;
+var sd_last: bool = false;
+var sd_chkw: u64 = 0;
 var s2_v: bool = false;
 var s2_g0: u64 = 0;
 var s2_g1: u64 = 0;
@@ -748,19 +759,24 @@ fn pick64(c: bool, a: u64, b: u64) -> u64 {
     return r;
 }
 
+fn pick32(c: bool, a: u32, b: u32) -> u32 {
+    var r: u32 = b;
+    if (c) { r = a; }
+    return r;
+}
+
+fn pick_bool(c: bool, a: bool, b: bool) -> bool {
+    var r: bool = b;
+    if (c) { r = a; }
+    return r;
+}
+
 fn rotl1(x: u64) -> u64 {
     return (x << 1) | (x >> 63);
 }
 
 fn rotl2(x: u64) -> u64 {
     return (x << 2) | (x >> 62);
-}
-
-fn after_issue(o: u32, taken: bool, acked: bool) -> u32 {
-    var n: u32 = o;
-    if (taken) { n = n + 1; }
-    if (acked) { n = n - 1; }
-    return n;
 }
 
 fn rep_last(kind: u32) -> u32 {
@@ -876,6 +892,11 @@ var nwords: u32;
 var wlast: u32;
 var final_ack: bool;
 var timeout: bool;
+var out_up: u32;
+var out_down: u32;
+var room_up: bool;
+var room_same: bool;
+var room_down: bool;
 var out_next: u32;
 var can_issue: bool;
 var lanes_w: u32;
@@ -926,8 +947,16 @@ nwords = words_of(trits, fmt);
 wlast = nwords - 1;
 final_ack = ack && acks == wlast;
 timeout = !progress && quiet >= watchdog;
-out_next = after_issue(outst, accept, ack);
-can_issue = out_next < cap;
+// The outstanding count after this clock and whether it leaves room under the cap, computed
+// from the registered count and selected by the request taken and the ack, so no adder or
+// compare sits between o_wb_stall and the next stb.
+out_up = outst + 1;
+out_down = outst - 1;
+room_up = out_up < cap;
+room_same = outst < cap;
+room_down = out_down < cap;
+out_next = pick32(accept && !ack, out_up, pick32(ack && !accept, out_down, outst));
+can_issue = pick_bool(accept && !ack, room_up, pick_bool(ack && !accept, room_down, room_same));
 lanes_w = lanes_of(fmt);
 step = step_of(fmt);
 rl = last_lanes(trits, fmt);
@@ -950,10 +979,10 @@ dec0 = pick64(fmt == FMT_D5, d5_dec4(s1_lo & M32), b2_dec16(s1_lo));
 dec1 = pick64(fmt == FMT_D5, d5_dec4(s1_lo >> 32), b2_dec16(s1_lo >> 32));
 dec2 = pick64(fmt == FMT_D5, d5_dec4(s1_hi & M32), b2_dec16(s1_hi));
 dec3 = pick64(fmt == FMT_D5, d5_dec4(s1_hi >> 32), b2_dec16(s1_hi >> 32));
-dg0 = dec_part(fmt, dec0, dec1, dec2, dec3, 0);
-dg1 = dec_part(fmt, dec0, dec1, dec2, dec3, 1);
-dg2 = dec_part(fmt, dec0, dec1, dec2, dec3, 2);
-dinv = invalid_of(dec0, dec1, dec2, dec3);
+dg0 = dec_part(fmt, sd_d0, sd_d1, sd_d2, sd_d3, 0);
+dg1 = dec_part(fmt, sd_d0, sd_d1, sd_d2, sd_d3, 1);
+dg2 = dec_part(fmt, sd_d0, sd_d1, sd_d2, sd_d3, 2);
+dinv = invalid_of(sd_d0, sd_d1, sd_d2, sd_d3);
 hp = class_counts(s2_g0, s2_g1, s2_g2, 0);
 hn = class_counts(s2_g0, s2_g1, s2_g2, 1);
 mis = (s2_g0 != s2_e0) || (s2_g1 != s2_e1) || (s2_g2 != s2_e2);
@@ -1026,16 +1055,26 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64, t
     s3_inv = s2_inv;
     s3_last = s2_last;
     s3_chkw = s2_chkw;
-    s2_v = s1_v;
+    s2_v = sd_v;
     s2_g0 = dg0;
     s2_g1 = dg1;
     s2_g2 = dg2;
-    s2_e0 = s1_e0;
-    s2_e1 = s1_e1;
-    s2_e2 = s1_e2;
+    s2_e0 = sd_e0;
+    s2_e1 = sd_e1;
+    s2_e2 = sd_e2;
     s2_inv = dinv;
-    s2_last = s1_last;
-    s2_chkw = rotl1(s1_lo) ^ s1_hi;
+    s2_last = sd_last;
+    s2_chkw = sd_chkw;
+    sd_v = s1_v;
+    sd_d0 = dec0;
+    sd_d1 = dec1;
+    sd_d2 = dec2;
+    sd_d3 = dec3;
+    sd_e0 = s1_e0;
+    sd_e1 = s1_e1;
+    sd_e2 = s1_e2;
+    sd_last = s1_last;
+    sd_chkw = rotl1(s1_lo) ^ s1_hi;
     s1_v = rd_ack;
     if (rd_ack) {
         s1_lo = rdata_lo;

@@ -95,7 +95,7 @@ class ReaderFunctions(unittest.TestCase):
                                 ("class_counts", (u64, u64, u64, u32), u64), ("class_sums", (u64,), u64),
                                 ("pair_sums", (u64,), u64), ("weighted_pairs", (u64,), u64), ("sum4", (u64,), u64),
                                 ("rotl1", (u64,), u64), ("rotl2", (u64,), u64), ("key_base", (u32, u32), u64),
-                                ("pick64", (b, u64, u64), u64), ("after_issue", (u32, b, b), u32),
+                                ("pick64", (b, u64, u64), u64), ("pick32", (b, u32, u32), u32),
                                 ("d5_dec", (u64,), u64), ("d5_enc", (u64,), u64), ("d5_dec4", (u64,), u64),
                                 ("d5_enc4", (u64,), u64), ("b2_dec16", (u64,), u64)):
             function = getattr(cls.lib, name)
@@ -198,16 +198,14 @@ class ReaderFunctions(unittest.TestCase):
             want = sum(((j & 7) + 1) * (1 if c == 1 else -1 if c == 2 else 0) for j, c in enumerate(codes))
             self.assertEqual(dot, want)
 
-    def test_checksum_step_and_issue_count(self):
+    def test_checksum_step_and_selects(self):
         rng = random.Random(67)
         for _ in range(1000):
             chk, lo, hi = rng.getrandbits(64), rng.getrandbits(64), rng.getrandbits(64)
             want = model.rotl(model.rotl(chk, 1) ^ lo, 1) ^ hi
             self.assertEqual(self.lib.rotl2(chk) ^ (self.lib.rotl1(lo) ^ hi), want)
-        self.assertEqual(self.lib.after_issue(5, True, False), 6)
-        self.assertEqual(self.lib.after_issue(5, True, True), 5)
-        self.assertEqual(self.lib.after_issue(5, False, True), 4)
         self.assertEqual(self.lib.pick64(True, 1, 2), 1)
+        self.assertEqual(self.lib.pick32(False, 1, 2), 2)
 
 
 # ---- whole-top simulation ----
