@@ -1712,7 +1712,7 @@ calibration (2^40 clocks at 83.33 MHz, arithmetic), and the decoder compares it 
 | `u` | -1 lanes | +1 lanes |
 | `s` | dot product bits 63:40 | dot product bits 39:0 |
 | `h` | checksum bits 63:32 | checksum bits 31:0 |
-| `x` | **stray acks** since calibration (extra): acks while the reader is in neither FILL nor READ | **all acks** since calibration (extra; low 40 bits) |
+| `x` | **stray acks** since calibration (extra): acks while the reader is in neither FILL nor READ | **all acks** since calibration (extra; low 40 bits): the fill and read words of the runs so far + stray acks, by construction (below) |
 
 and `t` (watchdog stop: acks of the open phase; read phase, format and run) or `z` (after
 `runs` runs).
@@ -1733,14 +1733,19 @@ does, and a check on them can only catch a broken report path or decoder:
   by construction, one word in every clock, which the timing closure of the build covers;
   this counter measures nothing.
 - *scale and metadata bytes* are the constant 0.
+- *all acks* (`x` line): all acks - stray acks are the acks while the reader is in FILL or
+  READ, and each of those phases takes exactly its W acks (it ends at the W-th), so all acks =
+  the fill and read words of the runs so far + stray acks whatever the memory does. The
+  decoder's `all_acks_equal_the_words` compares exactly that; it cannot fail on a working
+  report path, and without the stray term it would say the same as stray acks = 0. It adds
+  nothing to the stray-ack count.
 
 The capture tool still runs these checks (`IDENTITY_CHECKS` in the decoder, listed in each
 record) and reports them apart from the rest. What the memory can fail is: the lane compare
 of every word (*bad words*), the *invalid groups*, the +1 and -1 counts, dot product and
 checksum against the host model, the pairs of runs with the same logical trits in both
-formats, and the ack counts of the `x` line: *all acks* since calibration is counted
-apart from the stop condition and must equal the fill and read words of the runs so far,
-and *stray acks* (acks while the reader is in neither FILL nor READ) must be 0. An extra ack
+formats, and the `x` line's *stray acks* (acks while the reader is in neither FILL nor
+READ), which must be 0. An extra ack
 anywhere after calibration ends a phase one ack early, so a real ack lands outside the
 phases and counts as a stray ack (Icarus, below); a lost ack stops the phase (`t` line).
 The a6d9745f build (`READER_FORMAT` 1) has no `x` line; by the same argument an extra ack in
@@ -1750,8 +1755,7 @@ bad words.
 The `x` line comes with `READER_FORMAT` 2 on the `q` line (the b field's bits 39:32).
 [`tools/fpga-ddr3-capture.py`](../tools/fpga-ddr3-capture.py) decodes the lines into `reader`
 of its record (`trinity.ddr3-capture.v1`; format-1 records end a run at `h`) and fails a run
-that has a bad word, an invalid group, a stray ack, all acks different from the words so far,
-logical trits other than the region, or words, bus, payload and padding bytes, +1 and -1
+that has a bad word, an invalid group, a stray ack, logical trits other than the region, or words, bus, payload and padding bytes, +1 and -1
 counts, dot product and checksum different from `tools/ddr3_read_model.py` for its format and
 key, or that fails one of the identity checks; and a record without both formats, with runs
 out of order, or with a pair whose two formats disagree on logical trits, +1, -1 or dot product.
@@ -1770,11 +1774,11 @@ refresh-like window) and acks 6-13 clocks after the request, with no random stal
 holds counted; with the cap of 64 and that latency more are outstanding and the cap never
 holds); 160 trits (dense5 whole words, baseline2 padded); 1 trit. The stalls and latencies
 come from the model's pseudo-random sequence, one fixed trace per seed; besides the default seed
-the clean runs use four more (`+lfsr_seed`) and 75 % random stalls (with 1,237 and with 160
+the clean runs use five more (`+lfsr_seed`) and 75 % random stalls (with 1,237 and with 160
 trits), and the bench checks that these give other stall counts. One configuration runs until
 reset (`RUNS` 0, as the board builds do) and is stopped after its fifth run (`+stop_runs`).
 Every run equals the host model, both formats of a pair deliver the same logical trits, +1, -1
-and dot product, no ack is stray, all acks equal the words, and the bench's own count of every
+and dot product, no ack is stray, and the bench's own count of every
 phase at the Wishbone port (clocks from the first request to the last ack, requests, acks,
 command stalls, wait stalls, most outstanding) equals the reader's counters. After the last
 fill the memory model's words equal the model's dense5 words (bursts 0-15) and the baseline2
@@ -1864,8 +1868,14 @@ before the load), 20 s after the load
 loads returned 16:42:41.1, 16:44:57.2 and 16:46:54.2 UTC):
 
 - `H` line build id 42b6f5a9, `q` line `READER_FORMAT` 2. Calibration complete 5.196-5.197 s
-  after reset on every load, the reset 3-10 ms after the load returned. Of the 29 `S` lines per
-  load after the reset, 10 come before calibration (`calib_complete` 0) and 19 after it; each of
+  after reset on every load. The `H` line and the first two `S` lines (stamped 4 and 137,417
+  controller clocks after the reset) reached the host in one read, 4.7, 5.1 and 0.5 ms after
+  the load returned; the three lines take 5.2 ms at 115,200 baud (3 x 20 characters of 10
+  bits, arithmetic), so the reset came at most about 0.5 ms after the load returned (load 1)
+  and in load 3 at least 4.7 ms before it. The decoder's fitted reset (3-10 ms after the load
+  returned) is a median over lines that reach the host late and falls after these first
+  lines, so it is not used to select them. Of the 31 `S` lines per load from the `H`
+  line on, 12 come before calibration (`calib_complete` 0; states 0 and 17-22) and 19 after it; each of
   those 19 shows `calib_complete` 1, state 23, highest state 23 and no return to IDLE, from the
   calibration to the last line 19.70-19.71 s after reset (14.50-14.51 s of lines per load), so
   DONE_CALIBRATE held while the reader ran (the lines are coalesced; a return to IDLE in between
@@ -1878,10 +1888,9 @@ loads returned 16:42:41.1, 16:44:57.2 and 16:46:54.2 UTC):
   every run passing every check: 0 bad words and 0 invalid groups in
   214,272,000 baseline2 and 171,196,416 dense5 words read back; +1 and -1 counts, dot product
   and checksum equal to the host model in every run; in every pair both formats deliver the
-  same 17,694,720 logical trits with the same +1 and -1 counts and dot product; 0 stray acks,
-  and in every run all acks since calibration equal the fill and read words of the runs so far
-  (256,352,256, 256,794,624 and 257,789,952 at the last run of each load). The identity
-  checks (words, fill words, bus bytes, padding, consumer stalls 0) pass as they must. Scale and
+  same 17,694,720 logical trits with the same +1 and -1 counts and dot product; 0 stray acks
+  in every run. The identity checks (words, fill words, bus bytes, padding, consumer stalls 0,
+  all acks = fill and read words + stray acks) pass as they must. Scale and
   metadata bytes 0 and padding 0 (the region is whole words in both formats); the padding
   counters were exercised in simulation only.
 - **Read cycles per run** (the raw read path; first read request to last ack, refresh and row

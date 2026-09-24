@@ -45,10 +45,12 @@ module TrinityFpgaDdr3ReaderT27;
 // low; cons_ready is constant true, so it is 0 by construction and measures nothing). The
 // cap therefore only bounds the reader; it is reported, as are the clocks it held a request
 // back. A phase ends at its W-th ack, so the words of a run are W by construction; the
-// acks themselves are counted apart from that: every ack after calibration (all acks) and
-// every ack while the reader is in neither FILL nor READ (stray acks), reported with every
-// run, so an extra or a displaced ack shows as stray acks > 0 or as all acks != the sum of
-// the runs' fill and read words (a lost ack stops the phase: t line).
+// acks themselves are counted apart from that: every ack while the reader is in neither
+// FILL nor READ (stray acks), reported with every run, so an extra or a displaced ack shows
+// as stray acks > 0 (a lost ack stops the phase: t line). Every ack after calibration (all
+// acks) is reported too, but all acks = the runs' fill and read words + stray acks holds by
+// construction (each phase takes exactly its W acks), so it adds nothing to stray = 0 and
+// only guards the report path.
 //
 // Consumer (A), one 128-bit word per controller clock, nine register stages:
 // S1 the acknowledged word with its expected lanes; D the decoders on four 32-bit chunks
@@ -73,7 +75,8 @@ module TrinityFpgaDdr3ReaderT27;
 //   max outstanding, cap holds (extra): the most requests outstanding at a clock, and the
 //                 clocks with no request presented while requests remained (the cap held them)
 //   stray acks, all acks (extra, since calibration, not cleared per run): acks while the
-//                 reader is in neither FILL nor READ, and every ack
+//                 reader is in neither FILL nor READ (the evidence), and every ack (an identity
+//                 with the words and stray acks)
 //
 // Report lines (tag, a 32 bits, b 40 bits), after the status reporter's H and S lines:
 //   q a=trits per run   b=(READER_FORMAT << 32) | (byte lanes << 24) | cap

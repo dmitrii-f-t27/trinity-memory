@@ -61,8 +61,9 @@ format and key), the pairs of runs that carry the same trits in both formats, an
 read's words per clock, which is a raw read-path figure (cycles from the first read request to
 the last ack), not the stage-2 weights-per-second comparison. Several per-run checks hold by
 construction of the design and only guard the report path and the decoder (listed in
-IDENTITY_CHECKS); the evidence about the memory is the bad words, the invalid groups, the host
-model's counts, dot product and checksum, and (format 2) the stray and all-acks counts.
+IDENTITY_CHECKS, among them format 2's all acks = fill and read words + stray acks); the
+evidence about the memory is the bad words, the invalid groups, the host model's counts, dot
+product and checksum, and (format 2) the stray-ack count.
 
 The record keeps the command line (`argv`) and the repository revision of the tool
 (`tool_revision`: HEAD and whether tracked files differed from it).
@@ -101,9 +102,12 @@ CLOCK_TOLERANCE_PPM = 5000
 # Per-run reader checks that hold by construction of t27/rtl/fpga_ddr3_reader.t27 whatever the
 # memory does (docs/hardware.md, "DDR3 read path (#62)"): words and fill words are latched at
 # the W-th ack, bus bytes count the same acks through consumer (A), padding is 16 - payload per
-# word, consumer (A)'s ready is constant. They catch a broken report path or decoder only.
+# word, consumer (A)'s ready is constant, and (format 2) all acks - stray acks are the acks in
+# FILL and READ, exactly W per phase since a phase ends at its W-th ack. They catch a broken
+# report path or decoder only; all_acks_equal_the_words adds nothing to no_stray_ack.
 IDENTITY_CHECKS = ("bus_bytes_is_words_x16", "padding_is_bus_minus_payload", "fill_words_equal_read_words",
-                   "no_consumer_stall", "cycles_at_least_words", "words_cover_the_region")
+                   "no_consumer_stall", "cycles_at_least_words", "words_cover_the_region",
+                   "all_acks_equal_the_words")
 
 
 def utc(ts: float | None = None) -> str:
@@ -273,8 +277,9 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
     Runs must come as 0, 1, 2, ... without a gap or repeat (from 0 when the q line was seen),
     each as the lines of RUN_ORDER (READER_FORMAT 1) or RUN_ORDER_2 (format 2, from the q line).
     Every complete run is checked on its own (the counters add up, no bad word, no invalid
-    group, no consumer stall; format 2: no stray ack, and all acks since calibration equal the
-    fill and read words of the runs so far) and, for the first model_runs runs (None: all),
+    group, no consumer stall; format 2: no stray ack, and the identity all acks since calibration
+    = the fill and read words of the runs so far + stray acks) and, for the first model_runs
+    runs (None: all),
     against tools/ddr3_read_model.py with the seed of the k line.
     hz converts clocks into seconds and MB/s (the nominal controller clock when known)."""
     model = reader_model()
@@ -363,7 +368,8 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
         }
         if "all_acks" in r:
             # Acks counted apart from the phases' stop condition (format 2): none outside FILL
-            # and READ, and all of them = the fill and read words of runs 0 .. r (mod 2^40).
+            # and READ (the evidence). all acks = the fill and read words of runs 0 .. r + stray
+            # acks (mod 2^40) holds by construction (IDENTITY_CHECKS): it guards the report path.
             words_so_far += r["fill_words"] + r["words"]
             r["checks"].update({
                 "no_stray_ack": r["stray_acks"] == 0,
@@ -446,9 +452,11 @@ def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
                   "scale_metadata_bytes is 0 by construction: the region stores no scale and no metadata",
                   "identity_checks hold by construction of the design (words and fill words latched at the W-th "
                   "ack, bus bytes from the same acks, padding = 16 - payload per word, consumer (A) always "
-                  "ready): they guard the report path and the decoder, not the memory",
-                  "stray_acks (format 2): acks since calibration while the reader was in neither FILL nor READ; "
-                  "all_acks: every ack since calibration, checked against the runs' fill and read words"],
+                  "ready, all acks - stray acks = W per phase): they guard the report path and the decoder, "
+                  "not the memory",
+                  "stray_acks (format 2): acks since calibration while the reader was in neither FILL nor READ, "
+                  "the evidence that no ack came without a request; all_acks: every ack since calibration, "
+                  "equal to the runs' fill and read words plus stray_acks by construction (an identity)"],
     }
 
 
