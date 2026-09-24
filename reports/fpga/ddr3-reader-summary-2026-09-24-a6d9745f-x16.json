@@ -1,0 +1,629 @@
+{
+ "schema": "trinity.ddr3-reader-summary.v3",
+ "written_utc": "2026-09-24T17:23:03Z",
+ "written_by": {
+  "tool": "tools/ddr3-reader-summary.py",
+  "repository_head": "3b0c9508662d8e25d08082a16fcfd8cc654fde2b"
+ },
+ "netlist": "a6d9745f x16, DDR3_APP=reader (READER trits 17694720, seed 98, cap 64, runs 0), READER_FORMAT 1 (no x line); one yosys netlist (sha256 eda962bd..., the sweep's netlist_sha256) for both builds",
+ "sweep": "reports/fpga/ddr3-seed-sweep-2026-09-24-a6d9745f-x16-reader.json",
+ "skew_note": "nextpnr-xilinx 0.9.7's delay model (the sweep's luts_on_clock_nets): clock buffer -> fabric inverter LUT -> CK OBUFDS input (ck_ps, the later of its P and N inputs) and -> each lane's DQS OSERDES CLK. Not measured on silicon.",
+ "seed_rank_metric": "largest |CK - DQS| over the byte lanes (largest_abs_ck_minus_dqs_ps), among the seeds whose controller clock meets 83.33 MHz; smaller first",
+ "seed_rank": [
+  6,
+  5,
+  4,
+  3,
+  2,
+  11,
+  1,
+  12,
+  9
+ ],
+ "seed_choice": "In time order (load_order below; build.json written_at, the sweep's written_at): the seed search's build, seed 1 (build.json 15:10:05 UTC; CK - DQS -964 / -740 ps), did not calibrate on its first load (15:11 UTC, die 38.8 C before the load). The sweep of seeds 1-12 was then written (15:18:58 UTC) and seed 6 chosen from it as the first of seed_rank: among the seeds meeting 83.33 MHz, the smallest largest |CK - DQS| over the two lanes (177 ps; seed 5 next at 424 ps, although one of its lanes is at -24 ps). Seed 6 was built (build.json 15:22:44 UTC) and loaded three times (15:23-15:28 UTC, die 48.9-50.6 C), calibrating each time. Seed 1 was loaded a second time after those, as a control at the seed-6 temperature (15:31:50 UTC, die 51.0 C before the load, 10 s capture): it did not calibrate either. x16 builds that calibrated in #61 had CK - DQS -290/-310, -680/-370 and +740/+1090 ps. Ranking by this skew is a rule taken from #61's correlation, not a timing analysis.",
+ "seeds": [
+  {
+   "seed": 1,
+   "routed": true,
+   "fmax_mhz": 86.55,
+   "meets_83_33": true,
+   "fasm_sha256": "cca91a28a1435175ff585b0f08c132c40c47f1caa3be4db191a629abe1a42732",
+   "inverter_lut": "SLICE_X162Y145/C6LUT",
+   "ck_ps": 3055,
+   "dqs_clk_ps_by_lane": [
+    4019,
+    3795
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -964,
+    -740
+   ],
+   "largest_abs_ck_minus_dqs_ps": 964
+  },
+  {
+   "seed": 2,
+   "routed": true,
+   "fmax_mhz": 86.04,
+   "meets_83_33": true,
+   "fasm_sha256": "696628ce6e9870aca8804d544541f24777d14978eef29dd2f42a569b93a63765",
+   "inverter_lut": "SLICE_X162Y165/D6LUT",
+   "ck_ps": 3828,
+   "dqs_clk_ps_by_lane": [
+    3368,
+    3213
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    460,
+    615
+   ],
+   "largest_abs_ck_minus_dqs_ps": 615
+  },
+  {
+   "seed": 3,
+   "routed": true,
+   "fmax_mhz": 86.15,
+   "meets_83_33": true,
+   "fasm_sha256": "3c008d0d34053696af2214817d1dcc69241b96b3016b71597cb6e846f0cdeab2",
+   "inverter_lut": "SLICE_X163Y147/D6LUT",
+   "ck_ps": 3314,
+   "dqs_clk_ps_by_lane": [
+    3870,
+    3584
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -556,
+    -270
+   ],
+   "largest_abs_ck_minus_dqs_ps": 556
+  },
+  {
+   "seed": 4,
+   "routed": true,
+   "fmax_mhz": 91.02,
+   "meets_83_33": true,
+   "fasm_sha256": "b0dff089ef03d61727b89d785538e18a457e1c5e93eb09b28959ec97d864d792",
+   "inverter_lut": "SLICE_X162Y146/B6LUT",
+   "ck_ps": 3321,
+   "dqs_clk_ps_by_lane": [
+    3869,
+    3558
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -548,
+    -237
+   ],
+   "largest_abs_ck_minus_dqs_ps": 548
+  },
+  {
+   "seed": 5,
+   "routed": true,
+   "fmax_mhz": 88.91,
+   "meets_83_33": true,
+   "fasm_sha256": "ba5da8bbdca066f8509a05e64ba70d3767df66645665683046b9fa2e1680a539",
+   "inverter_lut": "SLICE_X162Y149/A6LUT",
+   "ck_ps": 3453,
+   "dqs_clk_ps_by_lane": [
+    3877,
+    3477
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -424,
+    -24
+   ],
+   "largest_abs_ck_minus_dqs_ps": 424
+  },
+  {
+   "seed": 6,
+   "routed": true,
+   "fmax_mhz": 85.82,
+   "meets_83_33": true,
+   "fasm_sha256": "85f0684ce96d43ebaf770918ff28e6d4e9f68e6b8596c8e8e0335527e67cff94",
+   "inverter_lut": "SLICE_X162Y152/B6LUT",
+   "ck_ps": 3391,
+   "dqs_clk_ps_by_lane": [
+    3568,
+    3271
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -177,
+    120
+   ],
+   "largest_abs_ck_minus_dqs_ps": 177
+  },
+  {
+   "seed": 7,
+   "routed": true,
+   "fmax_mhz": 78.67,
+   "meets_83_33": false,
+   "fasm_sha256": "104b43b27ee2909701191d52c942bceeb422ebd2e59f1a9f02cda454640a32ae",
+   "inverter_lut": "SLICE_X163Y147/D6LUT",
+   "ck_ps": 3314,
+   "dqs_clk_ps_by_lane": [
+    3870,
+    3559
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -556,
+    -245
+   ],
+   "largest_abs_ck_minus_dqs_ps": 556
+  },
+  {
+   "seed": 8,
+   "routed": false,
+   "fmax_mhz": null,
+   "meets_83_33": false,
+   "fasm_sha256": null
+  },
+  {
+   "seed": 9,
+   "routed": true,
+   "fmax_mhz": 84.01,
+   "meets_83_33": true,
+   "fasm_sha256": "40145544638568e7c9aee05c2f086282634dab59019e26191a909d2b977061d8",
+   "inverter_lut": "SLICE_X162Y189/D6LUT",
+   "ck_ps": 4450,
+   "dqs_clk_ps_by_lane": [
+    2263,
+    2406
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    2187,
+    2044
+   ],
+   "largest_abs_ck_minus_dqs_ps": 2187
+  },
+  {
+   "seed": 10,
+   "routed": true,
+   "fmax_mhz": 81.39,
+   "meets_83_33": false,
+   "fasm_sha256": "b877da5990c738108f9803346b6434bfa3e83397d8a8cce245066dbe16f77ffc",
+   "inverter_lut": "SLICE_X162Y148/B6LUT",
+   "ck_ps": 3321,
+   "dqs_clk_ps_by_lane": [
+    3621,
+    3612
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -300,
+    -291
+   ],
+   "largest_abs_ck_minus_dqs_ps": 300
+  },
+  {
+   "seed": 11,
+   "routed": true,
+   "fmax_mhz": 86.26,
+   "meets_83_33": true,
+   "fasm_sha256": "4b85a42830309fae036ae23031427d6db51c23ec1f34492887e2db0ce9270b27",
+   "inverter_lut": "SLICE_X162Y168/D6LUT",
+   "ck_ps": 3722,
+   "dqs_clk_ps_by_lane": [
+    3172,
+    2785
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    550,
+    937
+   ],
+   "largest_abs_ck_minus_dqs_ps": 937
+  },
+  {
+   "seed": 12,
+   "routed": true,
+   "fmax_mhz": 90.02,
+   "meets_83_33": true,
+   "fasm_sha256": "b4bee89e40a6fdca943b560358a58ad289f3a5eef509962239fc1d3e385386ea",
+   "inverter_lut": "SLICE_X162Y193/B6LUT",
+   "ck_ps": 4173,
+   "dqs_clk_ps_by_lane": [
+    2208,
+    2715
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    1965,
+    1458
+   ],
+   "largest_abs_ck_minus_dqs_ps": 1965
+  }
+ ],
+ "builds": {
+  "seed1": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader",
+  "seed6": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6"
+ },
+ "board": {
+  "seed1": [
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load1",
+    "label": "x16 read path (#62), load 1",
+    "bitstream_sha256": "5efd0ef66d6f5b08596494c65993fc262742138529a1712fccd1a11128ba7020",
+    "t0_utc": "2026-09-24T15:11:01.711Z",
+    "load_end_utc": "2026-09-24T15:11:16.550Z",
+    "seconds_captured": 20.0,
+    "exit_status": 1,
+    "calib_complete": 0,
+    "state": 0,
+    "highest_state": 14,
+    "returns_to_idle": 255,
+    "seconds_after_reset": 20.017,
+    "reset_minus_load_end_s_fitted": 0.012,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0086,
+    "s_lines_since_reset": 11541,
+    "s_lines_before_calib_complete": 11541,
+    "s_lines_after_calib_complete": 0,
+    "after_calib_all_done_calibrate": false,
+    "after_calib_span_s": null,
+    "calib_complete_s_after_reset": null,
+    "clock_ppm_from_nominal": 83.4,
+    "die_c": [
+     38.8237,
+     40.8347
+    ],
+    "vccint_v": [
+     0.994629,
+     0.994629
+    ],
+    "runs": 0,
+    "passing_runs": 0,
+    "model_checked_runs": 0,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 0,
+    "per_format": {},
+    "first_report_s_after_load_end": null,
+    "checks_failed": [],
+    "dot_values": 0,
+    "count_pairs": 0,
+    "checksum_values": {}
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load2",
+    "label": "x16 read path (#62), seed 1, load 2",
+    "bitstream_sha256": "5efd0ef66d6f5b08596494c65993fc262742138529a1712fccd1a11128ba7020",
+    "t0_utc": "2026-09-24T15:31:50.835Z",
+    "load_end_utc": "2026-09-24T15:32:05.463Z",
+    "seconds_captured": 10.0,
+    "exit_status": 1,
+    "calib_complete": 0,
+    "state": 0,
+    "highest_state": 14,
+    "returns_to_idle": 255,
+    "seconds_after_reset": 10.174,
+    "reset_minus_load_end_s_fitted": 0.011,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0182,
+    "s_lines_since_reset": 5867,
+    "s_lines_before_calib_complete": 5867,
+    "s_lines_after_calib_complete": 0,
+    "after_calib_all_done_calibrate": false,
+    "after_calib_span_s": null,
+    "calib_complete_s_after_reset": null,
+    "clock_ppm_from_nominal": -20.1,
+    "die_c": [
+     50.9586,
+     50.1473
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
+    "runs": 0,
+    "passing_runs": 0,
+    "model_checked_runs": 0,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 0,
+    "per_format": {},
+    "first_report_s_after_load_end": null,
+    "checks_failed": [],
+    "dot_values": 0,
+    "count_pairs": 0,
+    "checksum_values": {}
+   }
+  ],
+  "seed6": [
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load1",
+    "label": "x16 read path (#62), seed 6, load 1",
+    "bitstream_sha256": "7259adac7fe5e4e925522f6e73790b00dd0d6d443569a4d59fb7f62116711945",
+    "t0_utc": "2026-09-24T15:23:01.201Z",
+    "load_end_utc": "2026-09-24T15:23:15.866Z",
+    "seconds_captured": 20.0,
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.723,
+    "reset_minus_load_end_s_fitted": 0.005,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0117,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.525,
+    "calib_complete_s_after_reset": [
+     5.1975,
+     5.1975
+    ],
+    "clock_ppm_from_nominal": -345.6,
+    "die_c": [
+     49.3937,
+     48.9188
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
+    "runs": 549,
+    "passing_runs": 549,
+    "model_checked_runs": 549,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 274,
+    "per_format": {
+     "baseline2": {
+      "runs": 275,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292652,
+      "words_per_clock_min": 0.94474,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16163,
+      "wait_stalls_max": 3421,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292648,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 274,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234085,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944888,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234119,
+      "fill_cycles_max": 234120
+     }
+    },
+    "first_report_s_after_load_end": 5.243,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 133,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 274
+    }
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load2",
+    "label": "x16 read path (#62), seed 6, load 2",
+    "bitstream_sha256": "7259adac7fe5e4e925522f6e73790b00dd0d6d443569a4d59fb7f62116711945",
+    "t0_utc": "2026-09-24T15:26:06.689Z",
+    "load_end_utc": "2026-09-24T15:26:21.362Z",
+    "seconds_captured": 20.0,
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.714,
+    "reset_minus_load_end_s_fitted": 0.009,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0158,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.515,
+    "calib_complete_s_after_reset": [
+     5.1954,
+     5.1954
+    ],
+    "clock_ppm_from_nominal": 53.2,
+    "die_c": [
+     50.3088,
+     49.9358
+    ],
+    "vccint_v": [
+     0.993164,
+     0.993896
+    ],
+    "runs": 553,
+    "passing_runs": 553,
+    "model_checked_runs": 553,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 276,
+    "per_format": {
+     "baseline2": {
+      "runs": 277,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292652,
+      "words_per_clock_min": 0.94474,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16163,
+      "wait_stalls_max": 3421,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292648,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 276,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234085,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944888,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234119,
+      "fill_cycles_max": 234120
+     }
+    },
+    "first_report_s_after_load_end": 5.229,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 134,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 276
+    }
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load3",
+    "label": "x16 read path (#62), seed 6, load 3",
+    "bitstream_sha256": "7259adac7fe5e4e925522f6e73790b00dd0d6d443569a4d59fb7f62116711945",
+    "t0_utc": "2026-09-24T15:28:17.995Z",
+    "load_end_utc": "2026-09-24T15:28:32.659Z",
+    "seconds_captured": 20.0,
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.718,
+    "reset_minus_load_end_s_fitted": 0.007,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0158,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
+    "s_lines_after_calib_complete": 19,
+    "after_calib_all_done_calibrate": true,
+    "after_calib_span_s": 14.527,
+    "calib_complete_s_after_reset": [
+     5.1971,
+     5.1971
+    ],
+    "clock_ppm_from_nominal": -277.7,
+    "die_c": [
+     50.5856,
+     49.9916
+    ],
+    "vccint_v": [
+     0.993896,
+     0.993896
+    ],
+    "runs": 551,
+    "passing_runs": 551,
+    "model_checked_runs": 551,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 275,
+    "per_format": {
+     "baseline2": {
+      "runs": 276,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292652,
+      "words_per_clock_min": 0.94474,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16163,
+      "wait_stalls_max": 3421,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292648,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 275,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234085,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944888,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234119,
+      "fill_cycles_max": 234120
+     }
+    },
+    "first_report_s_after_load_end": 5.238,
+    "checks_failed": [],
+    "dot_values": 32,
+    "count_pairs": 133,
+    "checksum_values": {
+     "baseline2": 1,
+     "dense5": 275
+    }
+   }
+  ]
+ },
+ "load_order": [
+  {
+   "build": "seed1",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load1",
+   "t0_utc": "2026-09-24T15:11:01.711Z",
+   "load_end_utc": "2026-09-24T15:11:16.550Z",
+   "die_c_before": 38.8237,
+   "calibrated": false
+  },
+  {
+   "build": "seed6",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load1",
+   "t0_utc": "2026-09-24T15:23:01.201Z",
+   "load_end_utc": "2026-09-24T15:23:15.866Z",
+   "die_c_before": 49.3937,
+   "calibrated": true
+  },
+  {
+   "build": "seed6",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load2",
+   "t0_utc": "2026-09-24T15:26:06.689Z",
+   "load_end_utc": "2026-09-24T15:26:21.362Z",
+   "die_c_before": 50.3088,
+   "calibrated": true
+  },
+  {
+   "build": "seed6",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load3",
+   "t0_utc": "2026-09-24T15:28:17.995Z",
+   "load_end_utc": "2026-09-24T15:28:32.659Z",
+   "die_c_before": 50.5856,
+   "calibrated": true
+  },
+  {
+   "build": "seed1",
+   "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load2",
+   "t0_utc": "2026-09-24T15:31:50.835Z",
+   "load_end_utc": "2026-09-24T15:32:05.463Z",
+   "die_c_before": 50.9586,
+   "calibrated": false
+  }
+ ],
+ "notes": [
+  "Regenerated by tools/ddr3-reader-summary.py in the review fix of #62; the hand-written first version (schema v1, written_utc 2026-09-24T15:31:40Z although it already held seed 1's second load, which started 15:31:50.8Z) told the seed choice as if both seed-1 failures came before it.",
+  "S lines since reset are counted from the last H line on (schema v3); v2 counted them from the decoder's fitted reset_s, which falls a few ms after the first lines of the reset (it is a median over lines that reach the host late). For the seed-6 loads and seed 1's second load both select the same lines; for seed 1's first load v3 counts 5 more (11,541 against 11,536), all before calibration."
+ ]
+}
