@@ -1,0 +1,68 @@
+{
+ "chipdb_sha256": null,
+ "commit": "",
+ "label": "AX7103B probe of 2026-09-23 (#60): UberDDR3's unmodified alinx_ax7103b demo top at 79d8fd3 on xc7a200t, x32, yosys 0.69, nextpnr-xilinx 45a986b8 native --placer heap --seed 1 --router router2",
+ "netlist_ff_to_ff_max_lut_levels": 10,
+ "netlist_sha256": "b20c70bf9e09d71cb5eb08a349600e86fd4e06ff89084f59345778a1568eceb1",
+ "note": "Summary of the research probe's local log, FASM and netlist (not committed; scratch of the #60 research, hashed here). In x32 the demo declares no create_clock on the controller clock, so that run is checked against nextpnr's 12 MHz default.",
+ "runs": [
+  {
+   "clocks_routed": [
+    {
+     "clock": "i_controller_clk",
+     "fmax_mhz": 82.07,
+     "target_mhz": 12.0,
+     "verdict": "PASS"
+    }
+   ],
+   "critical_path": {
+    "carry_stages": 5,
+    "clock": "i_controller_clk",
+    "first_net": "ddr3_top.ddr3_controller_inst.write_by_byte_counter[0]",
+    "last_net": "$abc$274173$flatten\\ddr3_top.\\ddr3_controller_inst.$2$lookahead\\calib_data$3010[255:0]$3365[248]",
+    "logic_ns": 3.8,
+    "lut_stages": 8,
+    "routing_ns": 8.4,
+    "start": "$auto$ff.cc:337:slice$30099.Q"
+   },
+   "fasm_sha256": "b757dbda90eaca13a2501238a2dfdf7ca2e9783f33cf8456c0cf02584aea83ee",
+   "iologic_clock_from_fabric": 8,
+   "log_sha256": "ceb5f40eecf14142acbffd7102034befdfa42857e939aaca635e36ffcc70b3a8",
+   "packed_lut1": 689,
+   "placer": "heap",
+   "pll": [
+    {
+     "clkfbout_mult": 5,
+     "lktable": "0xB5BE8FA401",
+     "note": "tables are Vivado's CLKFBOUT_MULT=8 values",
+     "result": "FAIL",
+     "table": "0x3B4"
+    }
+   ],
+   "routed": true,
+   "run": "heap_seed1",
+   "seed": 1,
+   "utilisation": {
+    "CARRY4": 94,
+    "SLICE_FFX": 3782,
+    "SLICE_LUTX": 7269
+   }
+  }
+ ],
+ "schema": "trinity.fpga-seed-sweep.v1",
+ "summary": {
+  "fmax_mhz_range": {
+   "i_controller_clk": [
+    82.07,
+    82.07
+   ]
+  },
+  "met_every_clock": [
+   "heap_seed1"
+  ],
+  "routed": 1,
+  "runs": 1
+ },
+ "top": "ax7103_ddr3",
+ "written_at": "2026-09-24T08:13:09+00:00"
+}
