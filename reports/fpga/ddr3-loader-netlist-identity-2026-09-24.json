@@ -1,0 +1,32 @@
+{
+ "schema": "trinity.netlist-identity.v1",
+ "written_at": "2026-09-24T20:32:36+00:00",
+ "base": "e1c36ce (feat/uart-loader, the base of feat/ddr3-loader), extracted with git archive into a scratch directory",
+ "branch": "a9a56541 (feat/ddr3-loader, this change's code commit) in its worktree",
+ "note": "yosys 0.69 native (YOSYS='cd $(ROOT) && yosys'), UberDDR3 79d8fd3e fetched by sha256 in both trees, T27_ROOT at the pinned t27c; the sha256 of the netlist JSON each make target wrote. src attributes are repository-relative, so equal files mean equal netlists including line numbers.",
+ "designs": {
+  "ddr3_pattern_x16": {
+   "command": "make -C fpga/ax7203 ddr3-synth BUILD_ID=7deeef16 DDR3_BUILD=<scratch>",
+   "netlist_sha256": {
+    "base": "10fc135388b1c5b7792990eab5396642fd00e53faa86fa55ca62c294d2fc1b38",
+    "mine": "10fc135388b1c5b7792990eab5396642fd00e53faa86fa55ca62c294d2fc1b38"
+   }
+  },
+  "ddr3_reader_x16": {
+   "command": "make -C fpga/ax7203 ddr3-synth DDR3_APP=reader BUILD_ID=42b6f5a9 DDR3_BUILD=<scratch>",
+   "netlist_sha256": {
+    "base": "2282e99e1041f69f38adfcb8cbc615c49e71a043834adf0181d70bf5396ac815",
+    "mine": "2282e99e1041f69f38adfcb8cbc615c49e71a043834adf0181d70bf5396ac815"
+   }
+  },
+  "block_ram_loader": {
+   "command": "make -C fpga/ax7203 loader-synth BUILD_ID=1d474000 LOADER_BUILD=<scratch>",
+   "netlist_sha256": {
+    "base": "a098a297d25ce46b1788bcc087ee003a4189c52fef7ed5f44f08f3c1e950b072",
+    "mine": "a098a297d25ce46b1788bcc087ee003a4189c52fef7ed5f44f08f3c1e950b072"
+   },
+   "note": "equal to the netlist sha256 of the part-1 build of record (reports/fpga/loader-build-2026-09-24-1d474000, a098a297...)"
+  }
+ },
+ "equal": true
+}

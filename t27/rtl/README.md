@@ -107,6 +107,20 @@ with original commit and byte hashes recorded in
   stalling memory in Icarus, every device byte against the model. See
   `docs/uart-loader.md`.
 
+- DDR3 loader (`fpga_ddr3_loader.t27`, `fpga_loader_wb.t27`, `fpga_wb_arbiter.t27`, wired by
+  `fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v`, `make ... DDR3_APP=loader`, issue #63 part 2):
+  the loader above with marked changes (`not_ready` until UberDDR3 calibrates, protocol 3 with
+  the calibration word and the Wishbone counters in the status lines, registered compares, a
+  parallel CRC step, a pipelined line check byte and a status multiplexer tree for 83.33
+  MHz); a Wishbone master behind its write and read ports (16-byte words with byte selects,
+  `wr_idle` only when every write is acknowledged, a kept read word invalidated by writes, a
+  late read ack dropped after the loader's watchdog); and an arbiter of UberDDR3's single user
+  port between two masters that changes owner only with nothing outstanding.
+  `tests/test_ddr3_loader.py` checks the functions in C, that every difference from
+  `fpga_uart_loader.t27` is marked, and runs the whole top in Icarus against our Wishbone
+  memory model, every device byte against the protocol model, with the #62 reader as second
+  master. See `docs/uart-loader.md`, "DDR3 (part 2, built)".
+
 ## Current compiler boundaries
 
 - `trinity_dot_stream_t27` supports `ACC_WIDTH=2..32`; the native accumulator is
