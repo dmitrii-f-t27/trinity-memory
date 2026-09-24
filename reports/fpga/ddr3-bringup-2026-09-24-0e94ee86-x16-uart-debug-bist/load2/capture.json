@@ -1,0 +1,331 @@
+{
+ "schema": "trinity.ddr3-capture.v1",
+ "label": "x16 UART_DEBUG_BIST, load 2",
+ "tool": "tools/fpga-ddr3-capture.py",
+ "board": {
+  "dna": "0x00389c0c2d85e85c",
+  "idcode": "0x3636093",
+  "uart": "/dev/cu.usbserial-110 9600 8N1"
+ },
+ "bitstream": {
+  "file": "build/fpga/ddr3-x16-uart-debug-bist/tms_ddr3_ax7203.bit",
+  "report": "reports/fpga/ddr3-build-2026-09-24-0e94ee86-x16-uart-debug-bist/build.json",
+  "report_sha256": "1c59401fd5512fe9448e96ccde4fb9944c84d10958f04675f8f0ab22c87933df",
+  "report_sha256_from_sync": "e6f0e565096d2f3ec5261cc8a3d17f4bf4f9eb82c5957cae48e3e219818326df",
+  "reproducible_identity": {
+   "bitstream_sha256_from_sync": "e6f0e565096d2f3ec5261cc8a3d17f4bf4f9eb82c5957cae48e3e219818326df",
+   "fasm_sha256": "aa48db51c02662f640abc7e850f1491fe9788208357612cf1771f1e917bb35ba",
+   "frames_sha256": "bcd16e4358c82e0d54849e53859faba75ac920a817ffca981411d81402c402a6",
+   "note": "a rebuild with the same inputs and tools reproduces these; bitstream.sha256 covers the .bit header with xc7frames2bit's date and time and identifies only this one file (the one to flash)"
+  },
+  "load_check": [
+   "ddr3-flash: build/fpga/ddr3-x16-uart-debug-bist/tms_ddr3_ax7203.bit sha256 1c59401fd5512fe9448e96ccde4fb9944c84d10958f04675f8f0ab22c87933df as in reports/fpga/ddr3-build-2026-09-24-0e94ee86-x16-uart-debug-bist/build.json (whole file)"
+  ]
+ },
+ "expect": {
+  "build_id": "0e94ee86",
+  "lanes": 2,
+  "pattern": false,
+  "uart_debug_bist": true,
+  "period_ps": 3000,
+  "nominal_hz": 83333333.3
+ },
+ "run": {
+  "t0_utc": "2026-09-24T12:21:15.072Z",
+  "t0_note": "every *_s value is host seconds after t0 on one monotonic clock",
+  "steps": {
+   "idcode": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--detect"
+    ],
+    "started_utc": "2026-09-24T12:21:15.072Z",
+    "ended_utc": "2026-09-24T12:21:15.096Z",
+    "start_s": 0.0002,
+    "end_s": 0.0237,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "index 0:",
+     "\tidcode 0x3636093",
+     "\tmanufacturer xilinx",
+     "\tfamily artix a7 200t",
+     "\tmodel  xc7a200",
+     "\tirlength 6"
+    ]
+   },
+   "dna": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-dna"
+    ],
+    "started_utc": "2026-09-24T12:21:15.096Z",
+    "ended_utc": "2026-09-24T12:21:15.117Z",
+    "start_s": 0.0238,
+    "end_s": 0.0453,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"dna\": \"0x00389c0c2d85e85c\"}"
+    ]
+   },
+   "xadc_before": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-24T12:21:15.117Z",
+    "ended_utc": "2026-09-24T12:21:15.224Z",
+    "start_s": 0.0454,
+    "end_s": 0.1521,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 52.5889, ",
+     "    \"maxtemp\": 54.6691, ",
+     "    \"mintemp\": 51.8391, ",
+     "\"raw\":  {\"0\": 42363, \"1\": 21716, \"2\": 39094, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21731, \"7\": 0},",
+     "\"vccint\": 0.993896, ",
+     "   \"maxvccint\": 0.995361, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.78931, ",
+     "   \"maxvccaux\": 1.7915, ",
+     "   \"minvccaux\": 1.78711, ",
+     "}"
+    ]
+   },
+   "load": {
+    "cmd": [
+     "make",
+     "-s",
+     "-C",
+     "fpga/ax7203",
+     "ddr3-flash",
+     "DDR3_BUILD=build/fpga/ddr3-x16-uart-debug-bist",
+     "DDR3_FLASH_REPORT=reports/fpga/ddr3-build-2026-09-24-0e94ee86-x16-uart-debug-bist/build.json",
+     "OPENFPGALOADER=openFPGALoader",
+     "DDR3_CABLE=digilent_hs2"
+    ],
+    "started_utc": "2026-09-24T12:21:16.239Z",
+    "ended_utc": "2026-09-24T12:21:29.715Z",
+    "start_s": 1.1676,
+    "end_s": 14.6431,
+    "returncode": 0,
+    "output": [
+     "ddr3-flash: build/fpga/ddr3-x16-uart-debug-bist/tms_ddr3_ax7203.bit sha256 1c59401fd5512fe9448e96ccde4fb9944c84d10958f04675f8f0ab22c87933df as in reports/fpga/ddr3-build-2026-09-24-0e94ee86-x16-uart-debug-bist/build.json (whole file)",
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "Open file DONE",
+     "Parse file DONE",
+     "load program",
+     "",
+     "Load SRAM: [====                                              ] 7.00%",
+     "",
+     "Load SRAM: [========                                          ] 15.00%",
+     "",
+     "Load SRAM: [============                                      ] 23.00%",
+     "",
+     "Load SRAM: [================                                  ] 31.00%",
+     "",
+     "Load SRAM: [====================                              ] 39.00%",
+     "",
+     "Load SRAM: [========================                          ] 47.00%",
+     "",
+     "Load SRAM: [============================                      ] 55.00%",
+     "",
+     "Load SRAM: [================================                  ] 63.00%",
+     "",
+     "Load SRAM: [====================================              ] 71.00%",
+     "",
+     "Load SRAM: [========================================          ] 79.00%",
+     "",
+     "Load SRAM: [============================================      ] 87.00%",
+     "",
+     "Load SRAM: [================================================  ] 95.00%",
+     "",
+     "Load SRAM: [==================================================] 100.00%",
+     "",
+     "Done",
+     "Shift IR 35",
+     "ir: 1 isc_done 1 isc_ena 0 init 1 done 1"
+    ]
+   },
+   "xadc_after": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs2",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-24T12:21:49.944Z",
+    "ended_utc": "2026-09-24T12:21:50.047Z",
+    "start_s": 34.8714,
+    "end_s": 34.9748,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 51.7122, ",
+     "    \"maxtemp\": 52.9465, ",
+     "    \"mintemp\": 50.8087, ",
+     "\"raw\":  {\"0\": 42261, \"1\": 21713, \"2\": 39083, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21726, \"7\": 0},",
+     "\"vccint\": 0.993164, ",
+     "   \"maxvccint\": 0.995361, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.78931, ",
+     "   \"maxvccaux\": 1.7915, ",
+     "   \"minvccaux\": 1.78784, ",
+     "}"
+    ]
+   }
+  },
+  "idcode": "0x3636093",
+  "dna": "0x00389c0c2d85e85c",
+  "xadc_before": {
+   "temp": 52.5889,
+   "maxtemp": 54.6691,
+   "mintemp": 51.8391,
+   "raw": {
+    "0": 42363,
+    "1": 21716,
+    "2": 39094,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21731,
+    "7": 0
+   },
+   "vccint": 0.993896,
+   "maxvccint": 0.995361,
+   "minvccint": 0.992432,
+   "vccaux": 1.78931,
+   "maxvccaux": 1.7915,
+   "minvccaux": 1.78711
+  },
+  "uart_error": null,
+  "xadc_after": {
+   "temp": 51.7122,
+   "maxtemp": 52.9465,
+   "mintemp": 50.8087,
+   "raw": {
+    "0": 42261,
+    "1": 21713,
+    "2": 39083,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21726,
+    "7": 0
+   },
+   "vccint": 0.993164,
+   "maxvccint": 0.995361,
+   "minvccint": 0.992432,
+   "vccaux": 1.78931,
+   "maxvccaux": 1.7915,
+   "minvccaux": 1.78784
+  },
+  "load_end_s": 14.6431
+ },
+ "uart_transcript": {
+  "file": "uart.tsv",
+  "sha256": "059dde96d13a014b60b7cfe28b61999b74053216c2645bb6f91c59be02d623cb",
+  "lines": 797,
+  "raw_file": "uart-raw.txt",
+  "raw_sha256": "6224e81b107eed13b8080c2fc09f7cc9867e1374a9a5ae8171fa6ff45e284258",
+  "raw_bytes": 13890
+ },
+ "decoded_bist": {
+  "phases": [
+   {
+    "message": "DONE BURST WRITE (PER BYTE): BIST_MODE=1",
+    "t_s": 16.4725,
+    "since_load_end_s": 1.829
+   },
+   {
+    "message": "DONE BURST READ: BIST_MODE=1",
+    "t_s": 16.6921,
+    "since_load_end_s": 2.049
+   },
+   {
+    "message": "DONE RANDOM WRITE: BIST_MODE=1",
+    "t_s": 18.2899,
+    "since_load_end_s": 3.647
+   },
+   {
+    "message": "DONE RANDOM READ: BIST_MODE=1",
+    "t_s": 19.447,
+    "since_load_end_s": 4.804
+   },
+   {
+    "message": "DONE ALTERNATING WRITE-READ",
+    "t_s": 20.4297,
+    "since_load_end_s": 5.787
+   },
+   {
+    "message": "DONE BIST_MODE=1, correct_read_data=",
+    "t_s": 20.5319,
+    "since_load_end_s": 5.889
+   }
+  ],
+  "correct_read_data": 33554431,
+  "done_message_repeats": 122,
+  "expected_correct_read_data": 33554431,
+  "reset_reports": 0,
+  "bytes_before_this_load_text": 1033,
+  "capture_after_done_s": 14.201,
+  "checks": {
+   "all_phases_in_order": true,
+   "correct_read_data_reported": true,
+   "correct_read_data_as_modelled": true,
+   "correct_read_data_same_in_every_repeat": true,
+   "no_reset_report": true,
+   "phases_after_load": true
+  },
+  "pass": true,
+  "notes": [
+   "correct_read_data counts the self-test reads whose data matched (L3638-3650); it is never reset, not even by a recalibration",
+   "wrong_read_data is printed only in RESET reports, which the controller sends from the first wrong read on; no RESET report in the capture means wrong_read_data stayed 0 while it ran",
+   "the DONE message comes from FINISH_READ, in the clock that sets final_calibration_done (= o_calib_complete); on the board it then repeated about every 0.12 s with the same count",
+   "the expected count is the BIST_MODE 1 model's number of checked reads; the self-test covers 3/4 of the bursts and cannot see some address faults (docs/hardware.md, self-test coverage)"
+  ]
+ },
+ "exit_status": 0,
+ "redecoded": [
+  {
+   "utc": "2026-09-24T12:23:38.938Z",
+   "reason": "decoded again from the first phase message of this load on: the first decode also read the resident design's repeated DONE message received before the load (loads 2 and 3 timed their DONE phase from it), and it now also checks that every repeat of the DONE message carries the same count",
+   "checks_before": {
+    "all_phases_in_order": true,
+    "correct_read_data_reported": true,
+    "correct_read_data_as_modelled": true,
+    "no_reset_report": true,
+    "phases_after_load": false
+   },
+   "pass_before": false,
+   "exit_status_before": 1
+  },
+  {
+   "utc": "2026-09-24T12:24:10.966Z",
+   "reason": "the load's own text now starts at its first phase message itself (the previous decode started 101 bytes earlier); results unchanged",
+   "checks_before": {
+    "all_phases_in_order": true,
+    "correct_read_data_reported": true,
+    "correct_read_data_as_modelled": true,
+    "correct_read_data_same_in_every_repeat": true,
+    "no_reset_report": true,
+    "phases_after_load": true
+   },
+   "pass_before": true,
+   "exit_status_before": 0
+  }
+ ]
+}
