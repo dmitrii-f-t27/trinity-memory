@@ -626,7 +626,8 @@ routing), not the multiply-accumulate datapath.
 AX7203 needs a DDR3 PHY (IDELAYE2/ISERDESE2/OSERDESE2 with calibration); the open
 flow's support for those primitives is partial (gHashTag/trinity-fpga records an
 IDDR path that never fires, openXC7 issue 114) and no DDR3 controller has been
-brought up on this board with it, so any DDR figure would rest on unverified
+brought up on this board with it (a build-only DDR3 flow exists since issue #60,
+next section; nothing from it has run on the board), so any DDR figure would rest on unverified
 primitives; the protocol above ("If testing DDR bandwidth …") stays the plan for
 a Vivado-built controller or a repaired open PHY. Power needs an instrument on
 the 12 V input or the board's rails; none is attached to the bench, and the USB
@@ -634,3 +635,360 @@ ports power only the bridges. Both are therefore separate experiments with their
 own protocol, not claims. The player's clock is the board's crystal, so every
 tick figure is exact by construction but no instrument measured it; nextpnr's
 Fmax is an estimate, not a measurement.
+
+### DDR3 in the open flow (build only)
+
+Issue #60. This is a build: synthesis, place and route and a bitstream with
+recorded hashes. **Nothing here has run on the board**, no bitstream of this flow
+has been flashed, and nothing below says that DDR3 calibrates on the AX7203; the
+board bring-up and self-test are issue #61.
+
+**What is built.** [UberDDR3](https://github.com/AngeloJacobo/UberDDR3) at
+`79d8fd3e30ebba6acd84eecac2fa57b7f95f4544`: `rtl/ddr3_top.v`,
+`ddr3_controller.v`, `ddr3_phy.v` and the `LICENSE`, each pinned by sha256 in
+[`fpga/ax7203/ddr3/uberddr3.lock`](../fpga/ax7203/ddr3/uberddr3.lock) and fetched
+into `build/uberddr3/` by `make -C fpga/ax7203 ddr3-fetch`.
+[`tools/fetch-uberddr3.sh`](../tools/fetch-uberddr3.sh) keeps a file whose hash
+matches, replaces one whose hash does not with a fresh download, and stops when
+a download does not match. Before every synthesis `fetch-uberddr3.sh --verify`
+checks the four hashes again, so a locally edited UberDDR3 file (a VREF or PHY
+experiment, say) stops the build instead of being synthesized under the pinned
+commit's name; the report also exits with an error on a file that does not match.
+UberDDR3 is GPL-3.0-or-later and this repository Apache-2.0, so none of it is
+committed, and the demo files are not used: the top, the clocking and the
+constraints under [`fpga/ax7203/ddr3/`](../fpga/ax7203/ddr3/) are ours.
+`tms_ddr3_ax7203.v` only wires `ddr3_top` (ROW 15, COL 10, BA 3; `BYTE_LANES` 2
+for x16 = chip U6, DQ[15:0], or 4 for x32; `SDRAM_CAPACITY 4` = 4 Gb, for which
+UberDDR3 uses tRFC 300 ns instead of the inherited 8 Gb's 350 ns; `SPEED_BIN 3`;
+`ODELAY_SUPPORTED 0`; `BIST_MODE 1`; `NO_IOSERDES_LOOPBACK 1`, which is the
+`ddr3_phy` default at 79d8fd3 (`ddr3_top` does not pass it; a `chparam` only pins
+it in case a later commit changes the default); DIC RZQ/7, RTT_NOM RZQ/4; the user
+Wishbone port idle), one `PLLE2_ADV`, the t27 reset generator on T6 (LVCMOS15)
+and a status line: [`t27/rtl/fpga_ddr3_status.t27`](../t27/rtl/fpga_ddr3_status.t27)
+sends `H` (build id, byte lanes, DDR3 clock period) and then `S` lines
+(`o_calib_complete`, the calibration state from `o_debug1`, the highest state
+reached, the returns to IDLE, controller clocks) through the t27 line emitter
+and UART transmitter on N15 at 115200 baud. A line takes about 1.7 ms and
+calibration moves through its states far faster, so changes are coalesced: an
+`S` line carries the latest state whenever the emitter is free (and one goes out
+periodically); the highest state and the count of returns to IDLE are kept every
+clock and are exact, the sequence of intermediate states is not. LEDs:
+heartbeat, `o_calib_complete`, PLL locked, recalibrated since reset. Calibration
+state 23 (DONE_CALIBRATE) with `BIST_MODE 1` means the self-test pass over the
+whole address space had no wrong read (a wrong read resets the controller, which
+the `S` line counts). The Wishbone pattern test the host checks is #61. The
+build id on the `H` line is `BUILD_ID`, baked into the netlist (by default the
+short HEAD at synthesis; the netlist is rebuilt when it changes). The report
+takes its `commit` from the netlist, stops when they differ, and records the
+source tree the synthesis ran on (`ddr3.source_tree`: HEAD and tracked changes).
+
+**Pins and I/O.** The 71 DDR3 assignments of the LiteX AX7203 platform
+(litex-boards 9f84c87, `alinx_ax7203.py` L102-L125; a third-party AX7203 MIG
+project agrees pin for pin, the ALINX manual excerpts seen confirm only DQ0-DQ2
+and DQS0_P): DQ, DQS and DM in bank 35 (byte lane *n* in byte group T*n*),
+address, command and CK in bank 34, both banks at 1.5 V. SSTL15 / DIFF_SSTL15
+(RESET# LVCMOS15), `IN_TERM UNTUNED_SPLIT_50` on DQ and DQS (HR banks have no
+DCI), `SLEW FAST` everywhere. x32 adds `tms_ddr3_x32.xdc` (lanes 2-3). Clock,
+reset, LEDs and UART are those of the verified `tms_trace_player.xdc`.
+`tests/test_ddr3_flow.py` checks the pins against the LiteX list, the I/O
+properties and the ports of the top. Unused bank-34/35 pins, among them U5's
+DQ, DQS and DM in x16 and the bank-35 VREF pins E3 and N3, get the all-zero IOB
+configuration (weak pull-down, no IN_TERM, no input standard) plus STEPDOWN,
+which `fasm2frames` adds to every unused IOB of a bank that has any STEPDOWN
+feature (so the FASM alone does not show it). Checked by decoding the frames of
+the x16 build and of the AX7103B probe against prjxray-db a90f27c1 (U5's tiles
+RIOB33_X105Y157/163/169, E3's RIOB33_X105Y187 IOB_Y1; a local decoder, not
+committed). In x16, U5 still receives CK, the commands and ODT; with ODT on
+during writes it terminates its undriven DM near VTT and may store what it
+samples. Its contents are never read, so this is harmless.
+
+**Clocks.** 200 MHz (R4/T4) -> PLL, CLKFBOUT_MULT 5 (VCO 1000 MHz): CLKOUT0 /12
+= 83.33 MHz controller clock, CLKOUT1 /3 = 333.33 MHz DDR3 clock, CLKOUT2 /5 =
+200 MHz IDELAYCTRL reference, CLKOUT3 /3 at 90 degrees; UberDDR3's periods
+12,000 / 3,000 ps (DDR3-667, the 4:1 controller the demo uses). The Makefile
+appends `create_clock` on the four BUFG outputs to the XDC it hands nextpnr
+(`DDR3_PLL_MULT` / `DDR3_DDR_DIV` change the PLL and the constraints together;
+MULT 8 with DIV 5 would be 80 / 320 MHz, not built here).
+
+**CK and the write-DQS clock leave the clock network through a fabric LUT.**
+With `ODELAY_SUPPORTED 0`, `ddr3_phy.v` inverts the DDR3 clock for the CK output
+buffer (L473, `.I(!i_ddr3_clk)`) and for the DQS OSERDES (L1126,
+`.CLK(!i_ddr3_clk)`). yosys makes one inverter of it. nextpnr-xilinx 0.9.7 folds
+inverters into IDDR C and ISERDESE2 CLKB/OCLKB only (`pack_io_xc7.cc`), not into
+OSERDESE2 CLK or an OBUFDS input, so it stays a LUT1 in the fabric (x16
+`SLICE_X163Y168/D6LUT`, x32 `SLICE_X162Y147/A6LUT` in the builds below). The
+333 MHz CK and the write-DQS OSERDES clock therefore pass through that LUT and
+general routing: the DQS OLOGIC clocks come from `IOI_IMUX` (2 byte-group tiles
+in x16, 4 in x32), CK reaches its OBUFDS through an OLOGIC D1 route-through
+(`RIOI3_TBYTESRC_X105Y143`, pins R3/R2). The report lists both
+(`ddr3.fabric_clocks`) with the LUT's placement and nextpnr's delays: buffer to
+LUT 1.22 ns, LUT to the DQS OSERDES and to CK 1.2-2.6 ns, against 1.12-1.15 ns
+from the same buffer to every leaf-clocked SERDES pin. That route sets the phase
+of CK against the commands (launched from `clk_ddr` on the leaf), of write DQS
+against DQ (`clk_ddr_90` on the leaf), and of the DQS OSERDES CLK against its
+CLKDIV. Nothing times it, the seed search does not see it, and it moves with the
+seed: over seeds 1-8 of the same netlist (the seed sweeps below) the delay from
+the clock buffer to the DQS OSERDES and CK pins spans 2.47-4.63 ns in x16 and
+2.26-3.94 ns in x32 with 0.9.7, and up to 5.61 ns with 45a986b8 (x32 seeds 3
+and 5, where the LUT sits 2.9 ns from the buffer), while every leaf-clocked
+SERDES pin stays at 1.12-1.15 ns in every run; at 333 MHz the period is 3 ns.
+These are nextpnr's delay model, not silicon. The AX7103B demo, which its author
+reports passing on its board, has the same structure (its FASM has the same
+fabric-fed DQS clocks). For #61:
+keep two or three native seeds built and hashed (for example
+`make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_WIDTH=16 DDR3_SEEDS=2
+DDR3_BUILD=$PWD/build/fpga/ddr3-x16-seed2 DDR3_REPORT=...`) so that a calibration
+failure can be told apart from seed luck. Folding the inverter into the OSERDES
+(`ZINV_CLK`, which `fasm.cc` already writes from `IS_CLK_INVERTED` and prjxray-db
+has) would take DQS off the fabric; CK would stay on it. Not done here.
+
+**Why nextpnr-xilinx 0.9.7 for this design, and the 45a986b8 fallback.** The
+`regymm/openxc7` image and our block-RAM builds use nextpnr-xilinx 45a986b8
+(0.8.2-79). Its `fasm.cc` writes the same PLLE2 lock and loop-filter values into
+every PLL (`LKTABLE 0xB5BE8FA401`, `TABLE 0x3B4`, marked FIXME), which are
+Vivado's values for CLKFBOUT_MULT = 8; this PLL runs at MULT = 5, for which
+Vivado programs `0x73BE8FA401` / `0x1EC` (tables harvested from Vivado bitstreams
+per MULT, openXC7/nextpnr-xilinx#138, first in 0.9.3). 0.9.4 and later derive
+clocks through PLLs (#155), 0.9.5 and later carry the fix of the constant-holdout
+bug of 0.9.1-0.9.4 (#180 / #184, a constant-routing fix, not a DDR3 PHY fix).
+The default DDR3 line (`DDR3_PNR_LINE=release`) therefore uses nextpnr-xilinx
+**0.9.7** (`0eae9fbb19dfb83cdd30d5048d8b0ba744180ad0`, built with the same CMake
+options as the 45a986b8 build: `-DARCH=xilinx -DBUILD_GUI=OFF -DBUILD_PYTHON=OFF
+-DUSE_OPENMP=OFF`), a chip database from its own `bbaexport.py` with its
+submodules (prjxray-db `a90f27c1`, nextpnr-xilinx-meta `a4af910c`), and
+`fasm2frames` / `xc7frames2bit` of the image reading that same prjxray-db. The
+report of every DDR3 build decodes the PLL from the FASM and compares its tables
+with Vivado's values for the programmed MULT (`pll_check`).
+
+This departs from the only hardware precedent. The one report of UberDDR3
+working with openXC7 is its author's AX7103B BIST pass of 2025 (the commit "all
+example demos passing openxc7 run!" of 2025-03-02, the openiphub post of
+2025-03-21); no independent evidence was found. The constant tables are in
+`fasm.cc` from 2019 until e33b5f1a (merged 2026-08-12, first tag 0.9.3), so every
+nextpnr-xilinx of 2025, 3374e5a6 (the revision toolchain-nix pinned when the post
+was written) and 45a986b8 included, writes the MULT = 8 values, and that
+bitstream ran its MULT = 5 PLL with them (#61's Risks rely on this). 0.9.7 is 256 commits past
+45a986b8 (reworked carry packing, constant routing), tagged on 2026-09-22, and no
+UberDDR3 build from it is known to have run on hardware. #60 left "stay on
+45a986b8, or also build 0.9.5 or later" open, and #61 lists "nextpnr 0.9.5 or
+later" among the founders' options at its decision point; both lines are
+therefore built. `DDR3_PNR_LINE=image` builds the same design with the image's
+nextpnr-xilinx 45a986b8 (or a native build of it through `NEXTPNR`, as for the
+block-RAM designs), the image's chip database (`make chipdb`) and the image's
+prjxray-db (`6c02fde2`), into `build/fpga/ddr3-x<width>-nextpnr-45a986b8/`; its
+reports are `...-nextpnr-45a986b8/` below, `pll_check` FAIL with the note that
+the tables are the MULT = 8 values. Either line is a candidate for #61; which one
+is flashed first is #61's decision.
+
+**VREF.** nextpnr ignores `INTERNAL_VREF` in the XDC (`xdc.cc`) and sets
+`HCLK_IOI3.VREF.V_675_MV` for every bank with a single-ended SSTL input, in
+45a986b8 and in 0.9.7 alike. Every DDR3 FASM here has exactly one such line,
+`HCLK_IOI3_X263Y182.VREF.V_675_MV`: that HCLK tile sits in the middle row of
+bank 35 (IOB rows Y150-Y199 of the package file), so the DQ inputs compare
+against an internal 0.675 V instead of the board's 0.75 V VTTREF on the bank-35
+VREF pins (AX7103 core-board schematic; no AX7203 schematic was found). Bank 34
+has no single-ended SSTL input (address and command are outputs, CK and the 200
+MHz clock differential), so it gets no VREF bit. Not patched here: #61 decides
+whether a patch (`V_750_MV`, which prjxray-db has, or no internal VREF) is
+needed.
+
+**Build (native, on the Mac).** yosys 0.69 `synth_xilinx -flatten -abc9 -arch
+xc7` (the demos' synthesis, carry chains and wide muxes allowed), native
+nextpnr-xilinx `--placer heap --router router2 --timing-allow-fail` with a seed
+search that keeps the first seed of 1-8 whose routed design meets every clock
+constraint (`sa` stops with "No wire found for port O6" on this design), prjxray
+of the image under emulation. Commit `f07e91cd`; reports in
+[`reports/fpga/ddr3-build-2026-09-24-f07e91cd-x16/`](../reports/fpga/ddr3-build-2026-09-24-f07e91cd-x16/)
+and `-x32/` (nextpnr-xilinx 0.9.7) and
+[`...-x16-nextpnr-45a986b8/`](../reports/fpga/ddr3-build-2026-09-24-f07e91cd-x16-nextpnr-45a986b8/)
+and `...-x32-nextpnr-45a986b8/` (45a986b8, built at 170e1a2 and 9302b72 with
+`BUILD_ID=f07e91cd`: the same netlists). Each holds `build.json`
+(`trinity.fpga-build.v1` with a `ddr3` block), `yosys_stat.txt`, `nextpnr.log`
+and the XDC nextpnr read; `make ddr3-report` writes all four. The 0.9.7 reports
+were rewritten after the review from the same build directories (no rebuild; the
+SDF and routed netlist behind `fabric_clocks` come from a rerun of seed 1 whose
+FASM is byte-identical), which is why their `source_tree` is null.
+
+One command builds and reports both widths. The reported 0.9.7 builds were made
+with this command line (`BUILD_ID=f07e91cd` rebuilds the netlist of commit
+f07e91cd at any later commit whose DDR3 sources are unchanged; without it the
+netlist carries the current commit and its FASM, resource counts and Fmax
+differ):
+
+```sh
+make -C fpga/ax7203 ddr3-fetch ddr3-cores T27_ROOT=/path/to/t27     # UberDDR3 at the pinned commit, the t27 cores
+make -C fpga/ax7203 ddr3-all BUILD_ID=f07e91cd T27_ROOT=/path/to/t27 \
+  YOSYS='cd $(ROOT) && yosys' \
+  IMAGE=regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c \
+  DDR3_TOOLS=$T/nextpnr-xilinx-0.9.7 DDR3_XRAY=$T/prjxray-db-a90f27c1 DDR3_META=$T/nextpnr-xilinx-meta-a4af910c
+# the 45a986b8 line (image chip database from `make -C fpga/ax7203 chipdb`, prjxray-db of the image):
+make -C fpga/ax7203 ddr3-all DDR3_PNR_LINE=image BUILD_ID=f07e91cd T27_ROOT=/path/to/t27 \
+  YOSYS='cd $(ROOT) && yosys' NEXTPNR='cd $(ROOT) && /path/to/nextpnr-xilinx-45a986b8/build/nextpnr-xilinx' \
+  IMAGE=regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c
+```
+
+`$T` is a directory outside the repository (here `tools-native/`). Without the
+`DDR3_TOOLS`/`DDR3_XRAY`/`DDR3_META` overrides, `make ddr3-nextpnr ddr3-chipdb`
+clones 0.9.7 with both submodules into `build/tools/nextpnr-xilinx-0.9.7/`, builds
+it (built-from-<commit> stamp) and writes the chip database to
+`build/fpga/chipdb-nextpnr-0.9.7/` with a `.inputs` file naming the nextpnr,
+prjxray-db and meta revisions it was built from (the database is remade when one
+of them changes). Two things differ on this Mac. nextpnr-xilinx 0.9.7's CMake
+finds eigen3 through `pkg-config` (`pkg_check_modules`, which 45a986b8 did not
+use), and this Mac has none: the reported binary was configured with a small
+stand-in that answers only for eigen3 (`tools-native/pkg-config-shim`);
+`brew install pkgconf` is the ordinary way. And the submodule clone did not
+finish (git ran at about 24 KB/s): the artix7 part of prjxray-db `a90f27c1` and
+of the meta `a4af910c` was assembled from the image's older database plus the 26
+files that differ, every file checked against the git blob hash of the pinned
+tree (their `ASSEMBLED-*.txt` names the commit, which the report reads), and a
+`.source-<commit>` stamp was placed by hand in the source tree so that make does
+not clone again. Leaving out `YOSYS` runs the image's yosys 0.62 under
+emulation, which gives another netlist (4,387 LUTs instead of 4,424 in x16, in
+a local run); leaving out the `IMAGE` digest runs `:latest`, which resolved to
+that digest here on 2026-09-24.
+
+| Variant | yosys LUT / FF / CARRY4 | nextpnr SLICE_LUTX / SLICE_FFX | OSERDESE2 / ISERDESE2 / IDELAYE2 | Routed Fmax estimate, controller clock (83.33 MHz) | PLL tables | FASM sha256 |
+| --- | --- | --- | --- | --- | --- | --- |
+| x16, 0.9.7 | 4,424 / 2,622 / 153 | 5,792 / 2,622 | 45 / 18 / 18 | 90.93 MHz (seed 1) | PASS (MULT 5) | `4af339a6115480144923a2d8ea54b5780f7658b53b41f9138a7a2c7530ff9602` |
+| x32, 0.9.7 | 6,818 / 4,094 / 156 | 8,165 / 4,094 | 65 / 36 / 36 | 86.51 MHz (seed 1) | PASS (MULT 5) | `e18284b089e863d48bae16feb4e3522e272ec2cc2cc089f0cfa6e2aba5e2de5e` |
+| x16, 45a986b8 | same netlist | 5,719 / 2,622 | 45 / 18 / 18 | 86.99 MHz (seed 1) | FAIL (MULT 8 tables) | `3e097bea0de48556a708e5e8b89313b9389f48869db583d644438e195d57aaa9` |
+| x32, 45a986b8 | same netlist | 8,136 / 4,094 | 65 / 36 / 36 | 87.44 MHz (seed 1) | FAIL (MULT 8 tables) | `f9a9846195745cb46934e7574ecf625caf5c27b9eb576b4d0b0332e2481224b5` |
+
+**Identity.** `xc7frames2bit` writes the date and time it ran into the `.bit`
+header, so no two runs give the same whole-file sha256, on one machine or two.
+What a rebuild reproduces is the FASM, the frames and the `.bit` from its sync
+word (0xAA995566) on; `build.json` records them as `reproducible_identity`. The
+whole-file sha256 identifies only the one file in `build/fpga/` that a report
+was written for, the file to flash:
+
+| Variant | frames sha256 | `.bit` sha256 from the sync word | `.bit` sha256, whole file (local file of the report) |
+| --- | --- | --- | --- |
+| x16, 0.9.7 | `336e3c6d253dc98355b1bd42d9d1a8d022cc68b88fb3e7683b13fd820e389a4b` | `440ee6c1c4b6efec92b05234c710dd2b289046eb2a42f5fba9761b499ffe57c4` | `0ae4ed6c8d59f6dc5974dc2b59f732ecb5c1c7e93cc2d9c3c08e24e33e496ff0` |
+| x32, 0.9.7 | `b95fc020c74249a7e74a8861b602c1218cd652fda06ec83554bdbad12ba83e21` | `f409b7bb57341be55db0a054e02e9ea7a9f31eff6b53256827166999785f9291` | `b9c89cc9d54eb21182b97bddff9a50fdd59cc7051cda2c568f90b8c9ffa4edae` |
+| x16, 45a986b8 | `af39f28141d61e25054174dd6447d04a3981b60663c2b0ed9ddde7514f25d0b7` | `a6c2db67fdd360973c480033046e642dc36c10002bf275b6509638867c7a7fbe` | `53b3f95734b475ac7f996188d55163314dfb0bb98687cf89995c0cb6550d923f` |
+| x32, 45a986b8 | `75ca9039e8ba5130a5474c47542ea4a38a9b2fd774391dfde044288c85e2b5ba` | `157fe0954517ba8f59bc74dcfbc5100de3d666b5b95f6538233e1b48a7771b16` | `675e5c00e8129976ec0eb74283f3906c86e20a0b31510f6517341014143a6ac0` |
+
+A clean clone of 9d09da1 (the review fixes) with the command line above
+reproduced the FASM, frames and from-sync sha256 of both 0.9.7 builds exactly;
+its `.bit` files differed from the reported ones only in the header time
+(whole-file x16 `897a20b5…`, x32 `29c36161…`). `make -C fpga/ax7203 ddr3-flash
+DDR3_WIDTH=16 DDR3_EXPECT_SHA256=<whole-file sha256>` (or
+`DDR3_FLASH_REPORT=<build.json>`) flashes the existing `.bit` only when its
+sha256 matches, SRAM only, and never builds; that is #61, with the board and
+approval.
+
+All four: 1 PLLE2_ADV, 1 IDELAYCTRL, 4 BUFG; 9,730,786-byte bitstreams
+(9,730,803 for 45a986b8, whose `.bit` header names a longer path);
+chip database sha256 `5c88a26d…a14786a7` (0.9.7) and `81dc7e2c…fc530df499`
+(the image's); 32 "multiple conflicting drivers" warnings from yosys in
+`ddr3_controller` (as in the probe; UberDDR3's demos were validated with yosys
+0.44).
+
+**What the Fmax covers.** The Fmax column is nextpnr's estimate after routing
+for register-to-register paths inside the fabric on the controller clock, and
+nothing else. nextpnr-xilinx 0.9.7 gives the ports of OSERDESE2, ISERDESE2,
+IDELAYE2 and IDELAYCTRL no timing class (`arch.cc` `getPortTimingClass` returns
+`TMG_IGNORE`), so no path into or out of the PHY primitives is analysed, on any
+clock. On the 83.33 MHz controller clock these are not trivial: with `DLL_OFF 0`
+the command reaches the command OSERDES D1-D4 combinationally from the scheduler
+(`ddr3_controller.v` L1654-1658, `ddr3_phy.v` L201-204), up to 6 LUT levels from
+a flip-flop in both widths, and ISERDES/IDELAY outputs reach flip-flops through up
+to 5 (x16) and 6 (x32) levels (`ddr3.phy_paths` in the reports, counted on the
+yosys netlist; the timed critical path has 11). They are probably inside 12 ns,
+but nothing checks it. The 333 MHz, 90-degree and 200 MHz domains show no Fmax
+at all: their loads are PHY primitives (and the fabric LUT above), so nextpnr
+finds no register-to-register path in them, and the I/O timing of the PHY is not
+analysed.
+
+**Seed spread (committed sweeps).** `make ddr3-sweep` places and routes the
+same netlist with every seed of 1-8 without the seed search's early stop and
+summarises each run (`tools/fpga-seed-sweep.py`: routed Fmax, critical path,
+utilisation, packer LUT1 count, PLL tables, the fabric-clock LUT with its
+placement and delays, sha256 of log and FASM). The sweeps of the f07e91cd
+netlists, run in a clean clone of 170e1a2, are
+[`reports/fpga/ddr3-seed-sweep-2026-09-24-f07e91cd-x16.json`](../reports/fpga/ddr3-seed-sweep-2026-09-24-f07e91cd-x16.json),
+`-x32.json` and the `-nextpnr-45a986b8` pair; their seed-1 FASMs are the
+reported builds' FASMs.
+
+| Netlist | Routed Fmax, controller clock, seeds 1-8 | Seeds meeting 83.33 MHz | SLICE_LUTX | Packer LUT1 |
+| --- | --- | --- | --- | --- |
+| x16, 0.9.7 | 80.83-90.93 MHz | 6 of 8 | 5,792 | 1,348 |
+| x32, 0.9.7 | 82.90-96.83 MHz | 7 of 8 | 8,165 | 1,338 |
+| x16, 45a986b8 | 86.99-98.00 MHz | 8 of 8 | 5,719 | 1,292 |
+| x32, 45a986b8 | 83.42-93.82 MHz | 8 of 8 | 8,136 | 1,315 |
+| probe x16 (demo top, 45a986b8, seed 1) | 107.83 MHz | 1 run | 4,932 | 680 |
+| probe x32 (demo top, 45a986b8, seed 1, checked at 12 MHz) | 82.07 MHz | 1 run | 7,269 | 689 |
+
+The critical path moves with the seed between the scheduler's bank and
+precharge logic (10-13 LUT stages to `stage1_do_pre_d`, `stage2_do_pre_d` or
+`o_wb_stall_int_d`) and, in x32, the calibration lane logic and its carry
+chains (6-12 stages); routing is 81-91 % of the path delay, 64-67 % on the
+carry-chain paths of three 45a986b8 x32 seeds. On these netlists 45a986b8 is not
+slower than 0.9.7: it meets 83.33 MHz with every seed in both widths.
+
+**Against the probe of 2026-09-23** (#60: the unmodified AX7103B demo on
+45a986b8, heap seed 1, summarised in
+[`reports/fpga/ddr3-probe-2026-09-23-ax7103b-x16.json`](../reports/fpga/ddr3-probe-2026-09-23-ax7103b-x16.json)
+and `-x32.json` from its local logs, FASMs and netlists). x32: 7,269 SLICE_LUTX /
+3,782 FF / 82.07 MHz, but that run had no constraint on the controller clock and
+was checked against nextpnr's 12 MHz default; its critical path starts at
+`write_by_byte_counter[0]` and runs through a split CARRY4 chain and 8 LUTs, 3.8
+ns logic and 8.4 ns routing. Our x32 netlist on the same 45a986b8 gives 87.44
+MHz at seed 1 and 83.42-93.82 MHz over seeds 1-8, all timing-driven towards
+83.33 MHz; the probe's 82.07 MHz, from a run that was not, is just below that
+range, so x32 shows no gap beyond what the constraint and the seed explain.
+x16: 4,932 / 2,310 / 107.83 MHz, critical path
+`stage2_pending` -> `stage2_do_pre_d`, 6 LUT levels, 1.0 ns logic and 8.3 ns
+routing. Our x16 netlist on the same binary and seed gives 86.99 MHz and
+86.99-98.00 MHz over seeds 1-8; the probe is 10 % above the best of them and
+24 % above the same seed, so the x16 difference is **not** seed spread. It is
+structural: the deepest
+flip-flop-to-flip-flop path of the probe's x16 netlist is 9 LUT levels, ours is
+13 (`netlist_ff_to_ff_max_lut_levels` in the sweep files; the same endpoints,
+`stage1_do_pre` and `stage2_do_pre` in the controller's scheduler, are 9 levels
+in the probe and 12 in ours). Re-synthesizing the probe's top with our yosys
+command gives 9 again, so the difference comes from our top, not from the flow.
+Which part of the top is **open**: in a local bisect (not committed), setting
+`SDRAM_CAPACITY` back to the default took the deepest path from 13 to 12
+levels, while `AUX_WIDTH` 16, driving the Wishbone inputs from registers (with
+and without using its outputs), narrowing `o_debug1` to the state and leaving
+`i_user_self_refresh` open each left it at 13. The resource differences are
+explained: our top replaces the demo's
+9600-baud UART with the t27 reporter, emitter and transmitter (32- and 64-bit
+counters: +312 FF in both widths, yosys CARRY4 79 -> 153 in x16), ties the user
+Wishbone port and sets `SDRAM_CAPACITY 4`; yosys LUTs +173 (x16) and +239 (x32);
+and on 45a986b8 the packer creates 1,292 LUT1 cells (x16) against the probe's
+680 (+612; yosys writes none), which with the +173 yosys LUTs is the +787
+SLICE_LUTX (5,719 against 4,932; x32: 689 -> 1,315
+and +239, the +867); 0.9.7 packs another 56 (x16) and 23 (x32) LUT1 on the same
+netlists.
+
+**CI.** [`.github/workflows/fpga-ax7203-ddr3.yml`](../.github/workflows/fpga-ax7203-ddr3.yml)
+runs `make ddr3-all` in `regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c`:
+the image's yosys (0.62) and prjxray, and nextpnr-xilinx 0.9.7 built inside the
+same image (Ubuntu 20.04, CMake 3.16, g++ 9.4; checked locally, under
+emulation) and cached by commit and image digest, with its chip database and
+`.inputs` cached by nextpnr and prjxray-db commit (generated in the image,
+locally under emulation, the database is byte-identical to the native one:
+sha256 `5c88a26d…a14786a7`). It publishes the reports, the XDC, the logs and
+sha256 values only, never a `.bit` or `.fasm`: Actions artifacts of a public
+repository can be downloaded by any signed-in GitHub user, and publishing
+bitstreams built from UberDDR3 is the founders' decision. The step summary shows
+the FASM and frames sha256 next to the whole-file `.bit` sha256. The CI builds
+differ from the native ones in their FASM and frames too, because yosys 0.62
+gives another netlist, and every `.bit` differs from every other in its header
+time anyway. Until the founders decide, the bitstream flashed for #61 is a
+native build, the one file whose whole-file sha256 its report records, with the
+tool revisions of that report and no Tier-E claim. The workflow has not run on
+GitHub yet (nothing pushed).
+
+**Limits.** No board run. No timing analysis of the PHY: neither of its I/O
+nor of the controller-clock paths into and out of its primitives. CK and the
+write-DQS clock go through a fabric LUT with an untimed, seed-dependent delay
+(above). The internal 0.675 V VREF on bank 35. The 0.9.7 line departs from the
+precedent's nextpnr line and PLL tables and has no hardware record; the 45a986b8
+line matches the precedent but programs the MULT = 8 PLL tables. The x16 Fmax gap
+to the probe is structural and not yet traced to a part of our top. The VREF,
+termination and VCCO facts come from the AX7103 core-board schematic Rev 1.0,
+not from an AX7203 one.
