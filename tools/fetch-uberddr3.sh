@@ -31,6 +31,8 @@ case "$repo" in
 esac
 base=${UBERDDR3_BASE_URL:-https://raw.githubusercontent.com/$slug/$commit}
 mkdir -p "$out"
+# SOURCE marks a complete, verified fetch: it is removed first and written last.
+rm -f "$out/SOURCE"
 count=0
 awk '$1 == "file" { print $2, $3 }' "$lock" > "$out/.files"
 while read -r want path; do

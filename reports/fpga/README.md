@@ -27,7 +27,7 @@ Decision record and captured device output for issue #10. Protocol and flow:
   of all 34 trace vectors (dot, storage, join), the throughput workload (64
   words, 16 frames x 64 beats, results recomputed by the host) and the Edge Demo
   (three template rows in lockstep, t27 argmax, six fixtures).
-- **Not measurable on this bench:** DDR (no trusted DDR3 PHY in the open flow)
+- **Not measurable on this bench:** DDR (no trusted DDR3 PHY in the open flow; a build-only UberDDR3 flow exists since #60, not run on the board)
   and power (no instrument); see `docs/hardware.md`.
 
 ## Files
@@ -42,6 +42,7 @@ Decision record and captured device output for issue #10. Protocol and flow:
 
 | Directory | Commit | Variant | Result |
 | --- | --- | --- | --- |
+| `ddr3-build-2026-09-24-f07e91cd-x16/`, `-x32/` | f07e91cd (branch `feat/ddr3-open-flow`, issue #60; UberDDR3 79d8fd3e fetched, not committed; build only, **never flashed**) | our AX7203 top, PLL MULT 5 (83.33 / 333.33 MHz), BIST_MODE 1; yosys 0.69 native, nextpnr-xilinx 0.9.7 native (`heap`, seed search, `router2`) with its own chip database, prjxray of the image reading prjxray-db a90f27c1 | x16: 5,792 SLICE_LUTX, 2,622 FF, 45 / 18 / 18 OSERDESE2 / ISERDESE2 / IDELAYE2, routed Fmax 90.93 MHz for the 83.33 MHz controller clock; x32: 8,165 / 4,094, 65 / 36 / 36, 86.51 MHz; PLL tables PASS for MULT 5; VREF 0.675 V on bank 35; bitstream sha256 in `build.json` (`docs/hardware.md`, "DDR3 in the open flow") |
 | `build-2026-09-22-941c16c-bram-b2/`, `-d5/`, `-d5d2/` | 941c16c (branch `feat/fpga-bram-trit-packing`; the block-RAM trit packing bench, one layout per bitstream, `make bram-bit BRAM_ONLY=0/1/2`) | divided 25 MHz clock; yosys 0.69 with the 1K x 36 block RAM library (`fpga/ax7203/brams_x36.txt`); nextpnr-xilinx 45a986b built natively on the Mac, `heap` seed 1, `router2`; prjxray from `regymm/openxc7` | RAMB36E1 55 / 50 / 45; LUTs 3319 / 3537 / 3448; FFs 1038 / 1035 / 1110; nextpnr Fmax 38.8 / 35.6 / 29.8 MHz for the 25 MHz clock; `ooc_engine_codecs.stat` is the engine with its codecs synthesized alone (55 / 50 / 45 blocks, 2524 / 2715 / 2530 LUTs), `codec_encoder.stat` and `codec_decoder.stat` the codec alone (0 / 133 / 146 and 96 / 125 / 136 LUTs), all from `make bram-ooc` |
 | `build-2026-09-22-375cf00-bram-all/` | 375cf00 (all three layouts in one design) | yosys 0.69 native | 150 RAMB36E1, 8959 LUTs, 2188 FFs (`yosys_stat.txt`); did not route: `routing-attempts.txt` has the last progress lines of each nextpnr attempt (router1 12.6k of 64.4k arcs left after 35 minutes, router2 27.6k overused wires in its first iteration, `sa` stopped by the A5FF bug) |
 | `build-2026-09-22-941c16c-player/` | 941c16c (the t27 player with the idle-only trigger) | divided 25 MHz clock; yosys 0.69 and nextpnr-xilinx 45a986b native (`heap` seed 1, router1), prjxray from the image | 7842 LUTs, 3611 FFs, nextpnr Fmax 57.8 MHz for the 25 MHz clock |
