@@ -280,7 +280,10 @@ bram-capture:
 #   DDR3_WIDTH=32   BYTE_LANES 4, both chips
 # The pattern test (issue #61, t27/rtl/fpga_ddr3_pattern.t27) drives the user
 # Wishbone port after calibration: DDR3_PATTERN=1 (default) builds it in,
-# DDR3_PATTERN=0 leaves the port idle as the #60 builds had it.
+# DDR3_PATTERN=0 leaves the port idle as the #60 builds had it (the same port
+# behaviour, not the #60 netlist: the top changed since, so DDR3_PATTERN=0 gives
+# another netlist, FASM and Fmax; the #60 netlists rebuild only from a commit
+# whose DDR3 sources equal #60's, such as 00262ff, docs/hardware.md).
 # DDR3_PATTERN_BURSTS (default 2^25, every burst address), DDR3_PATTERN_HOLD
 # (controller clocks between a pass's writes and its reads, default 0) and
 # DDR3_PATTERN_ROUNDS (0 = until reset) are baked into the netlist and named in
@@ -352,6 +355,12 @@ DDR3_PATTERN_ROUNDS ?= 0
 override DDR3_PATTERN := $(strip $(DDR3_PATTERN))
 ifneq ($(words $(DDR3_PATTERN)) $(filter 0 1,$(DDR3_PATTERN)),1 $(DDR3_PATTERN))
 $(error DDR3_PATTERN must be 0 or 1, not '$(DDR3_PATTERN)')
+endif
+# The test's stop compare `round + 1 >= rounds` is lowered by t27c bff21b85 to a
+# signed Verilog compare, so from 2^31 rounds on it would never stop (C and u32
+# semantics would): only 0 .. 2^31-1 are accepted.
+ifneq ($(shell awk 'BEGIN { r = "$(strip $(DDR3_PATTERN_ROUNDS))"; print (r ~ /^[0-9]+$$/ && r + 0 < 2147483648) ? "ok" : "bad" }'),ok)
+$(error DDR3_PATTERN_ROUNDS must be a decimal number 0 .. 2147483647, not '$(DDR3_PATTERN_ROUNDS)')
 endif
 # DDR3_UART_DEBUG_BIST=1 (#61, the self-test counters): UberDDR3 read with
 # `define UART_DEBUG_BIST` and its debug UART (9600 baud) on N15 in place of our
@@ -566,7 +575,13 @@ $(DDR3_BUILD)/$(DDR3_TOP).bit: $(DDR3_BUILD)/$(DDR3_TOP).fasm
 # header carries the time xc7frames2bit ran, so its whole-file sha256 names one
 # file; the FASM and frames sha256 (and the .bit's from its sync word on) are
 # what a rebuild reproduces.
+# An existing report is committed evidence (the default name carries today's
+# date and BUILD_ID, so a rebuild with an earlier BUILD_ID on the same day would
+# land on it): it is replaced only with DDR3_REPORT_OVERWRITE=1.
+DDR3_REPORT_OVERWRITE ?= 0
 ddr3-report: $(DDR3_BUILD)/$(DDR3_TOP).bit
+	@if [ -e "$(DDR3_REPORT)/build.json" ] && [ "$(DDR3_REPORT_OVERWRITE)" != 1 ]; then \
+	  echo "ddr3-report: $(DDR3_REPORT)/build.json exists; set DDR3_REPORT=<new directory> (or DDR3_REPORT_ROOT), or DDR3_REPORT_OVERWRITE=1 to replace it"; exit 1; fi
 	cd $(ROOT) && $(YOSYS) -V > $(DDR3_BUILD)/yosys_version.txt
 	{ $(DDR3_REV_NEXTPNR); } > $(DDR3_BUILD)/nextpnr_revision.txt 2>/dev/null || true
 	$(DDR3_NEXTPNR) --version >> $(DDR3_BUILD)/nextpnr_revision.txt 2>&1 || true
