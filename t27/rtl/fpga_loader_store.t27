@@ -1,0 +1,42 @@
+module TrinityFpgaLoaderStoreT27;
+
+// Block-RAM store behind the UART loader's write and read ports (issue #63,
+// t27/rtl/fpga_uart_loader.t27): STORE_BYTES bytes, one byte per write transfer
+// and per read request. Both ports are always ready: a write lands in the clock
+// in which wr_valid is seen, a read returns its byte (rdata) with rd_valid one
+// clock after rd_req. wr_idle is always high, since no write is ever
+// outstanding. A DDR3 Wishbone master can take this module's place behind the
+// same ports; then wr_ready, wr_idle, rd_ready and the latency of rd_valid come
+// from the controller (docs/uart-loader.md, "DDR3"). Addresses wrap at the store
+// size; the loader never issues one outside it. The array infers block RAM with
+// yosys `read_verilog -nomem2reg`; rdata takes the array byte directly and has
+// no reset value, and the memory is not cleared by reset.
+const STORE_BYTES: u32 = 262144;
+const STORE_LOG2: u32 = 18;
+const STORE_MASK: u32 = 262143;
+
+var mem: [262144]u8;
+var rdata: u8;
+var rd_valid: bool = false;
+var writes: u32 = 0;
+// Constant registers rather than module-level assignments: an `always @(*)` with
+// constants only never runs in Icarus.
+var wr_ready: bool = true;
+var wr_idle: bool = true;
+var rd_ready: bool = true;
+var size_log2: u32 = STORE_LOG2;
+
+fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, rd_req: bool, rd_addr: u32) {
+    rd_valid = false;
+    if (wr_valid) {
+        mem[wr_addr & STORE_MASK] = (wr_data & 255) as u8;
+        writes = writes + 1;
+    }
+    if (rd_req) {
+        rdata = mem[rd_addr & STORE_MASK];
+        rd_valid = true;
+    }
+}
+
+test store_is_a_power_of_two { assert_eq(STORE_BYTES, 262144); assert_eq(STORE_MASK + 1, STORE_BYTES); assert_eq(STORE_BYTES >> STORE_LOG2, 1); }
+endmodule
