@@ -19,7 +19,10 @@ complement pass writes ~data, so every stored bit is written and read as 0 and a
 in one round: a stuck DQ bit or a dropped write shows in one of the two passes.
 
 The round key is derived from the seed, the controller clock count at which
-calibration completed (it varies from load to load) and the round number:
+calibration completed (reported in the K line) and the round number. On the board
+that count often repeated from load to load (x16 loads 1-3 of 2026-09-24 all
+432,973,211; other loads differed by tens to about 160 clocks), so loads of one
+bitstream can write the same key sequence; within a load every round has a new key:
 
     key = lin(lin((seed << 32 | clocks mod 2^32) + (round << 32 | round)) + KADD)
 """

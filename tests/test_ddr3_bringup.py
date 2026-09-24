@@ -175,6 +175,57 @@ class CaptureDecoder(unittest.TestCase):
         self.assertIsNone(result["reset"]["wraps_of_the_40_bit_count"])
         self.assertIsNone(result["checks"]["header_line"])
 
+    def test_a_wrap_inside_a_long_capture(self):
+        # A soak longer than 2^40 clocks (3.665 h): the count wraps inside the capture and is
+        # unwrapped before the clock fit and the reset estimate.
+        wrap_s = (1 << 40) / self.HZ
+        entries = self.transcript(seconds=wrap_s + 600, jitter=0.0)
+        result = self.decode(entries, load_end_s=9.99)
+        self.assertTrue(result["pass"], result["checks"])
+        self.assertLess(abs(result["clock"]["ppm_from_nominal"]), 1)
+        self.assertEqual(result["reset"]["wraps_within_capture"], 1)
+        self.assertEqual(result["reset"]["wraps_of_the_40_bit_count"], 1)
+        self.assertAlmostEqual(result["reset"]["reset_minus_load_end_s"], 0.01, delta=0.05)
+        self.assertAlmostEqual(result["reset"]["last_line_since_reset_s"], wrap_s + 600, delta=1)
+        # Read without a load across the wrap: the time since reset still grows.
+        tail = [e for e in entries if e["t_s"] > 10 + wrap_s - 60]
+        result = capture.decode(tail, load_end_s=None, nominal_hz=self.HZ)
+        self.assertTrue(result["checks"]["clock_near_nominal"])
+        self.assertAlmostEqual(result["reset"]["last_line_since_reset_s_if_no_wrap"], wrap_s + 600, delta=1)
+
+    def test_a_clock_far_from_nominal_fails(self):
+        entries = self.transcript()
+        # Lines of another design (or read wrongly): their counts do not follow the host time.
+        for e in entries[5:]:
+            if e["line"].startswith("S"):
+                e["t_s"] = round(e["t_s"] * 1.2, 4)
+        result = self.decode(entries, load_end_s=9.99)
+        self.assertFalse(result["checks"]["clock_near_nominal"])
+        self.assertFalse(result["pass"])
+
+    def test_redecode_keeps_a_gzip_record(self):
+        import shutil
+        import subprocess
+        import tempfile
+        source = ROOT / "reports/fpga/ddr3-bringup-2026-09-24-7deeef16-x32-pattern-seed1/load2"
+        report = ROOT / "reports/fpga/ddr3-build-2026-09-24-7deeef16-x32/build.json"
+        with tempfile.TemporaryDirectory() as work:
+            copy = Path(work) / "load2"
+            shutil.copytree(source, copy)
+            self.assertFalse((copy / "capture.json").exists())
+            before = json.loads(capture.read_kept(copy / "capture.json"))
+            run = subprocess.run([sys.executable, str(ROOT / "tools/fpga-ddr3-capture.py"), "--report", str(report),
+                                  "--redecode", str(copy), "--reason", "test"], capture_output=True, text=True)
+            self.assertIn(run.returncode, (0, 1), run.stderr)
+            self.assertFalse((copy / "capture.json").exists())
+            after = json.loads(capture.read_kept(copy / "capture.json"))
+            self.assertEqual(len(after["redecoded"]), len(before.get("redecoded", [])) + 1)
+            self.assertEqual(after["decoded"]["pass"], before["decoded"]["pass"])
+            # gzip -n: no file name and no time in the header.
+            head = (copy / "capture.json.gz").read_bytes()[:10]
+            self.assertEqual(head[3] & 0x08, 0)
+            self.assertEqual(head[4:8], b"\0\0\0\0")
+
     def test_openfpgaloader_output(self):
         xadc = ('empty\nJtag frequency : requested 6.00MHz    -> real 6.00MHz   \n{"temp": 48.9342, \n'
                 '    "maxtemp": 49.6936, \n"raw":  {"0": 41887, "1": 21718},\n"vccaux": 1.78857, \n'

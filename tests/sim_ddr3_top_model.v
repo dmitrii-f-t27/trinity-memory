@@ -24,7 +24,13 @@
 //                                               every stored write forced
 //   +drop_addr=<a> +drop_nth=<n>               the n-th write (from 0) to burst a is not stored
 //   +hang_after=<n>                            no request is taken after the n-th
+//   +lose_ack=<n>                              the n-th ack (from 0) is never raised
 // and +calib_clocks=<n> (default 3000) for the calibration time.
+//
+// Observation: min_gap is the smallest number of clocks between the clock a
+// write request to a burst address was taken and the clock a later read request
+// to the same address was taken (the testbench prints it), so the separation the
+// pattern test claims from its design (hold + bursts - 1) is checked in a run.
 `timescale 1ns/1ps
 `default_nettype none
 module ddr3_top #(
@@ -101,6 +107,10 @@ module ddr3_top #(
     reg [QDEPTH-1:0] q_read;
     integer q_head, q_tail, q_count, i, k;
     integer calib_clocks, stall_pct, stuck_bit, stuck_val, stuck_dq, stuck_dq_val, drop_nth, hang_after;
+    integer lose_ack, acks;
+    reg [63:0] wtime [0:(1 << MEM_BITS) - 1];
+    reg [(1 << MEM_BITS) - 1:0] wvalid;
+    reg [63:0] min_gap;
     reg [63:0] drop_addr;
     integer drop_seen, taken;
     reg [63:0] now, last_due;
@@ -124,7 +134,10 @@ module ddr3_top #(
         if (!$value$plusargs("drop_addr=%d", drop_addr)) drop_addr = {64{1'b1}};
         if (!$value$plusargs("drop_nth=%d", drop_nth)) drop_nth = 0;
         if (!$value$plusargs("hang_after=%d", hang_after)) hang_after = -1;
+        if (!$value$plusargs("lose_ack=%d", lose_ack)) lose_ack = -1;
         for (i = 0; i < (1 << MEM_BITS); i = i + 1) mem[i] = {WB_DATA_BITS{1'b0}};
+        wvalid = {(1 << MEM_BITS){1'b0}};
+        min_gap = {64{1'b1}};
     end
 
     function [WB_ADDR_BITS-1:0] fault_addr(input [WB_ADDR_BITS-1:0] a);
@@ -160,6 +173,7 @@ module ddr3_top #(
             held <= 1'b0;
             drop_seen = 0;
             taken = 0;
+            acks = 0;
         end else begin
             now <= now + 1;
             lfsr <= {lfsr[30:0], lfsr[31] ^ lfsr[21] ^ lfsr[1] ^ lfsr[0]};
@@ -192,6 +206,12 @@ module ddr3_top #(
                         store(phys, i_wb_data, i_wb_sel);
                     end
                 end
+                if (i_wb_we) begin
+                    wtime[i_wb_addr] = now;
+                    wvalid[i_wb_addr] = 1'b1;
+                end else if (wvalid[i_wb_addr] && now - wtime[i_wb_addr] < min_gap) begin
+                    min_gap = now - wtime[i_wb_addr];
+                end
                 q_data[q_tail] = i_wb_we ? {WB_DATA_BITS{1'b0}} : mem[phys];
                 q_read[q_tail] = !i_wb_we;
                 q_due[q_tail] = (now + 6 + (lfsr[2:0]) > last_due) ? now + 6 + lfsr[2:0] : last_due + 1;
@@ -205,7 +225,8 @@ module ddr3_top #(
             if (!i_wb_cyc) begin
                 q_head = q_tail; q_count = 0;
             end else if (q_count > 0 && q_due[q_head] <= now) begin
-                o_wb_ack <= 1'b1;
+                o_wb_ack <= acks != lose_ack;   // +lose_ack: this one is dropped, the queue moves on
+                acks = acks + 1;
                 o_wb_data <= q_read[q_head] ? q_data[q_head] : {WB_DATA_BITS{1'b0}};
                 q_head = (q_head + 1) % QDEPTH;
                 q_count = q_count - 1;

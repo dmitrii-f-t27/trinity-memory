@@ -7,13 +7,20 @@
   t27 cores and tests/sim_ddr3_top_model.v in place of UberDDR3 (a behavioural Wishbone
   memory with random stalls, refresh-like stall windows, in-order acks after 6-13 clocks,
   and protocol checks). The UART lines go through tools/fpga-ddr3-capture.py's decoder.
-  A clean run passes (x16 and x32, two rounds with Z), and every injected fault is
-  detected with exactly the counts that a Python replay of the same fault on the model's
-  data predicts: a stuck-at 0 and 1 on every burst-address bit the simulated region spans
-  (bits 0-7 with 256 bursts, 8-11 with 4096), a stuck DQ bit (x16 DQ 0, 7, 8, 15; x32 DQ 16,
-  31), a dropped write in a true and in a complement pass, and a hung port (T line).
-  The board region is 2^25 bursts; address bits 12-24 are not simulated, the same
-  counter and data rules cover them.
+  Clean runs pass: x16 (one round) and x32 (two rounds) with Z, x16 and x32 with a hold
+  between the writes and the reads (PATTERN_HOLD 1000 and 777), and PATTERN_ROUNDS 0 (the
+  setting of every bitstream), stopped by the bench after six passes. In every clean run
+  the memory model's smallest separation between a burst's write and its read request is
+  at least the hold + bursts - 1 clocks the decoder derives from the header. Every
+  injected fault is detected with exactly the counts that a Python replay of the same
+  fault on the model's data predicts: a stuck-at 0 and 1 on every burst-address bit the
+  simulated region spans (x16: bits 0-7 with 256 bursts, 8-11 with 4096; x32: bits 0-7
+  with 256 bursts), a stuck DQ bit (x16 DQ 0, 7, 8, 15; x32 DQ 16, 31), a dropped write
+  in a true and in a complement pass (and, with PATTERN_ROUNDS 0, in round 2, whose
+  counts depend on the hardware's keys of rounds 1 and 2), faults under a hold, and a
+  port that stops taking requests in the write phase or in the read phase or loses an
+  ack (T line). The board region is 2^25 bursts; address bits 12-24 are not simulated,
+  the same counter and data rules cover them.
 Runs with T27_ROOT set and Icarus installed (tools/test-t27.sh); skipped otherwise.
 """
 from __future__ import annotations
@@ -23,6 +30,7 @@ import ctypes
 import importlib.util
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -167,7 +175,13 @@ CONFIGS = {
     "x32": {"LANES": 4, "BURSTS": 256, "ROUNDS": 2},
     "x16_4096": {"LANES": 2, "BURSTS": 4096, "ROUNDS": 1},
     "x16_watchdog": {"LANES": 2, "BURSTS": 64, "ROUNDS": 1, "WATCHDOG": 2000},
+    "x16_hold": {"LANES": 2, "BURSTS": 256, "ROUNDS": 1, "HOLD": 1000},
+    "x32_hold": {"LANES": 4, "BURSTS": 256, "ROUNDS": 1, "HOLD": 777},
+    "x32_1r": {"LANES": 4, "BURSTS": 256, "ROUNDS": 1},
+    "x16_forever": {"LANES": 2, "BURSTS": 64, "ROUNDS": 0, "WATCHDOG": 2000},
 }
+CLEAN = ("x16", "x32", "x16_4096", "x16_hold", "x32_hold", "x32_1r")
+FOREVER_PASSES = 6
 FIELDS = ("bad_bursts", "bit_errors", "bad_words_64bit", "dq_fail_mask", "first_fail_burst", "first_fail_word",
           "first_fail_xor_low32")
 
@@ -205,10 +219,11 @@ class PatternSimulation(unittest.TestCase):
 
     @staticmethod
     def scenarios():
-        runs = [("x16", ()), ("x32", ()), ("x16_4096", ())]
+        runs = [(config, ()) for config in CLEAN]
         for bit in range(8):
             for val in (0, 1):
                 runs.append(("x16", (("stuck_addr_bit", bit), ("stuck_addr_val", val))))
+                runs.append(("x32_1r", (("stuck_addr_bit", bit), ("stuck_addr_val", val))))
         for bit in range(8, 12):
             for val in (0, 1):
                 runs.append(("x16_4096", (("stuck_addr_bit", bit), ("stuck_addr_val", val))))
@@ -219,7 +234,13 @@ class PatternSimulation(unittest.TestCase):
         runs.append(("x16", (("drop_addr", 77), ("drop_nth", 0))))
         runs.append(("x16", (("drop_addr", 77), ("drop_nth", 1))))
         runs.append(("x32", (("drop_addr", 200), ("drop_nth", 2))))
+        runs.append(("x16_hold", (("stuck_addr_bit", 5), ("stuck_addr_val", 1))))
+        runs.append(("x32_hold", (("drop_addr", 100), ("drop_nth", 1))))
         runs.append(("x16_watchdog", (("hang_after", 40),)))
+        runs.append(("x16_watchdog", (("hang_after", 64 + 20),)))     # in the read phase
+        runs.append(("x16_watchdog", (("lose_ack", 64 + 30),)))       # a read's ack never comes
+        runs.append(("x16_forever", (("stop_after_passes", FOREVER_PASSES),)))
+        runs.append(("x16_forever", (("drop_addr", 10), ("drop_nth", 4), ("stop_after_passes", FOREVER_PASSES))))
         return runs
 
     @classmethod
@@ -234,7 +255,9 @@ class PatternSimulation(unittest.TestCase):
             for raw in capture_file.read_text().splitlines():
                 t_ns, line = raw.split("\t", 1)
                 entries.append({"t_s": int(t_ns) / 1e9, "line": line})
-        return {"returncode": run.returncode, "stdout": run.stdout, "entries": entries}
+        gap = re.search(r"min_write_to_read_clocks=(\d+)", run.stdout)
+        return {"returncode": run.returncode, "stdout": run.stdout, "entries": entries,
+                "observed_min_write_to_read_clocks": int(gap.group(1)) if gap else None}
 
     def decoded(self, config, fault=()):
         result = self.results[(config, fault)]
@@ -252,14 +275,18 @@ class PatternSimulation(unittest.TestCase):
         self.assertTrue(decoded["checks"]["calib_complete"])
         header = decoded["pattern"]["header"]
         self.assertEqual((header["bursts"], header["byte_lanes"], header["seed"]), (p["BURSTS"], p["LANES"], 0x61))
-        want = replay(p["LANES"], p["BURSTS"], p["ROUNDS"], header["seed"], header["calib_complete_clocks_low40"],
-                      dict(fault))
         got = [{k: q[k] for k in ("round", "pass") + FIELDS} for q in decoded["pattern"]["passes"]]
+        # PATTERN_ROUNDS 0 runs until reset: replay as many rounds as the bench let it run.
+        rounds = p["ROUNDS"] or (len(got) + 1) // 2
+        want = replay(p["LANES"], p["BURSTS"], rounds, header["seed"], header["calib_complete_clocks_low40"],
+                      dict(fault))
+        if not p["ROUNDS"]:
+            want = want[:len(got)]
         self.assertEqual(got, want, (config, fault))
         return want
 
     def test_clean_runs_pass(self):
-        for config in ("x16", "x32", "x16_4096"):
+        for config in CLEAN:
             decoded = self.decoded(config)
             self.assertTrue(decoded["pass"], (config, decoded["checks"]))
             pattern = decoded["pattern"]
@@ -269,7 +296,12 @@ class PatternSimulation(unittest.TestCase):
             self.assertEqual(pattern["done"]["rounds"], p["ROUNDS"])
             self.assertEqual(pattern["totals"]["bytes_written_and_read_back"], 2 * p["ROUNDS"] * p["BURSTS"] * 8 * p["LANES"])
             self.assertEqual(pattern["header"]["rounds_configured"], p["ROUNDS"])
-            self.assertEqual(pattern["min_write_to_read_clocks"], p["BURSTS"] - 1)
+            self.assertEqual(pattern["header"]["hold_clocks"], p.get("HOLD", 0))
+            self.assertEqual(pattern["min_write_to_read_clocks"], p.get("HOLD", 0) + p["BURSTS"] - 1)
+            # The separation the decoder derives from the design, observed in the memory model.
+            observed = self.results[(config, ())]["observed_min_write_to_read_clocks"]
+            self.assertIsNotNone(observed, config)
+            self.assertGreaterEqual(observed, pattern["min_write_to_read_clocks"], config)
             for q in pattern["passes"]:
                 # At most one request per clock, and the model stalls some of them.
                 self.assertGreater(q["write_clocks"], p["BURSTS"])
@@ -322,15 +354,34 @@ class PatternSimulation(unittest.TestCase):
                     self.assertEqual(failing[0]["bit_errors"], 64 * CONFIGS[config]["LANES"])
 
     def test_a_hung_port_stops_the_test(self):
-        decoded = self.decoded("x16_watchdog", (("hang_after", 40),))
+        for fault, read_phase in (((("hang_after", 40),), False), ((("hang_after", 84),), True),
+                                  ((("lose_ack", 94),), True)):
+            decoded = self.decoded("x16_watchdog", fault)
+            pattern = decoded["pattern"]
+            self.assertTrue(decoded["checks"]["build_id"])
+            self.assertIsNotNone(pattern["timeout"], fault)
+            self.assertEqual(pattern["timeout"]["read_phase"], read_phase, fault)
+            self.assertEqual((pattern["timeout"]["round"], pattern["timeout"]["pass"]), (0, 0), fault)
+            self.assertFalse(decoded["checks"]["pattern_no_wrong_bits"])
+            self.assertFalse(decoded["pass"])
+            self.assertEqual(pattern["passes"], [], fault)
+        self.assertLessEqual(self.decoded("x16_watchdog", (("hang_after", 40),))["pattern"]["timeout"]["acks"], 40)
+
+    def test_rounds_zero_runs_on_with_new_keys(self):
+        """PATTERN_ROUNDS 0, as in every bitstream: the test goes on after round 1, and a write
+        dropped in round 2 gives exactly the counts of the model's round-1 and round-2 keys."""
+        decoded = self.decoded("x16_forever", (("stop_after_passes", FOREVER_PASSES),))
         pattern = decoded["pattern"]
-        self.assertTrue(decoded["checks"]["build_id"])
-        self.assertIsNotNone(pattern["timeout"])
-        self.assertEqual(pattern["timeout"]["read_phase"], False)
-        self.assertLessEqual(pattern["timeout"]["acks"], 40)
-        self.assertFalse(decoded["checks"]["pattern_no_wrong_bits"])
-        self.assertFalse(decoded["pass"])
-        self.assertEqual(pattern["passes"], [])
+        self.assertTrue(decoded["pass"], decoded["checks"])
+        self.assertEqual(pattern["header"]["rounds_configured"], 0)
+        self.assertIsNone(pattern["done"])
+        self.assertGreaterEqual(pattern["totals"]["passes"], FOREVER_PASSES)
+        self.assertEqual([(q["round"], q["pass"]) for q in pattern["passes"][:FOREVER_PASSES]],
+                         [(r, p) for r in range(3) for p in (0, 1)])
+        fault = (("drop_addr", 10), ("drop_nth", 4), ("stop_after_passes", FOREVER_PASSES))
+        _decoded, want = self.check_detected("x16_forever", fault)
+        failing = [(q["round"], q["pass"]) for q in want if q["bad_bursts"]]
+        self.assertEqual(failing, [(2, 0)])
 
 
 class PatternDecoder(unittest.TestCase):
@@ -379,6 +430,62 @@ class PatternDecoder(unittest.TestCase):
         bad[7]["line"] = self.line("E", 1, 3)
         result = capture.decode(bad, nominal_hz=hz, expect_pattern=True)
         self.assertFalse(result["checks"]["pattern_no_wrong_bits"])
+        # So do wrong bits in the last pass when the capture ends before its F line: its E and M
+        # counts are final once sent.
+        for tail in ((("R", 4, 60_000_000), ("E", 5, 17)), (("R", 4, 60_000_000), ("E", 0, 0), ("M", 7, 1 << 4))):
+            cut = entries + [{"t_s": t + 0.002 * (i + 1), "line": self.line(*x)} for i, x in enumerate(tail)]
+            result = capture.decode(cut, nominal_hz=hz, expect_pattern=True)
+            self.assertFalse(result["pattern"]["partial_pass_at_end"]["clean_so_far"], tail)
+            self.assertFalse(result["checks"]["pattern_no_wrong_bits"], tail)
+            self.assertFalse(result["pass"], tail)
+        clean_tail = entries + [{"t_s": t + 0.002, "line": self.line("R", 4, 60_000_000)},
+                                {"t_s": t + 0.004, "line": self.line("E", 0, 0)}]
+        self.assertTrue(capture.decode(clean_tail, nominal_hz=hz, expect_pattern=True)["pass"])
+
+    def test_passes_must_follow_each_other(self):
+        hz = 83_333_333.3
+        head = [{"t_s": 1.0, "line": "Hf07e91cd0102000bb8"},
+                {"t_s": 1.1, "line": "S01171700" + f"{100:010x}"},
+                {"t_s": 1.2, "line": self.line("G", 1 << 25, (1 << 32) | (2 << 24))},
+                {"t_s": 1.3, "line": self.line("K", 0x61, 433_000_000)},
+                {"t_s": 1.4, "line": self.line("L", 0, 1 << 24)}]
+
+        def run(order):
+            entries, t = list(head), 2.0
+            for rp in order:
+                for tag, a, b in (("W", rp, 50_000_000), ("R", rp, 60_000_000), ("E", 0, 0), ("M", 0, 0),
+                                  ("F", 0xFFFFFFFF, 0)):
+                    entries.append({"t_s": t, "line": self.line(tag, a, b)})
+                    t += 0.002
+            return capture.decode(entries, nominal_hz=hz, expect_pattern=True)
+
+        self.assertTrue(run([0, 1, 2, 3])["pass"])
+        for order in ([0, 1, 3, 4], [0, 1, 1, 2], [1, 2, 3, 4]):   # a lost block, a repeated one, none from 0
+            result = run(order)
+            self.assertFalse(result["checks"]["pattern_well_formed"], order)
+            self.assertFalse(result["pass"], order)
+        # Without the G line (a capture of a design already running) the first pass may be any.
+        entries = [e for e in head if not e["line"].startswith("G")]
+        t = 2.0
+        for rp in (6, 7):
+            for tag, a, b in (("W", rp, 5), ("R", rp, 6), ("E", 0, 0), ("M", 0, 0), ("F", 0xFFFFFFFF, 0)):
+                entries.append({"t_s": t, "line": self.line(tag, a, b)})
+                t += 0.002
+        self.assertTrue(capture.decode(entries, nominal_hz=hz)["checks"]["pattern_well_formed"])
+
+    def test_rates_use_the_nominal_clock(self):
+        # The fitted clock of a short capture is noisy; the MB/s and seconds use the nominal one.
+        hz = 83_333_333.3
+        entries = [{"t_s": 1.0, "line": "Hf07e91cd0102000bb8"}]
+        for i in range(30):   # S lines with a 500 ppm slow arrival: the fit comes out off the nominal clock
+            entries.append({"t_s": 1.0 + i * 0.8 * 1.0005, "line": "S01171700" + f"{int(i * 0.8 * hz):010x}"})
+        entries += [{"t_s": 30.0, "line": self.line("G", 1 << 25, (1 << 32) | (2 << 24))},
+                    {"t_s": 30.05, "line": self.line("L", 0, 1 << 24)},
+                    {"t_s": 30.1, "line": self.line("W", 0, 35_514_620)}]
+        result = capture.decode(entries, nominal_hz=hz, expect_pattern=True)
+        self.assertLess(result["clock"]["ppm_from_nominal"], -400)
+        self.assertEqual(result["pattern"]["clock_hz_used"], hz)
+        self.assertAlmostEqual(result["pattern"]["min_write_to_read_s"], ((1 << 25) - 1) / hz, 6)
 
     def test_makefile_bakes_the_pattern_settings(self):
         makefile = (ROOT / "fpga/ax7203/Makefile").read_text()
