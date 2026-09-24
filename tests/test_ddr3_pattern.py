@@ -245,6 +245,11 @@ class PatternSimulation(unittest.TestCase):
 
     def expect(self, config, fault, decoded):
         p = CONFIGS[config]
+        # The status reporter's H line comes through the test's arbiter, first.
+        self.assertTrue(decoded["header"], (config, fault))
+        self.assertEqual(decoded["header"][0]["build_id"], "5eedc0de")
+        self.assertTrue(decoded["checks"]["build_id"])
+        self.assertTrue(decoded["checks"]["calib_complete"])
         header = decoded["pattern"]["header"]
         self.assertEqual((header["bursts"], header["byte_lanes"], header["seed"]), (p["BURSTS"], p["LANES"], 0x61))
         want = replay(p["LANES"], p["BURSTS"], p["ROUNDS"], header["seed"], header["calib_complete_clocks_low40"],
@@ -319,6 +324,7 @@ class PatternSimulation(unittest.TestCase):
     def test_a_hung_port_stops_the_test(self):
         decoded = self.decoded("x16_watchdog", (("hang_after", 40),))
         pattern = decoded["pattern"]
+        self.assertTrue(decoded["checks"]["build_id"])
         self.assertIsNotNone(pattern["timeout"])
         self.assertEqual(pattern["timeout"]["read_phase"], False)
         self.assertLessEqual(pattern["timeout"]["acks"], 40)

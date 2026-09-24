@@ -180,25 +180,28 @@ module tms_ddr3_ax7203 #(
     wire        s_go, s_idle, line_go, line_idle, recalibrated, tx_start, tx_busy;
     wire [31:0] s_tag, s_a, line_tag, line_a, tx_byte;
     wire [63:0] s_b, line_b;
+    // With the test, the test and the status reporter take their reset from `rst`
+    // through the two-flip-flop stage of a second reset generator (its hold and
+    // heartbeat are unused): the test's many flip-flops then hang off a register,
+    // not off the comparator behind `rst`, and both leave reset on the same clock,
+    // two clocks after the controller, so the test sees the status reporter's
+    // first (H) line request. Without the test the reporter takes `rst` as in #60.
+    wire report_rst_n, staged_rst_n;
+    TrinityFpgaResetT27 report_reset (
+        .clk(clk_ctrl), .rst_n(1'b1), .en(1'b1), .ready(), .button_n(!rst),
+        .stage1(), .stage2(staged_rst_n), .hold(), .blink(), .reset(), .heartbeat()
+    );
+    assign report_rst_n = PATTERN_TEST != 0 ? staged_rst_n : !rst;
     TrinityFpgaDdr3StatusT27 status (
-        .clk(clk_ctrl), .rst_n(!rst), .en(1'b1), .ready(),
+        .clk(clk_ctrl), .rst_n(report_rst_n), .en(1'b1), .ready(),
         .state(debug1), .calib(calib_complete), .line_idle(s_idle), .build_id(BUILD_ID),
         .lanes(BYTE_LANES), .period_ps(DDR3_PS), .period(REPORT_PERIOD),
         .line_go(s_go), .line_tag(s_tag), .line_a(s_a), .line_b(s_b), .recalibrated(recalibrated)
     );
     generate
         if (PATTERN_TEST != 0) begin : pattern
-            // The test's reset: `rst` through the two-flip-flop stage of a second
-            // reset generator (its hold and heartbeat are unused), so the test's
-            // many flip-flops hang off a register, not off the comparator behind
-            // `rst`. The test enters and leaves reset two clocks after the rest.
-            wire test_rst_n;
-            TrinityFpgaResetT27 test_reset (
-                .clk(clk_ctrl), .rst_n(1'b1), .en(1'b1), .ready(), .button_n(!rst),
-                .stage1(), .stage2(test_rst_n), .hold(), .blink(), .reset(), .heartbeat()
-            );
             TrinityFpgaDdr3PatternT27 test (
-                .clk(clk_ctrl), .rst_n(test_rst_n), .en(1'b1), .ready(),
+                .clk(clk_ctrl), .rst_n(report_rst_n), .en(1'b1), .ready(),
                 .calib(calib_complete), .stall(wb_stall), .ack(wb_ack),
                 .rdata0(wb_rdata_words[63:0]), .rdata1(wb_rdata_words[127:64]),
                 .rdata2(wb_rdata_words[191:128]), .rdata3(wb_rdata_words[255:192]),
