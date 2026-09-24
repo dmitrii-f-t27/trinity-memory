@@ -1,0 +1,152 @@
+name: fpga-ax7203-ddr3
+
+# DDR3 on the AX7203 in the open flow (issue #60), build only: UberDDR3 at the
+# commit pinned in fpga/ax7203/ddr3/uberddr3.lock (GPL-3.0-or-later, fetched and
+# sha256-checked, never committed) with our top, PLL clocking, XDC and t27
+# status line, in both widths (x16: BYTE_LANES 2, x32: BYTE_LANES 4).
+#
+# Tools: every tool runs in regymm/openxc7 pinned by digest. yosys and prjxray
+# (fasm2frames, xc7frames2bit) are the image's. Place and route is NOT the
+# image's nextpnr-xilinx 45a986b8, which writes Vivado's CLKFBOUT_MULT=8 lock and
+# loop-filter tables into every PLLE2 while this design's PLL runs at MULT=5:
+# nextpnr-xilinx 0.9.7 is cloned at its release commit and built inside the same
+# image (cached by commit and image digest), its chip database comes from its own
+# bbaexport and prjxray-db (cached), and fasm2frames reads that same prjxray-db.
+#
+# Published: the build reports (trinity.fpga-build.v1: bitstream and FASM sha256,
+# tool revisions, image digest, UberDDR3 commit and license, resource counts,
+# routed Fmax per clock, PLL table check, VREF lines) and the logs. Never a .bit
+# or a .fasm: Actions artifacts of a public repository can be downloaded by any
+# signed-in GitHub user, and publishing bitstreams built from UberDDR3 is a
+# founders' decision (#60). The image's yosys (0.62) differs from the native
+# build's (0.69), so CI and native bitstream hashes differ; until that decision a
+# bitstream flashed for #61 is a native build identified by its sha256.
+# Nothing here touches a board.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'fpga/ax7203/ddr3/**'
+      - 'fpga/ax7203/Makefile'
+      - 't27/rtl/fpga_ddr3_status.t27'
+      - 't27/rtl/fpga_reset.t27'
+      - 't27/rtl/fpga_uart_tx.t27'
+      - 't27/rtl/fpga_line_emitter.t27'
+      - 'tools/fetch-uberddr3.sh'
+      - 'tools/fpga-build-report.py'
+      - '.github/workflows/fpga-ax7203-ddr3.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'fpga/ax7203/ddr3/**'
+      - 'fpga/ax7203/Makefile'
+      - 't27/rtl/fpga_ddr3_status.t27'
+      - 't27/rtl/fpga_reset.t27'
+      - 't27/rtl/fpga_uart_tx.t27'
+      - 't27/rtl/fpga_line_emitter.t27'
+      - 'tools/fetch-uberddr3.sh'
+      - 'tools/fpga-build-report.py'
+      - '.github/workflows/fpga-ax7203-ddr3.yml'
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c
+  NEXTPNR_DDR3_REV: '0.9.7'
+  NEXTPNR_DDR3_COMMIT: 0eae9fbb19dfb83cdd30d5048d8b0ba744180ad0
+  PRJXRAY_DB_COMMIT: a90f27c1caefee5276f47440f4c730b50519a86f
+
+jobs:
+  ddr3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+      # make arguments shared by every DDR3 step: every tool runs in the pinned image.
+      DDR3_MAKE: >-
+        DDR3_IN_IMAGE=1 DDR3_JOBS=4
+        IMAGE=regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c
+        IMAGE_DIGEST=regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned compiler and install tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build the pinned compiler
+        run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
+      - name: Fetch UberDDR3 at the pinned commit (sha256 per file) and generate the t27 cores
+        run: make -C fpga/ax7203 ddr3-fetch ddr3-cores
+      - name: Pull the toolchain image by digest
+        run: |
+          for i in 1 2 3 4 5 6; do docker pull "$IMAGE" && break; sleep $((i*20)); done
+          docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}'
+      - name: Restore nextpnr-xilinx ${{ env.NEXTPNR_DDR3_REV }} (built in the image)
+        uses: actions/cache@v4
+        with:
+          path: build/tools/nextpnr-xilinx-${{ env.NEXTPNR_DDR3_REV }}/build
+          key: nextpnr-xilinx-${{ env.NEXTPNR_DDR3_COMMIT }}-openxc7-eced1cdd4727-v1
+      - name: Clone nextpnr-xilinx ${{ env.NEXTPNR_DDR3_REV }} (prjxray-db and meta submodules) and build it in the image if not cached
+        run: |
+          make -C fpga/ax7203 ddr3-nextpnr $DDR3_MAKE
+          git -C build/tools/nextpnr-xilinx-$NEXTPNR_DDR3_REV/xilinx/external/prjxray-db rev-parse HEAD | tee /dev/stderr | grep -qx "$PRJXRAY_DB_COMMIT"
+      - name: Restore the chip database of nextpnr-xilinx ${{ env.NEXTPNR_DDR3_REV }}
+        uses: actions/cache@v4
+        with:
+          path: build/fpga/chipdb-nextpnr-${{ env.NEXTPNR_DDR3_REV }}/xc7a200tfbg484-2.bin
+          key: chipdb-xc7a200tfbg484-2-nextpnr-${{ env.NEXTPNR_DDR3_COMMIT }}-prjxray-db-${{ env.PRJXRAY_DB_COMMIT }}-v1
+      - name: Generate the chip database if not cached (bbaexport + bbasm in the image)
+        run: make -C fpga/ax7203 ddr3-chipdb $DDR3_MAKE
+      - name: Build both widths (yosys, nextpnr-xilinx seed search, prjxray) and write the reports
+        run: |
+          for w in 16 32; do
+            make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_WIDTH=$w $DDR3_MAKE \
+              DDR3_SOURCE_LABEL="github actions run ${{ github.run_id }} (${{ github.sha }})" \
+              DDR3_REPORT=${{ github.workspace }}/build/fpga/ddr3-reports/x$w
+            cp build/fpga/ddr3-x$w/nextpnr_heap_seed*.log build/fpga/ddr3-reports/x$w/ 2>/dev/null || true
+            cp build/fpga/ddr3-x$w/tms_ddr3_ax7203.xdc build/fpga/ddr3-reports/x$w/
+          done
+      - name: Summary (sha256 and figures only)
+        if: always()
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          print("| variant | bitstream sha256 | yosys LUT / FF | nextpnr SLICE_LUTX / SLICE_FFX | OSERDESE2 / ISERDESE2 / IDELAYE2 | routed Fmax clk_ctrl | PLL tables |")
+          print("| --- | --- | --- | --- | --- | --- | --- |")
+          for w in (16, 32):
+              p = pathlib.Path(f"build/fpga/ddr3-reports/x{w}/build.json")
+              if not p.is_file():
+                  print(f"| x{w} | (no report) | | | | | |"); continue
+              r = json.loads(p.read_text()); y = r["yosys"]["by_type"]; u = r["nextpnr"]["utilisation"]
+              lut = sum(v for k, v in y.items() if k.startswith("LUT")); ff = sum(v for k, v in y.items() if k.startswith("FD"))
+              clk = [c for c in r["ddr3"]["clocks"] if c["name"] == "clk_ctrl"]
+              fmax = f'{clk[0]["fmax_mhz"]} MHz ({clk[0]["verdict"]})' if clk and clk[0]["fmax_mhz"] else "n/a"
+              ser = " / ".join(str(u.get(k, {}).get("used", "?")) for k in ("OSERDESE2", "ISERDESE2", "IDELAYE2"))
+              pll = ", ".join(x["result"] for x in r["ddr3"].get("pll_check", []))
+              print(f'| x{w} | `{r["bitstream"]["sha256"]}` | {lut} / {ff} | {u["SLICE_LUTX"]["used"]} / {u["SLICE_FFX"]["used"]} | {ser} | {fmax} | {pll} |')
+          EOF
+      - name: Publish the reports and the sha256 values (no bitstream, no FASM)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ax7203-ddr3-reports
+          path: |
+            build/fpga/ddr3-reports/
+            build/fpga/ddr3-x*/yosys.log
+          retention-days: 90
+          if-no-files-found: warn
