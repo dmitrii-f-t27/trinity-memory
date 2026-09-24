@@ -12,12 +12,16 @@
 //   format 0: b2   (18 trits per word, two bits per trit)
 //   format 1: d5   (20 trits per word, four dense5 bytes, bits 35:32 unused)
 //   format 2: d5d2 (22 trits per word, four dense5 bytes and a dense2 nibble in bits 35:32)
+//   format 3: d5p (read-only store only; 45 trits per pair of words, the two parity
+//             nibbles forming one more dense5 byte; ONLY = 3)
 // ONLY = -1 builds all three (slots 0, 1, 2 = formats 0, 1, 2); ONLY = 0, 1 or 2
 // builds that format alone in slot 0, which keeps the placement small enough for
 // nextpnr-xilinx to route (all three need 150 RAMB36E1 and ~9k LUTs).
 // Report lines: see t27/rtl/fpga_bram_bench.t27. Clocking as in the trace player
 // (CLOCK_MODE 1: 25 MHz from the tick generator's divide-by-eight bit on a second
-// BUFG; 0: 200 MHz with a one-in-eight tick enable).
+// BUFG; 0: 200 MHz with a one-in-eight tick enable), plus CLOCK_MODE 2 and 3: 50 and
+// 100 MHz from bits 1 and 0 of the same counter on the second BUFG. BAUD_DIV is
+// ticks per UART bit, so it scales with the clock (217, 434, 868 for 115200).
 // LEDs: [0] heartbeat, [1] run active, [2] run complete, [3] any bad word or invalid group.
 `timescale 1ns/1ps
 `default_nettype none
@@ -37,13 +41,17 @@ module tms_bram_bench_ax7203 #(
 );
     // ---- clocks ----
     wire clk200_raw, clk200, clk, tick, tick_raw, div_bit;
+    wire [31:0] tick_count;
     IBUFDS clk_ibufds (.I(clk200_p), .IB(clk200_n), .O(clk200_raw));
     BUFG clk200_bufg (.I(clk200_raw), .O(clk200));
     TrinityFpgaTickT27 tickgen (
         .clk(clk200), .rst_n(1'b1), .en(1'b1), .ready(), .hold(1'b0),
-        .count(), .tick(tick_raw), .div_bit(div_bit)
+        .count(tick_count), .tick(tick_raw), .div_bit(div_bit)
     );
-    generate if (CLOCK_MODE != 0) begin : divided_clock
+    generate if (CLOCK_MODE == 2 || CLOCK_MODE == 3) begin : fast_clock
+        BUFG clk_bufg (.I(tick_count[3 - CLOCK_MODE]), .O(clk));
+        assign tick = 1'b1;
+    end else if (CLOCK_MODE != 0) begin : divided_clock
         BUFG clk_bufg (.I(div_bit), .O(clk));
         assign tick = 1'b1;
     end else begin : tick_enable
@@ -110,6 +118,18 @@ module tms_bram_bench_ax7203 #(
             TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd0), .x(lanes), .result(word));
             TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd1), .x(rdata), .result(dec));
             TrinityBramTritEngineD5T27 eng (
+                .clk(clk), .rst_n(!rst), .en(tick), .ready(),
+                .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
+                .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),
+                .write_ticks(s0_wt), .read_ticks(s0_rt), .bad_words(s0_bad), .invalid_groups(s0_inv),
+                .pos(s0_pos), .neg(s0_neg), .dot(s0_dot), .chk(s0_chk)
+            );
+        end else if (F0 == 3) begin : slot0_d5p
+            // The bytes of every word decode as d5; the store decodes the pair's parity byte.
+            wire [63:0] lanes, word, rdata, dec;
+            TrinityBramTritCodecT27 enc (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd0), .x(lanes), .result(word));
+            TrinityBramTritCodecT27 dec_c (.clk(clk), .rst_n(1'b1), .en(1'b1), .ready(), .format(32'd1), .op(32'd1), .x(rdata), .result(dec));
+            TrinityBramTritEngineD5PT27 eng (
                 .clk(clk), .rst_n(!rst), .en(tick), .ready(),
                 .start(start), .enc_word(word), .dec_out(dec), .rdata(rdata), .enc_lanes(lanes),
                 .done(s0_done), .words_out(s0_words), .format_out(s0_fmt), .lanes_out(s0_k),

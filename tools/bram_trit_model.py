@@ -7,9 +7,14 @@ uses it for the manifest; tools/fpga-bram-capture.py for the comparison.
 """
 from __future__ import annotations
 
-FMT_B2, FMT_D5, FMT_D5D2 = 0, 1, 2
-FORMAT_NAMES = {FMT_B2: "b2", FMT_D5: "d5", FMT_D5D2: "d5d2"}
+FMT_B2, FMT_D5, FMT_D5D2, FMT_D5P = 0, 1, 2, 3
+FORMAT_NAMES = {FMT_B2: "b2", FMT_D5: "d5", FMT_D5D2: "d5d2", FMT_D5P: "d5p"}
 LANES = {FMT_B2: 18, FMT_D5: 20, FMT_D5D2: 22}
+# d5p (read-only store only): a pair of 36-bit words holds 45 trits. Each word has
+# four dense5 bytes (20 trits) in bits 31:0; the two parity nibbles together are one
+# more dense5 byte, low nibble in the first word and high nibble in the second, whose
+# five trits follow the second word's twenty. Its trits per pair are PAIR_LANES.
+PAIR_LANES = 45
 WORD_BITS = 36
 WORD_MASK = (1 << WORD_BITS) - 1
 MASK64 = (1 << 64) - 1
@@ -129,6 +134,132 @@ def engine_results(fmt: int, words: int, seed: int = DEFAULT_SEED, verify: bool 
     return {"format": fmt, "name": FORMAT_NAMES[fmt], "lanes": k, "words": words, "trits": words * k,
             "write_ticks": words, "read_ticks": words + 1, "bad_words": 0, "invalid_groups": 0,
             "pos": pos, "neg": neg, "dot": dot, "chk": chk}
+
+
+def lane_of_trit(trit: int) -> int:
+    return {0: 0, 1: 1, -1: 2}[trit]
+
+
+def words_of_trits(fmt: int, trits) -> list[tuple[int, int]]:
+    """(lanes, stored word) of every word of a fixed trit sequence, lane j of word w
+    holding trit w * LANES + j; the length must be a multiple of LANES."""
+    k = LANES[fmt]
+    if len(trits) % k:
+        raise ValueError(f"{len(trits)} trits are not a whole number of {k}-trit words")
+    out = []
+    for w in range(0, len(trits), k):
+        lanes = 0
+        for j in range(k):
+            lanes |= lane_of_trit(trits[w + j]) << (2 * j)
+        out.append((lanes, encode_word(fmt, lanes)))
+    return out
+
+
+def dense5(digits) -> int:
+    return sum(d * 3 ** i for i, d in enumerate(digits))
+
+
+def pair_words(trits) -> list[tuple[int, int]]:
+    """(lanes, stored word) of every word of the d5p layout: per 45 trits, word A holds
+    lanes 0-19 (trits 0-19) and word B lanes 0-24 (trits 20-39, then 40-44 from the
+    parity byte P = dense5(trits 40-44), P[3:0] in A's bits 35:32, P[7:4] in B's)."""
+    if len(trits) % PAIR_LANES:
+        raise ValueError(f"{len(trits)} trits are not a whole number of {PAIR_LANES}-trit pairs")
+    out = []
+    for g in range(0, len(trits), PAIR_LANES):
+        group = trits[g:g + PAIR_LANES]
+        lanes_a = sum(lane_of_trit(t) << (2 * j) for j, t in enumerate(group[:20]))
+        lanes_b = sum(lane_of_trit(t) << (2 * j) for j, t in enumerate(group[20:45]))
+        parity = dense5([t + 1 for t in group[40:45]])
+        word_a = encode_word(FMT_D5, lanes_a) | ((parity & 15) << 32)
+        word_b = encode_word(FMT_D5, lanes_b & ((1 << 40) - 1)) | ((parity >> 4) << 32)
+        out += [(lanes_a, word_a), (lanes_b, word_b)]
+    return out
+
+
+def decode_pair(word_a: int, word_b: int) -> tuple[int, int, int]:
+    """(lanes of A, lanes of B, invalid groups) as the d5p store decodes a pair."""
+    lanes_a, bad_a = decode_word(FMT_D5, word_a & ((1 << 32) - 1))
+    lanes_b, bad_b = decode_word(FMT_D5, word_b & ((1 << 32) - 1))
+    parity = ((word_b >> 32) & 15) << 4 | ((word_a >> 32) & 15)
+    if parity < 243:
+        for i in range(5):
+            lanes_b |= lane_of_digit((parity // 3 ** i) % 3) << (2 * (20 + i))
+        return lanes_a, lanes_b, bad_a + bad_b
+    return lanes_a, lanes_b, bad_a + bad_b + 1
+
+
+def rom_results(fmt: int, trits, verify: bool = True, pipe: int = 0) -> dict:
+    """What the read-only store (t27/rtl/bram_trit_rom.t27) must report for a fixed
+    trit sequence: the engine's fields with no write phase, plus lanes_check, the
+    rotate-xor checksum of the decoded lanes the store compares itself with. With
+    pipe = 1 (three more register stages) a run takes three ticks more."""
+    k = PAIR_LANES if fmt == FMT_D5P else LANES[fmt]
+    pos = neg = dot = chk = lchk = 0
+    words = pair_words(trits) if fmt == FMT_D5P else words_of_trits(fmt, trits)
+    if verify and fmt == FMT_D5P:
+        for w in range(0, len(words), 2):
+            a, b, bad = decode_pair(words[w][1], words[w + 1][1])
+            assert (a, b, bad) == (words[w][0], words[w + 1][0], 0), (w, hex(words[w][1]), hex(words[w + 1][1]))
+    for w, (lanes, word) in enumerate(words):
+        if verify and fmt != FMT_D5P:
+            back, bad = decode_word(fmt, word)
+            assert back == lanes and bad == 0, (fmt, w, hex(lanes), hex(word))
+        chk = rotl1(chk) ^ word
+        lchk = rotl1(lchk) ^ lanes
+    for i, t in enumerate(trits):
+        if t == 1:
+            pos += 1
+            dot += (i & 7) + 1
+        elif t == -1:
+            neg += 1
+            dot -= (i & 7) + 1
+    return {"format": fmt, "name": FORMAT_NAMES[fmt], "lanes": k, "words": len(words), "trits": len(trits),
+            "write_ticks": 0, "read_ticks": len(words) + (4 if pipe else 1), "bad_words": 0, "invalid_groups": 0,
+            "pos": pos, "neg": neg, "dot": dot, "chk": chk, "lanes_check": lchk, "pipe": pipe}
+
+
+MATVEC_LATENCY = 25   # ticks after the last read: decode, accumulate, then 22 outputs picked and summed
+
+
+def matvec_order(trits, rows: int, cols: int, lanes: int) -> list[int]:
+    """The trits of a rows x cols matrix (row-major) in the order the matrix-vector
+    store keeps them: word k of group g holds column k of rows g*lanes .. g*lanes+lanes-1,
+    lane j row g*lanes + j."""
+    if rows % lanes:
+        raise ValueError(f"rows ({rows}) must be a multiple of {lanes}")
+    out = []
+    for g in range(rows // lanes):
+        for c in range(cols):
+            out += [trits[(g * lanes + j) * cols + c] for j in range(lanes)]
+    return out
+
+
+def act_words(acts) -> list[int]:
+    """The activation vector as 32-bit words of four signed bytes, element c in byte
+    c mod 4 of word c / 4 (the last word padded with zeros)."""
+    padded = list(acts) + [0] * (-len(acts) % 4)
+    return [sum((padded[i + b] & 0xFF) << (8 * b) for b in range(4)) for i in range(0, len(padded), 4)]
+
+
+def matvec_results(fmt: int, trits, acts, rows: int, cols: int) -> dict:
+    """What the matrix-vector store (t27/rtl/bram_trit_matvec.t27) must report for
+    y = W x, W the rows x cols trit matrix (row-major) and x the int8 vector: pos and
+    neg count the outputs above and below zero, dot is their sum, chk the rotate-xor
+    checksum of the outputs in row order (64-bit two's complement), which the store
+    also compares with its own (bad_words)."""
+    lanes = LANES[fmt]
+    ordered = matvec_order(trits, rows, cols, lanes)
+    words = len(ordered) // lanes
+    ys = [sum(t * a for t, a in zip(trits[r * cols:(r + 1) * cols], acts)) for r in range(rows)]
+    ychk = 0
+    for y in ys:
+        ychk = rotl1(ychk) ^ (y & MASK64)
+    return {"format": fmt, "name": FORMAT_NAMES[fmt], "lanes": lanes, "words": words, "trits": rows * cols,
+            "write_ticks": 0, "read_ticks": words + MATVEC_LATENCY, "bad_words": 0, "invalid_groups": 0,
+            "pos": sum(1 for y in ys if y > 0), "neg": sum(1 for y in ys if y < 0),
+            "dot": sum(ys), "chk": ychk, "rows": rows, "cols": cols, "outputs": ys,
+            "weights": {"plus": sum(1 for t in trits if t == 1), "minus": sum(1 for t in trits if t == -1)}}
 
 
 def stream_trits(count: int, seed: int = DEFAULT_SEED) -> list[int]:
