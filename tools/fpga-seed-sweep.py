@@ -110,7 +110,10 @@ def main(argv=None):
     parser.add_argument("--note", default="", help="free text: where and how the runs were made")
     args = parser.parse_args(argv)
     runs = [summarise(log) for log in sorted(args.logs, key=lambda p: (len(p.stem), p.stem))]
-    fmax = [c["fmax_mhz"] for r in runs for c in r["clocks_routed"] if c["clock"] == "clk_ctrl"]
+    fmax = {}
+    for r in runs:
+        for c in r["clocks_routed"]:
+            fmax.setdefault(c["clock"], []).append(c["fmax_mhz"])
     met = [r["run"] for r in runs if r["clocks_routed"] and all(c["verdict"] == "PASS" for c in r["clocks_routed"])]
     record = {"schema": "trinity.fpga-seed-sweep.v1",
               "written_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
@@ -120,7 +123,7 @@ def main(argv=None):
               "chipdb_sha256": report.sha256(args.chipdb) if args.chipdb and args.chipdb.is_file() else None,
               "summary": {"runs": len(runs), "routed": sum(r["routed"] for r in runs),
                           "met_every_clock": met,
-                          "clk_ctrl_fmax_mhz": [min(fmax), max(fmax)] if fmax else None},
+                          "fmax_mhz_range": {k: [min(v), max(v)] for k, v in sorted(fmax.items())}},
               "runs": runs}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n")
