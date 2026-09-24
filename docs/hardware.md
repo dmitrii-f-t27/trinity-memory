@@ -626,11 +626,17 @@ routing), not the multiply-accumulate datapath.
 data from the bitstream; [uart-loader.md](uart-loader.md) adds a t27 receiver and a
 loader with per-chunk acknowledgement (CRC-32 frames, ack/nak with a reason,
 retransmission, read-back through CRC frames) into a 256 KiB block-RAM store. On the
-AX7203 the TMEM dense5 container of q_proj rows 0-319 (163 864 bytes) loaded in 41
-chunks and read back identical at 115200 baud (9 217 B/s load, 11 197 B/s read-back),
-with injected corrupt, dropped, aborted, garbage-preceded and duplicated chunks detected
-and retransmitted, and at 921600, 1000000 and 1500000 baud twice each
-([`reports/fpga/uart-loader-2026-09-24-22844259/`](../reports/fpga/README.md)). Its
+AX7203 (build 1d474000) the TMEM dense5 container of q_proj rows 0-319 (163 864 bytes)
+loaded in 41 chunks and read back identical at 115200 baud (11 374.5 B/s load, 99 % of
+the line rate for 4110-byte frames; 11 322.3 B/s read-back; ack 359.8 ms after the start
+of each 4096-byte chunk's write, median). In run 2 the corrupt and dropped chunks and an
+aborted half frame were each refused with a nak (`crc`, `timeout`) and acknowledged on
+the next attempt, the 64 garbage bytes before one frame were ignored without a nak, and a
+chunk sent again after its ack was answered `duplicate` and not committed. Baud trials
+at 230400 to 1500000 (the whole payload XOR a per-trial key, twice at each of 921600,
+1000000 and 1500000) changed every byte they loaded and read them back identical; that
+is not a reliability study
+([`reports/fpga/uart-loader-2026-09-24-1d474000/`](../reports/fpga/README.md)). Its
 first build put the store into RAMB36 32K x 1 and the staging buffer into 4K x 9 and
 read back every even byte as its odd neighbour; with every memory in the 1K x 36
 configuration of the benches it reads back identical. Narrower RAMB36 configurations in

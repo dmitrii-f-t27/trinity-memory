@@ -1,0 +1,1099 @@
+{
+ "schema": "trinity.uart-loader-capture.v2",
+ "started_utc": "2026-09-24T17:09:00.510+00:00",
+ "label": "run 4: first 16384 bytes at 0x3C000 with tcdrain after each load frame (--drain), for comparison",
+ "argv": [
+  "tools/fpga-uart-loader.py",
+  "--port",
+  "/dev/cu.usbserial-110",
+  "--identity",
+  "--payload-tmem-trits",
+  "build/fpga/loader-payload/qproj-rows0-319.trits",
+  "--output",
+  "reports/fpga/uart-loader-2026-09-24-1d474000/run4-drain.json",
+  "--read-before",
+  "--drain",
+  "--addr",
+  "0x3C000",
+  "--length",
+  "16384",
+  "--first-seq",
+  "180",
+  "--label",
+  "run 4: first 16384 bytes at 0x3C000 with tcdrain after each load frame (--drain), for comparison"
+ ],
+ "tool_revision": {
+  "head": "1d4740009d99afd8e473860692a5f0ea52132db9",
+  "tracked_changes": true
+ },
+ "port": "/dev/cu.usbserial-110",
+ "baud": 115200,
+ "payload": {
+  "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+  "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+  "source_sha256": "f09fb275aa69773dcf868ebb4c6c512232a9c71a912d39350cc3cc90a11aafce",
+  "trits": 819200,
+  "counts": {
+   "+1": 284129,
+   "0": 251701,
+   "-1": 283370
+  },
+  "tmem_header_hex": "544d454d0101000000800c000000000000800200166dc191",
+  "source_sidecar": {
+   "schema": "trinity.bram-trits.v1",
+   "model": "BitNet b1.58 2B4T",
+   "tensor": "model.layers.0.self_attn.q_proj.weight",
+   "gguf_tensor": "blk.0.attn_q.weight",
+   "shape": [
+    2560,
+    2560
+   ],
+   "rows": [
+    0,
+    320
+   ],
+   "trits": 819200,
+   "order": "row-major rows of the unpacked [rows, cols] matrix (Hugging Face unpack order)",
+   "sources": {
+    "hf_packed": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors"
+    },
+    "I2_S": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+     "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+     "file": "ggml-model-i2_s.gguf"
+    }
+   },
+   "i2s_mismatches": 0,
+   "counts": {
+    "+1": 284129,
+    "0": 251701,
+    "-1": 283370
+   },
+   "sha256": "f09fb275aa69773dcf868ebb4c6c512232a9c71a912d39350cc3cc90a11aafce"
+  },
+  "bytes": 16384,
+  "sha256": "fb12d5482d0da4b03c6b4a20f28ef493519e317c7520fb0c138fa964ed0717c1"
+ },
+ "addr": 245760,
+ "chunk": 4096,
+ "faults": {
+  "corrupt": [],
+  "drop": [],
+  "abort": [],
+  "garbage": [],
+  "duplicate": []
+ },
+ "design_hz": 25000000,
+ "t0_note": "every time is host seconds after the start on one monotonic clock; a reply's t is when the reader thread read its last byte",
+ "identity_before": {
+  "idcode": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--detect"
+   ],
+   "start_s": 0.047,
+   "returncode": 0,
+   "output": [
+    "empty",
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "index 0:",
+    "\tidcode 0x3636093",
+    "\tmanufacturer xilinx",
+    "\tfamily artix a7 200t",
+    "\tmodel  xc7a200",
+    "\tirlength 6"
+   ],
+   "value": "0x3636093"
+  },
+  "dna": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-dna"
+   ],
+   "start_s": 0.072,
+   "returncode": 0,
+   "output": [
+    "empty",
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"dna\": \"0x00389c0c2d85e85c\"}"
+   ],
+   "value": "0x00389c0c2d85e85c"
+  },
+  "xadc": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-xadc"
+   ],
+   "start_s": 0.096,
+   "returncode": 0,
+   "output": [
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"temp\": 44.4605, ",
+    "    \"maxtemp\": 51.593, ",
+    "    \"mintemp\": 44.0799, ",
+    "\"raw\":  {\"0\": 41299, \"1\": 21717, \"2\": 39110, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21728, \"7\": 0},",
+    "\"vccint\": 0.994629, ",
+    "   \"maxvccint\": 0.996826, ",
+    "   \"minvccint\": 0.990234, ",
+    "\"vccaux\": 1.79004, ",
+    "   \"maxvccaux\": 1.79224, ",
+    "   \"minvccaux\": 1.78711, ",
+    "}"
+   ],
+   "value": {
+    "temp": 44.4605,
+    "maxtemp": 51.593,
+    "mintemp": 44.0799,
+    "raw": {
+     "0": 41299,
+     "1": 21717,
+     "2": 39110,
+     "3": 0,
+     "4": 0,
+     "5": 0,
+     "6": 21728,
+     "7": 0
+    },
+    "vccint": 0.994629,
+    "maxvccint": 0.996826,
+    "minvccint": 0.990234,
+    "vccaux": 1.79004,
+    "maxvccaux": 1.79224,
+    "minvccaux": 1.78711
+   }
+  }
+ },
+ "status_before": {
+  "rx_bytes": 453249,
+  "rx_framing_errors": 0,
+  "rx_false_starts": 0,
+  "fifo_overflow_bytes": 0,
+  "fifo_high_water": 1,
+  "ignored_bytes": 64,
+  "frames_committed": 106,
+  "frames_duplicate": 1,
+  "nak_crc": 2,
+  "nak_length": 0,
+  "nak_timeout": 3,
+  "nak_framing": 0,
+  "nak_command": 0,
+  "nak_overflow": 0,
+  "bytes_committed": 426032,
+  "readbacks": 212,
+  "baud_div": 217,
+  "baud_reverts": 0,
+  "last_seq": 424,
+  "config": 34345482,
+  "clocks": 3074266049,
+  "build_id": 491208704,
+  "nak_port": 0
+ },
+ "transfer": {
+  "store_before": {
+   "read_s": 1.442862,
+   "bytes_read": 16384,
+   "complete": true,
+   "sha256": "4fe7b59af6de3b665b67788cc2f99892ab827efae3a467342b3bb4e3bc8e5bfe",
+   "bytes_the_load_changes": 16302,
+   "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+   "reads": [
+    {
+     "addr": 245760,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 181,
+       "start": 0.561194,
+       "queued": 0.561211,
+       "reply": {
+        "kind": "readback",
+        "t": 0.921792,
+        "seq": 181,
+        "addr": 245760,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360598
+    },
+    {
+     "addr": 249856,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 182,
+       "start": 0.921901,
+       "queued": 0.921933,
+       "reply": {
+        "kind": "readback",
+        "t": 1.282515,
+        "seq": 182,
+        "addr": 249856,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360614
+    },
+    {
+     "addr": 253952,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 183,
+       "start": 1.282603,
+       "queued": 1.282619,
+       "reply": {
+        "kind": "readback",
+        "t": 1.643255,
+        "seq": 183,
+        "addr": 253952,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360652
+    },
+    {
+     "addr": 258048,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 184,
+       "start": 1.64336,
+       "queued": 1.643375,
+       "reply": {
+        "kind": "readback",
+        "t": 2.003963,
+        "seq": 184,
+        "addr": 258048,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360603
+    }
+   ]
+  },
+  "chunks": 4,
+  "acked": 4,
+  "payload_bytes": 16384,
+  "load_s": 1.722328,
+  "load_payload_Bps": 9512.7,
+  "readback_bytes": 16384,
+  "readback_s": 1.442764,
+  "readback_payload_Bps": 11356.0,
+  "identical": true,
+  "first_mismatch": null,
+  "retransmits": {},
+  "attempts": 4,
+  "late_replies": 0,
+  "latency_s": {
+   "n": 4,
+   "min": 0.430153,
+   "p50": 0.4303125,
+   "p90": 0.4309201,
+   "p99": 0.43110451,
+   "max": 0.431125,
+   "mean": 0.43047575,
+   "sd": 0.00045186087460632573
+  },
+  "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+  "chunk_s": {
+   "n": 4,
+   "min": 0.430153,
+   "p50": 0.4303125,
+   "p90": 0.4309201,
+   "p99": 0.43110451,
+   "max": 0.431125,
+   "mean": 0.43047575,
+   "sd": 0.00045186087460632573
+  },
+  "turnaround_s": {
+   "n": 4,
+   "min": 0.07338216666666669,
+   "p50": 0.07354166666666667,
+   "p90": 0.07414926666666667,
+   "p99": 0.07433367666666667,
+   "max": 0.07435416666666667,
+   "mean": 0.07370491666666668,
+   "sd": 0.00045186087460632573
+  },
+  "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+  "queued_s": {
+   "n": 4,
+   "min": 7.299999999998974e-05,
+   "p50": 0.00010650000000000936,
+   "p90": 0.00012139999999973838,
+   "p99": 0.00012463999999971166,
+   "max": 0.00012499999999970868,
+   "mean": 0.00010274999999992929,
+   "sd": 2.230657601084296e-05
+  },
+  "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+  "drained_s": {
+   "n": 4,
+   "min": 0.43009499999999967,
+   "p50": 0.43024450000000014,
+   "p90": 0.4308605999999998,
+   "p99": 0.4310463599999997,
+   "max": 0.43106699999999964,
+   "mean": 0.4304127499999999,
+   "sd": 0.00045526722921808205
+  },
+  "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+  "gap_s": {
+   "n": 3,
+   "min": 9.1e-05,
+   "p50": 0.000113,
+   "p90": 0.000117,
+   "p99": 0.00011789999999999999,
+   "max": 0.000118,
+   "mean": 0.00010733333333333334,
+   "sd": 1.4364307617610158e-05
+  },
+  "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+  "ideal_payload_Bps": 11480.8,
+  "per_chunk": [
+   {
+    "index": 0,
+    "seq": 185,
+    "addr": 245760,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 2.004617,
+      "queued": 2.00469,
+      "drained": 2.434727,
+      "reply": {
+       "kind": "line",
+       "t": 2.4348,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 185,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 107,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.430183,
+    "chunk_s": 0.430183,
+    "reason": "ok",
+    "ack_t": 2.4348
+   },
+   {
+    "index": 1,
+    "seq": 186,
+    "addr": 249856,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 2.434891,
+      "queued": 2.434991,
+      "drained": 2.86527,
+      "reply": {
+       "kind": "line",
+       "t": 2.865333,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 186,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 108,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.430442,
+    "chunk_s": 0.430442,
+    "reason": "ok",
+    "ack_t": 2.865333
+   },
+   {
+    "index": 2,
+    "seq": 187,
+    "addr": 253952,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 2.865451,
+      "queued": 2.865576,
+      "drained": 3.296518,
+      "reply": {
+       "kind": "line",
+       "t": 3.296576,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 187,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 109,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.431125,
+    "chunk_s": 0.431125,
+    "reason": "ok",
+    "ack_t": 3.296576
+   },
+   {
+    "index": 3,
+    "seq": 188,
+    "addr": 258048,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 3.296689,
+      "queued": 3.296802,
+      "drained": 3.726784,
+      "reply": {
+       "kind": "line",
+       "t": 3.726842,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 188,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 110,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.430153,
+    "chunk_s": 0.430153,
+    "reason": "ok",
+    "ack_t": 3.726842
+   }
+  ],
+  "reads": [
+   {
+    "addr": 245760,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 189,
+      "start": 3.726925,
+      "queued": 3.726958,
+      "reply": {
+       "kind": "readback",
+       "t": 4.087596,
+       "seq": 189,
+       "addr": 245760,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360671
+   },
+   {
+    "addr": 249856,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 190,
+      "start": 4.087647,
+      "queued": 4.087662,
+      "reply": {
+       "kind": "readback",
+       "t": 4.448235,
+       "seq": 190,
+       "addr": 249856,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360588
+   },
+   {
+    "addr": 253952,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 191,
+      "start": 4.448293,
+      "queued": 4.448308,
+      "reply": {
+       "kind": "readback",
+       "t": 4.808937,
+       "seq": 191,
+       "addr": 253952,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360644
+   },
+   {
+    "addr": 258048,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 192,
+      "start": 4.809,
+      "queued": 4.809016,
+      "reply": {
+       "kind": "readback",
+       "t": 5.1696,
+       "seq": 192,
+       "addr": 258048,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.3606
+   }
+  ]
+ },
+ "status_after": {
+  "rx_bytes": 469815,
+  "rx_framing_errors": 0,
+  "rx_false_starts": 0,
+  "fifo_overflow_bytes": 0,
+  "fifo_high_water": 1,
+  "ignored_bytes": 64,
+  "frames_committed": 110,
+  "frames_duplicate": 1,
+  "nak_crc": 2,
+  "nak_length": 0,
+  "nak_timeout": 3,
+  "nak_framing": 0,
+  "nak_command": 0,
+  "nak_overflow": 0,
+  "bytes_committed": 442416,
+  "readbacks": 220,
+  "baud_div": 217,
+  "baud_reverts": 0,
+  "last_seq": 444,
+  "config": 34345482,
+  "clocks": 3190598589,
+  "build_id": 491208704,
+  "nak_port": 0
+ },
+ "identity_after": {
+  "xadc": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-xadc"
+   ],
+   "start_s": 5.458,
+   "returncode": 0,
+   "output": [
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"temp\": 44.2337, ",
+    "    \"maxtemp\": 51.593, ",
+    "    \"mintemp\": 43.903, ",
+    "\"raw\":  {\"0\": 41277, \"1\": 21718, \"2\": 39103, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21730, \"7\": 0},",
+    "\"vccint\": 0.993896, ",
+    "   \"maxvccint\": 0.997559, ",
+    "   \"minvccint\": 0.990234, ",
+    "\"vccaux\": 1.79004, ",
+    "   \"maxvccaux\": 1.79224, ",
+    "   \"minvccaux\": 1.78711, ",
+    "}"
+   ],
+   "value": {
+    "temp": 44.2337,
+    "maxtemp": 51.593,
+    "mintemp": 43.903,
+    "raw": {
+     "0": 41277,
+     "1": 21718,
+     "2": 39103,
+     "3": 0,
+     "4": 0,
+     "5": 0,
+     "6": 21730,
+     "7": 0
+    },
+    "vccint": 0.993896,
+    "maxvccint": 0.997559,
+    "minvccint": 0.990234,
+    "vccaux": 1.79004,
+    "maxvccaux": 1.79224,
+    "minvccaux": 1.78711
+   }
+  }
+ },
+ "device_events": [
+  {
+   "kind": "line",
+   "t": 0.524904,
+   "tag": "C",
+   "a": "b4170000",
+   "v": 453249,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.524904,
+   "tag": "C",
+   "a": "b4170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.524904,
+   "tag": "C",
+   "a": "b4170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.530284,
+   "tag": "C",
+   "a": "b4170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.530284,
+   "tag": "C",
+   "a": "b4170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.530284,
+   "tag": "C",
+   "a": "b4170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.535703,
+   "tag": "C",
+   "a": "b4170006",
+   "v": 106,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.535703,
+   "tag": "C",
+   "a": "b4170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.535703,
+   "tag": "C",
+   "a": "b4170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.541426,
+   "tag": "C",
+   "a": "b4170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.541426,
+   "tag": "C",
+   "a": "b417000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.541426,
+   "tag": "C",
+   "a": "b417000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.546924,
+   "tag": "C",
+   "a": "b417000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.546924,
+   "tag": "C",
+   "a": "b417000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.546924,
+   "tag": "C",
+   "a": "b417000e",
+   "v": 426032,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.546924,
+   "tag": "C",
+   "a": "b417000f",
+   "v": 212,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.55235,
+   "tag": "C",
+   "a": "b4170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.55235,
+   "tag": "C",
+   "a": "b4170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.55235,
+   "tag": "C",
+   "a": "b4170012",
+   "v": 424,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.558133,
+   "tag": "C",
+   "a": "b4170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.558133,
+   "tag": "C",
+   "a": "b4170014",
+   "v": 3074266049,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.558133,
+   "tag": "C",
+   "a": "b4170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.561043,
+   "tag": "C",
+   "a": "b4170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 2.4348,
+   "tag": "A",
+   "a": "b9031000",
+   "v": 7012357,
+   "check_ok": true,
+   "seq": 185,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 2.865333,
+   "tag": "A",
+   "a": "ba031000",
+   "v": 7077893,
+   "check_ok": true,
+   "seq": 186,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 3.296576,
+   "tag": "A",
+   "a": "bb031000",
+   "v": 7143429,
+   "check_ok": true,
+   "seq": 187,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 3.726842,
+   "tag": "A",
+   "a": "bc031000",
+   "v": 7208965,
+   "check_ok": true,
+   "seq": 188,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 5.178014,
+   "tag": "C",
+   "a": "c1170000",
+   "v": 469815,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.178014,
+   "tag": "C",
+   "a": "c1170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.178014,
+   "tag": "C",
+   "a": "c1170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.183508,
+   "tag": "C",
+   "a": "c1170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.183508,
+   "tag": "C",
+   "a": "c1170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.183508,
+   "tag": "C",
+   "a": "c1170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.188955,
+   "tag": "C",
+   "a": "c1170006",
+   "v": 110,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.188955,
+   "tag": "C",
+   "a": "c1170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.188955,
+   "tag": "C",
+   "a": "c1170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.194739,
+   "tag": "C",
+   "a": "c1170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.194739,
+   "tag": "C",
+   "a": "c117000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.194739,
+   "tag": "C",
+   "a": "c117000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.200245,
+   "tag": "C",
+   "a": "c117000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.200245,
+   "tag": "C",
+   "a": "c117000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.200245,
+   "tag": "C",
+   "a": "c117000e",
+   "v": 442416,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.200245,
+   "tag": "C",
+   "a": "c117000f",
+   "v": 220,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.205667,
+   "tag": "C",
+   "a": "c1170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.205667,
+   "tag": "C",
+   "a": "c1170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.205667,
+   "tag": "C",
+   "a": "c1170012",
+   "v": 444,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.21139,
+   "tag": "C",
+   "a": "c1170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.21139,
+   "tag": "C",
+   "a": "c1170014",
+   "v": 3190598589,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.21139,
+   "tag": "C",
+   "a": "c1170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.214303,
+   "tag": "C",
+   "a": "c1170016",
+   "v": 0,
+   "check_ok": true
+  }
+ ],
+ "device_hello": null,
+ "rx_raw": {
+  "file": "run4-drain.json.rx.bin.gz",
+  "bytes": 33880,
+  "sha256_uncompressed": "1131ecbf735042bf27fda1150ee6e0e30a71c95c04df0549cf55d7f25b220fef",
+  "tx_bytes": 16580
+ },
+ "ended_utc": "2026-09-24T17:09:06.076+00:00",
+ "checks": {
+  "all_chunks_acked": true,
+  "read_back_identical": true,
+  "status_read": true
+ },
+ "pass": true
+}

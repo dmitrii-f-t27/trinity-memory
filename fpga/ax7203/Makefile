@@ -280,7 +280,7 @@ bram-capture:
 # baud rate has to be confirmed in, both in design clocks. Its own build directory,
 # variables and targets: nothing here changes the other designs' commands.
 #   make -C fpga/ax7203 loader-sim                        Icarus scenarios (tests/test_uart_loader.py)
-#   make -C fpga/ax7203 loader-bit loader-flash FREQ_MHZ=25 SEEDS=3   (the build of record: heap seed 3; seed 1 did not finish routing)
+#   make -C fpga/ax7203 loader-bit loader-flash FREQ_MHZ=25 SEEDS=3 BRAM_PLACERS=heap   (the build of record 1d474000: heap seed 3)
 #   python3 tools/fpga-uart-loader.py --port /dev/cu.usbserial-110 ...   (host side)
 .PHONY: loader-gen loader-sim loader-synth loader-pnr loader-bit loader-flash loader-report loader-clean
 LOADER_TOP       := tms_uart_loader_ax7203
@@ -290,6 +290,7 @@ LOADER_PROBATION ?= 75000000
 LOADER_BUILD     ?= $(BUILD)/loader-clk$(CLOCK_MODE)-div$(BAUD_DIV)
 LOADER_REPORT    ?= $(ROOT)/reports/fpga/loader-build-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)
 LOADER_SOURCES   := $(foreach c,$(LOADER_CORES),$(RTL)/$(c).v) $(CURDIR)/tms_uart_loader.v
+LOADER_IDENTITY_NOTE := nextpnr-xilinx 45a986b8 did not reproduce this design's FASM bit for bit: a second placement of the same netlist with the same seed differed in about 960 of 194 000 FASM lines (placements.json next to the build record); the FASM and frames hashes identify this build, bitstream.sha256 the file that was flashed
 LOADER_STAMP     := $(LOADER_BUILD)/params-$(CLOCK_MODE)-$(BAUD_DIV)-$(LOADER_TIMEOUT)-$(LOADER_PROBATION)-$(BUILD_ID).stamp
 # Synthesis as the block-RAM benches (bram_synth: the RAMB36E1 1K x 36 configuration
 # only, brams_x36.txt), the one configuration verified on this board. Left to itself
@@ -335,6 +336,7 @@ loader-flash:
 loader-report:
 	python3 $(ROOT)/tools/fpga-build-report.py --artifact-dir $(LOADER_BUILD) --commit $(BUILD_ID) --source local \
 	  --top $(LOADER_TOP) --output $(LOADER_REPORT) \
+	  --identity-note "$(LOADER_IDENTITY_NOTE)" \
 	  --flow "make -C fpga/ax7203 loader-bit CLOCK_MODE=$(CLOCK_MODE) BAUD_DIV=$(BAUD_DIV) LOADER_TIMEOUT=$(LOADER_TIMEOUT) LOADER_PROBATION=$(LOADER_PROBATION) FREQ_MHZ=$(FREQ_MHZ); yosys $(YOSYS_SYNTH) split around memory_libmap with fpga/ax7203/brams_x36.txt, read_verilog -nomem2reg; nextpnr-xilinx placers $(BRAM_PLACERS) seeds $(SEEDS) --router $(BRAM_ROUTER) --timing-allow-fail; prjxray fasm2frames + xc7frames2bit ($(IMAGE))"
 
 loader-clean:

@@ -1,0 +1,5762 @@
+{
+ "schema": "trinity.uart-loader-capture.v2",
+ "started_utc": "2026-09-24T17:09:06.271+00:00",
+ "label": "run 5: 16384 bytes at 0x38000, then 16384 bytes XOR a per-trial key at 230400..1500000",
+ "argv": [
+  "tools/fpga-uart-loader.py",
+  "--port",
+  "/dev/cu.usbserial-110",
+  "--identity",
+  "--payload-tmem-trits",
+  "build/fpga/loader-payload/qproj-rows0-319.trits",
+  "--output",
+  "reports/fpga/uart-loader-2026-09-24-1d474000/run5-baud.json",
+  "--read-before",
+  "--addr",
+  "0x38000",
+  "--length",
+  "16384",
+  "--first-seq",
+  "200",
+  "--baud-try",
+  "230400,460800,921600,1000000,1500000",
+  "--baud-bytes",
+  "16384",
+  "--label",
+  "run 5: 16384 bytes at 0x38000, then 16384 bytes XOR a per-trial key at 230400..1500000"
+ ],
+ "tool_revision": {
+  "head": "1d4740009d99afd8e473860692a5f0ea52132db9",
+  "tracked_changes": true
+ },
+ "port": "/dev/cu.usbserial-110",
+ "baud": 115200,
+ "payload": {
+  "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+  "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+  "source_sha256": "f09fb275aa69773dcf868ebb4c6c512232a9c71a912d39350cc3cc90a11aafce",
+  "trits": 819200,
+  "counts": {
+   "+1": 284129,
+   "0": 251701,
+   "-1": 283370
+  },
+  "tmem_header_hex": "544d454d0101000000800c000000000000800200166dc191",
+  "source_sidecar": {
+   "schema": "trinity.bram-trits.v1",
+   "model": "BitNet b1.58 2B4T",
+   "tensor": "model.layers.0.self_attn.q_proj.weight",
+   "gguf_tensor": "blk.0.attn_q.weight",
+   "shape": [
+    2560,
+    2560
+   ],
+   "rows": [
+    0,
+    320
+   ],
+   "trits": 819200,
+   "order": "row-major rows of the unpacked [rows, cols] matrix (Hugging Face unpack order)",
+   "sources": {
+    "hf_packed": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors"
+    },
+    "I2_S": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+     "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+     "file": "ggml-model-i2_s.gguf"
+    }
+   },
+   "i2s_mismatches": 0,
+   "counts": {
+    "+1": 284129,
+    "0": 251701,
+    "-1": 283370
+   },
+   "sha256": "f09fb275aa69773dcf868ebb4c6c512232a9c71a912d39350cc3cc90a11aafce"
+  },
+  "bytes": 16384,
+  "sha256": "fb12d5482d0da4b03c6b4a20f28ef493519e317c7520fb0c138fa964ed0717c1"
+ },
+ "addr": 229376,
+ "chunk": 4096,
+ "faults": {
+  "corrupt": [],
+  "drop": [],
+  "abort": [],
+  "garbage": [],
+  "duplicate": []
+ },
+ "design_hz": 25000000,
+ "t0_note": "every time is host seconds after the start on one monotonic clock; a reply's t is when the reader thread read its last byte",
+ "identity_before": {
+  "idcode": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--detect"
+   ],
+   "start_s": 0.031,
+   "returncode": 0,
+   "output": [
+    "empty",
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "index 0:",
+    "\tidcode 0x3636093",
+    "\tmanufacturer xilinx",
+    "\tfamily artix a7 200t",
+    "\tmodel  xc7a200",
+    "\tirlength 6"
+   ],
+   "value": "0x3636093"
+  },
+  "dna": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-dna"
+   ],
+   "start_s": 0.053,
+   "returncode": 0,
+   "output": [
+    "empty",
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"dna\": \"0x00389c0c2d85e85c\"}"
+   ],
+   "value": "0x00389c0c2d85e85c"
+  },
+  "xadc": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-xadc"
+   ],
+   "start_s": 0.076,
+   "returncode": 0,
+   "output": [
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"temp\": 44.226, ",
+    "    \"maxtemp\": 51.593, ",
+    "    \"mintemp\": 43.8722, ",
+    "\"raw\":  {\"0\": 41289, \"1\": 21748, \"2\": 39106, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21712, \"7\": 0},",
+    "\"vccint\": 0.994629, ",
+    "   \"maxvccint\": 0.997559, ",
+    "   \"minvccint\": 0.990234, ",
+    "\"vccaux\": 1.79004, ",
+    "   \"maxvccaux\": 1.79224, ",
+    "   \"minvccaux\": 1.78711, ",
+    "}"
+   ],
+   "value": {
+    "temp": 44.226,
+    "maxtemp": 51.593,
+    "mintemp": 43.8722,
+    "raw": {
+     "0": 41289,
+     "1": 21748,
+     "2": 39106,
+     "3": 0,
+     "4": 0,
+     "5": 0,
+     "6": 21712,
+     "7": 0
+    },
+    "vccint": 0.994629,
+    "maxvccint": 0.997559,
+    "minvccint": 0.990234,
+    "vccaux": 1.79004,
+    "maxvccaux": 1.79224,
+    "minvccaux": 1.78711
+   }
+  }
+ },
+ "status_before": {
+  "rx_bytes": 469829,
+  "rx_framing_errors": 0,
+  "rx_false_starts": 0,
+  "fifo_overflow_bytes": 0,
+  "fifo_high_water": 1,
+  "ignored_bytes": 64,
+  "frames_committed": 110,
+  "frames_duplicate": 1,
+  "nak_crc": 2,
+  "nak_length": 0,
+  "nak_timeout": 3,
+  "nak_framing": 0,
+  "nak_command": 0,
+  "nak_overflow": 0,
+  "bytes_committed": 442416,
+  "readbacks": 220,
+  "baud_div": 217,
+  "baud_reverts": 0,
+  "last_seq": 444,
+  "config": 34345482,
+  "clocks": 3217700155,
+  "build_id": 491208704,
+  "nak_port": 0
+ },
+ "transfer": {
+  "store_before": {
+   "read_s": 1.443015,
+   "bytes_read": 16384,
+   "complete": true,
+   "sha256": "cb685d2095fdf5f7822c5f15c01ee99f6d68dcdd79dd1051af3c10df7b835373",
+   "bytes_the_load_changes": 16312,
+   "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+   "reads": [
+    {
+     "addr": 229376,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 201,
+       "start": 0.537568,
+       "queued": 0.537593,
+       "reply": {
+        "kind": "readback",
+        "t": 0.898217,
+        "seq": 201,
+        "addr": 229376,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360649
+    },
+    {
+     "addr": 233472,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 202,
+       "start": 0.898285,
+       "queued": 0.898299,
+       "reply": {
+        "kind": "readback",
+        "t": 1.258968,
+        "seq": 202,
+        "addr": 233472,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360683
+    },
+    {
+     "addr": 237568,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 203,
+       "start": 1.259086,
+       "queued": 1.259104,
+       "reply": {
+        "kind": "readback",
+        "t": 1.619714,
+        "seq": 203,
+        "addr": 237568,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360628
+    },
+    {
+     "addr": 241664,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 204,
+       "start": 1.619847,
+       "queued": 1.619874,
+       "reply": {
+        "kind": "readback",
+        "t": 1.980491,
+        "seq": 204,
+        "addr": 241664,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360644
+    }
+   ]
+  },
+  "chunks": 4,
+  "acked": 4,
+  "payload_bytes": 16384,
+  "load_s": 1.439513,
+  "load_payload_Bps": 11381.6,
+  "readback_bytes": 16384,
+  "readback_s": 1.443099,
+  "readback_payload_Bps": 11353.3,
+  "identical": true,
+  "first_mismatch": null,
+  "retransmits": {},
+  "attempts": 4,
+  "late_replies": 0,
+  "latency_s": {
+   "n": 4,
+   "min": 0.359737,
+   "p50": 0.35980049999999997,
+   "p90": 0.3598237,
+   "p99": 0.35983207,
+   "max": 0.359833,
+   "mean": 0.35979275,
+   "sd": 4.0219191107413845e-05
+  },
+  "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+  "chunk_s": {
+   "n": 4,
+   "min": 0.359737,
+   "p50": 0.35980049999999997,
+   "p90": 0.3598237,
+   "p99": 0.35983207,
+   "max": 0.359833,
+   "mean": 0.35979275,
+   "sd": 4.0219191107413845e-05
+  },
+  "turnaround_s": {
+   "n": 4,
+   "min": 0.0029661666666666586,
+   "p50": 0.0030296666666666805,
+   "p90": 0.003052866666666698,
+   "p99": 0.003061236666666699,
+   "max": 0.003062166666666699,
+   "mean": 0.0030219166666666797,
+   "sd": 4.0219191107413845e-05
+  },
+  "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+  "queued_s": {
+   "n": 4,
+   "min": 8.200000000013752e-05,
+   "p50": 9.150000000013314e-05,
+   "p90": 0.00011109999999971976,
+   "p99": 0.00011730999999962854,
+   "max": 0.00011799999999961841,
+   "mean": 9.575000000000555e-05,
+   "sd": 1.5755951256318962e-05
+  },
+  "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+  "drained_s": null,
+  "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+  "gap_s": {
+   "n": 3,
+   "min": 7.4e-05,
+   "p50": 8.2e-05,
+   "p90": 8.44e-05,
+   "p99": 8.494000000000001e-05,
+   "max": 8.5e-05,
+   "mean": 8.033333333333334e-05,
+   "sd": 5.686240703077331e-06
+  },
+  "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+  "ideal_payload_Bps": 11480.8,
+  "per_chunk": [
+   {
+    "index": 0,
+    "seq": 205,
+    "addr": 229376,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 1.981021,
+      "queued": 1.981103,
+      "reply": {
+       "kind": "line",
+       "t": 2.340823,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 205,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 111,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359802,
+    "chunk_s": 0.359802,
+    "reason": "ok",
+    "ack_t": 2.340823
+   },
+   {
+    "index": 1,
+    "seq": 206,
+    "addr": 233472,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 2.340908,
+      "queued": 2.341026,
+      "reply": {
+       "kind": "line",
+       "t": 2.700645,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 206,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 112,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359737,
+    "chunk_s": 0.359737,
+    "reason": "ok",
+    "ack_t": 2.700645
+   },
+   {
+    "index": 2,
+    "seq": 207,
+    "addr": 237568,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 2.700719,
+      "queued": 2.700814,
+      "reply": {
+       "kind": "line",
+       "t": 3.060552,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 207,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 113,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359833,
+    "chunk_s": 0.359833,
+    "reason": "ok",
+    "ack_t": 3.060552
+   },
+   {
+    "index": 3,
+    "seq": 208,
+    "addr": 241664,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 3.060634,
+      "queued": 3.060722,
+      "reply": {
+       "kind": "line",
+       "t": 3.420433,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 208,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 114,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359799,
+    "chunk_s": 0.359799,
+    "reason": "ok",
+    "ack_t": 3.420433
+   }
+  ],
+  "reads": [
+   {
+    "addr": 229376,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 209,
+      "start": 3.420505,
+      "queued": 3.420521,
+      "reply": {
+       "kind": "readback",
+       "t": 3.781194,
+       "seq": 209,
+       "addr": 229376,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360689
+   },
+   {
+    "addr": 233472,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 210,
+      "start": 3.781278,
+      "queued": 3.781297,
+      "reply": {
+       "kind": "readback",
+       "t": 4.14189,
+       "seq": 210,
+       "addr": 233472,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360612
+   },
+   {
+    "addr": 237568,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 211,
+      "start": 4.14195,
+      "queued": 4.141966,
+      "reply": {
+       "kind": "readback",
+       "t": 4.502724,
+       "seq": 211,
+       "addr": 237568,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360774
+   },
+   {
+    "addr": 241664,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 212,
+      "start": 4.502801,
+      "queued": 4.502825,
+      "reply": {
+       "kind": "readback",
+       "t": 4.863506,
+       "seq": 212,
+       "addr": 241664,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360705
+   }
+  ]
+ },
+ "status_after": {
+  "rx_bytes": 486395,
+  "rx_framing_errors": 0,
+  "rx_false_starts": 0,
+  "fifo_overflow_bytes": 0,
+  "fifo_high_water": 1,
+  "ignored_bytes": 64,
+  "frames_committed": 114,
+  "frames_duplicate": 1,
+  "nak_crc": 2,
+  "nak_length": 0,
+  "nak_timeout": 3,
+  "nak_framing": 0,
+  "nak_command": 0,
+  "nak_overflow": 0,
+  "bytes_committed": 458800,
+  "readbacks": 228,
+  "baud_div": 217,
+  "baud_reverts": 0,
+  "last_seq": 464,
+  "config": 34345482,
+  "clocks": 3326989005,
+  "build_id": 491208704,
+  "nak_port": 0
+ },
+ "baud_trials": [
+  {
+   "rate": 230400,
+   "switch": {
+    "baud": 230400,
+    "divisor": 109,
+    "device_baud": 229357.79816513762,
+    "error_ppm": -4523,
+    "at_baud": 115200,
+    "reply": {
+     "kind": "line",
+     "t": 4.914609,
+     "tag": "A",
+     "check_ok": true,
+     "seq": 214,
+     "reason": 0,
+     "reason_name": "ok",
+     "cmd": 66,
+     "seq_known": true,
+     "len": 0,
+     "frames_committed": 114,
+     "naks": 5
+    },
+    "switched": true
+   },
+   "status": {
+    "rx_bytes": 486423,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 114,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 458800,
+    "readbacks": 228,
+    "baud_div": 109,
+    "baud_reverts": 0,
+    "last_seq": 464,
+    "config": 34345482,
+    "clocks": 3329857466,
+    "build_id": 491208704,
+    "nak_port": 0
+   },
+   "pattern": {
+    "xor": 91,
+    "bytes": 16384,
+    "sha256": "4c76e2c06d7a1fbc1f001276ef9e34f646a7529ff9a3c424c9e6078a975f21be",
+    "note": "the payload's first bytes XOR this key, so that every byte written differs from the main transfer's and the other trials' at that address"
+   },
+   "transfer": {
+    "store_before": {
+     "read_s": 0.730082,
+     "bytes_read": 16384,
+     "complete": true,
+     "sha256": "fb12d5482d0da4b03c6b4a20f28ef493519e317c7520fb0c138fa964ed0717c1",
+     "bytes_the_load_changes": 16384,
+     "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+     "reads": [
+      {
+       "addr": 229376,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 216,
+         "start": 5.020557,
+         "queued": 5.020571,
+         "reply": {
+          "kind": "readback",
+          "t": 5.202991,
+          "seq": 216,
+          "addr": 229376,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.182434
+      },
+      {
+       "addr": 233472,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 217,
+         "start": 5.203047,
+         "queued": 5.203063,
+         "reply": {
+          "kind": "readback",
+          "t": 5.385598,
+          "seq": 217,
+          "addr": 233472,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.182551
+      },
+      {
+       "addr": 237568,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 218,
+         "start": 5.385672,
+         "queued": 5.385693,
+         "reply": {
+          "kind": "readback",
+          "t": 5.568136,
+          "seq": 218,
+          "addr": 237568,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.182464
+      },
+      {
+       "addr": 241664,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 219,
+         "start": 5.568185,
+         "queued": 5.568201,
+         "reply": {
+          "kind": "readback",
+          "t": 5.750581,
+          "seq": 219,
+          "addr": 241664,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.182396
+      }
+     ]
+    },
+    "chunks": 4,
+    "acked": 4,
+    "payload_bytes": 16384,
+    "load_s": 0.725962,
+    "load_payload_Bps": 22568.7,
+    "readback_bytes": 16384,
+    "readback_s": 0.730105,
+    "readback_payload_Bps": 22440.6,
+    "identical": true,
+    "first_mismatch": null,
+    "retransmits": {},
+    "attempts": 4,
+    "late_replies": 0,
+    "latency_s": {
+     "n": 4,
+     "min": 0.18141,
+     "p50": 0.181417,
+     "p90": 0.1814411,
+     "p99": 0.18145001,
+     "max": 0.181451,
+     "mean": 0.18142375,
+     "sd": 1.8481973199134132e-05
+    },
+    "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+    "chunk_s": {
+     "n": 4,
+     "min": 0.18141,
+     "p50": 0.181417,
+     "p90": 0.1814411,
+     "p99": 0.18145001,
+     "max": 0.181451,
+     "mean": 0.18142375,
+     "sd": 1.8481973199134132e-05
+    },
+    "turnaround_s": {
+     "n": 4,
+     "min": 0.0030245833333333305,
+     "p50": 0.0030315833333333375,
+     "p90": 0.0030556833333333423,
+     "p99": 0.0030645933333333436,
+     "max": 0.0030655833333333438,
+     "mean": 0.0030383333333333373,
+     "sd": 1.8481973199134132e-05
+    },
+    "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+    "queued_s": {
+     "n": 4,
+     "min": 9.999999999976694e-05,
+     "p50": 0.00010199999999960241,
+     "p90": 0.00012259999999955084,
+     "p99": 0.00013015999999964833,
+     "max": 0.00013099999999965917,
+     "mean": 0.00010874999999965773,
+     "sd": 1.4885675440933465e-05
+    },
+    "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+    "drained_s": null,
+    "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+    "gap_s": {
+     "n": 3,
+     "min": 6.4e-05,
+     "p50": 6.5e-05,
+     "p90": 6.66e-05,
+     "p99": 6.696e-05,
+     "max": 6.7e-05,
+     "mean": 6.533333333333333e-05,
+     "sd": 1.5275252316519498e-06
+    },
+    "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+    "ideal_payload_Bps": 22961.5,
+    "per_chunk": [
+     {
+      "index": 0,
+      "seq": 220,
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 5.751037,
+        "queued": 5.751168,
+        "reply": {
+         "kind": "line",
+         "t": 5.932488,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 220,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 115,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.181451,
+      "chunk_s": 0.181451,
+      "reason": "ok",
+      "ack_t": 5.932488
+     },
+     {
+      "index": 1,
+      "seq": 221,
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 5.932553,
+        "queued": 5.932653,
+        "reply": {
+         "kind": "line",
+         "t": 6.113971,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 221,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 116,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.181418,
+      "chunk_s": 0.181418,
+      "reason": "ok",
+      "ack_t": 6.113971
+     },
+     {
+      "index": 2,
+      "seq": 222,
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 6.114035,
+        "queued": 6.114138,
+        "reply": {
+         "kind": "line",
+         "t": 6.295445,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 222,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 117,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.18141,
+      "chunk_s": 0.18141,
+      "reason": "ok",
+      "ack_t": 6.295445
+     },
+     {
+      "index": 3,
+      "seq": 223,
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 6.295512,
+        "queued": 6.295613,
+        "reply": {
+         "kind": "line",
+         "t": 6.476928,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 223,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 118,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.181416,
+      "chunk_s": 0.181416,
+      "reason": "ok",
+      "ack_t": 6.476928
+     }
+    ],
+    "reads": [
+     {
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 224,
+        "start": 6.476989,
+        "queued": 6.477003,
+        "reply": {
+         "kind": "readback",
+         "t": 6.659431,
+         "seq": 224,
+         "addr": 229376,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.182442
+     },
+     {
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 225,
+        "start": 6.659479,
+        "queued": 6.659494,
+        "reply": {
+         "kind": "readback",
+         "t": 6.841918,
+         "seq": 225,
+         "addr": 233472,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.182439
+     },
+     {
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 226,
+        "start": 6.841965,
+        "queued": 6.841979,
+        "reply": {
+         "kind": "readback",
+         "t": 7.024513,
+         "seq": 226,
+         "addr": 237568,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.182548
+     },
+     {
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 227,
+        "start": 7.0246,
+        "queued": 7.024623,
+        "reply": {
+         "kind": "readback",
+         "t": 7.207042,
+         "seq": 227,
+         "addr": 241664,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.182442
+     }
+    ]
+   },
+   "back": {
+    "attempts": [
+     {
+      "baud": 115200,
+      "divisor": 217,
+      "device_baud": 115207.3732718894,
+      "error_ppm": 64,
+      "at_baud": 230400,
+      "reply": {
+       "kind": "line",
+       "t": 7.211541,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 228,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 66,
+       "seq_known": true,
+       "len": 0,
+       "frames_committed": 118,
+       "naks": 5
+      },
+      "switched": true
+     }
+    ],
+    "switched": true
+   },
+   "status_after": {
+    "rx_bytes": 503003,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 118,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 475184,
+    "readbacks": 236,
+    "baud_div": 217,
+    "baud_reverts": 0,
+    "last_seq": 479,
+    "config": 34345482,
+    "clocks": 3387609032,
+    "build_id": 491208704,
+    "nak_port": 0
+   }
+  },
+  {
+   "rate": 460800,
+   "switch": {
+    "baud": 460800,
+    "divisor": 54,
+    "device_baud": 462962.962962963,
+    "error_ppm": 4694,
+    "at_baud": 115200,
+    "reply": {
+     "kind": "line",
+     "t": 7.33925,
+     "tag": "A",
+     "check_ok": true,
+     "seq": 230,
+     "reason": 0,
+     "reason_name": "ok",
+     "cmd": 66,
+     "seq_known": true,
+     "len": 0,
+     "frames_committed": 118,
+     "naks": 5
+    },
+    "switched": true
+   },
+   "status": {
+    "rx_bytes": 503031,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 118,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 475184,
+    "readbacks": 236,
+    "baud_div": 54,
+    "baud_reverts": 0,
+    "last_seq": 479,
+    "config": 34345482,
+    "clocks": 3390328254,
+    "build_id": 491208704,
+    "nak_port": 0
+   },
+   "pattern": {
+    "xor": 182,
+    "bytes": 16384,
+    "sha256": "028f35054069499b68cd6b12075c67af2ff4632e83bd7fcaa69100bc87c76754",
+    "note": "the payload's first bytes XOR this key, so that every byte written differs from the main transfer's and the other trials' at that address"
+   },
+   "transfer": {
+    "store_before": {
+     "read_s": 0.367083,
+     "bytes_read": 16384,
+     "complete": true,
+     "sha256": "4c76e2c06d7a1fbc1f001276ef9e34f646a7529ff9a3c424c9e6078a975f21be",
+     "bytes_the_load_changes": 16384,
+     "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+     "reads": [
+      {
+       "addr": 229376,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 232,
+         "start": 7.4381,
+         "queued": 7.438127,
+         "reply": {
+          "kind": "readback",
+          "t": 7.529816,
+          "seq": 232,
+          "addr": 229376,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.091716
+      },
+      {
+       "addr": 233472,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 233,
+         "start": 7.529867,
+         "queued": 7.529882,
+         "reply": {
+          "kind": "readback",
+          "t": 7.62156,
+          "seq": 233,
+          "addr": 233472,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.091693
+      },
+      {
+       "addr": 237568,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 234,
+         "start": 7.621616,
+         "queued": 7.621631,
+         "reply": {
+          "kind": "readback",
+          "t": 7.713302,
+          "seq": 234,
+          "addr": 237568,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.091686
+      },
+      {
+       "addr": 241664,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 235,
+         "start": 7.713395,
+         "queued": 7.713411,
+         "reply": {
+          "kind": "readback",
+          "t": 7.805093,
+          "seq": 235,
+          "addr": 241664,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.091698
+      }
+     ]
+    },
+    "chunks": 4,
+    "acked": 4,
+    "payload_bytes": 16384,
+    "load_s": 0.36919,
+    "load_payload_Bps": 44378.2,
+    "readback_bytes": 16384,
+    "readback_s": 0.366952,
+    "readback_payload_Bps": 44648.9,
+    "identical": true,
+    "first_mismatch": null,
+    "retransmits": {},
+    "attempts": 4,
+    "late_replies": 0,
+    "latency_s": {
+     "n": 4,
+     "min": 0.092189,
+     "p50": 0.09221750000000001,
+     "p90": 0.09223830000000001,
+     "p99": 0.09224343,
+     "max": 0.092244,
+     "mean": 0.092217,
+     "sd": 2.328089345365103e-05
+    },
+    "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+    "chunk_s": {
+     "n": 4,
+     "min": 0.092189,
+     "p50": 0.09221750000000001,
+     "p90": 0.09223830000000001,
+     "p99": 0.09224343,
+     "max": 0.092244,
+     "mean": 0.092217,
+     "sd": 2.328089345365103e-05
+    },
+    "turnaround_s": {
+     "n": 4,
+     "min": 0.0029962916666666645,
+     "p50": 0.003024791666666672,
+     "p90": 0.003045591666666676,
+     "p99": 0.0030507216666666778,
+     "max": 0.003051291666666678,
+     "mean": 0.0030242916666666717,
+     "sd": 2.328089345365103e-05
+    },
+    "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+    "queued_s": {
+     "n": 4,
+     "min": 8.300000000005525e-05,
+     "p50": 9.599999999965192e-05,
+     "p90": 9.809999999976782e-05,
+     "p99": 9.890999999964122e-05,
+     "max": 9.899999999962716e-05,
+     "mean": 9.349999999974656e-05,
+     "sd": 7.141428428338823e-06
+    },
+    "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+    "drained_s": null,
+    "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+    "gap_s": {
+     "n": 3,
+     "min": 6.4e-05,
+     "p50": 6.5e-05,
+     "p90": 7.3e-05,
+     "p99": 7.479999999999999e-05,
+     "max": 7.5e-05,
+     "mean": 6.799999999999999e-05,
+     "sd": 6.082762530298218e-06
+    },
+    "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+    "ideal_payload_Bps": 45923.0,
+    "per_chunk": [
+     {
+      "index": 0,
+      "seq": 236,
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 7.805581,
+        "queued": 7.805664,
+        "reply": {
+         "kind": "line",
+         "t": 7.897825,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 236,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 119,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.092244,
+      "chunk_s": 0.092244,
+      "reason": "ok",
+      "ack_t": 7.897825
+     },
+     {
+      "index": 1,
+      "seq": 237,
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 7.89789,
+        "queued": 7.897989,
+        "reply": {
+         "kind": "line",
+         "t": 7.990079,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 237,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 120,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.092189,
+      "chunk_s": 0.092189,
+      "reason": "ok",
+      "ack_t": 7.990079
+     },
+     {
+      "index": 2,
+      "seq": 238,
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 7.990143,
+        "queued": 7.990239,
+        "reply": {
+         "kind": "line",
+         "t": 8.082353,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 238,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 121,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.09221,
+      "chunk_s": 0.09221,
+      "reason": "ok",
+      "ack_t": 8.082353
+     },
+     {
+      "index": 3,
+      "seq": 239,
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 8.082428,
+        "queued": 8.082524,
+        "reply": {
+         "kind": "line",
+         "t": 8.174653,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 239,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 122,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.092225,
+      "chunk_s": 0.092225,
+      "reason": "ok",
+      "ack_t": 8.174653
+     }
+    ],
+    "reads": [
+     {
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 240,
+        "start": 8.174759,
+        "queued": 8.174771,
+        "reply": {
+         "kind": "readback",
+         "t": 8.266456,
+         "seq": 240,
+         "addr": 229376,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.091697
+     },
+     {
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 241,
+        "start": 8.266519,
+        "queued": 8.266533,
+        "reply": {
+         "kind": "readback",
+         "t": 8.358159,
+         "seq": 241,
+         "addr": 233472,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.09164
+     },
+     {
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 242,
+        "start": 8.35821,
+        "queued": 8.358224,
+        "reply": {
+         "kind": "readback",
+         "t": 8.449929,
+         "seq": 242,
+         "addr": 237568,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.091719
+     },
+     {
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 243,
+        "start": 8.449991,
+        "queued": 8.450007,
+        "reply": {
+         "kind": "readback",
+         "t": 8.541656,
+         "seq": 243,
+         "addr": 241664,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.091665
+     }
+    ]
+   },
+   "back": {
+    "attempts": [
+     {
+      "baud": 115200,
+      "divisor": 217,
+      "device_baud": 115207.3732718894,
+      "error_ppm": 64,
+      "at_baud": 460800,
+      "reply": {
+       "kind": "line",
+       "t": 8.545333,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 244,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 66,
+       "seq_known": true,
+       "len": 0,
+       "frames_committed": 122,
+       "naks": 5
+      },
+      "switched": true
+     }
+    ],
+    "switched": true
+   },
+   "status_after": {
+    "rx_bytes": 519611,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 122,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 491568,
+    "readbacks": 244,
+    "baud_div": 217,
+    "baud_reverts": 0,
+    "last_seq": 495,
+    "config": 34345482,
+    "clocks": 3421028067,
+    "build_id": 491208704,
+    "nak_port": 0
+   }
+  },
+  {
+   "rate": 921600,
+   "switch": {
+    "baud": 921600,
+    "divisor": 27,
+    "device_baud": 925925.925925926,
+    "error_ppm": 4694,
+    "at_baud": 115200,
+    "reply": {
+     "kind": "line",
+     "t": 8.675993,
+     "tag": "A",
+     "check_ok": true,
+     "seq": 246,
+     "reason": 0,
+     "reason_name": "ok",
+     "cmd": 66,
+     "seq_known": true,
+     "len": 0,
+     "frames_committed": 122,
+     "naks": 5
+    },
+    "switched": true
+   },
+   "status": {
+    "rx_bytes": 519639,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 122,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 491568,
+    "readbacks": 244,
+    "baud_div": 27,
+    "baud_reverts": 0,
+    "last_seq": 495,
+    "config": 34345482,
+    "clocks": 3423547078,
+    "build_id": 491208704,
+    "nak_port": 0
+   },
+   "pattern": {
+    "xor": 17,
+    "bytes": 16384,
+    "sha256": "228f66676c8e3f62cf25f459a40fb635a43fe669f0656b27835ef387a7e3980c",
+    "note": "the payload's first bytes XOR this key, so that every byte written differs from the main transfer's and the other trials' at that address"
+   },
+   "transfer": {
+    "store_before": {
+     "read_s": 0.186947,
+     "bytes_read": 16384,
+     "complete": true,
+     "sha256": "028f35054069499b68cd6b12075c67af2ff4632e83bd7fcaa69100bc87c76754",
+     "bytes_the_load_changes": 16384,
+     "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+     "reads": [
+      {
+       "addr": 229376,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 248,
+         "start": 8.764896,
+         "queued": 8.76491,
+         "reply": {
+          "kind": "readback",
+          "t": 8.811576,
+          "seq": 248,
+          "addr": 229376,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.04668
+      },
+      {
+       "addr": 233472,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 249,
+         "start": 8.81164,
+         "queued": 8.811656,
+         "reply": {
+          "kind": "readback",
+          "t": 8.858293,
+          "seq": 249,
+          "addr": 233472,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.046653
+      },
+      {
+       "addr": 237568,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 250,
+         "start": 8.858338,
+         "queued": 8.858354,
+         "reply": {
+          "kind": "readback",
+          "t": 8.905029,
+          "seq": 250,
+          "addr": 237568,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.046691
+      },
+      {
+       "addr": 241664,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 251,
+         "start": 8.905086,
+         "queued": 8.9051,
+         "reply": {
+          "kind": "readback",
+          "t": 8.951776,
+          "seq": 251,
+          "addr": 241664,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.04669
+      }
+     ]
+    },
+    "chunks": 4,
+    "acked": 4,
+    "payload_bytes": 16384,
+    "load_s": 0.188931,
+    "load_payload_Bps": 86719.3,
+    "readback_bytes": 16384,
+    "readback_s": 0.186946,
+    "readback_payload_Bps": 87640.5,
+    "identical": true,
+    "first_mismatch": null,
+    "retransmits": {},
+    "attempts": 4,
+    "late_replies": 0,
+    "latency_s": {
+     "n": 4,
+     "min": 0.04709,
+     "p50": 0.047146,
+     "p90": 0.0471869,
+     "p99": 0.04719689,
+     "max": 0.047198,
+     "mean": 0.047145,
+     "sd": 4.577481112285719e-05
+    },
+    "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+    "chunk_s": {
+     "n": 4,
+     "min": 0.04709,
+     "p50": 0.047146,
+     "p90": 0.0471869,
+     "p99": 0.04719689,
+     "max": 0.047198,
+     "mean": 0.047145,
+     "sd": 4.577481112285719e-05
+    },
+    "turnaround_s": {
+     "n": 4,
+     "min": 0.0024936458333333356,
+     "p50": 0.002549645833333336,
+     "p90": 0.002590545833333334,
+     "p99": 0.0026005358333333326,
+     "max": 0.0026016458333333325,
+     "mean": 0.002548645833333335,
+     "sd": 4.577481112285719e-05
+    },
+    "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+    "queued_s": {
+     "n": 4,
+     "min": 9.000000000014552e-05,
+     "p50": 9.550000000047021e-05,
+     "p90": 0.00011589999999976897,
+     "p99": 0.0001231899999995889,
+     "max": 0.0001239999999995689,
+     "mean": 0.00010125000000016371,
+     "sd": 1.5435349040054018e-05
+    },
+    "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+    "drained_s": null,
+    "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+    "gap_s": {
+     "n": 3,
+     "min": 6.1e-05,
+     "p50": 6.2e-05,
+     "p90": 8.840000000000001e-05,
+     "p99": 9.434e-05,
+     "max": 9.5e-05,
+     "mean": 7.266666666666667e-05,
+     "sd": 1.934769581457527e-05
+    },
+    "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+    "ideal_payload_Bps": 91846.1,
+    "per_chunk": [
+     {
+      "index": 0,
+      "seq": 252,
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 8.952406,
+        "queued": 8.9525,
+        "reply": {
+         "kind": "line",
+         "t": 8.999604,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 252,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 123,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.047198,
+      "chunk_s": 0.047198,
+      "reason": "ok",
+      "ack_t": 8.999604
+     },
+     {
+      "index": 1,
+      "seq": 253,
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 8.999699,
+        "queued": 8.999823,
+        "reply": {
+         "kind": "line",
+         "t": 9.04683,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 253,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 124,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.047131,
+      "chunk_s": 0.047131,
+      "reason": "ok",
+      "ack_t": 9.04683
+     },
+     {
+      "index": 2,
+      "seq": 254,
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 9.046892,
+        "queued": 9.046989,
+        "reply": {
+         "kind": "line",
+         "t": 9.093982,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 254,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 125,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.04709,
+      "chunk_s": 0.04709,
+      "reason": "ok",
+      "ack_t": 9.093982
+     },
+     {
+      "index": 3,
+      "seq": 255,
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 9.094043,
+        "queued": 9.094133,
+        "reply": {
+         "kind": "line",
+         "t": 9.141204,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 255,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 126,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.047161,
+      "chunk_s": 0.047161,
+      "reason": "ok",
+      "ack_t": 9.141204
+     }
+    ],
+    "reads": [
+     {
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 0,
+        "start": 9.141325,
+        "queued": 9.141342,
+        "reply": {
+         "kind": "readback",
+         "t": 9.188035,
+         "seq": 0,
+         "addr": 229376,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.04671
+     },
+     {
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 1,
+        "start": 9.188081,
+        "queued": 9.188094,
+        "reply": {
+         "kind": "readback",
+         "t": 9.234773,
+         "seq": 1,
+         "addr": 233472,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.046692
+     },
+     {
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 2,
+        "start": 9.234835,
+        "queued": 9.234849,
+        "reply": {
+         "kind": "readback",
+         "t": 9.281499,
+         "seq": 2,
+         "addr": 237568,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.046664
+     },
+     {
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 3,
+        "start": 9.281549,
+        "queued": 9.281561,
+        "reply": {
+         "kind": "readback",
+         "t": 9.328214,
+         "seq": 3,
+         "addr": 241664,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.046665
+     }
+    ]
+   },
+   "back": {
+    "attempts": [
+     {
+      "baud": 115200,
+      "divisor": 217,
+      "device_baud": 115207.3732718894,
+      "error_ppm": 64,
+      "at_baud": 921600,
+      "reply": {
+       "kind": "line",
+       "t": 9.331072,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 4,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 66,
+       "seq_known": true,
+       "len": 0,
+       "frames_committed": 126,
+       "naks": 5
+      },
+      "switched": true
+     }
+    ],
+    "switched": true
+   },
+   "status_after": {
+    "rx_bytes": 536219,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 126,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 507952,
+    "readbacks": 252,
+    "baud_div": 217,
+    "baud_reverts": 0,
+    "last_seq": 511,
+    "config": 34345482,
+    "clocks": 3440761276,
+    "build_id": 491208704,
+    "nak_port": 0
+   }
+  },
+  {
+   "rate": 1000000,
+   "switch": {
+    "baud": 1000000,
+    "divisor": 25,
+    "device_baud": 1000000.0,
+    "error_ppm": 0,
+    "at_baud": 115200,
+    "reply": {
+     "kind": "line",
+     "t": 9.465359,
+     "tag": "A",
+     "check_ok": true,
+     "seq": 6,
+     "reason": 0,
+     "reason_name": "ok",
+     "cmd": 66,
+     "seq_known": true,
+     "len": 0,
+     "frames_committed": 126,
+     "naks": 5
+    },
+    "switched": true
+   },
+   "status": {
+    "rx_bytes": 536247,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 126,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 507952,
+    "readbacks": 252,
+    "baud_div": 25,
+    "baud_reverts": 0,
+    "last_seq": 511,
+    "config": 34345482,
+    "clocks": 3443269124,
+    "build_id": 491208704,
+    "nak_port": 0
+   },
+   "pattern": {
+    "xor": 108,
+    "bytes": 16384,
+    "sha256": "7f1033cb471f5b69df40b0cad15f7dc79c3250bdabed342471716f71452d49f9",
+    "note": "the payload's first bytes XOR this key, so that every byte written differs from the main transfer's and the other trials' at that address"
+   },
+   "transfer": {
+    "store_before": {
+     "read_s": 0.173237,
+     "bytes_read": 16384,
+     "complete": true,
+     "sha256": "228f66676c8e3f62cf25f459a40fb635a43fe669f0656b27835ef387a7e3980c",
+     "bytes_the_load_changes": 16384,
+     "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+     "reads": [
+      {
+       "addr": 229376,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 8,
+         "start": 9.553589,
+         "queued": 9.553602,
+         "reply": {
+          "kind": "readback",
+          "t": 9.596866,
+          "seq": 8,
+          "addr": 229376,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.043277
+      },
+      {
+       "addr": 233472,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 9,
+         "start": 9.596922,
+         "queued": 9.596936,
+         "reply": {
+          "kind": "readback",
+          "t": 9.640178,
+          "seq": 9,
+          "addr": 233472,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.043256
+      },
+      {
+       "addr": 237568,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 10,
+         "start": 9.64023,
+         "queued": 9.640243,
+         "reply": {
+          "kind": "readback",
+          "t": 9.683468,
+          "seq": 10,
+          "addr": 237568,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.043238
+      },
+      {
+       "addr": 241664,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 11,
+         "start": 9.683517,
+         "queued": 9.683529,
+         "reply": {
+          "kind": "readback",
+          "t": 9.726769,
+          "seq": 11,
+          "addr": 241664,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.043252
+      }
+     ]
+    },
+    "chunks": 4,
+    "acked": 4,
+    "payload_bytes": 16384,
+    "load_s": 0.1745,
+    "load_payload_Bps": 93891.3,
+    "readback_bytes": 16384,
+    "readback_s": 0.17325,
+    "readback_payload_Bps": 94568.6,
+    "identical": true,
+    "first_mismatch": null,
+    "retransmits": {},
+    "attempts": 4,
+    "late_replies": 0,
+    "latency_s": {
+     "n": 4,
+     "min": 0.043496,
+     "p50": 0.043545,
+     "p90": 0.043601,
+     "p99": 0.0436226,
+     "max": 0.043625,
+     "mean": 0.04355275,
+     "sd": 5.341894170922139e-05
+    },
+    "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+    "chunk_s": {
+     "n": 4,
+     "min": 0.043496,
+     "p50": 0.043545,
+     "p90": 0.043601,
+     "p99": 0.0436226,
+     "max": 0.043625,
+     "mean": 0.04355275,
+     "sd": 5.341894170922139e-05
+    },
+    "turnaround_s": {
+     "n": 4,
+     "min": 0.0023960000000000023,
+     "p50": 0.0024450000000000027,
+     "p90": 0.0025010000000000006,
+     "p99": 0.0025225999999999994,
+     "max": 0.0025249999999999995,
+     "mean": 0.002452750000000002,
+     "sd": 5.341894170922139e-05
+    },
+    "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+    "queued_s": {
+     "n": 4,
+     "min": 9.299999999967667e-05,
+     "p50": 0.00010599999999971743,
+     "p90": 0.00012280000000028935,
+     "p99": 0.0001265800000008177,
+     "max": 0.0001270000000008764,
+     "mean": 0.00010799999999999699,
+     "sd": 1.5187714333444235e-05
+    },
+    "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+    "drained_s": null,
+    "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+    "gap_s": {
+     "n": 3,
+     "min": 6e-05,
+     "p50": 6.2e-05,
+     "p90": 9e-05,
+     "p99": 9.63e-05,
+     "max": 9.7e-05,
+     "mean": 7.3e-05,
+     "sd": 2.080865204668481e-05
+    },
+    "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+    "ideal_payload_Bps": 99659.4,
+    "per_chunk": [
+     {
+      "index": 0,
+      "seq": 12,
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 9.727229,
+        "queued": 9.727322,
+        "reply": {
+         "kind": "line",
+         "t": 9.770854,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 12,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 127,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.043625,
+      "chunk_s": 0.043625,
+      "reason": "ok",
+      "ack_t": 9.770854
+     },
+     {
+      "index": 1,
+      "seq": 13,
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 9.770916,
+        "queued": 9.771015,
+        "reply": {
+         "kind": "line",
+         "t": 9.814461,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 13,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 128,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.043545,
+      "chunk_s": 0.043545,
+      "reason": "ok",
+      "ack_t": 9.814461
+     },
+     {
+      "index": 2,
+      "seq": 14,
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 9.814521,
+        "queued": 9.814648,
+        "reply": {
+         "kind": "line",
+         "t": 9.858017,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 14,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 129,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.043496,
+      "chunk_s": 0.043496,
+      "reason": "ok",
+      "ack_t": 9.858017
+     },
+     {
+      "index": 3,
+      "seq": 15,
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 9.858114,
+        "queued": 9.858227,
+        "reply": {
+         "kind": "line",
+         "t": 9.901659,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 15,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 130,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.043545,
+      "chunk_s": 0.043545,
+      "reason": "ok",
+      "ack_t": 9.901659
+     }
+    ],
+    "reads": [
+     {
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 16,
+        "start": 9.901716,
+        "queued": 9.901728,
+        "reply": {
+         "kind": "readback",
+         "t": 9.944982,
+         "seq": 16,
+         "addr": 229376,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.043266
+     },
+     {
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 17,
+        "start": 9.945037,
+        "queued": 9.94505,
+        "reply": {
+         "kind": "readback",
+         "t": 9.98832,
+         "seq": 17,
+         "addr": 233472,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.043283
+     },
+     {
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 18,
+        "start": 9.988373,
+        "queued": 9.988387,
+        "reply": {
+         "kind": "readback",
+         "t": 10.031625,
+         "seq": 18,
+         "addr": 237568,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.043252
+     },
+     {
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 19,
+        "start": 10.03167,
+        "queued": 10.031683,
+        "reply": {
+         "kind": "readback",
+         "t": 10.074916,
+         "seq": 19,
+         "addr": 241664,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.043246
+     }
+    ]
+   },
+   "back": {
+    "attempts": [
+     {
+      "baud": 115200,
+      "divisor": 217,
+      "device_baud": 115207.3732718894,
+      "error_ppm": 64,
+      "at_baud": 1000000,
+      "reply": {
+       "kind": "line",
+       "t": 10.07759,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 20,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 66,
+       "seq_known": true,
+       "len": 0,
+       "frames_committed": 130,
+       "naks": 5
+      },
+      "switched": true
+     }
+    ],
+    "switched": true
+   },
+   "status_after": {
+    "rx_bytes": 552827,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 130,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 524336,
+    "readbacks": 260,
+    "baud_div": 217,
+    "baud_reverts": 0,
+    "last_seq": 271,
+    "config": 34345482,
+    "clocks": 3459315600,
+    "build_id": 491208704,
+    "nak_port": 0
+   }
+  },
+  {
+   "rate": 1500000,
+   "switch": {
+    "baud": 1500000,
+    "divisor": 17,
+    "device_baud": 1470588.2352941176,
+    "error_ppm": -19608,
+    "at_baud": 115200,
+    "reply": {
+     "kind": "line",
+     "t": 10.207506,
+     "tag": "A",
+     "check_ok": true,
+     "seq": 22,
+     "reason": 0,
+     "reason_name": "ok",
+     "cmd": 66,
+     "seq_known": true,
+     "len": 0,
+     "frames_committed": 130,
+     "naks": 5
+    },
+    "switched": true
+   },
+   "status": {
+    "rx_bytes": 552855,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 130,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 524336,
+    "readbacks": 260,
+    "baud_div": 17,
+    "baud_reverts": 0,
+    "last_seq": 271,
+    "config": 34345482,
+    "clocks": 3461920305,
+    "build_id": 491208704,
+    "nak_port": 0
+   },
+   "pattern": {
+    "xor": 199,
+    "bytes": 16384,
+    "sha256": "b0e081852404689cd2045fd41ad347bc9f2e4db0aee2121ac1ed0c59264a7097",
+    "note": "the payload's first bytes XOR this key, so that every byte written differs from the main transfer's and the other trials' at that address"
+   },
+   "transfer": {
+    "store_before": {
+     "read_s": 0.118431,
+     "bytes_read": 16384,
+     "complete": true,
+     "sha256": "7f1033cb471f5b69df40b0cad15f7dc79c3250bdabed342471716f71452d49f9",
+     "bytes_the_load_changes": 16384,
+     "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+     "reads": [
+      {
+       "addr": 229376,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 24,
+         "start": 10.298813,
+         "queued": 10.298828,
+         "reply": {
+          "kind": "readback",
+          "t": 10.32834,
+          "seq": 24,
+          "addr": 229376,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.029527
+      },
+      {
+       "addr": 233472,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 25,
+         "start": 10.328379,
+         "queued": 10.328392,
+         "reply": {
+          "kind": "readback",
+          "t": 10.357947,
+          "seq": 25,
+          "addr": 233472,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.029568
+      },
+      {
+       "addr": 237568,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 26,
+         "start": 10.358027,
+         "queued": 10.358065,
+         "reply": {
+          "kind": "readback",
+          "t": 10.387589,
+          "seq": 26,
+          "addr": 237568,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.029562
+      },
+      {
+       "addr": 241664,
+       "len": 4096,
+       "attempts": [
+        {
+         "seq": 27,
+         "start": 10.387637,
+         "queued": 10.38765,
+         "reply": {
+          "kind": "readback",
+          "t": 10.417193,
+          "seq": 27,
+          "addr": 241664,
+          "len": 4096,
+          "crc_ok": true
+         }
+        }
+       ],
+       "latency_s": 0.029556
+      }
+     ]
+    },
+    "chunks": 4,
+    "acked": 4,
+    "payload_bytes": 16384,
+    "load_s": 0.117709,
+    "load_payload_Bps": 139191.1,
+    "readback_bytes": 16384,
+    "readback_s": 0.118396,
+    "readback_payload_Bps": 138383.1,
+    "identical": true,
+    "first_mismatch": null,
+    "retransmits": {},
+    "attempts": 4,
+    "late_replies": 0,
+    "latency_s": {
+     "n": 4,
+     "min": 0.029332,
+     "p50": 0.0293635,
+     "p90": 0.0293999,
+     "p99": 0.02940989,
+     "max": 0.029411,
+     "mean": 0.0293675,
+     "sd": 3.368976105584569e-05
+    },
+    "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+    "chunk_s": {
+     "n": 4,
+     "min": 0.029332,
+     "p50": 0.0293635,
+     "p90": 0.0293999,
+     "p99": 0.02940989,
+     "max": 0.029411,
+     "mean": 0.0293675,
+     "sd": 3.368976105584569e-05
+    },
+    "turnaround_s": {
+     "n": 4,
+     "min": 0.0019319999999999997,
+     "p50": 0.0019635,
+     "p90": 0.0019998999999999993,
+     "p99": 0.002009889999999999,
+     "max": 0.002010999999999999,
+     "mean": 0.0019674999999999996,
+     "sd": 3.368976105584569e-05
+    },
+    "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+    "queued_s": {
+     "n": 4,
+     "min": 6.49999999993156e-05,
+     "p50": 8.750000000024016e-05,
+     "p90": 9.550000000029258e-05,
+     "p99": 9.685000000024146e-05,
+     "max": 9.700000000023579e-05,
+     "mean": 8.425000000000793e-05,
+     "sd": 1.4080127840788146e-05
+    },
+    "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+    "drained_s": null,
+    "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+    "gap_s": {
+     "n": 3,
+     "min": 5.8e-05,
+     "p50": 5.9e-05,
+     "p90": 5.9800000000000003e-05,
+     "p99": 5.998e-05,
+     "max": 6e-05,
+     "mean": 5.9e-05,
+     "sd": 1.0000000000000006e-06
+    },
+    "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+    "ideal_payload_Bps": 149489.1,
+    "per_chunk": [
+     {
+      "index": 0,
+      "seq": 28,
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 10.417681,
+        "queued": 10.417746,
+        "reply": {
+         "kind": "line",
+         "t": 10.447013,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 28,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 131,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.029332,
+      "chunk_s": 0.029332,
+      "reason": "ok",
+      "ack_t": 10.447013
+     },
+     {
+      "index": 1,
+      "seq": 29,
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 10.447071,
+        "queued": 10.447154,
+        "reply": {
+         "kind": "line",
+         "t": 10.476424,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 29,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 132,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.029353,
+      "chunk_s": 0.029353,
+      "reason": "ok",
+      "ack_t": 10.476424
+     },
+     {
+      "index": 2,
+      "seq": 30,
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 10.476483,
+        "queued": 10.476575,
+        "reply": {
+         "kind": "line",
+         "t": 10.505894,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 30,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 133,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.029411,
+      "chunk_s": 0.029411,
+      "reason": "ok",
+      "ack_t": 10.505894
+     },
+     {
+      "index": 3,
+      "seq": 31,
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "start": 10.505954,
+        "queued": 10.506051,
+        "reply": {
+         "kind": "line",
+         "t": 10.535328,
+         "tag": "A",
+         "check_ok": true,
+         "seq": 31,
+         "reason": 0,
+         "reason_name": "ok",
+         "cmd": 76,
+         "seq_known": true,
+         "len": 4096,
+         "frames_committed": 134,
+         "naks": 5
+        }
+       }
+      ],
+      "injected": [],
+      "acked": true,
+      "latency_s": 0.029374,
+      "chunk_s": 0.029374,
+      "reason": "ok",
+      "ack_t": 10.535328
+     }
+    ],
+    "reads": [
+     {
+      "addr": 229376,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 32,
+        "start": 10.535381,
+        "queued": 10.535393,
+        "reply": {
+         "kind": "readback",
+         "t": 10.564927,
+         "seq": 32,
+         "addr": 229376,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.029546
+     },
+     {
+      "addr": 233472,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 33,
+        "start": 10.564973,
+        "queued": 10.564986,
+        "reply": {
+         "kind": "readback",
+         "t": 10.594506,
+         "seq": 33,
+         "addr": 233472,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.029533
+     },
+     {
+      "addr": 237568,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 34,
+        "start": 10.594565,
+        "queued": 10.594581,
+        "reply": {
+         "kind": "readback",
+         "t": 10.624118,
+         "seq": 34,
+         "addr": 237568,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.029553
+     },
+     {
+      "addr": 241664,
+      "len": 4096,
+      "attempts": [
+       {
+        "seq": 35,
+        "start": 10.624169,
+        "queued": 10.624181,
+        "reply": {
+         "kind": "readback",
+         "t": 10.653721,
+         "seq": 35,
+         "addr": 241664,
+         "len": 4096,
+         "crc_ok": true
+        }
+       }
+      ],
+      "latency_s": 0.029552
+     }
+    ]
+   },
+   "back": {
+    "attempts": [
+     {
+      "baud": 115200,
+      "divisor": 217,
+      "device_baud": 115207.3732718894,
+      "error_ppm": 64,
+      "at_baud": 1500000,
+      "reply": {
+       "kind": "line",
+       "t": 10.655797,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 36,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 66,
+       "seq_known": true,
+       "len": 0,
+       "frames_committed": 134,
+       "naks": 5
+      },
+      "switched": true
+     }
+    ],
+    "switched": true
+   },
+   "status_after": {
+    "rx_bytes": 569435,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "fifo_overflow_bytes": 0,
+    "fifo_high_water": 1,
+    "ignored_bytes": 64,
+    "frames_committed": 134,
+    "frames_duplicate": 1,
+    "nak_crc": 2,
+    "nak_length": 0,
+    "nak_timeout": 3,
+    "nak_framing": 0,
+    "nak_command": 0,
+    "nak_overflow": 0,
+    "bytes_committed": 540720,
+    "readbacks": 268,
+    "baud_div": 217,
+    "baud_reverts": 0,
+    "last_seq": 287,
+    "config": 34345482,
+    "clocks": 3473927051,
+    "build_id": 491208704,
+    "nak_port": 0
+   }
+  }
+ ],
+ "identity_after": {
+  "xadc": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-xadc"
+   ],
+   "start_s": 11.03,
+   "returncode": 0,
+   "output": [
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"temp\": 43.9953, ",
+    "    \"maxtemp\": 51.593, ",
+    "    \"mintemp\": 43.6338, ",
+    "\"raw\":  {\"0\": 41259, \"1\": 21754, \"2\": 39107, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21738, \"7\": 0},",
+    "\"vccint\": 0.993896, ",
+    "   \"maxvccint\": 0.997559, ",
+    "   \"minvccint\": 0.990234, ",
+    "\"vccaux\": 1.78931, ",
+    "   \"maxvccaux\": 1.79224, ",
+    "   \"minvccaux\": 1.78711, ",
+    "}"
+   ],
+   "value": {
+    "temp": 43.9953,
+    "maxtemp": 51.593,
+    "mintemp": 43.6338,
+    "raw": {
+     "0": 41259,
+     "1": 21754,
+     "2": 39107,
+     "3": 0,
+     "4": 0,
+     "5": 0,
+     "6": 21738,
+     "7": 0
+    },
+    "vccint": 0.993896,
+    "maxvccint": 0.997559,
+    "minvccint": 0.990234,
+    "vccaux": 1.78931,
+    "maxvccaux": 1.79224,
+    "minvccaux": 1.78711
+   }
+  }
+ },
+ "device_events": [
+  {
+   "kind": "line",
+   "t": 0.501113,
+   "tag": "C",
+   "a": "c8170000",
+   "v": 469829,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.501113,
+   "tag": "C",
+   "a": "c8170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.501113,
+   "tag": "C",
+   "a": "c8170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.506678,
+   "tag": "C",
+   "a": "c8170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.506678,
+   "tag": "C",
+   "a": "c8170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.506678,
+   "tag": "C",
+   "a": "c8170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.512019,
+   "tag": "C",
+   "a": "c8170006",
+   "v": 110,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.512019,
+   "tag": "C",
+   "a": "c8170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.512019,
+   "tag": "C",
+   "a": "c8170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.517786,
+   "tag": "C",
+   "a": "c8170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.517786,
+   "tag": "C",
+   "a": "c817000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.517786,
+   "tag": "C",
+   "a": "c817000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.52325,
+   "tag": "C",
+   "a": "c817000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.52325,
+   "tag": "C",
+   "a": "c817000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.52325,
+   "tag": "C",
+   "a": "c817000e",
+   "v": 442416,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.52325,
+   "tag": "C",
+   "a": "c817000f",
+   "v": 220,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.528952,
+   "tag": "C",
+   "a": "c8170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.528952,
+   "tag": "C",
+   "a": "c8170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.528952,
+   "tag": "C",
+   "a": "c8170012",
+   "v": 444,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.534476,
+   "tag": "C",
+   "a": "c8170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.534476,
+   "tag": "C",
+   "a": "c8170014",
+   "v": 3217700155,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.534476,
+   "tag": "C",
+   "a": "c8170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.537453,
+   "tag": "C",
+   "a": "c8170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 2.340823,
+   "tag": "A",
+   "a": "cd031000",
+   "v": 7274501,
+   "check_ok": true,
+   "seq": 205,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 2.700645,
+   "tag": "A",
+   "a": "ce031000",
+   "v": 7340037,
+   "check_ok": true,
+   "seq": 206,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 3.060552,
+   "tag": "A",
+   "a": "cf031000",
+   "v": 7405573,
+   "check_ok": true,
+   "seq": 207,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 3.420433,
+   "tag": "A",
+   "a": "d0031000",
+   "v": 7471109,
+   "check_ok": true,
+   "seq": 208,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 4.873544,
+   "tag": "C",
+   "a": "d5170000",
+   "v": 486395,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.873544,
+   "tag": "C",
+   "a": "d5170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.873544,
+   "tag": "C",
+   "a": "d5170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.878917,
+   "tag": "C",
+   "a": "d5170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.878917,
+   "tag": "C",
+   "a": "d5170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.878917,
+   "tag": "C",
+   "a": "d5170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.88426,
+   "tag": "C",
+   "a": "d5170006",
+   "v": 114,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.88426,
+   "tag": "C",
+   "a": "d5170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.88426,
+   "tag": "C",
+   "a": "d5170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.889361,
+   "tag": "C",
+   "a": "d5170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.889361,
+   "tag": "C",
+   "a": "d517000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.889361,
+   "tag": "C",
+   "a": "d517000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.894874,
+   "tag": "C",
+   "a": "d517000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.894874,
+   "tag": "C",
+   "a": "d517000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.894874,
+   "tag": "C",
+   "a": "d517000e",
+   "v": 458800,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.894874,
+   "tag": "C",
+   "a": "d517000f",
+   "v": 228,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.900293,
+   "tag": "C",
+   "a": "d5170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.900293,
+   "tag": "C",
+   "a": "d5170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.900293,
+   "tag": "C",
+   "a": "d5170012",
+   "v": 464,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.90611,
+   "tag": "C",
+   "a": "d5170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.90611,
+   "tag": "C",
+   "a": "d5170014",
+   "v": 3326989005,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.90611,
+   "tag": "C",
+   "a": "d5170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.908996,
+   "tag": "C",
+   "a": "d5170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 4.914609,
+   "tag": "A",
+   "a": "d6090000",
+   "v": 7471109,
+   "check_ok": true,
+   "seq": 214,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 5.0009,
+   "tag": "C",
+   "a": "d7170000",
+   "v": 486423,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.0009,
+   "tag": "C",
+   "a": "d7170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.0009,
+   "tag": "C",
+   "a": "d7170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.003649,
+   "tag": "C",
+   "a": "d7170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.003649,
+   "tag": "C",
+   "a": "d7170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.003649,
+   "tag": "C",
+   "a": "d7170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.006386,
+   "tag": "C",
+   "a": "d7170006",
+   "v": 114,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.006386,
+   "tag": "C",
+   "a": "d7170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.006386,
+   "tag": "C",
+   "a": "d7170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.009391,
+   "tag": "C",
+   "a": "d7170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.009391,
+   "tag": "C",
+   "a": "d717000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.009391,
+   "tag": "C",
+   "a": "d717000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.012024,
+   "tag": "C",
+   "a": "d717000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.012024,
+   "tag": "C",
+   "a": "d717000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.012024,
+   "tag": "C",
+   "a": "d717000e",
+   "v": 458800,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.012024,
+   "tag": "C",
+   "a": "d717000f",
+   "v": 228,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.01478,
+   "tag": "C",
+   "a": "d7170010",
+   "v": 109,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.01478,
+   "tag": "C",
+   "a": "d7170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.01478,
+   "tag": "C",
+   "a": "d7170012",
+   "v": 464,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.017664,
+   "tag": "C",
+   "a": "d7170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.017664,
+   "tag": "C",
+   "a": "d7170014",
+   "v": 3329857466,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.017664,
+   "tag": "C",
+   "a": "d7170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.020112,
+   "tag": "C",
+   "a": "d7170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 5.932488,
+   "tag": "A",
+   "a": "dc031000",
+   "v": 7536645,
+   "check_ok": true,
+   "seq": 220,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 6.113971,
+   "tag": "A",
+   "a": "dd031000",
+   "v": 7602181,
+   "check_ok": true,
+   "seq": 221,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 6.295445,
+   "tag": "A",
+   "a": "de031000",
+   "v": 7667717,
+   "check_ok": true,
+   "seq": 222,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 6.476928,
+   "tag": "A",
+   "a": "df031000",
+   "v": 7733253,
+   "check_ok": true,
+   "seq": 223,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 7.211541,
+   "tag": "A",
+   "a": "e4090000",
+   "v": 7733253,
+   "check_ok": true,
+   "seq": 228,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 7.297536,
+   "tag": "C",
+   "a": "e5170000",
+   "v": 503003,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.297536,
+   "tag": "C",
+   "a": "e5170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.297536,
+   "tag": "C",
+   "a": "e5170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.302897,
+   "tag": "C",
+   "a": "e5170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.302897,
+   "tag": "C",
+   "a": "e5170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.302897,
+   "tag": "C",
+   "a": "e5170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.308371,
+   "tag": "C",
+   "a": "e5170006",
+   "v": 118,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.308371,
+   "tag": "C",
+   "a": "e5170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.308371,
+   "tag": "C",
+   "a": "e5170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.314162,
+   "tag": "C",
+   "a": "e5170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.314162,
+   "tag": "C",
+   "a": "e517000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.314162,
+   "tag": "C",
+   "a": "e517000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.319644,
+   "tag": "C",
+   "a": "e517000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.319644,
+   "tag": "C",
+   "a": "e517000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.319644,
+   "tag": "C",
+   "a": "e517000e",
+   "v": 475184,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.319644,
+   "tag": "C",
+   "a": "e517000f",
+   "v": 236,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.325061,
+   "tag": "C",
+   "a": "e5170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.325061,
+   "tag": "C",
+   "a": "e5170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.325061,
+   "tag": "C",
+   "a": "e5170012",
+   "v": 479,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.330867,
+   "tag": "C",
+   "a": "e5170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.330867,
+   "tag": "C",
+   "a": "e5170014",
+   "v": 3387609032,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.330867,
+   "tag": "C",
+   "a": "e5170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.333723,
+   "tag": "C",
+   "a": "e5170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.33925,
+   "tag": "A",
+   "a": "e6090000",
+   "v": 7733253,
+   "check_ok": true,
+   "seq": 230,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 7.426648,
+   "tag": "C",
+   "a": "e7170000",
+   "v": 503031,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.426648,
+   "tag": "C",
+   "a": "e7170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.426648,
+   "tag": "C",
+   "a": "e7170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.427963,
+   "tag": "C",
+   "a": "e7170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.427963,
+   "tag": "C",
+   "a": "e7170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.427963,
+   "tag": "C",
+   "a": "e7170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.429327,
+   "tag": "C",
+   "a": "e7170006",
+   "v": 118,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.429327,
+   "tag": "C",
+   "a": "e7170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.429327,
+   "tag": "C",
+   "a": "e7170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.430826,
+   "tag": "C",
+   "a": "e7170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.430826,
+   "tag": "C",
+   "a": "e717000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.430826,
+   "tag": "C",
+   "a": "e717000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.432115,
+   "tag": "C",
+   "a": "e717000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.432115,
+   "tag": "C",
+   "a": "e717000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.432115,
+   "tag": "C",
+   "a": "e717000e",
+   "v": 475184,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.432115,
+   "tag": "C",
+   "a": "e717000f",
+   "v": 236,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.433478,
+   "tag": "C",
+   "a": "e7170010",
+   "v": 54,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.433478,
+   "tag": "C",
+   "a": "e7170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.433478,
+   "tag": "C",
+   "a": "e7170012",
+   "v": 479,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.43491,
+   "tag": "C",
+   "a": "e7170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.43491,
+   "tag": "C",
+   "a": "e7170014",
+   "v": 3390328254,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.43491,
+   "tag": "C",
+   "a": "e7170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.43709,
+   "tag": "C",
+   "a": "e7170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 7.897825,
+   "tag": "A",
+   "a": "ec031000",
+   "v": 7798789,
+   "check_ok": true,
+   "seq": 236,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 7.990079,
+   "tag": "A",
+   "a": "ed031000",
+   "v": 7864325,
+   "check_ok": true,
+   "seq": 237,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 8.082353,
+   "tag": "A",
+   "a": "ee031000",
+   "v": 7929861,
+   "check_ok": true,
+   "seq": 238,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 8.174653,
+   "tag": "A",
+   "a": "ef031000",
+   "v": 7995397,
+   "check_ok": true,
+   "seq": 239,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 8.545333,
+   "tag": "A",
+   "a": "f4090000",
+   "v": 7995397,
+   "check_ok": true,
+   "seq": 244,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 8.634184,
+   "tag": "C",
+   "a": "f5170000",
+   "v": 519611,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.634184,
+   "tag": "C",
+   "a": "f5170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.634184,
+   "tag": "C",
+   "a": "f5170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.639736,
+   "tag": "C",
+   "a": "f5170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.639736,
+   "tag": "C",
+   "a": "f5170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.639736,
+   "tag": "C",
+   "a": "f5170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.645167,
+   "tag": "C",
+   "a": "f5170006",
+   "v": 122,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.645167,
+   "tag": "C",
+   "a": "f5170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.645167,
+   "tag": "C",
+   "a": "f5170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.650875,
+   "tag": "C",
+   "a": "f5170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.650875,
+   "tag": "C",
+   "a": "f517000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.650875,
+   "tag": "C",
+   "a": "f517000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.656394,
+   "tag": "C",
+   "a": "f517000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.656394,
+   "tag": "C",
+   "a": "f517000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.656394,
+   "tag": "C",
+   "a": "f517000e",
+   "v": 491568,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.656394,
+   "tag": "C",
+   "a": "f517000f",
+   "v": 244,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.661855,
+   "tag": "C",
+   "a": "f5170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.661855,
+   "tag": "C",
+   "a": "f5170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.661855,
+   "tag": "C",
+   "a": "f5170012",
+   "v": 495,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.667581,
+   "tag": "C",
+   "a": "f5170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.667581,
+   "tag": "C",
+   "a": "f5170014",
+   "v": 3421028067,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.667581,
+   "tag": "C",
+   "a": "f5170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.670495,
+   "tag": "C",
+   "a": "f5170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.675993,
+   "tag": "A",
+   "a": "f6090000",
+   "v": 7995397,
+   "check_ok": true,
+   "seq": 246,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 8.758737,
+   "tag": "C",
+   "a": "f7170000",
+   "v": 519639,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.758737,
+   "tag": "C",
+   "a": "f7170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.758737,
+   "tag": "C",
+   "a": "f7170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.75933,
+   "tag": "C",
+   "a": "f7170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.75933,
+   "tag": "C",
+   "a": "f7170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.75933,
+   "tag": "C",
+   "a": "f7170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.760004,
+   "tag": "C",
+   "a": "f7170006",
+   "v": 122,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.760004,
+   "tag": "C",
+   "a": "f7170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.760004,
+   "tag": "C",
+   "a": "f7170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.760718,
+   "tag": "C",
+   "a": "f7170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.760718,
+   "tag": "C",
+   "a": "f717000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.760718,
+   "tag": "C",
+   "a": "f717000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.761421,
+   "tag": "C",
+   "a": "f717000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.761421,
+   "tag": "C",
+   "a": "f717000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.761421,
+   "tag": "C",
+   "a": "f717000e",
+   "v": 491568,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.761421,
+   "tag": "C",
+   "a": "f717000f",
+   "v": 244,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.762103,
+   "tag": "C",
+   "a": "f7170010",
+   "v": 27,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.762103,
+   "tag": "C",
+   "a": "f7170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.762103,
+   "tag": "C",
+   "a": "f7170012",
+   "v": 495,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.762818,
+   "tag": "C",
+   "a": "f7170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.762818,
+   "tag": "C",
+   "a": "f7170014",
+   "v": 3423547078,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.762818,
+   "tag": "C",
+   "a": "f7170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.764476,
+   "tag": "C",
+   "a": "f7170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 8.999604,
+   "tag": "A",
+   "a": "fc031000",
+   "v": 8060933,
+   "check_ok": true,
+   "seq": 252,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 9.04683,
+   "tag": "A",
+   "a": "fd031000",
+   "v": 8126469,
+   "check_ok": true,
+   "seq": 253,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 9.093982,
+   "tag": "A",
+   "a": "fe031000",
+   "v": 8192005,
+   "check_ok": true,
+   "seq": 254,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 9.141204,
+   "tag": "A",
+   "a": "ff031000",
+   "v": 8257541,
+   "check_ok": true,
+   "seq": 255,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 9.331072,
+   "tag": "A",
+   "a": "04090000",
+   "v": 8257541,
+   "check_ok": true,
+   "seq": 4,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 9.423588,
+   "tag": "C",
+   "a": "05170000",
+   "v": 536219,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.423588,
+   "tag": "C",
+   "a": "05170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.423588,
+   "tag": "C",
+   "a": "05170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.42905,
+   "tag": "C",
+   "a": "05170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.42905,
+   "tag": "C",
+   "a": "05170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.42905,
+   "tag": "C",
+   "a": "05170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.434529,
+   "tag": "C",
+   "a": "05170006",
+   "v": 126,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.434529,
+   "tag": "C",
+   "a": "05170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.434529,
+   "tag": "C",
+   "a": "05170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.44027,
+   "tag": "C",
+   "a": "05170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.44027,
+   "tag": "C",
+   "a": "0517000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.44027,
+   "tag": "C",
+   "a": "0517000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.445795,
+   "tag": "C",
+   "a": "0517000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.445795,
+   "tag": "C",
+   "a": "0517000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.445795,
+   "tag": "C",
+   "a": "0517000e",
+   "v": 507952,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.445795,
+   "tag": "C",
+   "a": "0517000f",
+   "v": 252,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.451214,
+   "tag": "C",
+   "a": "05170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.451214,
+   "tag": "C",
+   "a": "05170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.451214,
+   "tag": "C",
+   "a": "05170012",
+   "v": 511,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.456905,
+   "tag": "C",
+   "a": "05170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.456905,
+   "tag": "C",
+   "a": "05170014",
+   "v": 3440761276,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.456905,
+   "tag": "C",
+   "a": "05170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.45986,
+   "tag": "C",
+   "a": "05170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.465359,
+   "tag": "A",
+   "a": "06090000",
+   "v": 8257541,
+   "check_ok": true,
+   "seq": 6,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 9.547855,
+   "tag": "C",
+   "a": "07170000",
+   "v": 536247,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.547855,
+   "tag": "C",
+   "a": "07170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.547855,
+   "tag": "C",
+   "a": "07170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.548443,
+   "tag": "C",
+   "a": "07170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.548443,
+   "tag": "C",
+   "a": "07170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.548443,
+   "tag": "C",
+   "a": "07170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.549045,
+   "tag": "C",
+   "a": "07170006",
+   "v": 126,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.549045,
+   "tag": "C",
+   "a": "07170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.549045,
+   "tag": "C",
+   "a": "07170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.549726,
+   "tag": "C",
+   "a": "07170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.549726,
+   "tag": "C",
+   "a": "0717000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.549726,
+   "tag": "C",
+   "a": "0717000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.550351,
+   "tag": "C",
+   "a": "0717000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.550351,
+   "tag": "C",
+   "a": "0717000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.550351,
+   "tag": "C",
+   "a": "0717000e",
+   "v": 507952,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.550351,
+   "tag": "C",
+   "a": "0717000f",
+   "v": 252,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.550971,
+   "tag": "C",
+   "a": "07170010",
+   "v": 25,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.550971,
+   "tag": "C",
+   "a": "07170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.550971,
+   "tag": "C",
+   "a": "07170012",
+   "v": 511,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.551664,
+   "tag": "C",
+   "a": "07170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.551664,
+   "tag": "C",
+   "a": "07170014",
+   "v": 3443269124,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.551664,
+   "tag": "C",
+   "a": "07170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.553174,
+   "tag": "C",
+   "a": "07170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 9.770854,
+   "tag": "A",
+   "a": "0c031000",
+   "v": 8323077,
+   "check_ok": true,
+   "seq": 12,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 9.814461,
+   "tag": "A",
+   "a": "0d031000",
+   "v": 8388613,
+   "check_ok": true,
+   "seq": 13,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 9.858017,
+   "tag": "A",
+   "a": "0e031000",
+   "v": 8454149,
+   "check_ok": true,
+   "seq": 14,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 9.901659,
+   "tag": "A",
+   "a": "0f031000",
+   "v": 8519685,
+   "check_ok": true,
+   "seq": 15,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 10.07759,
+   "tag": "A",
+   "a": "14090000",
+   "v": 8519685,
+   "check_ok": true,
+   "seq": 20,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 10.165758,
+   "tag": "C",
+   "a": "15170000",
+   "v": 552827,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.165758,
+   "tag": "C",
+   "a": "15170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.165758,
+   "tag": "C",
+   "a": "15170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.171307,
+   "tag": "C",
+   "a": "15170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.171307,
+   "tag": "C",
+   "a": "15170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.171307,
+   "tag": "C",
+   "a": "15170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.176705,
+   "tag": "C",
+   "a": "15170006",
+   "v": 130,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.176705,
+   "tag": "C",
+   "a": "15170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.176705,
+   "tag": "C",
+   "a": "15170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.182372,
+   "tag": "C",
+   "a": "15170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.182372,
+   "tag": "C",
+   "a": "1517000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.182372,
+   "tag": "C",
+   "a": "1517000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.18791,
+   "tag": "C",
+   "a": "1517000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.18791,
+   "tag": "C",
+   "a": "1517000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.18791,
+   "tag": "C",
+   "a": "1517000e",
+   "v": 524336,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.18791,
+   "tag": "C",
+   "a": "1517000f",
+   "v": 260,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.193382,
+   "tag": "C",
+   "a": "15170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.193382,
+   "tag": "C",
+   "a": "15170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.193382,
+   "tag": "C",
+   "a": "15170012",
+   "v": 271,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.199132,
+   "tag": "C",
+   "a": "15170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.199132,
+   "tag": "C",
+   "a": "15170014",
+   "v": 3459315600,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.199132,
+   "tag": "C",
+   "a": "15170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.202057,
+   "tag": "C",
+   "a": "15170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.207506,
+   "tag": "A",
+   "a": "16090000",
+   "v": 8519685,
+   "check_ok": true,
+   "seq": 22,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 10.294945,
+   "tag": "C",
+   "a": "17170000",
+   "v": 552855,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.294945,
+   "tag": "C",
+   "a": "17170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.294945,
+   "tag": "C",
+   "a": "17170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.295284,
+   "tag": "C",
+   "a": "17170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.295284,
+   "tag": "C",
+   "a": "17170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.295284,
+   "tag": "C",
+   "a": "17170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.295701,
+   "tag": "C",
+   "a": "17170006",
+   "v": 130,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.295701,
+   "tag": "C",
+   "a": "17170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.295701,
+   "tag": "C",
+   "a": "17170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.296157,
+   "tag": "C",
+   "a": "17170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.296157,
+   "tag": "C",
+   "a": "1717000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.296157,
+   "tag": "C",
+   "a": "1717000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.296599,
+   "tag": "C",
+   "a": "1717000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.296599,
+   "tag": "C",
+   "a": "1717000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.296599,
+   "tag": "C",
+   "a": "1717000e",
+   "v": 524336,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.296599,
+   "tag": "C",
+   "a": "1717000f",
+   "v": 260,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.297021,
+   "tag": "C",
+   "a": "17170010",
+   "v": 17,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.297021,
+   "tag": "C",
+   "a": "17170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.297021,
+   "tag": "C",
+   "a": "17170012",
+   "v": 271,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.29747,
+   "tag": "C",
+   "a": "17170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.29747,
+   "tag": "C",
+   "a": "17170014",
+   "v": 3461920305,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.29747,
+   "tag": "C",
+   "a": "17170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.298407,
+   "tag": "C",
+   "a": "17170016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.447013,
+   "tag": "A",
+   "a": "1c031000",
+   "v": 8585221,
+   "check_ok": true,
+   "seq": 28,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 10.476424,
+   "tag": "A",
+   "a": "1d031000",
+   "v": 8650757,
+   "check_ok": true,
+   "seq": 29,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 10.505894,
+   "tag": "A",
+   "a": "1e031000",
+   "v": 8716293,
+   "check_ok": true,
+   "seq": 30,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 10.535328,
+   "tag": "A",
+   "a": "1f031000",
+   "v": 8781829,
+   "check_ok": true,
+   "seq": 31,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 10.655797,
+   "tag": "A",
+   "a": "24090000",
+   "v": 8781829,
+   "check_ok": true,
+   "seq": 36,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 66,
+   "seq_known": true,
+   "len": 0
+  },
+  {
+   "kind": "line",
+   "t": 10.750205,
+   "tag": "C",
+   "a": "25170000",
+   "v": 569435,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.750205,
+   "tag": "C",
+   "a": "25170001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.750205,
+   "tag": "C",
+   "a": "25170002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.755703,
+   "tag": "C",
+   "a": "25170003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.755703,
+   "tag": "C",
+   "a": "25170004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.755703,
+   "tag": "C",
+   "a": "25170005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.761135,
+   "tag": "C",
+   "a": "25170006",
+   "v": 134,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.761135,
+   "tag": "C",
+   "a": "25170007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.761135,
+   "tag": "C",
+   "a": "25170008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.766874,
+   "tag": "C",
+   "a": "25170009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.766874,
+   "tag": "C",
+   "a": "2517000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.766874,
+   "tag": "C",
+   "a": "2517000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.77246,
+   "tag": "C",
+   "a": "2517000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.77246,
+   "tag": "C",
+   "a": "2517000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.77246,
+   "tag": "C",
+   "a": "2517000e",
+   "v": 540720,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.77246,
+   "tag": "C",
+   "a": "2517000f",
+   "v": 268,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.777854,
+   "tag": "C",
+   "a": "25170010",
+   "v": 217,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.777854,
+   "tag": "C",
+   "a": "25170011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.777854,
+   "tag": "C",
+   "a": "25170012",
+   "v": 287,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.783571,
+   "tag": "C",
+   "a": "25170013",
+   "v": 34345482,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.783571,
+   "tag": "C",
+   "a": "25170014",
+   "v": 3473927051,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.783571,
+   "tag": "C",
+   "a": "25170015",
+   "v": 491208704,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 10.786426,
+   "tag": "C",
+   "a": "25170016",
+   "v": 0,
+   "check_ok": true
+  }
+ ],
+ "device_hello": null,
+ "rx_raw": {
+  "file": "run5-baud.json.rx.bin.gz",
+  "bytes": 203480,
+  "sha256_uncompressed": "3e81b37ef40e36579bb1e107a1a40f121abc5f43d08717659e704ea74df6f8e5",
+  "tx_bytes": 99620
+ },
+ "ended_utc": "2026-09-24T17:09:17.410+00:00",
+ "checks": {
+  "all_chunks_acked": true,
+  "read_back_identical": true,
+  "status_read": true,
+  "baud_trials_all_ok": true
+ },
+ "pass": true
+}
