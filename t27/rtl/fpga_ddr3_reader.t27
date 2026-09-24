@@ -23,8 +23,10 @@ module TrinityFpgaDdr3ReaderT27;
 // Trit stream (tools/ddr3_read_model.py): trit i is lane i & 15 of block i >> 4, the
 // 16 lane codes of raw(K, b) = (K xor post(lin(mix(b)))) mod 2^32 with a pair 11 read
 // as 00, K = lin(lin((seed << 32) | pair) + KADD), lin the nine xorshift steps of the
-// pattern test, mix and post one nonlinear step each (without them the counts, dot
-// product and checksum of a region of aligned ranges would not depend on the key);
+// pattern test, mix and post one nonlinear step each (without them the +1 and -1 counts
+// and the dot product of a region of aligned ranges would not depend on the key; they do
+// not change that the baseline2 checksum of such a region is 0 for every key, nor make
+// the counts and dot product random-like: docs/hardware.md, "DDR3 read path (#62)");
 // lanes after `trits` are logical zeros. A baseline2 word holds blocks
 // 4w .. 4w+3 (64 lanes, lane j at bits [2j, 2j+1], four per byte, earliest lowest),
 // a dense5 word blocks 5w .. 5w+4 (80 lanes, byte n = the dense5 code of lanes 5n ..
@@ -40,8 +42,13 @@ module TrinityFpgaDdr3ReaderT27;
 // stay below `cap`, so at most `cap` are outstanding. Acks cannot be held off: consumer
 // (A) takes one word in every clock, with no FIFO and no ready, so an ack is always
 // accepted in its clock (consumer_stalls counts acks that arrive while cons_ready is
-// low; cons_ready is constant true, so it is 0 by construction). The cap therefore only
-// bounds the reader; it is reported, as are the clocks it held a request back.
+// low; cons_ready is constant true, so it is 0 by construction and measures nothing). The
+// cap therefore only bounds the reader; it is reported, as are the clocks it held a request
+// back. A phase ends at its W-th ack, so the words of a run are W by construction; the
+// acks themselves are counted apart from that: every ack after calibration (all acks) and
+// every ack while the reader is in neither FILL nor READ (stray acks), reported with every
+// run, so an extra or a displaced ack shows as stray acks > 0 or as all acks != the sum of
+// the runs' fill and read words (a lost ack stops the phase: t line).
 //
 // Consumer (A), one 128-bit word per controller clock, nine register stages:
 // S1 the acknowledged word with its expected lanes; D the decoders on four 32-bit chunks
@@ -54,10 +61,10 @@ module TrinityFpgaDdr3ReaderT27;
 //
 // Counters of a read (docs/hardware.md, "DDR3 read path (#62)"):
 //   cycles        controller clocks from the first read request presented to the last ack, inclusive
-//   words         acks received (= W)
-//   bus bytes     16 per word consumed
+//   words         acks of the phase, which ends at the W-th: W by construction
+//   bus bytes     16 per word consumed (consumer (A)'s valid chain; the same acks)
 //   payload bytes bytes of each word that hold at least one logical trit (ceil(trits/4), ceil(trits/5))
-//   padding bytes 16 - payload bytes, per word
+//   padding bytes 16 - payload bytes, per word (so padding = bus - payload is an identity)
 //   scale/metadata bytes  0: this region stores no scale and no metadata
 //   logical trits lanes consumed below `trits` (padding lanes excluded)
 //   command stalls clocks with a request presented and o_wb_stall high
@@ -65,9 +72,12 @@ module TrinityFpgaDdr3ReaderT27;
 //   consumer stalls acks while consumer (A) is not ready (0 by construction)
 //   max outstanding, cap holds (extra): the most requests outstanding at a clock, and the
 //                 clocks with no request presented while requests remained (the cap held them)
+//   stray acks, all acks (extra, since calibration, not cleared per run): acks while the
+//                 reader is in neither FILL nor READ, and every ack
 //
 // Report lines (tag, a 32 bits, b 40 bits), after the status reporter's H and S lines:
 //   q a=trits per run   b=(READER_FORMAT << 32) | (byte lanes << 24) | cap
+//                       (READER_FORMAT 2: runs end with the x line; 1, a6d9745f: with h)
 //   k a=seed            b=controller clocks since reset when calib_complete was seen (low 40)
 //   v a=runs (0 = until reset)   b=watchdog clocks
 // then per run:
@@ -84,6 +94,7 @@ module TrinityFpgaDdr3ReaderT27;
 //   u a=-1 lanes (low 32 bits)    b=+1 lanes (low 40 bits)
 //   s a=dot product bits 63:40 (64-bit two's complement)   b=dot product bits 39:0
 //   h a=checksum bits 63:32       b=checksum bits 31:0
+//   x a=stray acks since calibration   b=all acks since calibration (low 40 bits)
 // and at the end
 //   t a=acks of the open phase   b=(read phase << 36) | (format << 32) | run   (watchdog; stops)
 //   z a=runs done   b=bad words over all runs                                 (after `runs` runs)
@@ -114,7 +125,7 @@ const FMT_B2: u32 = 0;
 const FMT_D5: u32 = 1;
 const PRIME_STEPS: u32 = 4;
 const DRAIN_CLOCKS: u32 = 12;
-const READER_FORMAT: u64 = 1;
+const READER_FORMAT: u64 = 2;
 const B40: u64 = 1099511627775;
 const M32: u64 = 4294967295;
 const M40: u64 = 1099511627775;
@@ -136,6 +147,7 @@ const TAG_W: u32 = 119;
 const TAG_U: u32 = 117;
 const TAG_S: u32 = 115;
 const TAG_H: u32 = 104;
+const TAG_X: u32 = 120;
 const TAG_T: u32 = 116;
 const TAG_Z: u32 = 122;
 
@@ -188,6 +200,10 @@ var neg: u64 = 0;
 var dot: u64 = 0;
 var chk: u64 = 0;
 var cons_stalls: u32 = 0;
+
+// Acks since calibration: all of them, and those while in neither FILL nor READ.
+var all_acks: u64 = 0;
+var stray_acks: u32 = 0;
 
 // Generator: word index and block indices of G1's next word, then the stages.
 var gw: u32 = 0;
@@ -782,7 +798,7 @@ fn rotl2(x: u64) -> u64 {
 fn rep_last(kind: u32) -> u32 {
     var n: u32 = 0;
     if (kind == K_HEAD) { n = 2; }
-    if (kind == K_RUN) { n = 12; }
+    if (kind == K_RUN) { n = 13; }
     return n;
 }
 
@@ -807,6 +823,7 @@ fn rep_tag(kind: u32, n: u32) -> u32 {
         if (n == 10) { t = TAG_U; }
         if (n == 11) { t = TAG_S; }
         if (n == 12) { t = TAG_H; }
+        if (n == 13) { t = TAG_X; }
     }
     if (kind == K_TIME) { t = TAG_T; }
     return t;
@@ -829,7 +846,7 @@ fn time_b(rdph: bool, f: u32, r: u32) -> u64 {
 }
 
 fn rep_a(kind: u32, n: u32, trits: u32, seed: u32, runs: u32, r: u32, fw: u32, fm: u32, rw: u32, cs: u32,
-         bw: u32, ig: u32, rm: u32, rh: u32, ng: u64, dt: u64, ck: u64, nacks: u32) -> u32 {
+         bw: u32, ig: u32, rm: u32, rh: u32, ng: u64, dt: u64, ck: u64, nacks: u32, st: u32) -> u32 {
     var a: u32 = r;
     if (kind == K_HEAD) {
         a = trits;
@@ -849,6 +866,7 @@ fn rep_a(kind: u32, n: u32, trits: u32, seed: u32, runs: u32, r: u32, fw: u32, f
         if (n == 10) { a = (ng & M32) as u32; }
         if (n == 11) { a = ((dt >> 40) & M32) as u32; }
         if (n == 12) { a = (ck >> 32) as u32; }
+        if (n == 13) { a = st; }
     }
     if (kind == K_TIME) { a = nacks; }
     return a;
@@ -856,7 +874,7 @@ fn rep_a(kind: u32, n: u32, trits: u32, seed: u32, runs: u32, r: u32, fw: u32, f
 
 fn rep_b(kind: u32, n: u32, lanes: u32, cap: u32, cal: u64, wd: u32, f: u32, fc: u64, fcmd: u64, rc: u64,
          bus: u64, pay: u64, pad: u64, tr: u64, cmd: u64, wt: u64, ps: u64, dt: u64, ck: u64, tb: u64,
-         tbad: u64) -> u64 {
+         tbad: u64, aa: u64) -> u64 {
     var b: u64 = tbad & B40;
     if (kind == K_HEAD) {
         b = head_b(lanes, cap);
@@ -877,6 +895,7 @@ fn rep_b(kind: u32, n: u32, lanes: u32, cap: u32, cal: u64, wd: u32, f: u32, fc:
         if (n == 10) { b = ps & B40; }
         if (n == 11) { b = dt & B40; }
         if (n == 12) { b = ck & M32; }
+        if (n == 13) { b = aa & B40; }
     }
     if (kind == K_TIME) { b = tb; }
     return b;
@@ -939,6 +958,8 @@ var sfire: bool;
 var pfire: bool;
 var status_idle: bool;
 var running: bool;
+var ack_seen: bool;
+var ack_stray: bool;
 accept = wb_stb && !stall;
 progress = accept || ack;
 rd_ack = tstate == T_READ && ack;
@@ -992,13 +1013,16 @@ cons_ready = true;
 next_run = run + 1;
 rp_t = rep_tag(rkind, rline);
 rp_a = rep_a(rkind, rline, trits, seed, runs, run, f_words, f_max, r_words, cons_stalls, bad_words, inv_groups,
-             ph_max, ph_hold, neg, dot, chk, acks);
+             ph_max, ph_hold, neg, dot, chk, acks, stray_acks);
 rp_b = rep_b(rkind, rline, lanes_bus, cap, calib_clocks, watchdog, fmt, f_clocks, f_cmd, r_clocks, bus_bytes,
-             pay_bytes, pad_bytes, trits_out, ph_cmd, ph_wait, pos, dot, chk, time_b(rd, fmt, run), total_bad);
+             pay_bytes, pad_bytes, trits_out, ph_cmd, ph_wait, pos, dot, chk, time_b(rd, fmt, run), total_bad,
+             all_acks);
 sfire = arb == A_IDLE && sbuf_full && line_idle;
 pfire = arb == A_IDLE && !sbuf_full && line_idle && tstate == T_REPORT;
 status_idle = !sbuf_full;
 running = tstate != T_CALIB && tstate != T_STOP;
+ack_seen = ack && tstate != T_CALIB;
+ack_stray = ack_seen && tstate != T_FILL && tstate != T_READ;
 
 // calib: ddr3_top o_calib_complete. stall, ack: o_wb_stall, o_wb_ack; rdata_lo, rdata_hi: bits
 // 63:0 and 127:64 of o_wb_data.
@@ -1085,6 +1109,8 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64, t
         s1_last = c_last;
         if (!cons_ready) { cons_stalls = cons_stalls + 1; }
     }
+    if (ack_seen) { all_acks = all_acks + 1; }
+    if (ack_stray) { stray_acks = stray_acks + 1; }
 
     if (tstate == T_CALIB) {
         if (calib) {
@@ -1298,8 +1324,8 @@ test last_word_payload { assert_eq(last_payload(21, 0), 6); assert_eq(last_paylo
 test lane_masks { assert_eq(therm(3, 0), 63); assert_eq(therm(37, 32), 1023); assert_eq(therm(10, 32), 0); assert_eq(top_mask(0, 255), 0); }
 test class_popcounts { assert_eq(class_counts(1, 0, 0, 0), 1); assert_eq(class_counts(2, 0, 0, 1), 1); assert_eq(class_counts(0, 0, 1, 0), 8); }
 test weighted_sums { assert_eq(weighted_pairs(268435457), 2251799813685249); assert_eq(sum4(weighted_pairs(268435457)), 9); }
-test report_tags { assert_eq(rep_tag(0, 0), 113); assert_eq(rep_tag(1, 12), 104); assert_eq(rep_tag(2, 0), 116); assert_eq(rep_tag(3, 0), 122); assert_eq(rep_last(1), 12); }
+test report_tags { assert_eq(rep_tag(0, 0), 113); assert_eq(rep_tag(1, 12), 104); assert_eq(rep_tag(1, 13), 120); assert_eq(rep_tag(2, 0), 116); assert_eq(rep_tag(3, 0), 122); assert_eq(rep_last(1), 13); }
 test dense5_tables { assert_eq(d5_dec(121), 0); assert_eq(d5_dec(242), 341); assert_eq(d5_dec(0), 682); assert_eq(d5_dec(243), 1024); assert_eq(d5_enc(0), 121); assert_eq(d5_enc(341), 242); assert_eq(d5_enc(682), 0); }
 test baseline2_invalid_lanes { assert_eq(b2_dec16(15), 562949953421312); assert_eq(b2_dec16(6), 6); }
-test report_fields { assert_eq(head_b(2, 48), 4328521776); assert_eq(run_b(1), 5637144576); assert_eq(time_b(true, 1, 2), 73014444034); }
+test report_fields { assert_eq(head_b(2, 48), 8623489072); assert_eq(run_b(1), 5637144576); assert_eq(time_b(true, 1, 2), 73014444034); }
 endmodule
