@@ -48,6 +48,19 @@ A #61 run (Python with pyserial; the x16 pattern-test build of 7deeef16, 60 s af
   python3 tools/fpga-ddr3-capture.py --decode reports/fpga/.../uart.tsv --report .../build.json
   python3 tools/fpga-ddr3-capture.py --redecode reports/fpga/.../load<n> --report .../build.json --reason "..."
 
+A build with the read path (`define DDR3_READER, make ... DDR3_APP=reader; t27/rtl/fpga_ddr3_reader.t27,
+issue #62; the report's variant names READER) sends q, k, v lines once after calibration and
+thirteen lines per run (a f g c y p d n o w u s h: format, fill, read cycles and words, bus,
+payload, padding and scale/metadata bytes, logical trits, bad words, invalid groups, command,
+wait and consumer stalls, the most requests outstanding, the clocks the cap held a request, the
++1 and -1 counts, the dot product and the checksum), t when its watchdog stopped it and z after
+its last run. They are decoded into `reader`: every run with its counters checked against each
+other (bus bytes = words x 16, padding = bus - payload, ...) and against tools/ddr3_read_model.py
+(words, bytes, trits, counts, dot product and checksum of the run's format and key), the pairs of
+runs that carry the same trits in both formats, and per run the read's words per clock, which
+is a raw read-path figure (cycles from the first read request to the last ack), not the
+stage-2 weights-per-second comparison.
+
 The record keeps the command line (`argv`) and the repository revision of the tool
 (`tool_revision`: HEAD and whether tracked files differed from it).
 
@@ -71,10 +84,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = "trinity.ddr3-capture.v1"
-LINE = re.compile(r"^([HSGKLWREMFTZ])([0-9a-f]{8})([0-9a-f]{10})$")
+LINE = re.compile(r"^([HSGKLWREMFTZqkvafgcypdnowushtz])([0-9a-f]{8})([0-9a-f]{10})$")
 LINE_CHARS = 19
 PATTERN_TAGS = "GKLWREMFTZ"
 PASS_ORDER = "WREMF"
+READER_TAGS = "qkvafgcypdnowushtz"
+RUN_ORDER = "afgcypdnowush"
 NONE32 = 0xFFFFFFFF
 WRAP = 1 << 40
 DONE_CALIBRATE = 23
@@ -92,7 +107,7 @@ def parse_line(text: str):
     if not match:
         return None
     tag, a, b = match.group(1), int(match.group(2), 16), int(match.group(3), 16)
-    if tag in PATTERN_TAGS:
+    if tag in PATTERN_TAGS or tag in READER_TAGS:
         return {"tag": tag, "a": a, "b": b}
     if tag == "H":
         return {"tag": "H", "build_id": f"{a:08x}", "format": b >> 32, "byte_lanes": (b >> 24) & 0xFF,
@@ -231,14 +246,189 @@ def decode_pattern(lines, *, hz=None, lanes=None) -> dict:
     }
 
 
+def _signed64(x: int) -> int:
+    return x - (1 << 64) if x >> 63 else x
+
+
+def reader_model():
+    sys.path.insert(0, str(ROOT / "tools"))
+    import ddr3_read_model  # noqa: E402
+
+    return ddr3_read_model
+
+
+def decode_reader(lines, *, hz=None, model_runs=None) -> dict:
+    """The read path's lines (parsed, with t_s) of one reset, in arrival order.
+
+    Runs must come as 0, 1, 2, ... without a gap or repeat (from 0 when the q line was seen),
+    each as the thirteen lines of RUN_ORDER. Every complete run is checked on its own (the
+    counters add up, no bad word, no invalid group, no consumer stall) and, for the first
+    model_runs runs (None: all), against tools/ddr3_read_model.py with the seed of the k line.
+    hz converts clocks into seconds and MB/s (the nominal controller clock when known)."""
+    model = reader_model()
+    header, runs, problems = {}, [], []
+    timeout = done = None
+    block, last_run = None, None
+    for ln in lines:
+        tag, a, b = ln["tag"], ln["a"], ln["b"]
+        if tag == "q":
+            header.update({"trits": a, "format": b >> 32, "byte_lanes": (b >> 24) & 0xFF, "cap": b & 0xFFFFFF,
+                           "t_s": ln["t_s"]})
+        elif tag == "k":
+            header.update({"seed": a, "calib_complete_clocks_low40": b})
+        elif tag == "v":
+            header.update({"runs_configured": a, "watchdog_clocks": b})
+        elif tag in RUN_ORDER:
+            want = RUN_ORDER[len(block["_seen"])] if block else "a"
+            if tag != want:
+                problems.append({"t_s": ln["t_s"], "problem": f"{tag} line where {want} was expected"})
+                block = None
+                if tag != "a":
+                    continue
+            if tag == "a":
+                want_run = 0 if last_run is None and "trits" in header else (
+                    (last_run + 1) & NONE32 if last_run is not None else None)
+                if want_run is not None and a != want_run:
+                    problems.append({"t_s": ln["t_s"], "problem": f"run {a} where {want_run} was expected "
+                                                                  "(a run missing or repeated)"})
+                last_run = a
+                fmt = (b >> 32) & 1
+                block = {"run": a, "pair": a >> 1, "format": fmt, "format_name": model.FORMAT_NAMES[fmt],
+                         "lanes_per_word": (b >> 24) & 0xFF, "_seen": ""}
+            elif tag == "f":
+                block.update({"fill_words": a, "fill_cycles": b})
+            elif tag == "g":
+                block.update({"fill_max_outstanding": a, "fill_command_stalls": b})
+            elif tag == "c":
+                block.update({"words": a, "cycles": b})
+            elif tag == "y":
+                block.update({"consumer_stalls": a, "bus_bytes": b})
+            elif tag == "p":
+                block.update({"scale_metadata_bytes": a, "payload_bytes": b})
+            elif tag == "d":
+                block.update({"bad_words": a, "padding_bytes": b})
+            elif tag == "n":
+                block.update({"invalid_groups": a, "logical_trits": b})
+            elif tag == "o":
+                block.update({"max_outstanding": a, "command_stalls": b})
+            elif tag == "w":
+                block.update({"cap_holds": a, "wait_stalls": b})
+            elif tag == "u":
+                block.update({"minus": a, "plus": b})
+            elif tag == "s":
+                block.update({"dot": _signed64((a << 40) | b)})
+            elif tag == "h":
+                block.update({"checksum": f"{(a << 32) | b:#018x}", "reported_t_s": ln["t_s"]})
+            block["_seen"] += tag
+            if tag == "h":
+                block.pop("_seen")
+                runs.append(block)
+                block = None
+        elif tag == "t":
+            timeout = {"acks": a, "read_phase": bool(b >> 36 & 1), "format": b >> 32 & 1, "run": b & NONE32,
+                       "t_s": ln["t_s"]}
+        elif tag == "z":
+            done = {"runs": a, "bad_words_all_runs": b, "t_s": ln["t_s"]}
+    trits, seed = header.get("trits"), header.get("seed")
+    checked = 0
+    for r in runs:
+        fmt = r["format"]
+        lanes = model.LANES[fmt]
+        r["checks"] = {
+            "lanes_per_word": r["lanes_per_word"] == lanes,
+            "bus_bytes_is_words_x16": r["bus_bytes"] == r["words"] * model.WORD_BYTES,
+            "padding_is_bus_minus_payload": r["padding_bytes"] == r["bus_bytes"] - r["payload_bytes"],
+            "no_scale_metadata": r["scale_metadata_bytes"] == 0,
+            "fill_words_equal_read_words": r["fill_words"] == r["words"],
+            "no_bad_word": r["bad_words"] == 0,
+            "no_invalid_group": r["invalid_groups"] == 0,
+            "no_consumer_stall": r["consumer_stalls"] == 0,
+            "cycles_at_least_words": r["cycles"] >= r["words"],
+        }
+        if trits is not None:
+            r["checks"].update({
+                "words_cover_the_region": r["words"] == model.words_of(fmt, trits),
+                "logical_trits_are_the_region": r["logical_trits"] == trits,
+                "payload_bytes_of_the_format": r["payload_bytes"] == model.payload_bytes(fmt, trits),
+            })
+        if trits is not None and seed is not None and (model_runs is None or checked < model_runs):
+            want = model.expected_run(seed, r["run"], trits)
+            got = {"words": r["words"], "bus_bytes": r["bus_bytes"], "payload_bytes": r["payload_bytes"],
+                   "padding_bytes": r["padding_bytes"], "pos": r["plus"], "neg": r["minus"], "dot": r["dot"],
+                   "chk": int(r["checksum"], 16)}
+            r["model"] = {k: want[k] for k in got}
+            r["checks"]["equals_host_model"] = got == r["model"]
+            r["model"]["chk"] = f"{want['chk']:#018x}"
+            checked += 1
+        r["pass"] = all(r["checks"].values())
+        r["words_per_clock"] = round(r["words"] / r["cycles"], 6) if r["cycles"] else None
+        if hz and r["cycles"]:
+            r["read_s"] = round(r["cycles"] / hz, 9)
+            r["bus_MBps"] = round(r["bus_bytes"] / (r["cycles"] / hz) / 1e6, 1)
+    partial = None
+    if block:
+        partial = {k: v for k, v in block.items() if not k.startswith("_")}
+        partial["clean_so_far"] = not (partial.get("bad_words") or partial.get("invalid_groups")
+                                       or partial.get("consumer_stalls"))
+    pairs = []
+    by_run = {r["run"]: r for r in runs}
+    for r in runs:
+        if r["format"] == 0 and r["run"] + 1 in by_run:
+            other = by_run[r["run"] + 1]
+            same = {k: r[k] == other[k] for k in ("logical_trits", "plus", "minus", "dot")}
+            pairs.append({"pair": r["pair"], "runs": [r["run"], other["run"]], "same": same,
+                          "same_logical_trits": all(same.values())})
+    formats = {r["format"] for r in runs}
+    per_format = {}
+    for fmt in sorted(formats):
+        mine = [r for r in runs if r["format"] == fmt]
+        per_format[model.FORMAT_NAMES[fmt]] = {
+            "runs": len(mine), "words": sorted({r["words"] for r in mine}),
+            "cycles_min": min(r["cycles"] for r in mine), "cycles_max": max(r["cycles"] for r in mine),
+            "words_per_clock_min": min(r["words_per_clock"] for r in mine),
+            "words_per_clock_max": max(r["words_per_clock"] for r in mine),
+            "command_stalls_max": max(r["command_stalls"] for r in mine),
+            "wait_stalls_max": max(r["wait_stalls"] for r in mine),
+            "max_outstanding_max": max(r["max_outstanding"] for r in mine),
+            "cap_holds_max": max(r["cap_holds"] for r in mine),
+            "fill_cycles_min": min(r["fill_cycles"] for r in mine),
+            "fill_cycles_max": max(r["fill_cycles"] for r in mine)}
+    return {
+        "header": header,
+        "runs": runs,
+        "partial_run_at_end": partial,
+        "problems": problems,
+        "timeout": timeout,
+        "done": done,
+        "pairs": pairs,
+        "per_format": per_format,
+        "totals": {"runs": len(runs), "passing_runs": sum(r["pass"] for r in runs),
+                   "model_checked_runs": checked, "bad_words": sum(r["bad_words"] for r in runs),
+                   "invalid_groups": sum(r["invalid_groups"] for r in runs),
+                   "consumer_stalls": sum(r["consumer_stalls"] for r in runs),
+                   "complete_pairs": len(pairs)},
+        "clock_hz_used": hz,
+        "notes": ["cycles: controller clocks from the first read request presented to the last ack, inclusive; "
+                  "words_per_clock = words / cycles, the raw read path of this in-order single master with "
+                  "refresh and row changes included, not the stage-2 weights-per-second comparison (#65)",
+                  "read_s and bus_MBps convert cycles at clock_hz_used, the nominal controller clock when the "
+                  "report gives one",
+                  "runs 2p and 2p+1 hold the same logical trits (key of pair p) as baseline2 and as dense5; "
+                  "pairs[].same compares their logical trits, +1 and -1 counts and dot products",
+                  "scale_metadata_bytes is 0 by construction: the region stores no scale and no metadata"],
+    }
+
+
 def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps=None,
-           load_end_s=None, nominal_hz=None, min_span_s=1.0, expect_pattern=None) -> dict:
+           load_end_s=None, nominal_hz=None, min_span_s=1.0, expect_pattern=None, expect_reader=None,
+           reader_model_runs=None) -> dict:
     """Decode a timestamped transcript.
 
     entries: [{"t_s": host seconds on one monotonic clock, "line": text}] in arrival order.
     load_end_s: host seconds (same clock) at which the load returned, if this run loaded.
-    expect_pattern: True when the build has the pattern test, False when it has not, None unknown."""
-    headers, status, other, pattern_lines, joined = [], [], [], [], []
+    expect_pattern: True when the build has the pattern test, False when it has not, None unknown.
+    expect_reader: the same for the read path (#62); reader_model_runs limits its model check."""
+    headers, status, other, pattern_lines, reader_lines, joined = [], [], [], [], [], []
     for entry in entries:
         parsed = parse_line(entry["line"])
         if parsed is None and len(entry["line"]) > LINE_CHARS:
@@ -253,7 +443,9 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
             other.append({"t_s": entry["t_s"], "line": entry["line"]})
             continue
         parsed["t_s"] = entry["t_s"]
-        if parsed["tag"] in PATTERN_TAGS:
+        if parsed["tag"] in READER_TAGS:
+            reader_lines.append(parsed)
+        elif parsed["tag"] in PATTERN_TAGS:
             pattern_lines.append(parsed)
         else:
             (headers if parsed["tag"] == "H" else status).append(parsed)
@@ -320,6 +512,11 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
         pattern = decode_pattern(current_pattern, hz=nominal_hz or rate,
                                  lanes=headers[-1]["byte_lanes"] if headers else expect_lanes)
     has_pattern = bool(current_pattern)
+    current_reader = [p for p in reader_lines if last_h is None or p["t_s"] >= last_h]
+    reader = None
+    if current_reader or expect_reader:
+        reader = decode_reader(current_reader, hz=nominal_hz or rate, model_runs=reader_model_runs)
+    has_reader = bool(current_reader)
     checks = {
         "header_line": bool(headers) if load_end_s is not None else None,
         "build_id": (headers[-1]["build_id"] == expect_build_id) if headers and expect_build_id else None,
@@ -351,12 +548,31 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
         if pattern else None,
         "pattern_round_complete": pattern["totals"]["rounds_complete"] >= 1 if pattern else None,
     }
+    if reader is not None or expect_reader is not None:
+        # Read path (#62), only in records of builds that name it (earlier records keep their
+        # checks): present exactly when the build has it; runs in order; every run's counters
+        # add up, no bad word, invalid group or consumer stall, the host model's results; no
+        # watchdog stop; at least one run of each format; both formats of a pair the same trits.
+        checks.update({
+            "reader_present": (has_reader == bool(expect_reader)) if expect_reader is not None else None,
+            "reader_header": bool(reader["header"].get("trits") is not None) if reader else None,
+            "reader_lanes": (reader["header"].get("byte_lanes") == headers[-1]["byte_lanes"])
+            if reader and headers and "byte_lanes" in reader["header"] else None,
+            "reader_well_formed": not reader["problems"] if reader else None,
+            "reader_runs_pass": (all(r["pass"] for r in reader["runs"]) and reader["timeout"] is None
+                                 and (reader["partial_run_at_end"] or {}).get("clean_so_far", True))
+            if reader else None,
+            "reader_both_formats": len(reader["per_format"]) == 2 if reader else None,
+            "reader_pairs_same_trits": all(p["same_logical_trits"] for p in reader["pairs"]) if reader else None,
+        })
     passed = all(v for v in checks.values() if v is not None)
     result = {"header": headers, "status_lines": status, "unparsed_lines": other, "joined_lines": joined,
               "final": final,
               "clock": clock, "reset": reset, "calibration": calibration, "checks": checks, "pass": passed}
     if pattern is not None:
         result["pattern"] = pattern
+    if reader is not None:
+        result["reader"] = reader
     return result
 
 
@@ -528,8 +744,10 @@ def expectations(report: dict) -> dict:
     match = re.search(r"PATTERN_TEST (\d)", ddr3.get("variant", ""))
     pattern = bool(int(match.group(1))) if match else False
     uart_debug_bist = "UART_DEBUG_BIST 1" in ddr3.get("variant", "")
+    # The read path (#62) names itself READER in the variant; earlier builds have none.
+    reader = "READER (" in ddr3.get("variant", "")
     return {"build_id": ddr3.get("netlist_build_id"), "lanes": lanes, "pattern": pattern,
-            "uart_debug_bist": uart_debug_bist,
+            "uart_debug_bist": uart_debug_bist, "reader": reader,
             "period_ps": round(ddr_clock["period_ns"] * 1000) if ddr_clock.get("period_ns") else None,
             "nominal_hz": round(1e9 / ctrl_clock["period_ns"], 1) if ctrl_clock.get("period_ns") else None}
 
@@ -671,7 +889,8 @@ def main() -> int:
             return 0 if result["pass"] else 1
         result = decode(entries, expect_build_id=rec_expect["build_id"], expect_lanes=rec_expect["lanes"],
                         expect_period_ps=rec_expect["period_ps"], load_end_s=record["run"].get("load_end_s"),
-                        nominal_hz=rec_expect["nominal_hz"], expect_pattern=rec_expect.get("pattern"))
+                        nominal_hz=rec_expect["nominal_hz"], expect_pattern=rec_expect.get("pattern"),
+                        expect_reader=rec_expect.get("reader"))
         before = record.get("decoded", {})
         record.setdefault("redecoded", []).append({
             "utc": utc(), "reason": args.reason, "tool_revision": tool_revision(),
@@ -693,7 +912,8 @@ def main() -> int:
             entries.append({"t_s": float(t_s), "line": line})
         result = decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                         expect_period_ps=expect["period_ps"], load_end_s=args.load_end_s,
-                        nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
+                        nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"),
+                        expect_reader=expect.get("reader"))
         print(json.dumps(result, indent=1))
         return 0 if result["pass"] else 1
 
@@ -737,7 +957,8 @@ def main() -> int:
     elif status == 0:
         record["decoded"] = decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                                    expect_period_ps=expect["period_ps"], load_end_s=run.get("load_end_s"),
-                                   nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
+                                   nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"),
+                        expect_reader=expect.get("reader"))
         status = 0 if record["decoded"]["pass"] else 1
     record["exit_status"] = status
     (out / "capture.json").write_text(json.dumps(record, indent=1) + "\n")
@@ -751,6 +972,8 @@ def main() -> int:
     print(json.dumps({"exit_status": status, "stopped": run.get("stopped"), "checks": summary.get("checks"),
                       "final": summary.get("final"), "clock": summary.get("clock"), "reset": summary.get("reset"),
                       "pattern_totals": (summary.get("pattern") or {}).get("totals"),
+                      "reader_totals": (summary.get("reader") or {}).get("totals"),
+                      "reader_per_format": (summary.get("reader") or {}).get("per_format"),
                       "xadc_before": run.get("xadc_before", {}).get("temp"),
                       "xadc_after": run.get("xadc_after", {}).get("temp")}, indent=1))
     return status
