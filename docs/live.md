@@ -42,8 +42,9 @@ parts, the architecture mapping, in the PrismML fork the Hadamard rules (`tlv_ha
 over the tensors of every part), and clip refused as a main model; `tlv_native` names the
 runtime a model is written for and `tlv_file_verdict` folds the verdict there. Where a
 reader's own signed arithmetic overflows (an element count past 2^63, bitnet.cpp's TL2
-size of an absurd shape) the outcome depends on the compiler, and t27 gives no verdict
-(`limit`). Python only moves bytes.
+size of an absurd shape) the outcome depends on the compiler: the walk goes on, a later
+refusal is the reader's answer either way, and otherwise t27 gives no verdict (`limit`).
+Python only moves bytes.
 
 **Checked against the real readers.** `sh tools/live-replay.sh` builds
 `tests/upstream/gguf_replay.c` against the GGUF reader of every pinned runtime, and
@@ -66,12 +67,15 @@ starts `prism.`; bitnet.cpp when the architecture is `bitnet-b1.58`; the fork wh
 tensor has id 142 or 143; bitnet.cpp when one has id 36 or 38, or has id 42 (Q2_0 in
 llama.cpp, TL2 in bitnet.cpp) and bitnet.cpp accepts the model while llama.cpp does not;
 else llama.cpp. A model written for software none of them is (a type id none of them
-defines, an architecture none of them maps, no architecture at all) is `other_runtime`.
+defines, an architecture none of them maps, no architecture at all, or records of a type
+that is not ternary there whose bytes do not fill their places while every ternary
+record's do: that id means another layout in the software it is written for, as id 40
+does in the vlut fork) is `other_runtime`.
 The verdicts: `ok`, `refused`, `no_ternary_layout`, `undecided` (no verdict: a scanner
 limit, or arithmetic whose outcome depends on the compiler), `other_runtime`, `unread`
-(a header could not be fetched) or `error`. `problems` lists, per status, the ternary
-records whose bytes do not fill their place and the layout that fills it instead (for
-example `extent` with `PQ2_0`: type 42 declared, 128-weight groups stored,
+(a header could not be fetched) or `error`. `problems` lists, per status, the records
+whose bytes do not fill their place and, for a ternary record, the layout that fills it
+instead (for example `extent` with `PQ2_0`: type 42 declared, 128-weight groups stored,
 PrismML-Eng/llama.cpp#167). TL1 and TL2 count as ternary layouts: their places are
 checked, their weights have no storage contract in `t27/formats.t27`. Status tokens are
 in [`specs/formats/OWNERS.md`](../specs/formats/OWNERS.md#status-classes).

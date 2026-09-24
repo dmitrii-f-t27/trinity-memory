@@ -113,6 +113,9 @@ jobs:
               print(f"| {runtime} | " + " | ".join(str(counts.get(k, 0)) for k in keys) + " |")
           replay = report.get("replay")
           if replay:
+              missing = sorted(set(report["runtimes"]) - set(replay["runtimes"]))
+              if missing:
+                  print(f"\n**Not replayed: {', '.join(missing)}** (the reader did not build; see its build log).")
               print(f"\nUpstream readers ({', '.join(replay['runtimes'])}) over {replay['files']} files: "
                     f"{replay['agree']} answers agree with the t27 reader, {replay['disagree']} disagree, "
                     f"{replay['no_verdict']} without a t27 verdict, {replay['crashes']} crashes, "

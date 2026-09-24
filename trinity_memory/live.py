@@ -112,8 +112,8 @@ class LiveError(RuntimeError):
 class Walk(C.Structure):
     _fields_ = [("status", C.c_int32), ("reader", C.c_int32), ("record", U64), ("expected", U64), ("found", U64),
                 ("needed", U64), ("version", C.c_uint32), ("keys", U64), ("tensors", U64), ("records_at", U64),
-                ("data_start", U64), ("alignment", U64), ("ternary", U64), ("ternary_ok", U64), ("read", U64),
-                ("prism", C.c_bool), ("bitnet", C.c_bool)]
+                ("data_start", U64), ("alignment", U64), ("ternary", U64), ("ternary_ok", U64),
+                ("misfit_ternary", U64), ("misfit_other", U64), ("read", U64), ("prism", C.c_bool), ("bitnet", C.c_bool)]
 
 
 class Key(C.Structure):

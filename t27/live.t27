@@ -154,7 +154,10 @@ module TrinityMemoryLive {
     // offset of the data section. `read` counts the records read (their
     // per-record outputs are written); `ternary` those of them with a ternary
     // layout in the runtime that pass their own checks, `ternary_ok` those
-    // whose bytes also fill their place.
+    // whose bytes also fill their place. `misfit_ternary` and `misfit_other`
+    // count the records, ternary or not, that pass their own checks but whose
+    // bytes do not fill their place (0 when the offsets are out of record
+    // order: no record has a place then).
     struct TLVWalk {
         status: i32,
         reader: i32,
@@ -170,6 +173,8 @@ module TrinityMemoryLive {
         alignment: u64,
         ternary: u64,
         ternary_ok: u64,
+        misfit_ternary: u64,
+        misfit_other: u64,
         read: u64,
         prism: bool,
         bitnet: bool,
@@ -520,7 +525,8 @@ module TrinityMemoryLive {
     fn tlv_reset(out: *TLVWalk) {
         out.status = 0; out.reader = 0; out.record = 0xffffffffffffffff; out.expected = 0; out.found = 0;
         out.needed = 0; out.version = 0; out.keys = 0; out.tensors = 0; out.records_at = 0; out.data_start = 0;
-        out.alignment = 32; out.ternary = 0; out.ternary_ok = 0; out.read = 0; out.prism = false; out.bitnet = false;
+        out.alignment = 32; out.ternary = 0; out.ternary_ok = 0; out.misfit_ternary = 0; out.misfit_other = 0;
+        out.read = 0; out.prism = false; out.bitnet = false;
     }
 
     // Whether the `count` bytes at `pos` are in the file and in `data`: 0
@@ -609,9 +615,10 @@ module TrinityMemoryLive {
     // end at `size`; `file_size` is the size of the whole file. With capacity
     // >= out.tensors, status[i] holds for record i: the ternary layout of a
     // record whose bytes fill its place (tlv_ternary), 0 for any other record
-    // that passes, or a negative status (the record's own refusal, or for a
-    // ternary record tlv_place's answer); fit[i] the layout that fills the
-    // place instead (tlv_fit); type_ids[i] its type id; name_at[i] and
+    // that passes, or a negative status (the record's own refusal, or
+    // tlv_place's answer when its bytes do not fill its place); fit[i], for a
+    // ternary record, the layout that fills the place instead (tlv_fit);
+    // type_ids[i] its type id; name_at[i] and
     // name_size[i] where its name is (up to the first NUL, at most 64 bytes).
     // The per-record statuses cover every record the walk could read, also
     // after the first refusal, so a caller can list them all.
@@ -738,6 +745,7 @@ module TrinityMemoryLive {
         var done: bool = false;
         // The previous record, while its place (which ends at this record's offset) is open.
         var prev_open: bool = false;
+        var prev_ternary: bool = false;
         var prev_t: u64 = 0;
         var prev_format: i32 = 0;
         var prev_offset: u64 = 0;
@@ -873,13 +881,15 @@ module TrinityMemoryLive {
                     status[t as usize] = own; fit[t as usize] = 0; type_ids[t as usize] = type_id;
                     name_at[t as usize] = pos + 8; name_size[t as usize] = cname;
                 }
-                // The place of the previous ternary record ends at this offset.
+                // The place of the previous record ends at this offset.
                 if (prev_open) {
                     var mine: i32 = tlv_place(prev_format, prev_offset, prev_bytes, offset, false, 0, 0, alignment);
-                    if (mine == prev_format) { out.ternary_ok = out.ternary_ok + 1; }
+                    if (mine < 0 && prev_ternary) { out.misfit_ternary = out.misfit_ternary + 1; }
+                    if (mine < 0 && !prev_ternary) { out.misfit_other = out.misfit_other + 1; }
+                    if (mine == prev_format && prev_ternary) { out.ternary_ok = out.ternary_ok + 1; }
                     if (prev_t < (capacity as u64)) {
                         status[prev_t as usize] = mine;
-                        if (mine < 0 && mine != TLV_ERR_BOUNDS && offset >= prev_offset) {
+                        if (mine < 0 && prev_ternary && mine != TLV_ERR_BOUNDS && offset >= prev_offset) {
                             fit[prev_t as usize] = tlv_fit(prev_ne0, prev_ne1, prev_ne2, prev_ne3, offset - prev_offset,
                                                            alignment, false);
                         }
@@ -887,14 +897,11 @@ module TrinityMemoryLive {
                     prev_open = false;
                 }
                 var format: i32 = tlv_ternary(runtime, type_id);
-                if (own == 0 && format > 0) {
-                    out.ternary = out.ternary + 1;
-                    var rule: i32 = trt_rule(runtime, type_id);
-                    if (rule != TRT_RULE_TL2 || tlv_tl2_defined(ne0, ne1)) {
-                        prev_open = true; prev_t = t; prev_format = format; prev_offset = offset;
-                        prev_bytes = tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3);
-                        prev_ne0 = ne0; prev_ne1 = ne1; prev_ne2 = ne2; prev_ne3 = ne3;
-                    }
+                if (own == 0 && format > 0) { out.ternary = out.ternary + 1; }
+                if (own == 0 && (trt_rule(runtime, type_id) != TRT_RULE_TL2 || tlv_tl2_defined(ne0, ne1))) {
+                    prev_open = true; prev_ternary = format > 0; prev_t = t; prev_format = format; prev_offset = offset;
+                    prev_bytes = tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3);
+                    prev_ne0 = ne0; prev_ne1 = ne1; prev_ne2 = ne2; prev_ne3 = ne3;
                 }
                 if (own != 0 && own != TLV_ERR_LIMIT && first == 0) { first = own; first_record = t; }
                 pos = dim_at + 8 * dims + 12;
@@ -904,7 +911,10 @@ module TrinityMemoryLive {
         }
         var answered: u64 = out.read;
         if (answered > (capacity as u64)) { answered = capacity as u64; }
-        if (!ordered) { out.ternary_ok = 0; tlv_unplace(status, fit, answered); }
+        if (!ordered) {
+            out.ternary_ok = 0; out.misfit_ternary = 0; out.misfit_other = 0;
+            tlv_unplace(status, fit, answered);
+        }
         if (truncated) {
             // More bytes would let the walk read further.
             out.status = TF_ERR_TRUNCATED;
@@ -921,18 +931,23 @@ module TrinityMemoryLive {
         if (tensors > 0) { data_start = tlv_pad(pos - base, alignment); }
         out.data_start = data_start;
         out.needed = data_start;
-        // The last ternary record's place runs to the end of the file.
+        // The last record's place runs to the end of the file.
         if (prev_open) {
             var mine: i32 = tlv_place(prev_format, prev_offset, prev_bytes, 0, true, data_start, file_size, alignment);
-            if (mine == prev_format) { out.ternary_ok = out.ternary_ok + 1; }
+            if (mine < 0 && prev_ternary) { out.misfit_ternary = out.misfit_ternary + 1; }
+            if (mine < 0 && !prev_ternary) { out.misfit_other = out.misfit_other + 1; }
+            if (mine == prev_format && prev_ternary) { out.ternary_ok = out.ternary_ok + 1; }
             if (prev_t < (capacity as u64)) {
                 status[prev_t as usize] = mine;
-                if (mine < 0 && mine != TLV_ERR_BOUNDS) {
+                if (mine < 0 && prev_ternary && mine != TLV_ERR_BOUNDS) {
                     fit[prev_t as usize] = tlv_fit(prev_ne0, prev_ne1, prev_ne2, prev_ne3,
                                                    tlv_room(prev_offset, 0, true, data_start, file_size), alignment, true);
                 }
             }
-            if (!ordered) { out.ternary_ok = 0; tlv_unplace(status, fit, answered); }
+            if (!ordered) {
+                out.ternary_ok = 0; out.misfit_ternary = 0; out.misfit_other = 0;
+                tlv_unplace(status, fit, answered);
+            }
         }
         // The data section must start inside the file (gguf.cpp:771-776).
         if (first == 0 && tensors > 0 && data_start > file_size) { first = TLV_ERR_SHORT; first_record = top; }
@@ -1595,16 +1610,42 @@ module TrinityMemoryLive {
             || trt_blck(TRT_BITNET_CPP, type_id) != 0;
     }
 
+    // Records of the files the loader reads whose bytes do not fill their
+    // place, in `runtime`: `ternary` true for those of a ternary layout there.
+    fn tlv_misfits(data: []u8, total: usize, parts: []u64, count: usize, runtime: i32, ternary: bool) -> u64 {
+        var none_i: [1]i32 = [0];
+        var none_f: [1]i32 = [0];
+        var none_t: [1]u32 = [0];
+        var none_a: [1]u64 = [0];
+        var none_s: [1]u64 = [0];
+        var walk: TLVWalk;
+        var rows: u64 = tlv_loaded(data, total, parts, count);
+        var misfits: u64 = 0;
+        var i: u64 = 0;
+        while (i < rows) {
+            tlv_walk(data, tlv_part_at(parts, i), tlv_part_end(parts, i) as usize, tlv_part_file(parts, i), runtime,
+                     none_i, none_f, none_t, none_a, none_s, 0, &walk);
+            if (ternary) { misfits = misfits + walk.misfit_ternary; }
+            else { misfits = misfits + walk.misfit_other; }
+            i = i + 1;
+        }
+        return misfits;
+    }
+
     // The runtime a model is written for, to read its layouts in, from the
     // first file's keys and the type ids of the files the loader reads: the
     // PrismML fork when a key starts "prism."; bitnet.cpp when the
     // architecture is bitnet-b1.58; the fork when a record has id 142 or 143;
     // bitnet.cpp when one has id 36 or 38; for id 42 (Q2_0 in llama.cpp, TL2
     // in bitnet.cpp) bitnet.cpp when it accepts the model and llama.cpp does
-    // not; TLV_NATIVE_OTHER for software none of them is: a type id none of
-    // them defines, an architecture none of them maps, or no architecture at
-    // all in a file that is not a later part of a split model; llama.cpp
-    // otherwise. Records past the first that cannot be read give no marker.
+    // not; llama.cpp otherwise. TLV_NATIVE_OTHER, software none of them is,
+    // for a type id none of them defines, an architecture none of them maps,
+    // no architecture at all in a file that is not a later part of a split
+    // model, or records of a type that is not ternary there whose bytes do
+    // not fill their place while every ternary record's do: that type id
+    // means another layout in the software the model is written for (the
+    // vlut fork's I2_V is id 40, NVFP4 in llama.cpp). Records past the first
+    // that cannot be read give no marker.
     fn tlv_native(data: []u8, total: usize, parts: []u64, count: usize) -> i32 {
         var none_i: [1]i32 = [0];
         var none_f: [1]i32 = [0];
@@ -1615,11 +1656,14 @@ module TrinityMemoryLive {
         if (!tlv_parts_ok(total, parts, count)) { return TLV_NATIVE_OTHER; }
         var size: usize = tlv_part_end(parts, 0) as usize;
         tlv_walk(data, 0, size, tlv_part_file(parts, 0), TRT_LLAMA_CPP, none_i, none_f, none_t, none_a, none_s, 0, &walk);
-        if (walk.prism) { return TRT_PRISMML; }
-        if (walk.bitnet) { return TRT_BITNET_CPP; }
-        if (walk.records_at == 0) { return TRT_LLAMA_CPP; }
+        var native: i32 = TRT_LLAMA_CPP;
+        var marked: bool = true;
+        if (walk.prism) { native = TRT_PRISMML; }
+        if (!walk.prism && walk.bitnet) { native = TRT_BITNET_CPP; }
+        if (!walk.prism && !walk.bitnet) { marked = false; }
+        if (walk.records_at == 0) { return native; }
         var arch: TLVKey;
-        if (tlv_key(data, size, "general.architecture", 20, &arch) < 0) { return TRT_LLAMA_CPP; }
+        if (tlv_key(data, size, "general.architecture", 20, &arch) < 0) { return native; }
         if (arch.found) {
             if (arch.vtype != 8) { return TLV_NATIVE_OTHER; }
             var arch_size: u64 = tlv_cstr(data, arch.at + 8, tf_read_u64(data, arch.at as usize));
@@ -1670,16 +1714,22 @@ module TrinityMemoryLive {
             }
             i = i + 1;
         }
-        if (fork) { return TRT_PRISMML; }
-        if (bitnet) { return TRT_BITNET_CPP; }
-        if (q2) {
-            var run: TLVRun;
-            if (tlv_model(data, total, parts, count, TRT_BITNET_CPP, &run) == TLV_RUN_ACCEPTS
-                && tlv_model(data, total, parts, count, TRT_LLAMA_CPP, &run) == TLV_RUN_REFUSES) {
-                return TRT_BITNET_CPP;
+        if (!marked) {
+            if (fork) { native = TRT_PRISMML; }
+            if (!fork && bitnet) { native = TRT_BITNET_CPP; }
+            if (!fork && !bitnet && q2) {
+                var run: TLVRun;
+                if (tlv_model(data, total, parts, count, TRT_BITNET_CPP, &run) == TLV_RUN_ACCEPTS
+                    && tlv_model(data, total, parts, count, TRT_LLAMA_CPP, &run) == TLV_RUN_REFUSES) {
+                    native = TRT_BITNET_CPP;
+                }
             }
         }
-        return TRT_LLAMA_CPP;
+        if (tlv_misfits(data, total, parts, count, native, false) > 0
+            && tlv_misfits(data, total, parts, count, native, true) == 0) {
+            return TLV_NATIVE_OTHER;
+        }
+        return native;
     }
 
     // Ternary records of the files the loader reads, in `runtime`, that pass their own checks.

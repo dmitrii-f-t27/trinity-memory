@@ -248,9 +248,11 @@ static void test_offsets_and_places(void) {
     free(b.data);
     g = (Gguf){0}; rec2(&g, "a", 8, 1, 0, 32); rec2(&g, "b", 8, 1, 0, 0); b = finish(&g, &fs, 64);
     assert(walk_of(&b, fs, LLAMA, &w) == TLV_ERR_OFFSETS && w.record == 0); free(b.data);
-    /* a gap after a record of known size, attributed to the next record */
+    /* a gap after a record of known size, attributed to the next record; the first one's place is too big */
     g = (Gguf){0}; rec2(&g, "a", 8, 1, 0, 0); rec2(&g, "b", 8, 1, 0, 64); b = finish(&g, &fs, 128);
-    assert(walk_of(&b, fs, LLAMA, &w) == TLV_ERR_OFFSETS && w.record == 1 && w.expected == 32 && w.found == 64);
+    assert(tlv_walk(b.data, 0, b.size, fs, LLAMA, s, fit, types, at, size, 8, &w) == TLV_ERR_OFFSETS);
+    assert(w.record == 1 && w.expected == 32 && w.found == 64);
+    assert(s[0] == TLV_ERR_OFFSETS && s[1] == 0 && w.misfit_other == 1 && w.misfit_ternary == 0);
     free(b.data);
     /* a zero-weight record takes no bytes, also a ternary one */
     g = (Gguf){0}; rec2(&g, "a", 8, 1, 0, 0); rec2(&g, "empty", 128, 0, 142, 32); rec2(&g, "b", 8, 1, 0, 32);
@@ -302,6 +304,23 @@ static void test_native_and_nbytes(void) {
     assert(native_of(&b, fs) == TLV_NATIVE_OTHER); free(b.data);
     g = (Gguf){0}; kv_str(&g, "general.architecture", "llama"); rec2(&g, "a", 256, 1, 66, 0); b = finish(&g, &fs, 256);
     assert(native_of(&b, fs) == TLV_NATIVE_OTHER); free(b.data);
+    /* a type id of llama.cpp holding another layout (the vlut fork's I2_V is id
+     * 40, NVFP4 in llama.cpp): its records do not fill their places while no
+     * ternary record misfits, so the model is written for other software */
+    g = (Gguf){0}; kv_str(&g, "general.architecture", "llama");
+    rec2(&g, "blk.0.attn_q.weight", 1024, 4, 40, 0); rec2(&g, "blk.0.attn_k.weight", 1024, 4, 40, 1024);
+    b = finish(&g, &fs, 2048);
+    {
+        TLVRun r;
+        assert(model_of(&b, fs, LLAMA, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_OFFSETS);
+        assert(native_of(&b, fs) == TLV_NATIVE_OTHER);
+    }
+    free(b.data);
+    /* the legacy Q2_0 files misfit on ternary records: still llama.cpp's */
+    g = (Gguf){0}; kv_str(&g, "general.architecture", "qwen35");
+    for (int i = 0; i < 2; i++) { char name[8]; snprintf(name, sizeof name, "w%d", i); rec2(&g, name, 1024, 4, 42, (uint64_t)i * 1088); }
+    b = finish(&g, &fs, 2 * 1088);
+    assert(native_of(&b, fs) == LLAMA); free(b.data);
     /* id 42 with bitnet.cpp's TL2 sizes and a llama architecture: bitnet.cpp
      * accepts it, llama.cpp (Q2_0) does not */
     {
