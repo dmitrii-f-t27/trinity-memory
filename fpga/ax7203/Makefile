@@ -275,9 +275,17 @@ bram-capture:
 # ---- DDR3 (UberDDR3) on the AX7203, issue #60: build only ----
 # UberDDR3's ddr3_top (GPL-3.0-or-later, fetched at the commit in
 # ddr3/uberddr3.lock into build/uberddr3/, never committed) with our top, PLL
-# clocking, XDC and t27 status line (ddr3/tms_ddr3_ax7203.v). Two variants:
+# clocking, XDC, t27 status line and t27 pattern test (ddr3/tms_ddr3_ax7203.v). Two variants:
 #   DDR3_WIDTH=16   BYTE_LANES 2, chip U6 (DQ[15:0])
 #   DDR3_WIDTH=32   BYTE_LANES 4, both chips
+# The pattern test (issue #61, t27/rtl/fpga_ddr3_pattern.t27) drives the user
+# Wishbone port after calibration: DDR3_PATTERN=1 (default) builds it in,
+# DDR3_PATTERN=0 leaves the port idle as the #60 builds had it.
+# DDR3_PATTERN_BURSTS (default 2^25, every burst address), DDR3_PATTERN_HOLD
+# (controller clocks between a pass's writes and its reads, default 0) and
+# DDR3_PATTERN_ROUNDS (0 = until reset) are baked into the netlist and named in
+# the report's variant. Simulation: tests/test_ddr3_pattern.py (Icarus, a
+# behavioural Wishbone memory in place of UberDDR3, with injected faults).
 # Two place-and-route lines (DDR3_PNR_LINE):
 #   release (default)  nextpnr-xilinx $(NEXTPNR_DDR3_REV), built from its release tag, with a chip
 #                      database from its own bbaexport and prjxray-db; fasm2frames reads that same
@@ -336,7 +344,17 @@ DDR3_SRC       := $(ROOT)/build/uberddr3
 DDR3_SUFFIX    := $(if $(filter image,$(DDR3_PNR_LINE)),-nextpnr-45a986b8)
 DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)
 DDR3_TOP       := tms_ddr3_ax7203
-DDR3_CORES     := fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status
+DDR3_CORES     := fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status fpga_ddr3_pattern
+DDR3_PATTERN   ?= 1
+DDR3_PATTERN_BURSTS ?= 33554432
+DDR3_PATTERN_HOLD   ?= 0
+DDR3_PATTERN_ROUNDS ?= 0
+override DDR3_PATTERN := $(strip $(DDR3_PATTERN))
+ifneq ($(words $(DDR3_PATTERN)) $(filter 0 1,$(DDR3_PATTERN)),1 $(DDR3_PATTERN))
+$(error DDR3_PATTERN must be 0 or 1, not '$(DDR3_PATTERN)')
+endif
+DDR3_PATTERN_TAG := $(DDR3_PATTERN)-$(DDR3_PATTERN_BURSTS)-$(DDR3_PATTERN_HOLD)-$(DDR3_PATTERN_ROUNDS)
+DDR3_PATTERN_VARIANT := PATTERN_TEST $(DDR3_PATTERN)$(if $(filter 1,$(DDR3_PATTERN)), (bursts $(DDR3_PATTERN_BURSTS)$(comma) hold $(DDR3_PATTERN_HOLD) clocks$(comma) rounds $(DDR3_PATTERN_ROUNDS)))
 DDR3_UBER      := $(DDR3_SRC)/rtl/ddr3_top.v $(DDR3_SRC)/rtl/ddr3_controller.v $(DDR3_SRC)/rtl/ddr3_phy.v
 DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
@@ -457,6 +475,8 @@ $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)pll-*.stamp; touch $@
 $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)build-id-*.stamp; touch $@
+$(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp:
+	mkdir -p $(dir $@); rm -f $(dir $@)pattern-*.stamp; touch $@
 
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
 # the four PLL outputs by net name.
@@ -472,13 +492,15 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 # Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
 # and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp
 	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
 	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
-	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_TOP); \
+	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) \
+	    -set PATTERN_TEST $(DDR3_PATTERN) -set PATTERN_BURSTS $(DDR3_PATTERN_BURSTS) -set PATTERN_HOLD $(DDR3_PATTERN_HOLD) \
+	    -set PATTERN_ROUNDS $(DDR3_PATTERN_ROUNDS) $(DDR3_TOP); \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP); setundef -zero -params; tee -o $(call REL,$(DDR3_BUILD))/yosys_stat.txt stat; \
 	  write_json $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).json"
 	grep -c "multiple conflicting drivers" $(DDR3_BUILD)/yosys.log > $(DDR3_BUILD)/yosys_conflicting_drivers.txt || true
@@ -537,7 +559,7 @@ ddr3-report: $(DDR3_BUILD)/$(DDR3_TOP).bit
 	  --source "$(DDR3_SOURCE_LABEL)" --output $(DDR3_REPORT) \
 	  --flow "yosys $(DDR3_YOSYS_SYNTH); nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer/seed search over '$(DDR3_PLACERS)' x '$(DDR3_SEEDS)' $(DDR3_PNR_ARGS); prjxray fasm2frames + xc7frames2bit ($(IMAGE))" \
 	  --ddr3 --uberddr3-dir $(DDR3_SRC) --lock $(DDR3_LOCK) --image-digest "$(IMAGE_DIGEST)" --chipdb $(DDR3_CHIPDB) \
-	  --variant "x$(DDR3_WIDTH) BYTE_LANES $(DDR3_LANES), PLL CLKFBOUT_MULT $(DDR3_PLL_MULT), DDR3 clock VCO/$(DDR3_DDR_DIV) ($(DDR3_DDR_NS) ns), controller $(DDR3_CTRL_NS) ns"
+	  --variant "x$(DDR3_WIDTH) BYTE_LANES $(DDR3_LANES), PLL CLKFBOUT_MULT $(DDR3_PLL_MULT), DDR3 clock VCO/$(DDR3_DDR_DIV) ($(DDR3_DDR_NS) ns), controller $(DDR3_CTRL_NS) ns, $(DDR3_PATTERN_VARIANT)"
 
 # Both widths with one command. Each width is its own make run, so
 # DDR3_WIDTH, DDR3_BUILD and DDR3_REPORT cannot be set here: DDR3_REPORT_ROOT
