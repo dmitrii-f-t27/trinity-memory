@@ -117,8 +117,8 @@ divisor D every sample therefore lies 0 to 1 clock after the middle of its bit (
 an odd one, within half a clock of it). Arithmetic, not measured: the stop bit is
 sampled 9.5 D + 0..1 clocks after the start edge and must fall inside the host's
 stop bit, 9 to 10 host bit periods, so the host's bit period may be off by
--(0.5 D - 1) / (10 D) to +0.5 / 9: -4.4 % to +5.5 % at D = 16, -4.98 % to +5.5 % at
-D = 217 (115200 baud at 25 MHz). A pulse that ends before the start sample is a false
+-(0.5 D - 1) / (10 D) (even D; -(0.5 D - 0.5) / (10 D) for odd D) to +0.5 / 9:
+-4.4 % to +5.5 % at D = 16, -4.98 % to +5.5 % at D = 217 (115200 baud at 25 MHz). A pulse that ends before the start sample is a false
 start: up to half a bit, or half a bit plus one clock depending on its phase. The
 first build sampled one clock later than this (the count started at `baud_div >> 1`),
 which left only -3.75 % on the fast side at D = 16 (review finding 3).
@@ -382,7 +382,7 @@ Run 4 here repeats the old behaviour on purpose (`--drain`): tcdrain returned
 430.1-431.1 ms after the write started, the ack was read 0.06-0.07 ms after that (while
 the host waits in tcdrain the reader thread receives nothing on this macOS and CP2102N
 setup), and the load ran at 9 512.7 B/s. Without tcdrain the ack arrives 359.8 ms after
-the start (runs 1-6). The old tool also waited out a 10 ms read window after every
+the start (runs 1-3, 5 and 6). The old tool also waited out a 10 ms read window after every
 reply (review finding 10); the new one returns as soon as the reply is decoded.
 Arithmetic from the rates, not measured: a whole 2560 x 2560 q_proj as dense5
 (1 310 720 bytes plus header) would take about 115 s at 11.37 kB/s.
