@@ -9,7 +9,7 @@
 // then, pseudo-randomly, on +stall_pct percent of the clocks and for a
 // refresh-like window of 24 clocks every 700; a request is taken on a clock with
 // i_wb_cyc, i_wb_stb and not o_wb_stall; writes and reads are acknowledged in
-// order after 6 to 13 clocks (at most one ack per clock, never held off), and
+// order after 6 to 13 clocks (+ack_min, +ack_span; at most one ack per clock, never held off), and
 // o_wb_data is valid with a read's ack; i_wb_cyc low drops every request in
 // flight. Writes store the bytes whose i_wb_sel bit is set, at the time they are
 // taken; reads return the stored burst at the time they are taken.
@@ -25,7 +25,9 @@
 //   +drop_addr=<a> +drop_nth=<n>               the n-th write (from 0) to burst a is not stored
 //   +hang_after=<n>                            no request is taken after the n-th
 //   +lose_ack=<n>                              the n-th ack (from 0) is never raised
-// and +calib_clocks=<n> (default 3000) for the calibration time.
+// and +calib_clocks=<n> (default 3000) for the calibration time, +stall_pct=<p> (default 20)
+// for the random stalls, +ack_min=<n> +ack_span=<m> (defaults 6 and 8) for the ack latency:
+// n + (a pseudo-random number mod m) clocks after the request, and never before the previous ack.
 //
 // Observation: min_gap is the smallest number of clocks between the clock a
 // write request to a burst address was taken and the clock a later read request
@@ -107,7 +109,7 @@ module ddr3_top #(
     reg [QDEPTH-1:0] q_read;
     integer q_head, q_tail, q_count, i, k;
     integer calib_clocks, stall_pct, stuck_bit, stuck_val, stuck_dq, stuck_dq_val, drop_nth, hang_after;
-    integer lose_ack, acks;
+    integer lose_ack, acks, ack_min, ack_span;
     reg [63:0] wtime [0:(1 << MEM_BITS) - 1];
     reg [(1 << MEM_BITS) - 1:0] wvalid;
     reg [63:0] min_gap;
@@ -135,6 +137,8 @@ module ddr3_top #(
         if (!$value$plusargs("drop_nth=%d", drop_nth)) drop_nth = 0;
         if (!$value$plusargs("hang_after=%d", hang_after)) hang_after = -1;
         if (!$value$plusargs("lose_ack=%d", lose_ack)) lose_ack = -1;
+        if (!$value$plusargs("ack_min=%d", ack_min)) ack_min = 6;
+        if (!$value$plusargs("ack_span=%d", ack_span)) ack_span = 8;
         for (i = 0; i < (1 << MEM_BITS); i = i + 1) mem[i] = {WB_DATA_BITS{1'b0}};
         wvalid = {(1 << MEM_BITS){1'b0}};
         min_gap = {64{1'b1}};
@@ -214,7 +218,8 @@ module ddr3_top #(
                 end
                 q_data[q_tail] = i_wb_we ? {WB_DATA_BITS{1'b0}} : mem[phys];
                 q_read[q_tail] = !i_wb_we;
-                q_due[q_tail] = (now + 6 + (lfsr[2:0]) > last_due) ? now + 6 + lfsr[2:0] : last_due + 1;
+                q_due[q_tail] = (now + ack_min + (lfsr % ack_span) > last_due) ? now + ack_min + (lfsr % ack_span)
+                                                                               : last_due + 1;
                 last_due = q_due[q_tail];
                 q_tail = (q_tail + 1) % QDEPTH;
                 q_count = q_count + 1;
