@@ -628,8 +628,9 @@ flow's support for those primitives is partial (gHashTag/trinity-fpga records an
 IDDR path that never fires, openXC7 issue 114) and no DDR3 controller has been
 brought up on this board with it beyond a memory test (the DDR3 flow of issue #60,
 next section, calibrates on the board and passes our write/read-back pattern test
-over all of U6 in x16 and over all 1 GiB in x32 for some placements; no bandwidth
-of the stage-2 kind has been measured), so any DDR figure would rest on primitives
+over all of U6 in x16 and over all 1 GiB in x32 for some placements, and #62's read
+path counts its words and clocks per run; the stage-2 weights-per-second comparison, #65,
+has not been made), so any DDR figure would rest on primitives
 whose timing nothing analyses; the protocol above ("If testing DDR bandwidth …") stays the plan for
 a Vivado-built controller or a repaired open PHY. Power needs an instrument on
 the 12 V input or the board's rails; none is attached to the bench, and the USB
@@ -663,6 +664,11 @@ SRAM loads only, AX7203 DNA `0x00389c0c2d85e85c`):**
   prediction from it, committed before four more seeds ran, was right as written
   for two (19 and 12 pass); 9 failed as predicted but in another way (it never
   left alignment), and 10, predicted "pattern test uncertain", passed.
+- **Read path (#62), x16:** a t27 burst reader and consumer (A) on the user port
+  filled and read back a 2560 x 6912 region (17,694,720 trits) in baseline2 and in dense5,
+  1,653 runs over 3 loads of one placement, 0 bad words, every run equal to the host model,
+  0.9447-0.9449 words per controller clock; another placement of the same netlist never
+  calibrated ("DDR3 read path (#62)", below).
 - Not run: the 45a986b8 line, any VREF change, `BIST_MODE 2`, a hold between
   write and read, a descending address order, a soak longer than 600 s, and x32
   with `UART_DEBUG_BIST`.
@@ -1541,3 +1547,241 @@ every record's whole `decoded` with a fresh decode and pins the totals above.
   the probe is structural and not yet traced to a part of our top. The VREF,
   termination and VCCO facts come from the AX7103 core-board schematic Rev 1.0,
   not from an AX7203 one.
+
+### DDR3 read path (#62)
+
+Issue #62 is the read path of stage 2: a t27 Wishbone burst reader on UberDDR3's user
+port, consumer (A) at bus rate, and the counters of step 5 of the protocol above
+("If testing DDR bandwidth ..."). It is built for **x16** only (128-bit Wishbone words
+at the 83.33 MHz controller clock; no 2:1 gearbox); x32 was not built. The weights-per-second
+comparison of the two layouts is #65; this section reports the read path's own counters.
+
+**What is built.** [`t27/rtl/fpga_ddr3_reader.t27`](../t27/rtl/fpga_ddr3_reader.t27) is the
+whole application: sequencer, Wishbone master, the trit generator, the dense5 encoder,
+consumer (A) with its decoders, the counters and the report arbiter (the status reporter's
+`H` and `S` lines pass through it, as through the pattern test).
+[`fpga/ax7203/ddr3/tms_ddr3_reader.v`](../fpga/ax7203/ddr3/tms_ddr3_reader.v) only splits the
+128-bit words into the u64 ports the pinned compiler emits: `rdata[63:0]` is bytes 0-7,
+`rdata[127:64]` bytes 8-15, byte n of a word at bits `[8n+7:8n]`, which UberDDR3 puts on beat
+n / 2, byte lane n % 2, so byte k of the region is byte k % 16 of burst k / 16: the payload
+lies in DDR3 in stream order. `tms_ddr3_ax7203.v` instantiates it in place of the pattern test
+when it is read with `` `define DDR3_READER ``; everything of the reader in the top (the
+`READER_*` parameters, the instance, the reset choice) is under that define, so the
+pattern-test and #60 builds see the same source text as before.
+
+```sh
+make -C fpga/ax7203 ddr3-fetch ddr3-cores T27_ROOT=/path/to/t27
+make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_APP=reader T27_ROOT=/path/to/t27 \
+  YOSYS='cd $(ROOT) && yosys' IMAGE=regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c \
+  DDR3_TOOLS=$T/nextpnr-xilinx-0.9.7 DDR3_XRAY=$T/prjxray-db-a90f27c1 DDR3_META=$T/nextpnr-xilinx-meta-a4af910c \
+  DDR3_SEEDS=6      # the placement that ran; see "Placement" below
+```
+
+`DDR3_APP` is `pattern` by default (the #61 builds); `reader` builds into
+`build/fpga/ddr3-x16-reader/` and reports into `ddr3-build-<date>-<id>-x16-reader/`, refuses
+`DDR3_WIDTH=32`, `DDR3_PATTERN=1` and `DDR3_UART_DEBUG_BIST=1`, and bakes
+`DDR3_READER_TRITS` (default 17,694,720), `DDR3_READER_SEED` (98), `DDR3_READER_CAP` (64) and
+`DDR3_READER_RUNS` (0, until reset) into the netlist; the report's variant reads
+`READER (trits ..., seed ..., cap ..., runs ...)`, which the capture tool reads.
+
+**Default builds unchanged.** With the Makefile of this change, `make -n` prints the same
+tool commands as before for the default, x32, `DDR3_PNR_LINE=image`, `DDR3_PATTERN=0`,
+`DDR3_PATTERN=0 DDR3_UART_DEBUG_BIST=1` and `bram-bit BRAM_ONLY=2` (it adds only the touch of
+an `app-pattern.stamp`), and the x16 pattern-test netlist rebuilt at ce3d889 with
+`BUILD_ID=7deeef16 DDR3_SEEDS=3` gave FASM `4e837c96…`, the FASM of
+`ddr3-build-2026-09-24-7deeef16-x16/` (a rebuild in this session, not committed; the block-RAM
+sources are untouched).
+
+**Fill mode (no UART).** After `o_calib_complete` the reader runs until reset. Run r writes
+format r & 1 (0 baseline2, 1 dense5) with the key of pair p = r >> 1, so runs 2p and 2p+1 carry
+the same logical trits in the two layouts. A run fills the region (word w at burst address w),
+waits for every write's ack, then reads every word back through consumer (A) and reports.
+The trits come from [`tools/ddr3_read_model.py`](../tools/ddr3_read_model.py)'s rule: trit i is
+lane i & 15 of block i >> 4, the 16 lane codes of `(K xor post(lin(mix(b)))) mod 2^32` with a
+pair 11 read as 00 (so 0 with probability 1/2, +1 and -1 with 1/4 each), `K =
+lin(lin((seed << 32) | p) + KADD)`, `lin` the pattern test's nine xorshift steps and `mix`,
+`post` one nonlinear step each; the lanes after `trits` are logical zeros. A baseline2 word
+holds 64 lanes (four per byte, earliest lowest, `docs/format.md`), a dense5 word 80 (byte n
+= `sum (t_i + 1) * 3^i` of lanes 5n .. 5n+4); a padding byte of dense5 is 121. The generator is
+a four-stage pipeline (raw blocks, padding mask, encoded word, current word) that advances one
+word per write taken or per read acknowledged, so its current word is the data presented
+(fill) or the lanes the next ack must decode to (read). Keys depend on the seed and the pair
+only, so every load of a bitstream writes the same sequence of keys; within a load every pair
+has a new key, and a run's fill overwrites the previous run's region with other bytes.
+
+**Burst reader.** Requests are taken on a clock with `stb` and not `o_wb_stall`; a presented
+request is never withdrawn or changed; the n-th ack belongs to the n-th request. A new request
+is presented only while the requests taken and not yet acknowledged, counting the one being
+taken, stay below `cap`, so at most `cap` (64) are outstanding. Acks cannot be held off, so
+consumer (A) has no ready and no FIFO: it takes the acknowledged word into its first register
+in the ack's clock, every clock if need be. The cap therefore only bounds the reader; with no
+FIFO to protect it is set above what the controller keeps in flight (the board runs saw at most
+9) and every clock it holds a request back is counted (`cap holds`, 0 on the board).
+
+**Consumer (A)**, one word per controller clock, nine register stages: S1 the acknowledged
+word and its expected lanes; D the decoders on four 32-bit chunks (dense5: 20 lanes and the
+invalid bytes per chunk, baseline2: 16 lanes with every `11` cleared and counted); S2 the lanes
+assembled (80 or 64) and the invalid groups added; S3 the compare with the expected lanes and
+per activation class (lane mod 8) the counts of +1 and -1 lanes; S4-S6 the word's +1 and -1
+counts and its activation-weighted sums; S7 the accumulators and the word's dot product; S8 the
+dot accumulator. Every definition is `tools/bram_trit_model.py`'s: lane codes `00 = 0, 01 =
++1, 10 = -1`, activation `(i mod 8) + 1` for global trit index i, dot product `sum t_i *
+act_i`, and the rotate-xor checksum `chk = rotl1(chk) xor x` over the stored data, here in
+64-bit halves in bus order (low half of word 0, high half, low half of word 1, ...). The dense5
+decoder and encoder are constant tables, not the divisions of `bram_trit_codec.t27`: with
+carry chains allowed (the DDR3 flow's `synth_xilinx -abc9 -arch xc7`), one codec decoder and
+one encoder of four bytes each took 183 CARRY4 and 609 LUTs out of context, and an
+out-of-context synthesis of the reader with 243 constant compares per byte instead ended after
+4 minutes without a result (486,935 cells in its first optimisation; session logs, not
+committed). The tables are checked in C on all 256 codes and all 243 valid lane groups against
+`bram_trit_codec.t27`'s decoder and encoder and against the host model.
+
+**Counters of a run** (report lines after the status reporter's; `a` 32 bits, `b` 40 bits,
+so every field holds a whole layer, and in fact the whole 512 MiB of U6: 2^25 words, at most
+2.7 G trits; the dot product has 64 bits over two fields):
+
+| Line | a | b |
+| --- | --- | --- |
+| `q` (once) | logical trits per run | (1 << 32) \| (byte lanes << 24) \| cap |
+| `k` (once) | seed | controller clocks since reset at `o_calib_complete` (low 40 bits) |
+| `v` (once) | runs (0 = until reset) | watchdog clocks |
+| `a` | run | (format << 32) \| (lanes per word << 24) |
+| `f` | fill words acknowledged | fill cycles: clocks from the first write request presented to the last write ack, inclusive |
+| `g` | fill: most requests outstanding | fill command stalls |
+| `c` | **words**: read acks | **cycles**: clocks from the first read request presented to the last read ack, inclusive |
+| `y` | **consumer stalls**: acks while consumer (A) is not ready (0 by construction: its ready is constant) | **bus bytes**: 16 per word consumed |
+| `p` | **scale and metadata bytes**: 0, this region stores none | **payload bytes**: per word, the bytes holding at least one logical trit (ceil(trits / 4) or ceil(trits / 5) per run) |
+| `d` | **bad words**: words whose decoded lanes differ from the regenerated lanes anywhere | **padding bytes**: 16 - payload bytes, per word |
+| `n` | **invalid groups**: dense5 bytes >= 243, baseline2 lanes `11` | **logical trits** delivered: lanes below `trits` (padding lanes excluded) |
+| `o` | most requests outstanding at a clock (extra) | **command stalls**: clocks with a request presented and `o_wb_stall` high |
+| `w` | **cap holds** (extra): clocks with no request presented while requests remained | **wait stalls**: clocks with at least one request outstanding and no ack |
+| `u` | -1 lanes | +1 lanes |
+| `s` | dot product bits 63:40 | dot product bits 39:0 |
+| `h` | checksum bits 63:32 | checksum bits 31:0 |
+
+and `t` (watchdog stop: acks of the open phase; read phase, format and run) or `z` (after
+`runs` runs). Bus bytes and words are counted independently (consumer and acks), as are
+payload and padding, so "bus = words x 16" and "padding = bus - payload" are checks, not
+identities of one counter. [`tools/fpga-ddr3-capture.py`](../tools/fpga-ddr3-capture.py)
+decodes the lines into `reader` of its record (`trinity.ddr3-capture.v1`) and fails a run
+whose counters do not add up (those two, fill words = read words, words = ceil(trits /
+lanes), logical trits = the region, payload bytes of the format, cycles >= words), which has a
+bad word, an invalid group or a consumer stall, or whose words, bus, payload and padding bytes,
++1 and -1 counts, dot product and checksum differ from `tools/ddr3_read_model.py` for its
+format and key; and a record without both formats, with runs out of order, or with a pair
+whose two formats disagree on logical trits, +1, -1 or dot product.
+
+**Simulation** ([`tests/test_ddr3_reader.py`](../tests/test_ddr3_reader.py), in
+`tools/test-t27.sh`; skipped without T27_ROOT or Icarus). The generated C of the module's
+functions agrees with the host model on random inputs (generator, region arithmetic, masks,
+decoders, encoder, lane assembly, counts, weighted sums, checksum step). Icarus runs the whole
+top with `` `define DDR3_READER `` against [`tests/sim_ddr3_top_model.v`](../tests/sim_ddr3_top_model.v)
+(our behavioural Wishbone memory, now with `+ack_min`/`+ack_span` for the ack latency; its
+defaults reproduce the #61 behaviour) and hands the UART lines to the capture decoder: 1,237
+trits (not a multiple of 64, 80, 5 or 4: 20 baseline2 words with 310 payload and 10 padding
+bytes, 16 dense5 words with 248 and 8), four runs, with the default random stalls (20 % plus a
+refresh-like window) and acks 6-13 clocks after the request, with no random stalls, with acks
+30-69 clocks late, and with a cap of 3 and acks 40-69 clocks late (at most 3 outstanding, cap
+holds counted; with the cap of 64 and that latency more are outstanding and the cap never
+holds); 160 trits (dense5 whole words, baseline2 padded); 1 trit. Every run equals the host
+model, both formats of a pair deliver the same logical trits, +1, -1 and dot product, the
+counters add up, and the bench's own count of every phase at the Wishbone port (clocks from the
+first request to the last ack, requests, acks, command stalls, wait stalls, most outstanding)
+equals the reader's counters. After the last fill the memory model's bursts equal the model's
+dense5 words (bursts 0-15) and the baseline2 words the run before wrote (16-19) byte for byte,
+and the dense5 bytes read as a stream give the trits in order, padding bytes 121: that is the
+bit order above. A stuck DQ bit (3 at 1, 12 at 0), a stuck address bit (2 at 1) and dropped
+writes (in a dense5 and in a baseline2 run) are detected, each run's bad words, invalid
+groups, +1 and -1 counts, dot product and checksum equal a Python replay of the fault, and a
+port that stops taking requests in the fill or in the read stops the reader with a `t` line.
+The memory model is ours, not UberDDR3: its stall and ack timing are invented, nothing here
+simulates the PHY or the chips.
+
+**Build.** Same flow as the #61 builds (native yosys 0.69, native nextpnr-xilinx 0.9.7
+`heap`/`router2` with its own chip database, prjxray of the image). The first reader netlist
+(ce3d8896) missed the controller clock with every seed 1-8 (65.82-77.96 MHz; session logs, not
+committed): the decoders and the invalid-group sum shared a stage, and `o_wb_stall` went
+through an adder and a compare with the cap before the next `stb`. Pipelined instead of
+lowering the clock: the decoders got their own stage (D) and the next outstanding count and its
+room under the cap are computed from the registered count and only selected by the request
+taken and the ack. The netlist of a6d9745f met 83.33 MHz with seed 1 of the seed search
+([`ddr3-build-2026-09-24-a6d9745f-x16-reader/`](../reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader/))
+and, in a sweep of seeds 1-12 ([`ddr3-seed-sweep-2026-09-24-a6d9745f-x16-reader.json`](../reports/fpga/ddr3-seed-sweep-2026-09-24-a6d9745f-x16-reader.json)),
+with 9 of 11 routed seeds (78.67-91.02 MHz; seed 8 did not route). The routed critical path
+lies in UberDDR3's scheduler (to `o_wb_stall_int_d`) for 8 of the 11, in UberDDR3's
+instruction-address logic for seed 2, and in the reader's generator (to `raw1`, 11-12 LUT
+stages) for seeds 9 and 12 (84.01 and 90.02 MHz, both meeting the clock). yosys: 11,143 LUT, 6,899 FF, 574 CARRY4 (the x16 pattern-test netlist: 6,907 LUT,
+4,135 FF); nextpnr 15,486 SLICE_LUTX; 45 / 18 / 18 OSERDESE2 / ISERDESE2 / IDELAYE2; PLL tables
+PASS for MULT 5; VREF 0.675 V on bank 35 as before. As for every DDR3 build here, the Fmax
+covers fabric register-to-register paths on the controller clock only; the other clocks have
+no such paths and the PHY is not analysed.
+
+| Build | Seed | Fmax, controller clock | CK - DQS, lanes 0/1 (ns, model) | FASM sha256 | `.bit` sha256 from the sync word | Board |
+| --- | --- | --- | --- | --- | --- | --- |
+| [`…-a6d9745f-x16-reader/`](../reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader/) | 1 (seed search) | 86.55 MHz | -0.96 / -0.74 | `cca91a28…` | `da86854d…` | never calibrates (2 loads) |
+| [`…-a6d9745f-x16-reader-seed6/`](../reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6/) | 6 (`DDR3_SEEDS=6`) | 85.82 MHz | -0.18 / +0.12 | `85f0684c…` | `793707a3…` | 3 of 3 loads pass |
+
+**Placement.** The seed-1 bitstream (whole-file sha256 `5efd0ef6…`) never calibrated in two
+loads ([`ddr3-reader-2026-09-24-a6d9745f-x16/load1`, `load2`](../reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/)):
+highest state 14 (CHECK_STARTING_DATA), the count of returns to IDLE at its ceiling of 255:
+the failure mode of the x32 placements 1, 7 and 9 of #61 (seed 7 with a lane at -1.19 ns,
+seeds 1 and 9 with every lane between +1.12 and +2.37 ns, in the model). In
+nextpnr's model its lane 0 sits at -0.96 ns, below every x16 placement that calibrated so far
+(-0.29 / -0.31, -0.68 / -0.37, +0.74 / +1.09). So x16 is placement-sensitive too. Seed 6 was
+then picked from the sweep before it was loaded, as the seed that meets 83.33 MHz with the
+smallest CK - DQS (-0.18 / +0.12 ns), built on its own (`DDR3_SEEDS=6`: FASM equal to the
+sweep's seed 6) and loaded three times. Choosing the seed by this skew is a rule taken from
+#61's correlation, not a timing analysis; [`ddr3-reader-summary-2026-09-24-a6d9745f-x16.json`](../reports/fpga/ddr3-reader-summary-2026-09-24-a6d9745f-x16.json)
+lists every seed's delays and every load.
+
+**Board runs (2026-09-24, seed 6, `.bit` whole-file sha256 `7259adac…`)**, each by
+`tools/fpga-ddr3-capture.py` as for #61 (the `.bit` checked against its report, IDCODE
+`0x3636093`, DNA `0x00389c0c2d85e85c`, XADC before and after, UART recorded from before the
+load), 20 s after the load
+([`ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load1`-`load3`](../reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/);
+loads returned 15:23:15.9, 15:26:21.4 and 15:28:32.7 UTC):
+
+- Calibration complete 5.195-5.198 s after reset on every load, the reset 5-9 ms after the load
+  returned; every `S` line after it (31 per load, the last about 19.7 s after reset) shows
+  `calib_complete` 1, state 23, highest state 23 and no return to IDLE, so DONE_CALIBRATE held
+  while the reader ran (the lines are coalesced; a return to IDLE in between would have raised
+  the count). Controller clock fits -346, +53 and -278 ppm from 83.333 MHz. Die 48.9-50.6 °C,
+  VCCINT 0.993-0.994 V.
+- 549, 553 and 551 runs (1,653: 828 baseline2, 825 dense5, 825 complete pairs; the first
+  report 5.23-5.24 s after the load), every run passing every check above: 0 bad words, 0
+  invalid groups, 0 consumer stalls in 228,925,440 baseline2 and 182,476,800 dense5 words read
+  back; words, bus, payload and padding bytes, +1 and -1 counts, dot product and checksum equal
+  to the host model in every run; in every pair both formats deliver the same 17,694,720 logical
+  trits with the same +1 and -1 counts and dot product. Scale and metadata bytes 0 and padding
+  0 (the region is whole words in both formats); the padding counters were exercised in
+  simulation only.
+- **Read cycles per run** (the raw read path; first read request to last ack, refresh and row
+  changes included): baseline2 276,480 words in 292,614-292,652 clocks, 0.94474-0.94486
+  words per clock; dense5 221,184 words in 234,085-234,125 clocks, 0.94473-0.94489 words per
+  clock. At the nominal 83.333 MHz (arithmetic, not a second measurement) that is
+  3.5114-3.5118 ms and 2.8090-2.8095 ms per run and 1,259.6-1,259.9 MB/s of bus data, the rate
+  of the #61 pattern test's phases (1,259.7 MB/s). Command stalls 16,125-16,163 (baseline2)
+  and 12,892-12,932 (dense5) per read, wait stalls 3,413-3,421 and 2,730-2,740, at most 9
+  requests outstanding, 0 cap holds. Fills: 292,648-292,649 and 234,119-234,120 clocks, at
+  most 6 outstanding. Every load repeated these ranges.
+
+**Limits and open items.**
+- The checksum of the baseline2 runs was 0 in all 828 runs, and the model gives 0 too: the
+  baseline2 data are the generator's lane codes themselves, and the rotate-xor of their
+  64-bit halves over this region cancels (the xor-sum of a low-degree function of the block
+  index over large aligned ranges); the dense5 checksum differs from pair to pair (276
+  values over the 276 pairs). So for baseline2 on this region the checksum confirms nothing;
+  the per-word lane compare, which covers every lane of every word, is the check. A checksum
+  with carries (rotate-add) would not cancel; not changed, since the issue asks for the block-RAM
+  benches' rotate-xor. The +1 and -1 counts and the dot product depend on the key (134 distinct
+  count pairs, dot products -6,464 to +6,464 over the 1,653 runs).
+- Keys repeat from load to load (they depend on seed and pair only); within a load each pair
+  has its own key. The first run of a load reads a region that the previous load last filled
+  with another pair's bytes, so a lost fill still shows as bad words.
+- x16 only; placement-sensitive (seed 1 fails, seed 6 passes); only one placement ran
+  clean, and only for 3 x 20 s. No longer soak, no second board.
+- Padding and scale/metadata bytes are 0 on the board region; nonzero padding was only
+  simulated. No scales are stored or read, so the scale/metadata counter is 0 by construction.
+- Not done here: consumer (B), the matvec (#64); loading real weights over the UART (#63); the
+  weights-per-second comparison of the two layouts (#65). The words-per-clock figures above
+  are the read path's, measured by the reader's own counters at the controller clock.

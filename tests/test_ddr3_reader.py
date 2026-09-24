@@ -438,6 +438,78 @@ class ReaderSimulation(unittest.TestCase):
             self.assertEqual(reader["runs"], [])
 
 
+def have_numpy() -> bool:
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+class ReaderBoardRecords(unittest.TestCase):
+    """The committed board captures of the read path (reports/fpga/ddr3-reader-*/load*/) decode to
+    what their records say. The host model's run results take ~0.3 s each with numpy for the
+    2560 x 6912 region, so a fresh decode checks the first three runs of each load against the
+    model (none without numpy) and the rest against the record, which checked every run."""
+    RUN_FIELDS = ("run", "format", "fill_words", "fill_cycles", "fill_max_outstanding", "fill_command_stalls",
+                  "words", "cycles", "consumer_stalls", "bus_bytes", "scale_metadata_bytes", "payload_bytes",
+                  "bad_words", "padding_bytes", "invalid_groups", "logical_trits", "max_outstanding",
+                  "command_stalls", "cap_holds", "wait_stalls", "minus", "plus", "dot", "checksum")
+
+    def records(self):
+        return sorted((ROOT / "reports/fpga").glob("ddr3-reader-*/load*/"))
+
+    def test_records_decode_again(self):
+        model_runs = 3 if have_numpy() else 0
+        self.assertEqual(len(self.records()), 5)      # seed 1: loads 1-2; seed 6: loads 1-3
+        for directory in self.records():
+            import json
+            record = json.loads(capture.read_kept(directory / "capture.json"))
+            entries = []
+            for raw in capture.read_kept(directory / record["uart_transcript"]["file"]).decode().splitlines():
+                if raw.startswith("#") or not raw.strip():
+                    continue
+                t_s, _utc, line = raw.split("\t", 2)
+                entries.append({"t_s": float(t_s), "line": line})
+            expect = record["expect"]
+            self.assertTrue(expect["reader"], directory)
+            again = capture.decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
+                                   expect_period_ps=expect["period_ps"], load_end_s=record["run"].get("load_end_s"),
+                                   nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"),
+                                   expect_reader=True, reader_model_runs=model_runs)
+            kept = record["decoded"]
+            self.assertEqual(again["final"], kept["final"], directory)
+            self.assertEqual(again["pass"], kept["pass"], directory)
+            self.assertEqual(again["checks"], kept["checks"], directory)
+            got = [{k: r[k] for k in self.RUN_FIELDS} for r in again["reader"]["runs"]]
+            want = [{k: r[k] for k in self.RUN_FIELDS} for r in kept["reader"]["runs"]]
+            self.assertEqual(got, want, directory)
+            self.assertEqual(kept["reader"]["totals"]["model_checked_runs"], len(kept["reader"]["runs"]), directory)
+            for r in again["reader"]["runs"][:model_runs]:
+                self.assertTrue(r["checks"]["equals_host_model"], (directory, r["run"]))
+
+    def test_pinned_board_results(self):
+        """The figures docs/hardware.md quotes ("DDR3 read path (#62)")."""
+        import json
+        summary = json.loads((ROOT / "reports/fpga/ddr3-reader-summary-2026-09-24-a6d9745f-x16.json").read_text())
+        seed6 = summary["board"]["seed6"]
+        self.assertEqual([x["runs"] for x in seed6], [549, 553, 551])
+        self.assertTrue(all(x["passing_runs"] == x["runs"] == x["model_checked_runs"] for x in seed6))
+        self.assertTrue(all(x["bad_words"] == x["invalid_groups"] == x["consumer_stalls"] == 0 for x in seed6))
+        self.assertTrue(all((x["calib_complete"], x["state"], x["returns_to_idle"]) == (1, 23, 0) for x in seed6))
+        for x in seed6:
+            self.assertEqual(x["per_format"]["baseline2"]["words"], [276480])
+            self.assertEqual(x["per_format"]["dense5"]["words"], [221184])
+            self.assertEqual((x["per_format"]["baseline2"]["cycles_min"], x["per_format"]["baseline2"]["cycles_max"]),
+                             (292614, 292652))
+            self.assertEqual((x["per_format"]["dense5"]["cycles_min"], x["per_format"]["dense5"]["cycles_max"]),
+                             (234085, 234125))
+            self.assertEqual(x["per_format"]["dense5"]["cap_holds_max"], 0)
+        seed1 = summary["board"]["seed1"]
+        self.assertTrue(all((x["calib_complete"], x["highest_state"], x["returns_to_idle"], x["runs"]) == (0, 14, 255, 0)
+                            for x in seed1))
+
+
 class ReaderDecoder(unittest.TestCase):
     HZ = 83_333_333.3
 

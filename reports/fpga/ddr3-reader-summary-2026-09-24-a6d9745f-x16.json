@@ -1,0 +1,422 @@
+{
+ "schema": "trinity.ddr3-reader-summary.v1",
+ "written_utc": "2026-09-24T15:31:40Z",
+ "netlist": "a6d9745f x16, DDR3_APP=reader (READER trits 17694720, seed 98, cap 64, runs 0); yosys netlist sha256 identical for both builds below",
+ "skew_note": "nextpnr-xilinx 0.9.7's delay model (reports/fpga/ddr3-seed-sweep-2026-09-24-a6d9745f-x16-reader.json): clock buffer -> fabric inverter LUT -> CK OBUFDS input (ck_ps, the later of P and N) and -> each lane's DQS OSERDES CLK, as in ddr3-x32-skew-outcome-2026-09-24.json. Not measured on silicon.",
+ "seed_choice": "The seed search's first seed that met the controller clock (1) had CK - DQS -964 / -740 ps and never calibrated on the board (two loads below, highest state 14, 255 returns to IDLE). Seed 6 was then chosen from the sweep as the seed meeting 83.33 MHz with the smallest |CK - DQS| (-177 / +120 ps), before it was loaded; x16 builds that calibrated in #61 had -290/-310, -680/-370 and +740/+1090 ps.",
+ "seeds": [
+  {
+   "seed": 1,
+   "routed": true,
+   "fmax_mhz": 86.55,
+   "meets_83_33": true,
+   "fasm_sha256": "cca91a28a1435175ff585b0f08c132c40c47f1caa3be4db191a629abe1a42732",
+   "inverter_lut": "SLICE_X162Y145/C6LUT",
+   "ck_ps": 3055,
+   "dqs_clk_ps_by_lane": [
+    4019,
+    3795
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -964,
+    -740
+   ]
+  },
+  {
+   "seed": 2,
+   "routed": true,
+   "fmax_mhz": 86.04,
+   "meets_83_33": true,
+   "fasm_sha256": "696628ce6e9870aca8804d544541f24777d14978eef29dd2f42a569b93a63765",
+   "inverter_lut": "SLICE_X162Y165/D6LUT",
+   "ck_ps": 3828,
+   "dqs_clk_ps_by_lane": [
+    3368,
+    3213
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    460,
+    615
+   ]
+  },
+  {
+   "seed": 3,
+   "routed": true,
+   "fmax_mhz": 86.15,
+   "meets_83_33": true,
+   "fasm_sha256": "3c008d0d34053696af2214817d1dcc69241b96b3016b71597cb6e846f0cdeab2",
+   "inverter_lut": "SLICE_X163Y147/D6LUT",
+   "ck_ps": 3314,
+   "dqs_clk_ps_by_lane": [
+    3870,
+    3584
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -556,
+    -270
+   ]
+  },
+  {
+   "seed": 4,
+   "routed": true,
+   "fmax_mhz": 91.02,
+   "meets_83_33": true,
+   "fasm_sha256": "b0dff089ef03d61727b89d785538e18a457e1c5e93eb09b28959ec97d864d792",
+   "inverter_lut": "SLICE_X162Y146/B6LUT",
+   "ck_ps": 3321,
+   "dqs_clk_ps_by_lane": [
+    3869,
+    3558
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -548,
+    -237
+   ]
+  },
+  {
+   "seed": 5,
+   "routed": true,
+   "fmax_mhz": 88.91,
+   "meets_83_33": true,
+   "fasm_sha256": "ba5da8bbdca066f8509a05e64ba70d3767df66645665683046b9fa2e1680a539",
+   "inverter_lut": "SLICE_X162Y149/A6LUT",
+   "ck_ps": 3453,
+   "dqs_clk_ps_by_lane": [
+    3877,
+    3477
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -424,
+    -24
+   ]
+  },
+  {
+   "seed": 6,
+   "routed": true,
+   "fmax_mhz": 85.82,
+   "meets_83_33": true,
+   "fasm_sha256": "85f0684ce96d43ebaf770918ff28e6d4e9f68e6b8596c8e8e0335527e67cff94",
+   "inverter_lut": "SLICE_X162Y152/B6LUT",
+   "ck_ps": 3391,
+   "dqs_clk_ps_by_lane": [
+    3568,
+    3271
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -177,
+    120
+   ]
+  },
+  {
+   "seed": 7,
+   "routed": true,
+   "fmax_mhz": 78.67,
+   "meets_83_33": false,
+   "fasm_sha256": "104b43b27ee2909701191d52c942bceeb422ebd2e59f1a9f02cda454640a32ae",
+   "inverter_lut": "SLICE_X163Y147/D6LUT",
+   "ck_ps": 3314,
+   "dqs_clk_ps_by_lane": [
+    3870,
+    3559
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -556,
+    -245
+   ]
+  },
+  {
+   "seed": 8,
+   "routed": false,
+   "fmax_mhz": null,
+   "meets_83_33": false,
+   "fasm_sha256": null
+  },
+  {
+   "seed": 9,
+   "routed": true,
+   "fmax_mhz": 84.01,
+   "meets_83_33": true,
+   "fasm_sha256": "40145544638568e7c9aee05c2f086282634dab59019e26191a909d2b977061d8",
+   "inverter_lut": "SLICE_X162Y189/D6LUT",
+   "ck_ps": 4450,
+   "dqs_clk_ps_by_lane": [
+    2263,
+    2406
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    2187,
+    2044
+   ]
+  },
+  {
+   "seed": 10,
+   "routed": true,
+   "fmax_mhz": 81.39,
+   "meets_83_33": false,
+   "fasm_sha256": "b877da5990c738108f9803346b6434bfa3e83397d8a8cce245066dbe16f77ffc",
+   "inverter_lut": "SLICE_X162Y148/B6LUT",
+   "ck_ps": 3321,
+   "dqs_clk_ps_by_lane": [
+    3621,
+    3612
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    -300,
+    -291
+   ]
+  },
+  {
+   "seed": 11,
+   "routed": true,
+   "fmax_mhz": 86.26,
+   "meets_83_33": true,
+   "fasm_sha256": "4b85a42830309fae036ae23031427d6db51c23ec1f34492887e2db0ce9270b27",
+   "inverter_lut": "SLICE_X162Y168/D6LUT",
+   "ck_ps": 3722,
+   "dqs_clk_ps_by_lane": [
+    3172,
+    2785
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    550,
+    937
+   ]
+  },
+  {
+   "seed": 12,
+   "routed": true,
+   "fmax_mhz": 90.02,
+   "meets_83_33": true,
+   "fasm_sha256": "b4bee89e40a6fdca943b560358a58ad289f3a5eef509962239fc1d3e385386ea",
+   "inverter_lut": "SLICE_X162Y193/B6LUT",
+   "ck_ps": 4173,
+   "dqs_clk_ps_by_lane": [
+    2208,
+    2715
+   ],
+   "ck_minus_dqs_ps_by_lane": [
+    1965,
+    1458
+   ]
+  }
+ ],
+ "builds": {
+  "seed1": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader/",
+  "seed6": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6/"
+ },
+ "board": {
+  "seed1": [
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load1",
+    "load_end_utc": "2026-09-24T15:11:16.550Z",
+    "exit_status": 1,
+    "calib_complete": 0,
+    "state": 0,
+    "highest_state": 14,
+    "returns_to_idle": 255,
+    "seconds_after_reset": 20.017,
+    "runs": 0,
+    "passing_runs": 0,
+    "model_checked_runs": 0,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 0,
+    "per_format": {},
+    "die_c": [
+     38.8237,
+     40.8347
+    ]
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16/load2",
+    "load_end_utc": "2026-09-24T15:32:05.463Z",
+    "exit_status": 1,
+    "calib_complete": 0,
+    "state": 0,
+    "highest_state": 14,
+    "returns_to_idle": 255,
+    "seconds_after_reset": 10.174,
+    "runs": 0,
+    "passing_runs": 0,
+    "model_checked_runs": 0,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 0,
+    "per_format": {},
+    "die_c": [
+     50.9586,
+     50.1473
+    ]
+   }
+  ],
+  "seed6": [
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load1",
+    "load_end_utc": "2026-09-24T15:23:15.866Z",
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.723,
+    "runs": 549,
+    "passing_runs": 549,
+    "model_checked_runs": 549,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 274,
+    "per_format": {
+     "baseline2": {
+      "runs": 275,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292652,
+      "words_per_clock_min": 0.94474,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16163,
+      "wait_stalls_max": 3421,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292648,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 274,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234085,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944888,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234119,
+      "fill_cycles_max": 234120
+     }
+    },
+    "die_c": [
+     49.3937,
+     48.9188
+    ]
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load2",
+    "load_end_utc": "2026-09-24T15:26:21.362Z",
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.714,
+    "runs": 553,
+    "passing_runs": 553,
+    "model_checked_runs": 553,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 276,
+    "per_format": {
+     "baseline2": {
+      "runs": 277,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292652,
+      "words_per_clock_min": 0.94474,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16163,
+      "wait_stalls_max": 3421,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292648,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 276,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234085,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944888,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234119,
+      "fill_cycles_max": 234120
+     }
+    },
+    "die_c": [
+     50.3088,
+     49.9358
+    ]
+   },
+   {
+    "capture": "reports/fpga/ddr3-reader-2026-09-24-a6d9745f-x16-seed6/load3",
+    "load_end_utc": "2026-09-24T15:28:32.658Z",
+    "exit_status": 0,
+    "calib_complete": 1,
+    "state": 23,
+    "highest_state": 23,
+    "returns_to_idle": 0,
+    "seconds_after_reset": 19.718,
+    "runs": 551,
+    "passing_runs": 551,
+    "model_checked_runs": 551,
+    "bad_words": 0,
+    "invalid_groups": 0,
+    "consumer_stalls": 0,
+    "complete_pairs": 275,
+    "per_format": {
+     "baseline2": {
+      "runs": 276,
+      "words": [
+       276480
+      ],
+      "cycles_min": 292614,
+      "cycles_max": 292652,
+      "words_per_clock_min": 0.94474,
+      "words_per_clock_max": 0.944863,
+      "command_stalls_max": 16163,
+      "wait_stalls_max": 3421,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 292648,
+      "fill_cycles_max": 292649
+     },
+     "dense5": {
+      "runs": 275,
+      "words": [
+       221184
+      ],
+      "cycles_min": 234085,
+      "cycles_max": 234125,
+      "words_per_clock_min": 0.944726,
+      "words_per_clock_max": 0.944888,
+      "command_stalls_max": 12932,
+      "wait_stalls_max": 2740,
+      "max_outstanding_max": 9,
+      "cap_holds_max": 0,
+      "fill_cycles_min": 234119,
+      "fill_cycles_max": 234120
+     }
+    },
+    "die_c": [
+     50.5856,
+     49.9916
+    ]
+   }
+  ]
+ }
+}
