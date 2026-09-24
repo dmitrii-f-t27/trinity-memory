@@ -4,7 +4,10 @@
 // (faults by plusargs) and the PLL by a pass-through stub. The UART is decoded
 // into lines, written with the simulation time to the file named by +capture=,
 // and tests/test_ddr3_pattern.py hands them to tools/fpga-ddr3-capture.py's
-// decoder. The run ends after a Z line (all rounds done) or a T line (watchdog).
+// decoder. The run ends after a Z line (all rounds done), a T line (watchdog)
+// or, with +stop_after_passes=<n>, the n-th F line (PATTERN_ROUNDS 0 runs until
+// reset). TB_PASS also prints the memory model's smallest write-to-read
+// separation of one burst address, in controller clocks.
 `timescale 1ns/1ps
 `default_nettype none
 // Simulation stand-in for the PLL: every output is the input clock, LOCKED after 16 cycles.
@@ -60,20 +63,24 @@ module tb_ddr3_pattern;
         .ddr3_dq(dq), .ddr3_dqs_p(dqs_p), .ddr3_dqs_n(dqs_n), .ddr3_dm(dm)
     );
     reg [4095:0] path;
-    integer fd, lines;
+    integer fd, lines, passes, stop_after;
     reg [7:0] byte_r, first;
     reg at_line_start;
-    event finish_later;
+    event finish_later, finish_now;
     always @(finish_later) begin
         #(BIT_NS * 20 * 30);
+        -> finish_now;
+    end
+    always @(finish_now) begin
         $fclose(fd);
-        $display("TB_PASS lines=%0d leds=%b", lines, led);
+        $display("TB_PASS lines=%0d leds=%b min_write_to_read_clocks=%0d", lines, led, dut.ddr3.min_gap);
         $finish;
     end
     initial begin
         if (!$value$plusargs("capture=%s", path)) $fatal(1, "missing plusarg capture=");
         fd = $fopen(path, "w");
-        lines = 0; at_line_start = 1'b1; first = 8'd0;
+        lines = 0; passes = 0; at_line_start = 1'b1; first = 8'd0;
+        if (!$value$plusargs("stop_after_passes=%d", stop_after)) stop_after = 0;
         #200 rst_n = 1'b1;
     end
     initial begin
@@ -100,7 +107,10 @@ module tb_ddr3_pattern;
         if (byte_r == 8'h0a) begin
             lines = lines + 1;
             at_line_start = 1'b1;
+            if (first == "F") passes = passes + 1;
             if (first == "Z" || first == "T") -> finish_later;
+            // Stopped at a line's end, so the capture holds no cut-off line.
+            if (stop_after > 0 && first == "F" && passes == stop_after) -> finish_now;
         end
     end
 endmodule

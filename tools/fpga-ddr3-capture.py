@@ -38,11 +38,18 @@ the pattern test's own throughput (in-order bursts, one request per clock at
 most, refresh and row changes included), not the stage-2 measurement. The test
 checks only what it read back: the passes decoded, over the bursts it covered.
 
-  ../.venv-hw/bin/python tools/fpga-ddr3-capture.py --port /dev/cu.usbserial-110 \\
-      --bit build/fpga/ddr3-x16/tms_ddr3_ax7203.bit \\
-      --report reports/fpga/ddr3-build-2026-09-24-f07e91cd-x16/build.json \\
-      --output-dir reports/fpga/ddr3-bringup-2026-09-24-f07e91cd-x16 --seconds 60
+A #61 run (Python with pyserial; the x16 pattern-test build of 7deeef16, 60 s after the load):
+
+  python tools/fpga-ddr3-capture.py --port /dev/cu.usbserial-110 \\
+      --bit build/fpga/ddr3-x16-pattern/tms_ddr3_ax7203.bit \\
+      --report reports/fpga/ddr3-build-2026-09-24-7deeef16-x16/build.json \\
+      --output-dir reports/fpga/ddr3-bringup-<date>-7deeef16-x16-pattern/load<n> \\
+      --seconds 60 --label "x16 pattern test, load <n>"
   python3 tools/fpga-ddr3-capture.py --decode reports/fpga/.../uart.tsv --report .../build.json
+  python3 tools/fpga-ddr3-capture.py --redecode reports/fpga/.../load<n> --report .../build.json --reason "..."
+
+The record keeps the command line (`argv`) and the repository revision of the tool
+(`tool_revision`: HEAD and whether tracked files differed from it).
 
 Exit status 0 when every check passes, 1 otherwise, 2 when the run was stopped
 (temperature, a tool failed, the port could not be opened).
@@ -71,6 +78,7 @@ PASS_ORDER = "WREMF"
 NONE32 = 0xFFFFFFFF
 WRAP = 1 << 40
 DONE_CALIBRATE = 23
+CLOCK_TOLERANCE_PPM = 5000
 
 
 def utc(ts: float | None = None) -> str:
@@ -111,10 +119,17 @@ def fit_clock(points):
 
 
 def decode_pattern(lines, *, hz=None, lanes=None) -> dict:
-    """The pattern test's lines (parsed, with t_s) of one reset, in arrival order."""
+    """The pattern test's lines (parsed, with t_s) of one reset, in arrival order.
+
+    hz converts phase clocks into seconds and MB/s (the caller passes the nominal controller
+    clock when it has one). Passes must come as round << 1 | pass = 0, 1, 2, ... without a gap
+    or repeat (from 0 when the G line was seen). A last block cut off by the end of the capture
+    is kept in partial_pass_at_end; its E and M counts, when they arrived, are final (the test
+    sends them after the pass's compare) and count as wrong bits like a completed pass's."""
     header, passes, problems = {}, [], []
     timeout = done = None
     block = None
+    last_rp = None
     for ln in lines:
         tag, a, b = ln["tag"], ln["a"], ln["b"]
         if tag == "G":
@@ -132,6 +147,12 @@ def decode_pattern(lines, *, hz=None, lanes=None) -> dict:
                 if tag != "W":
                     continue
             if tag == "W":
+                want_rp = 0 if last_rp is None and "bursts" in header else (
+                    (last_rp + 1) & NONE32 if last_rp is not None else None)
+                if want_rp is not None and a != want_rp:
+                    problems.append({"t_s": ln["t_s"], "problem": f"pass {a:#x} where {want_rp:#x} was expected "
+                                                                  "(a pass missing or repeated)"})
+                last_rp = a
                 block = {"round": a >> 1, "pass": a & 1, "data": "complement" if a & 1 else "true",
                          "write_clocks": b, "_seen": "W", "_rp": a}
             elif tag == "R":
@@ -160,6 +181,8 @@ def decode_pattern(lines, *, hz=None, lanes=None) -> dict:
     partial = None
     if block:
         partial = {k: v for k, v in block.items() if not k.startswith("_")}
+        partial["clean_so_far"] = not (partial.get("bad_bursts") or partial.get("bit_errors")
+                                       or partial.get("bad_words_64bit"))
     lanes = header.get("byte_lanes") or lanes
     bursts = header.get("bursts")
     region = bursts * 8 * lanes if bursts is not None and lanes else None
@@ -192,12 +215,17 @@ def decode_pattern(lines, *, hz=None, lanes=None) -> dict:
                    "bytes_written_and_read_back": len(passes) * region if region else None},
         "min_write_to_read_clocks": min_sep,
         "min_write_to_read_s": round(min_sep / hz, 6) if min_sep is not None and hz else None,
+        "clock_hz_used": hz,
         "notes": ["pattern_test_*_MBps: region bytes over the phase's controller clocks (first request "
                   "presented to last ack), with the in-order single-master access of this test, refresh and "
                   "row changes included; it is not the stage-2 throughput measurement",
-                  "min_write_to_read: every burst's read request is accepted at least hold + bursts - 1 "
-                  "controller clocks after its write request (all writes are acknowledged before the first "
-                  "read, at most one request per clock); no longer retention is claimed",
+                  "*_s, pattern_test_*_MBps and min_write_to_read_s convert clocks at clock_hz_used, the nominal "
+                  "controller clock when the report gives one (the PLL output; the fit in `clock` is limited by "
+                  "the host's arrival jitter)",
+                  "min_write_to_read: a bound from the design, not a measurement: every burst's read request is "
+                  "accepted at least hold + bursts - 1 controller clocks after its write request (all writes "
+                  "are acknowledged before the first read, at most one request per clock); no longer retention "
+                  "is claimed",
                   "a pass covers the burst addresses 0 .. bursts-1 once for write and once for read-back; "
                   "the counts are per pass, bursts and 64-bit words counted once however many bits are wrong"],
     }
@@ -232,8 +260,16 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
     # The S lines after the last H line belong to the design's current reset.
     last_h = headers[-1]["t_s"] if headers else None
     current = [s for s in status if last_h is None or s["t_s"] >= last_h]
-    # Clocks rise monotonically within one reset (a wrap inside a short capture is not expected).
-    points = [(s["t_s"], s["clocks_low40"]) for s in current]
+    # Clocks rise monotonically within one reset; the 40-bit field wraps every 2^40 clocks (3.665 h at
+    # 83.33 MHz), so a drop by more than half the range is a wrap and is unwrapped before the fit.
+    unwrapped, add, prev = [], 0, None
+    for s in current:
+        if prev is not None and prev - s["clocks_low40"] > WRAP // 2:
+            add += WRAP
+        prev = s["clocks_low40"]
+        unwrapped.append(s["clocks_low40"] + add)
+    wraps_inside = add // WRAP
+    points = [(s["t_s"], u) for s, u in zip(current, unwrapped)]
     span = points[-1][0] - points[0][0] if len(points) >= 2 else 0.0
     hz, hz_err = fit_clock(points) if span >= min_span_s else (None, None)
     clock = {"nominal_hz": nominal_hz, "lines": len(points), "span_s": round(span, 3),
@@ -247,41 +283,41 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
     if rate and current:
         # When the design left reset, per line, in host seconds; the median is robust to arrival jitter.
         if load_end_s is not None:
-            wraps = [round(((s["t_s"] - load_end_s) * rate - s["clocks_low40"]) / WRAP) for s in current]
+            wraps = [round(((s["t_s"] - load_end_s) * rate - u) / WRAP) for s, u in zip(current, unwrapped)]
             k = max(set(wraps), key=wraps.count)
-            estimates = [s["t_s"] - (s["clocks_low40"] + k * WRAP) / rate for s in current]
+            estimates = [s["t_s"] - (u + k * WRAP) / rate for s, u in zip(current, unwrapped)]
             reset_s = statistics.median(estimates)
-            reset = {"wraps_of_the_40_bit_count": k, "reset_s": round(reset_s, 3),
+            reset = {"wraps_of_the_40_bit_count": k + wraps_inside, "wraps_within_capture": wraps_inside,
+                     "reset_s": round(reset_s, 3),
                      "reset_minus_load_end_s": round(reset_s - load_end_s, 3),
                      "last_line_since_reset_s": round(current[-1]["t_s"] - reset_s, 3)}
         else:
-            reset = {"wraps_of_the_40_bit_count": None,
-                     "last_line_since_reset_s_if_no_wrap": round(current[-1]["clocks_low40"] / rate, 3),
+            reset = {"wraps_of_the_40_bit_count": None, "wraps_within_capture": wraps_inside,
+                     "last_line_since_reset_s_if_no_wrap": round(unwrapped[-1] / rate, 3),
                      "note": "no load in this run: the time since reset is this value plus an unknown "
-                             "multiple of 2^40 clocks (3.665 h at 83.33 MHz)"}
+                             "multiple of 2^40 clocks (3.665 h at 83.33 MHz) before the first line"}
     final = current[-1] if current else None
     # Calibration as the coalesced lines show it: the first line of each state, and the
     # last line before calib_complete and the first one with it (the finish lies between).
     timeline, seen = [], set()
-    for line in current:
+    for line, u in zip(current, unwrapped):
         if line["state"] not in seen:
             seen.add(line["state"])
             timeline.append({"state": line["state"], "first_seen_clocks": line["clocks_low40"],
-                             "first_seen_s": round(line["clocks_low40"] / rate, 4) if rate else None})
-    before = [line for line in current if not line["calib_complete"]]
-    after = [line for line in current if line["calib_complete"]]
+                             "first_seen_s": round(u / rate, 4) if rate else None})
+    before = [u for line, u in zip(current, unwrapped) if not line["calib_complete"]]
+    after = [u for line, u in zip(current, unwrapped) if line["calib_complete"]]
     calibration = {
         "state_timeline": timeline,
-        "last_line_before_calib_complete_clocks": before[-1]["clocks_low40"] if before else None,
-        "first_line_with_calib_complete_clocks": after[0]["clocks_low40"] if after else None,
+        "last_line_before_calib_complete_clocks": before[-1] if before else None,
+        "first_line_with_calib_complete_clocks": after[0] if after else None,
     }
     if rate and before and after:
-        calibration["calib_complete_between_s"] = [round(before[-1]["clocks_low40"] / rate, 4),
-                                                   round(after[0]["clocks_low40"] / rate, 4)]
+        calibration["calib_complete_between_s"] = [round(before[-1] / rate, 4), round(after[0] / rate, 4)]
     current_pattern = [p for p in pattern_lines if last_h is None or p["t_s"] >= last_h]
     pattern = None
     if current_pattern or expect_pattern:
-        pattern = decode_pattern(current_pattern, hz=rate,
+        pattern = decode_pattern(current_pattern, hz=nominal_hz or rate,
                                  lanes=headers[-1]["byte_lanes"] if headers else expect_lanes)
     has_pattern = bool(current_pattern)
     checks = {
@@ -299,6 +335,10 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
         # openFPGALoader returns; a reset far from the load means another one happened.
         "reset_at_load": (-3.0 <= reset["reset_minus_load_end_s"] <= 3.0)
         if "reset_minus_load_end_s" in reset else None,
+        # The PLL makes the controller clock from a 200 MHz oscillator: a fit far from the nominal
+        # rate means lines that do not belong together (or a count read wrongly), not a slow clock.
+        "clock_near_nominal": (abs(clock["ppm_from_nominal"]) <= CLOCK_TOLERANCE_PPM)
+        if clock["ppm_from_nominal"] is not None else None,
         # Pattern test: present exactly when the build has it; every pass reported in order and
         # without a wrong bit; no watchdog stop; at least one round (true and complement pass).
         "pattern_present": (has_pattern == bool(expect_pattern)) if expect_pattern is not None else None,
@@ -306,7 +346,8 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
         "pattern_lanes": (pattern["header"].get("byte_lanes") == headers[-1]["byte_lanes"])
         if pattern and headers and "byte_lanes" in pattern["header"] else None,
         "pattern_well_formed": not pattern["problems"] if pattern else None,
-        "pattern_no_wrong_bits": (all(p["clean"] for p in pattern["passes"]) and pattern["timeout"] is None)
+        "pattern_no_wrong_bits": (all(p["clean"] for p in pattern["passes"]) and pattern["timeout"] is None
+                                  and (pattern["partial_pass_at_end"] or {}).get("clean_so_far", True))
         if pattern else None,
         "pattern_round_complete": pattern["totals"]["rounds_complete"] >= 1 if pattern else None,
     }
@@ -505,6 +546,26 @@ def read_kept(path: Path) -> bytes:
     return path.read_bytes()
 
 
+def write_kept(path: Path, data: bytes) -> None:
+    """Write a capture file back the way it is kept: <name>.gz (gzip -n: no name, no time) when only
+    that exists, otherwise the plain file."""
+    if not path.exists() and path.with_name(path.name + ".gz").exists():
+        path.with_name(path.name + ".gz").write_bytes(gzip.compress(data, compresslevel=9, mtime=0))
+    else:
+        path.write_bytes(data)
+
+
+def tool_revision() -> dict:
+    """The repository revision this tool ran from, and whether tracked files differed from it."""
+    def git(*cmd):
+        proc = subprocess.run(["git", "-C", str(ROOT), *cmd], capture_output=True, text=True)
+        return proc.stdout.strip() if proc.returncode == 0 else None
+    status = git("status", "--porcelain", "--untracked-files=no")
+    return {"head": git("rev-parse", "HEAD"), "tracked_changes": None if status is None else bool(status),
+            "tool_changed": None if status is None else any(line.endswith("tools/fpga-ddr3-capture.py")
+                                                            for line in status.splitlines())}
+
+
 def board_run(args, expect, report_path: Path) -> tuple[dict, int]:
     loader = [args.loader, "-c", args.cable]
     t0 = time.monotonic()
@@ -585,7 +646,7 @@ def main() -> int:
 
     if args.redecode:
         path = args.redecode / "capture.json"
-        record = json.loads(path.read_text())
+        record = json.loads(read_kept(path))
         entries = []
         for raw in read_kept(args.redecode / record["uart_transcript"]["file"]).decode().splitlines():
             if raw.startswith("#") or not raw.strip():
@@ -598,12 +659,13 @@ def main() -> int:
             result = decode_bist_debug(raw_bytes, entries, load_end_s=record["run"].get("load_end_s"))
             before = record.get("decoded_bist", {})
             record.setdefault("redecoded", []).append({
-                "utc": utc(), "reason": args.reason, "checks_before": before.get("checks"),
+                "utc": utc(), "reason": args.reason, "tool_revision": tool_revision(),
+                "checks_before": before.get("checks"),
                 "pass_before": before.get("pass"), "exit_status_before": record.get("exit_status")})
             record["decoded_bist"] = result
             if record.get("exit_status") in (0, 1):
                 record["exit_status"] = 0 if result["pass"] else 1
-            path.write_text(json.dumps(record, indent=1) + "\n")
+            write_kept(path, (json.dumps(record, indent=1) + "\n").encode())
             print(json.dumps({"pass": result["pass"], "checks": result["checks"],
                               "correct_read_data": result["correct_read_data"]}, indent=1))
             return 0 if result["pass"] else 1
@@ -612,12 +674,13 @@ def main() -> int:
                         nominal_hz=rec_expect["nominal_hz"], expect_pattern=rec_expect.get("pattern"))
         before = record.get("decoded", {})
         record.setdefault("redecoded", []).append({
-            "utc": utc(), "reason": args.reason, "checks_before": before.get("checks"),
+            "utc": utc(), "reason": args.reason, "tool_revision": tool_revision(),
+            "checks_before": before.get("checks"),
             "pass_before": before.get("pass"), "exit_status_before": record.get("exit_status")})
         record["decoded"] = result
         if record.get("exit_status") in (0, 1):
             record["exit_status"] = 0 if result["pass"] else 1
-        path.write_text(json.dumps(record, indent=1) + "\n")
+        write_kept(path, (json.dumps(record, indent=1) + "\n").encode())
         print(json.dumps({"pass": result["pass"], "checks": result["checks"], "final": result["final"]}, indent=1))
         return 0 if result["pass"] else 1
 
@@ -638,6 +701,7 @@ def main() -> int:
         parser.error("a board run needs --port, --output-dir and --bit (or --no-load)")
     if args.baud is None:
         args.baud = 9600 if expect["uart_debug_bist"] else 115200
+    revision = tool_revision()
     run, status = board_run(args, expect, args.report)
     out = args.output_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -652,6 +716,8 @@ def main() -> int:
         "schema": SCHEMA,
         "label": args.label,
         "tool": "tools/fpga-ddr3-capture.py",
+        "tool_revision": revision,
+        "argv": [repo_relative(a) for a in sys.argv],
         "board": {"dna": run.get("dna"), "idcode": run.get("idcode"), "uart": f"{args.port} {args.baud} 8N1"},
         "bitstream": None if args.no_load else {
             "file": str(Path(args.bit)), "report": str(args.report),
