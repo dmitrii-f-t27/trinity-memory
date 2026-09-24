@@ -11,14 +11,15 @@ Covers what can be checked without the board and without the toolchain image:
   holds the build time), refuses a netlist whose BUILD_ID is not the report's commit or
   fetched files that do not match the lock, copies the XDC, and counts the LUT levels into
   the PHY primitives and the IOLOGIC clocks fed from the fabric;
-- make ddr3-flash never builds and flashes only a bitstream with the expected sha256;
+- make ddr3-flash never builds and flashes only a bitstream with the expected sha256, or,
+  against a report, one whose whole file or whose part from the sync word on matches it;
 - the DDR3 XDC agrees pin for pin with the LiteX AX7203 platform (litex-boards 9f84c87,
   alinx_ax7203.py L102-L125) and with the ports of our top, with the I/O standards,
   termination and slew of every pin, and reuses the board's verified reset and LED pins;
 - tools/fpga-build-report.py decodes a PLLE2 from FASM and checks its lock and filter
   tables against Vivado's values for the programmed CLKFBOUT_MULT;
 - with T27_ROOT and Icarus: t27/rtl/fpga_ddr3_status.t27 with the line emitter and the
-  UART transmitter reports calibration states, recalibrations and completion.
+  UART transmitter reports calibration states, returns to IDLE and completion.
 """
 from __future__ import annotations
 
@@ -416,6 +417,35 @@ class Ddr3Flash(unittest.TestCase):
             run = self.flash(build, f"DDR3_FLASH_REPORT={report}")
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertIn("LOADER", run.stdout)
+            self.assertIn("(whole file)", run.stdout)
+
+    def test_flash_accepts_a_rebuild_by_its_sync_identity(self):
+        # A rebuild differs from the report's .bit only in the header time: the
+        # whole-file sha256 differs, the sha256 from the sync word on does not.
+        with tempfile.TemporaryDirectory(prefix="trinity-flash-") as tmp:
+            build = Path(tmp)
+            reported = bit_file("00:53:18")
+            sync = reported.find(bytes.fromhex("AA995566"))
+            report = build / "build.json"
+            report.write_text(json.dumps({"bitstream": {
+                "sha256": sha256_hex(reported), "sha256_from_sync": sha256_hex(reported[sync:])}}))
+            bit = build / "tms_ddr3_ax7203.bit"
+            bit.write_bytes(bit_file("09:14:07"))
+            self.assertNotEqual(sha256_hex(bit.read_bytes()), sha256_hex(reported))
+            run = self.flash(build, f"DDR3_FLASH_REPORT={report}")
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertIn("from the sync word", run.stdout)
+            self.assertIn(f"LOADER -c digilent_hs2 {bit}", run.stdout)
+            # The whole-file form stays strict.
+            run = self.flash(build, "DDR3_EXPECT_SHA256=" + sha256_hex(reported))
+            self.assertNotEqual(run.returncode, 0)
+            self.assertNotIn("LOADER", run.stdout)
+            # Another payload matches neither.
+            bit.write_bytes(bit_file("09:14:07")[:-1] + b"\x00")
+            run = self.flash(build, f"DDR3_FLASH_REPORT={report}")
+            self.assertNotEqual(run.returncode, 0)
+            self.assertNotIn("LOADER", run.stdout)
+            self.assertIn("nothing was flashed", run.stdout)
 
     def test_ddr3_all_refuses_a_single_width(self):
         run = subprocess.run(["make", "-n", "-C", str(ROOT / "fpga/ax7203"), "ddr3-all", "DDR3_WIDTH=16"],

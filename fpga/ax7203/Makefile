@@ -275,9 +275,20 @@ bram-capture:
 # ---- DDR3 (UberDDR3) on the AX7203, issue #60: build only ----
 # UberDDR3's ddr3_top (GPL-3.0-or-later, fetched at the commit in
 # ddr3/uberddr3.lock into build/uberddr3/, never committed) with our top, PLL
-# clocking, XDC and t27 status line (ddr3/tms_ddr3_ax7203.v). Two variants:
+# clocking, XDC, t27 status line and t27 pattern test (ddr3/tms_ddr3_ax7203.v). Two variants:
 #   DDR3_WIDTH=16   BYTE_LANES 2, chip U6 (DQ[15:0])
 #   DDR3_WIDTH=32   BYTE_LANES 4, both chips
+# The pattern test (issue #61, t27/rtl/fpga_ddr3_pattern.t27) drives the user
+# Wishbone port after calibration: DDR3_PATTERN=1 (default) builds it in,
+# DDR3_PATTERN=0 leaves the port idle as the #60 builds had it (the same port
+# behaviour, not the #60 netlist: the top changed since, so DDR3_PATTERN=0 gives
+# another netlist, FASM and Fmax; the #60 netlists rebuild only from a commit
+# whose DDR3 sources equal #60's, such as 00262ff, docs/hardware.md).
+# DDR3_PATTERN_BURSTS (default 2^25, every burst address), DDR3_PATTERN_HOLD
+# (controller clocks between a pass's writes and its reads, default 0) and
+# DDR3_PATTERN_ROUNDS (0 = until reset) are baked into the netlist and named in
+# the report's variant. Simulation: tests/test_ddr3_pattern.py (Icarus, a
+# behavioural Wishbone memory in place of UberDDR3, with injected faults).
 # Two place-and-route lines (DDR3_PNR_LINE):
 #   release (default)  nextpnr-xilinx $(NEXTPNR_DDR3_REV), built from its release tag, with a chip
 #                      database from its own bbaexport and prjxray-db; fasm2frames reads that same
@@ -298,8 +309,9 @@ bram-capture:
 #   make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_WIDTH=16 yosys -> nextpnr -> prjxray -> .bit, then reports/fpga/...
 #   make -C fpga/ax7203 ddr3-all                           both widths, bitstreams and reports (one command)
 #   make -C fpga/ax7203 ddr3-sweep DDR3_WIDTH=16           every seed of DDR3_SEEDS on the current netlist, summarised
-#   make -C fpga/ax7203 ddr3-flash DDR3_WIDTH=16 DDR3_EXPECT_SHA256=<sha256>
+#   make -C fpga/ax7203 ddr3-flash DDR3_WIDTH=16 DDR3_FLASH_REPORT=<build.json> (or DDR3_EXPECT_SHA256=<sha256>)
 #                                                          SRAM only; never builds; needs the board and approval (#61)
+#   tools/fpga-ddr3-capture.py                             that load with the UART capture, IDCODE, DNA and XADC around it
 #
 # BUILD_ID (default: the short HEAD) is baked into the netlist and sent on the
 # UART H line, so a build at another commit is a different netlist, FASM and
@@ -335,9 +347,40 @@ DDR3_SRC       := $(ROOT)/build/uberddr3
 DDR3_SUFFIX    := $(if $(filter image,$(DDR3_PNR_LINE)),-nextpnr-45a986b8)
 DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)
 DDR3_TOP       := tms_ddr3_ax7203
-DDR3_CORES     := fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status
+DDR3_CORES     := fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status fpga_ddr3_pattern
+DDR3_PATTERN   ?= 1
+DDR3_PATTERN_BURSTS ?= 33554432
+DDR3_PATTERN_HOLD   ?= 0
+DDR3_PATTERN_ROUNDS ?= 0
+override DDR3_PATTERN := $(strip $(DDR3_PATTERN))
+ifneq ($(words $(DDR3_PATTERN)) $(filter 0 1,$(DDR3_PATTERN)),1 $(DDR3_PATTERN))
+$(error DDR3_PATTERN must be 0 or 1, not '$(DDR3_PATTERN)')
+endif
+# The test's stop compare `round + 1 >= rounds` is lowered by t27c bff21b85 to a
+# signed Verilog compare, so from 2^31 rounds on it would never stop (C and u32
+# semantics would): only 0 .. 2^31-1 are accepted.
+ifneq ($(shell awk 'BEGIN { r = "$(strip $(DDR3_PATTERN_ROUNDS))"; print (r ~ /^[0-9]+$$/ && r + 0 < 2147483648) ? "ok" : "bad" }'),ok)
+$(error DDR3_PATTERN_ROUNDS must be a decimal number 0 .. 2147483647, not '$(DDR3_PATTERN_ROUNDS)')
+endif
+# DDR3_UART_DEBUG_BIST=1 (#61, the self-test counters): UberDDR3 read with
+# `define UART_DEBUG_BIST` and its debug UART (9600 baud) on N15 in place of our
+# lines (UBER_UART 1); the `uart_tx` module UberDDR3 then instantiates is
+# ddr3/uart_tx_t27.v (our t27 transmitter). UberDDR3 then does not return to IDLE on a wrong self-test
+# read (L3653-3655) and prints its phases and correct_read_data; a wrong read
+# makes it report and stop in WAIT_UART. Needs DDR3_PATTERN=0 (no user port traffic).
+DDR3_UART_DEBUG_BIST ?= 0
+override DDR3_UART_DEBUG_BIST := $(strip $(DDR3_UART_DEBUG_BIST))
+ifneq ($(words $(DDR3_UART_DEBUG_BIST)) $(filter 0 1,$(DDR3_UART_DEBUG_BIST)),1 $(DDR3_UART_DEBUG_BIST))
+$(error DDR3_UART_DEBUG_BIST must be 0 or 1, not '$(DDR3_UART_DEBUG_BIST)')
+endif
+ifeq ($(DDR3_UART_DEBUG_BIST)$(DDR3_PATTERN),11)
+$(error DDR3_UART_DEBUG_BIST=1 needs DDR3_PATTERN=0)
+endif
+DDR3_PATTERN_TAG := $(DDR3_PATTERN)-$(DDR3_PATTERN_BURSTS)-$(DDR3_PATTERN_HOLD)-$(DDR3_PATTERN_ROUNDS)-uart$(DDR3_UART_DEBUG_BIST)
+DDR3_PATTERN_VARIANT := PATTERN_TEST $(DDR3_PATTERN)$(if $(filter 1,$(DDR3_PATTERN)), (bursts $(DDR3_PATTERN_BURSTS)$(comma) hold $(DDR3_PATTERN_HOLD) clocks$(comma) rounds $(DDR3_PATTERN_ROUNDS)))$(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(comma) UART_DEBUG_BIST 1 (ddr3_top uart_tx on N15$(comma) 9600 baud))
 DDR3_UBER      := $(DDR3_SRC)/rtl/ddr3_top.v $(DDR3_SRC)/rtl/ddr3_controller.v $(DDR3_SRC)/rtl/ddr3_phy.v
-DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v
+DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v \
+                  $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(DDR3_DIR)/uart_tx_t27.v)
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
 DDR3_YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -arch xc7
 ifeq ($(DDR3_PNR_LINE),image)
@@ -456,6 +499,8 @@ $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)pll-*.stamp; touch $@
 $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)build-id-*.stamp; touch $@
+$(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp:
+	mkdir -p $(dir $@); rm -f $(dir $@)pattern-*.stamp; touch $@
 
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
 # the four PLL outputs by net name.
@@ -471,13 +516,16 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 # Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
 # and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp
 	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
 	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
-	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
+	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),-DUART_DEBUG_BIST )$(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
-	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_TOP); \
+	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) \
+	    -set UBER_UART $(DDR3_UART_DEBUG_BIST) \
+	    -set PATTERN_TEST $(DDR3_PATTERN) -set PATTERN_BURSTS $(DDR3_PATTERN_BURSTS) -set PATTERN_HOLD $(DDR3_PATTERN_HOLD) \
+	    -set PATTERN_ROUNDS $(DDR3_PATTERN_ROUNDS) $(DDR3_TOP); \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP); setundef -zero -params; tee -o $(call REL,$(DDR3_BUILD))/yosys_stat.txt stat; \
 	  write_json $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).json"
 	grep -c "multiple conflicting drivers" $(DDR3_BUILD)/yosys.log > $(DDR3_BUILD)/yosys_conflicting_drivers.txt || true
@@ -527,7 +575,13 @@ $(DDR3_BUILD)/$(DDR3_TOP).bit: $(DDR3_BUILD)/$(DDR3_TOP).fasm
 # header carries the time xc7frames2bit ran, so its whole-file sha256 names one
 # file; the FASM and frames sha256 (and the .bit's from its sync word on) are
 # what a rebuild reproduces.
+# An existing report is committed evidence (the default name carries today's
+# date and BUILD_ID, so a rebuild with an earlier BUILD_ID on the same day would
+# land on it): it is replaced only with DDR3_REPORT_OVERWRITE=1.
+DDR3_REPORT_OVERWRITE ?= 0
 ddr3-report: $(DDR3_BUILD)/$(DDR3_TOP).bit
+	@if [ -e "$(DDR3_REPORT)/build.json" ] && [ "$(DDR3_REPORT_OVERWRITE)" != 1 ]; then \
+	  echo "ddr3-report: $(DDR3_REPORT)/build.json exists; set DDR3_REPORT=<new directory> (or DDR3_REPORT_ROOT), or DDR3_REPORT_OVERWRITE=1 to replace it"; exit 1; fi
 	cd $(ROOT) && $(YOSYS) -V > $(DDR3_BUILD)/yosys_version.txt
 	{ $(DDR3_REV_NEXTPNR); } > $(DDR3_BUILD)/nextpnr_revision.txt 2>/dev/null || true
 	$(DDR3_NEXTPNR) --version >> $(DDR3_BUILD)/nextpnr_revision.txt 2>&1 || true
@@ -536,7 +590,7 @@ ddr3-report: $(DDR3_BUILD)/$(DDR3_TOP).bit
 	  --source "$(DDR3_SOURCE_LABEL)" --output $(DDR3_REPORT) \
 	  --flow "yosys $(DDR3_YOSYS_SYNTH); nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer/seed search over '$(DDR3_PLACERS)' x '$(DDR3_SEEDS)' $(DDR3_PNR_ARGS); prjxray fasm2frames + xc7frames2bit ($(IMAGE))" \
 	  --ddr3 --uberddr3-dir $(DDR3_SRC) --lock $(DDR3_LOCK) --image-digest "$(IMAGE_DIGEST)" --chipdb $(DDR3_CHIPDB) \
-	  --variant "x$(DDR3_WIDTH) BYTE_LANES $(DDR3_LANES), PLL CLKFBOUT_MULT $(DDR3_PLL_MULT), DDR3 clock VCO/$(DDR3_DDR_DIV) ($(DDR3_DDR_NS) ns), controller $(DDR3_CTRL_NS) ns"
+	  --variant "x$(DDR3_WIDTH) BYTE_LANES $(DDR3_LANES), PLL CLKFBOUT_MULT $(DDR3_PLL_MULT), DDR3 clock VCO/$(DDR3_DDR_DIV) ($(DDR3_DDR_NS) ns), controller $(DDR3_CTRL_NS) ns, $(DDR3_PATTERN_VARIANT)"
 
 # Both widths with one command. Each width is its own make run, so
 # DDR3_WIDTH, DDR3_BUILD and DDR3_REPORT cannot be set here: DDR3_REPORT_ROOT
@@ -566,16 +620,17 @@ ddr3-sweep: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(DDR3_BUILD)/$(DDR3_T
 # SRAM only: nothing is written to the configuration flash. Needs the board and
 # the founders' approval of the run (issue #61); never part of a build. It never
 # builds either: it flashes the existing bitstream only when its sha256 equals
-# DDR3_EXPECT_SHA256, or the bitstream sha256 of the report DDR3_FLASH_REPORT.
+# DDR3_EXPECT_SHA256, or, with DDR3_FLASH_REPORT=<build.json>, when the whole file
+# matches the report's bitstream sha256 or the file from its sync word on matches
+# the report's sha256_from_sync (a rebuild differs from the report only in the
+# header time; tools/ddr3-flash-check.py).
 ddr3-flash:
-	@bit=$(DDR3_BUILD)/$(DDR3_TOP).bit; want="$(DDR3_EXPECT_SHA256)"; \
-	if [ -z "$$want" ] && [ -n "$(DDR3_FLASH_REPORT)" ]; then \
-	  want=$$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["bitstream"]["sha256"])' "$(DDR3_FLASH_REPORT)") || exit 1; fi; \
-	[ -n "$$want" ] || { echo "ddr3-flash: set DDR3_EXPECT_SHA256=<sha256> or DDR3_FLASH_REPORT=<build.json>; nothing was flashed"; exit 1; }; \
+	@bit=$(DDR3_BUILD)/$(DDR3_TOP).bit; \
+	if [ -n "$(DDR3_EXPECT_SHA256)" ]; then how="--expect $(DDR3_EXPECT_SHA256)"; \
+	elif [ -n "$(DDR3_FLASH_REPORT)" ]; then how="--report $(DDR3_FLASH_REPORT)"; \
+	else echo "ddr3-flash: set DDR3_EXPECT_SHA256=<sha256> or DDR3_FLASH_REPORT=<build.json>; nothing was flashed"; exit 1; fi; \
 	[ -f "$$bit" ] || { echo "ddr3-flash: no $$bit (ddr3-flash never builds: make ddr3-bit ddr3-report first); nothing was flashed"; exit 1; }; \
-	got=$$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$$bit"); \
-	[ "$$got" = "$$want" ] || { echo "ddr3-flash: $$bit has sha256 $$got, not $$want; nothing was flashed"; exit 1; }; \
-	echo "ddr3-flash: $$bit sha256 $$got as expected"; \
+	python3 $(ROOT)/tools/ddr3-flash-check.py "$$bit" $$how || exit 1; \
 	$(OPENFPGALOADER) -c $(DDR3_CABLE) "$$bit"
 
 ddr3-clean:

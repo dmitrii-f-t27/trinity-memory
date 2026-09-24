@@ -56,9 +56,23 @@ with original commit and byte hashes recorded in
   line takes about 1.7 ms at 115200 baud, calibration passes through its states
   much faster, so a line carries the latest state and most transitions never get
   a line of their own. The highest state reached and the number of returns to
-  IDLE (recalibrations), kept every clock, are exact.
+  IDLE (a wrong self-test read or a failed alignment step), kept every clock,
+  are exact.
   `tests/test_ddr3_flow.py` runs it with the emitter and the transmitter in
-  Icarus. See `docs/hardware.md`, "DDR3 in the open flow (build only)".
+  Icarus. See `docs/hardware.md`, "DDR3 in the open flow".
+
+- DDR3 pattern test (`fpga_ddr3_pattern.t27`, wired by
+  `fpga/ax7203/ddr3/tms_ddr3_ax7203.v` with `PATTERN_TEST` 1, issue #61): a
+  Wishbone master on UberDDR3's user port that, after calibration, writes every
+  burst address of the region with address-unique data (per 64-bit word
+  `key ^ lin((word << 32) | address)`, `lin` a bijection of 64 bits), reads it all
+  back and compares, then repeats with the complement; per pass it reports the
+  wrong bursts, 64-bit words and bits, the DQ bits ever wrong, the first failing
+  burst and the controller clocks of each phase, and it arbitrates the report
+  line with the status reporter. `tests/test_ddr3_pattern.py` checks its functions
+  in C against `tools/ddr3_pattern_model.py` and runs the whole top in Icarus
+  against a behavioural Wishbone memory with injected faults. See
+  `docs/hardware.md`, "Pattern test (#61)".
 
 ## Current compiler boundaries
 
@@ -114,6 +128,15 @@ with original commit and byte hashes recorded in
   adds, digit arithmetic is 16 bits wide. A heavy function called inside a
   branch of another function makes yosys spend minutes in `proc`; such values
   are computed into locals first and selected afterwards.
+- An ordering compare (`>=`, `>`, `<`) with arithmetic on a literal on one side
+  (`round + 1 >= rounds`, `a - 1 >= b`) is lowered by gen-verilog to a signed
+  compare (`$signed((round + 1)) >= $signed({1'b0, rounds})`) while gen-c keeps
+  it unsigned, so the two differ from 2^31 on (and `a - 1` at `a` = 0). `==`,
+  `a >= b` and `a + c >= b` stay unsigned; assigning the sum to a typed local
+  first (`var n: u32 = a + 1; ... n >= b`) gives an unsigned compare. In
+  `fpga_ddr3_pattern.t27` the round stop is such a compare; it is unreachable
+  below 2^31 rounds, and the Makefile accepts only `DDR3_PATTERN_ROUNDS` below
+  2^31 (rewriting it would change the netlist of the builds that ran).
 
 Evidence from these tests is RTL simulation. Board runs, block RAM mapping and
 place-and-route of the FPGA designs built from these modules are recorded in
