@@ -48,6 +48,14 @@ with original commit and byte hashes recorded in
   `tools/bram_trit_model.py` on random inputs; `make -C fpga/ax7203 bram-sim`
   runs the whole bench in Icarus. See `docs/hardware.md`, "Block-RAM trit packing".
 
+- DDR3 calibration status (`fpga_ddr3_status.t27`, wired by
+  `fpga/ax7203/ddr3/tms_ddr3_ax7203.v` to UberDDR3, the line emitter and the
+  UART): a header line, then a status line on every change of the controller's
+  calibration state or of `o_calib_complete` and periodically, with the highest
+  state reached and the number of returns to IDLE (recalibrations).
+  `tests/test_ddr3_flow.py` runs it with the emitter and the transmitter in
+  Icarus. See `docs/hardware.md`, "DDR3 in the open flow (build only)".
+
 ## Current compiler boundaries
 
 - `trinity_dot_stream_t27` supports `ACC_WIDTH=2..32`; the native accumulator is
