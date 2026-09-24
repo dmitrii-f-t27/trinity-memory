@@ -9,10 +9,10 @@
   "ggml/src/ggml.c": "fcf1f13a4b64d2711a17f52c4dee92fdeb7fd4f3",
   "ggml/src/gguf.cpp": "5e1986182515b3baadd3ab4c45c7e09038d0b64e",
   "src/llama-arch.cpp": "0181e59611c32d02b8a957018f6e3e6a3fc82f90",
-  "src/llama-model.cpp": "6eda8f3da3cf370bdb3c54f99586dbdd1dbccfc2",
-  "src/llama-model-loader.cpp": "2c715e3118a2e4d4d0a8e939d49f4c927d23f92a"
+  "src/llama-model-loader.cpp": "2c715e3118a2e4d4d0a8e939d49f4c927d23f92a",
+  "src/llama-model.cpp": "6eda8f3da3cf370bdb3c54f99586dbdd1dbccfc2"
  },
- "source": "the llama.cpp submodule of microsoft/BitNet 0b341e58. ggml.h enum ggml_type: I2_S 36, I8_S 37, TL1 38, TL2 42, GGML_TYPE_COUNT 43; ggml.c type traits :931-960 (blck_size 1, type_size 1) and ggml_nbytes :1300-1330 (I2_S and TL1: n/4 + 32; TL2: (ne0-256)*ne1/3*5/8 + 256*ne1/2*4/8 padded to 32, + 32); the other ids take the traits of the ggml-org build, whose ggml.c entries for them read the same macros; architectures: LLM_ARCH_NAMES in src/llama-arch.cpp",
+ "source": "the llama.cpp submodule of microsoft/BitNet 0b341e58. ggml.h enum ggml_type: I2_S 36, I8_S 37, TL1 38, TL2 42, GGML_TYPE_COUNT 43; ggml.c type traits :931-960 (blck_size 1, type_size 1) and ggml_nbytes :1300-1330 (I2_S and TL1: n/4 + 32; TL2: (ne0-256)*ne1/3*5/8 + 256*ne1/2*4/8 padded to 32, + 32); the other ids take the traits of the ggml-org build, whose ggml.c entries for them read the same macros; architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp that the model mapping src/llama-model.cpp:39-309 maps to a model class (unknown names are refused at :329-330, unmapped ones, clip among them, at :308)",
  "type_count": 43,
  "hadamard": false,
  "types": [
@@ -284,14 +284,12 @@
   }
  ],
  "archs": [
-  "clip",
   "llama",
   "llama4",
   "deci",
   "falcon",
   "grok",
   "gpt2",
-  "gptj",
   "gptneox",
   "mpt",
   "baichuan",
@@ -418,7 +416,7 @@
   "maincoder",
   "kimi-linear",
   "talkie",
-  "mellum",
-  "(unknown)"
- ]
+  "mellum"
+ ],
+ "archs_refused_as_main": []
 }

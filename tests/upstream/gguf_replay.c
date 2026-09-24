@@ -26,11 +26,11 @@ int main(int argc, char **argv) {
     char buf[1 << 16];
     size_t n;
     while ((n = fread(buf, 1, sizeof buf, in)) > 0) {
-        if (write(fd, buf, n) != (ssize_t) n) { perror("write"); return 74; }
+        if (write(fd, buf, n) != (ssize_t) n) { perror("write"); close(fd); unlink(path); return 74; }
     }
     fclose(in);
     long long size = atoll(argv[2]);
-    if (ftruncate(fd, size) != 0) { perror("ftruncate"); return 74; }
+    if (ftruncate(fd, size) != 0) { perror("ftruncate"); close(fd); unlink(path); return 74; }
     close(fd);
     struct ggml_context *meta = NULL;
     struct gguf_init_params params = { /*.no_alloc =*/ true, /*.ctx =*/ &meta };
