@@ -355,7 +355,8 @@ $(error DDR3_PATTERN must be 0 or 1, not '$(DDR3_PATTERN)')
 endif
 # DDR3_UART_DEBUG_BIST=1 (#61, the self-test counters): UberDDR3 read with
 # `define UART_DEBUG_BIST` and its debug UART (9600 baud) on N15 in place of our
-# lines (UBER_UART 1). UberDDR3 then does not return to IDLE on a wrong self-test
+# lines (UBER_UART 1); the `uart_tx` module UberDDR3 then instantiates is
+# ddr3/uart_tx_t27.v (our t27 transmitter). UberDDR3 then does not return to IDLE on a wrong self-test
 # read (L3653-3655) and prints its phases and correct_read_data; a wrong read
 # makes it report and stop in WAIT_UART. Needs DDR3_PATTERN=0 (no user port traffic).
 DDR3_UART_DEBUG_BIST ?= 0
@@ -369,7 +370,8 @@ endif
 DDR3_PATTERN_TAG := $(DDR3_PATTERN)-$(DDR3_PATTERN_BURSTS)-$(DDR3_PATTERN_HOLD)-$(DDR3_PATTERN_ROUNDS)-uart$(DDR3_UART_DEBUG_BIST)
 DDR3_PATTERN_VARIANT := PATTERN_TEST $(DDR3_PATTERN)$(if $(filter 1,$(DDR3_PATTERN)), (bursts $(DDR3_PATTERN_BURSTS)$(comma) hold $(DDR3_PATTERN_HOLD) clocks$(comma) rounds $(DDR3_PATTERN_ROUNDS)))$(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(comma) UART_DEBUG_BIST 1 (ddr3_top uart_tx on N15$(comma) 9600 baud))
 DDR3_UBER      := $(DDR3_SRC)/rtl/ddr3_top.v $(DDR3_SRC)/rtl/ddr3_controller.v $(DDR3_SRC)/rtl/ddr3_phy.v
-DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v
+DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v \
+                  $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(DDR3_DIR)/uart_tx_t27.v)
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
 DDR3_YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -arch xc7
 ifeq ($(DDR3_PNR_LINE),image)
