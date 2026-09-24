@@ -1871,8 +1871,9 @@ loads returned 16:42:41.1, 16:44:57.2 and 16:46:54.2 UTC):
   after reset on every load. The `H` line and the first two `S` lines (stamped 4 and 137,417
   controller clocks after the reset) reached the host in one read, 4.7, 5.1 and 0.5 ms after
   the load returned; the three lines take 5.2 ms at 115,200 baud (3 x 20 characters of 10
-  bits, arithmetic), so the reset came at most about 0.5 ms after the load returned (load 1)
-  and in load 3 at least 4.7 ms before it. The decoder's fitted reset (3-10 ms after the load
+  bits, arithmetic), so the lines cannot have arrived earlier than 5.2 ms after the reset: in
+  every load the reset came before the load returned, at least 0.5, 0.1 and 4.7 ms before it
+  (loads 1-3). The decoder's fitted reset (3-10 ms after the load
   returned) is a median over lines that reach the host late and falls after these first
   lines, so it is not used to select them. Of the 31 `S` lines per load from the `H`
   line on, 12 come before calibration (`calib_complete` 0; states 0 and 17-22) and 19 after it; each of
@@ -1946,6 +1947,9 @@ ack in a fill or outside the phases would not have shown there.
 - Consumer (A) keeping up is by construction (one word taken in every clock, no ready) and by
   the build meeting 83.33 MHz; the consumer-stall counter cannot be nonzero in this design and
   is no evidence of it.
+- A lost ack and an extra ack in the same fill cancel: in a review's scratch Icarus run
+  (not committed) a fill with one ack dropped and one duplicated passed every check. A single
+  extra ack or a single lost ack is caught (stray-ack count, stop condition); the pair is not.
 - Padding and scale/metadata bytes are 0 on the board region; nonzero padding was only
   simulated. No scales are stored or read, so the scale/metadata counter is 0 by construction.
 - Not done here: consumer (B), the matvec (#64); loading real weights over the UART (#63); the
