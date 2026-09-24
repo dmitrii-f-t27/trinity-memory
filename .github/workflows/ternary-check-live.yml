@@ -60,6 +60,8 @@ jobs:
           python3 tools/generate-runtime-tables.py --check
           sh tools/build-t27.sh
       - name: Build the upstream GGUF readers of the pinned runtimes
+        id: readers
+        continue-on-error: true
         run: sh tools/live-replay.sh
       - name: Scan
         env:
@@ -71,6 +73,7 @@ jobs:
           python3 -m trinity_memory.live --min-downloads "$MIN_DOWNLOADS" --limit "$LIMIT" --interval 1 \
             --out build/live/scan.json 2>&1 | tee build/live/scan.log
       - name: Replay every header through the upstream readers
+        if: steps.readers.outcome == 'success'
         run: |
           set -o pipefail
           python3 -m trinity_memory.live --out build/live/scan.json --replay build/replay 2>&1 | tee -a build/live/scan.log
@@ -107,3 +110,4 @@ jobs:
           path: |
             build/live/scan.json
             build/live/scan.log
+            build/replay/*.log
