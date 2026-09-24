@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import gzip
 import hashlib
 import json
 import re
@@ -64,6 +65,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = "trinity.ddr3-capture.v1"
 LINE = re.compile(r"^([HSGKLWREMFTZ])([0-9a-f]{8})([0-9a-f]{10})$")
+LINE_CHARS = 19
 PATTERN_TAGS = "GKLWREMFTZ"
 PASS_ORDER = "WREMF"
 NONE32 = 0xFFFFFFFF
@@ -208,9 +210,17 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
     entries: [{"t_s": host seconds on one monotonic clock, "line": text}] in arrival order.
     load_end_s: host seconds (same clock) at which the load returned, if this run loaded.
     expect_pattern: True when the build has the pattern test, False when it has not, None unknown."""
-    headers, status, other, pattern_lines = [], [], [], []
+    headers, status, other, pattern_lines, joined = [], [], [], [], []
     for entry in entries:
         parsed = parse_line(entry["line"])
+        if parsed is None and len(entry["line"]) > LINE_CHARS:
+            # A design that was sending when the load began leaves a cut-off line on the
+            # port, and the new design's first line (its H line) is then appended to it:
+            # the last LINE_CHARS characters are a whole line of their own.
+            parsed = parse_line(entry["line"][-LINE_CHARS:])
+            if parsed is not None:
+                joined.append({"t_s": entry["t_s"], "line": entry["line"],
+                               "recovered": entry["line"][-LINE_CHARS:]})
         if parsed is None:
             other.append({"t_s": entry["t_s"], "line": entry["line"]})
             continue
@@ -301,11 +311,74 @@ def decode(entries, *, expect_build_id=None, expect_lanes=None, expect_period_ps
         "pattern_round_complete": pattern["totals"]["rounds_complete"] >= 1 if pattern else None,
     }
     passed = all(v for v in checks.values() if v is not None)
-    result = {"header": headers, "status_lines": status, "unparsed_lines": other, "final": final,
+    result = {"header": headers, "status_lines": status, "unparsed_lines": other, "joined_lines": joined,
+              "final": final,
               "clock": clock, "reset": reset, "calibration": calibration, "checks": checks, "pass": passed}
     if pattern is not None:
         result["pattern"] = pattern
     return result
+
+
+# UberDDR3 79d8fd3e with `define UART_DEBUG_BIST` (the UART_DEBUG_BIST build of #61): every message is
+# its 100-character uart_text buffer sent from the top, so text shorter than 100 characters arrives
+# after NUL padding. The phases of BIST_MODE 1, in order (L3199-3353), then the count of correct reads
+# as four raw bytes, most significant first. A wrong read sets wrong_read_data, and from then on the
+# controller sends RESET reports (L3410-3440) instead of finishing: wrong_read_data itself is printed
+# only in them, so a capture without RESET means it stayed 0 for as long as the capture ran.
+BIST_PHASES = [b"DONE BURST WRITE (", b"DONE BURST READ: BIST_MODE=", b"DONE RANDOM WRITE: BIST_MODE=",
+               b"DONE RANDOM READ: BIST_MODE=", b"DONE ALTERNATING WRITE-READ", b"DONE BIST_MODE="]
+BIST_COUNT_MARK = b"correct_read_data=\n\n"
+# BIST_MODE 1 checks 2^23 burst reads, 2^24 random reads and 2^23 - 1 alternating reads (the last
+# alternating write is not read back): tools/uberddr3-bist-model.py `operations`.
+BIST1_CHECKED_READS = (1 << 23) + (1 << 24) + (1 << 23) - 1
+
+
+def decode_bist_debug(raw: bytes, entries, *, load_end_s=None, expect_reads=BIST1_CHECKED_READS) -> dict:
+    """The UART_DEBUG_BIST text of one load (raw bytes as received, entries with host times)."""
+    start = 0
+    phases, order_ok = [], True
+    for mark in BIST_PHASES:
+        at = raw.find(mark, start)
+        if at < 0:
+            order_ok = False
+            break
+        end = raw.find(b"\n", at)
+        text = raw[at:end if end >= 0 else len(raw)].decode("ascii", "replace")
+        t_s = next((e["t_s"] for e in entries if text[:24] in e["line"]), None)
+        phases.append({"message": text, "t_s": t_s,
+                       "since_load_end_s": round(t_s - load_end_s, 3) if t_s is not None and load_end_s is not None
+                       else None})
+        start = at + len(mark)
+    count = None
+    at = raw.find(BIST_COUNT_MARK)
+    if at >= 0 and len(raw) >= at + len(BIST_COUNT_MARK) + 4:
+        count = int.from_bytes(raw[at + len(BIST_COUNT_MARK):at + len(BIST_COUNT_MARK) + 4], "big")
+    resets = raw.count(b"RESET")
+    last_t = entries[-1]["t_s"] if entries else None
+    done_t = phases[-1]["t_s"] if len(phases) == len(BIST_PHASES) else None
+    checks = {
+        "all_phases_in_order": order_ok and len(phases) == len(BIST_PHASES),
+        "correct_read_data_reported": count is not None,
+        "correct_read_data_as_modelled": count == expect_reads if count is not None else False,
+        "no_reset_report": resets == 0,
+        "phases_after_load": all(p["since_load_end_s"] is None or p["since_load_end_s"] > 0 for p in phases)
+        if load_end_s is not None else None,
+    }
+    return {
+        "phases": phases,
+        "correct_read_data": count,
+        "expected_correct_read_data": expect_reads,
+        "reset_reports": resets,
+        "capture_after_done_s": round(last_t - done_t, 3) if done_t is not None and last_t is not None else None,
+        "checks": checks,
+        "pass": all(v for v in checks.values() if v is not None),
+        "notes": ["correct_read_data counts the self-test reads whose data matched (L3638-3650); it is never "
+                  "reset, not even by a recalibration",
+                  "wrong_read_data is printed only in RESET reports, which the controller sends from the first "
+                  "wrong read on; no RESET report in the capture means wrong_read_data stayed 0 while it ran",
+                  "the expected count is the BIST_MODE 1 model's number of checked reads; the self-test covers "
+                  "3/4 of the bursts and cannot see some address faults (docs/hardware.md, self-test coverage)"],
+    }
 
 
 def parse_xadc(text: str) -> dict:
@@ -396,13 +469,23 @@ def expectations(report: dict) -> dict:
     # Builds before the pattern test name no PATTERN_TEST and have none.
     match = re.search(r"PATTERN_TEST (\d)", ddr3.get("variant", ""))
     pattern = bool(int(match.group(1))) if match else False
+    uart_debug_bist = "UART_DEBUG_BIST 1" in ddr3.get("variant", "")
     return {"build_id": ddr3.get("netlist_build_id"), "lanes": lanes, "pattern": pattern,
+            "uart_debug_bist": uart_debug_bist,
             "period_ps": round(ddr_clock["period_ns"] * 1000) if ddr_clock.get("period_ns") else None,
             "nominal_hz": round(1e9 / ctrl_clock["period_ns"], 1) if ctrl_clock.get("period_ns") else None}
 
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_kept(path: Path) -> bytes:
+    """A capture file as recorded: long captures are committed gzip-compressed as <name>.gz
+    (the record's sha256 values are those of the uncompressed file)."""
+    if not path.exists() and path.with_name(path.name + ".gz").exists():
+        return gzip.decompress(path.with_name(path.name + ".gz").read_bytes())
+    return path.read_bytes()
 
 
 def board_run(args, expect, report_path: Path) -> tuple[dict, int]:
@@ -464,8 +547,12 @@ def main() -> int:
     parser.add_argument("--report", type=Path, required=True, help="build.json of the bitstream")
     parser.add_argument("--decode", type=Path, help="decode a uart.tsv of an earlier run instead of using the board")
     parser.add_argument("--load-end-s", type=float, help="with --decode: host seconds at which the load returned")
+    parser.add_argument("--redecode", type=Path, metavar="CAPTURE_DIR",
+                        help="decode the transcript of a committed capture again with this decoder and rewrite "
+                             "its `decoded` (the earlier checks and the reason are kept in `redecoded`)")
+    parser.add_argument("--reason", default="", help="with --redecode: why the capture is decoded again")
     parser.add_argument("--port")
-    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--baud", type=int, help="default 115200, or 9600 for a UART_DEBUG_BIST build")
     parser.add_argument("--bit", help="the .bit to load (make ddr3-flash checks it against --report)")
     parser.add_argument("--no-load", action="store_true", help="read the resident design")
     parser.add_argument("--seconds", type=float, default=60.0, help="capture after the load returned")
@@ -479,9 +566,33 @@ def main() -> int:
     report = json.loads(args.report.read_text())
     expect = expectations(report)
 
+    if args.redecode:
+        path = args.redecode / "capture.json"
+        record = json.loads(path.read_text())
+        entries = []
+        for raw in read_kept(args.redecode / record["uart_transcript"]["file"]).decode().splitlines():
+            if raw.startswith("#") or not raw.strip():
+                continue
+            t_s, _utc, line = raw.split("\t", 2)
+            entries.append({"t_s": float(t_s), "line": line})
+        rec_expect = record["expect"]
+        result = decode(entries, expect_build_id=rec_expect["build_id"], expect_lanes=rec_expect["lanes"],
+                        expect_period_ps=rec_expect["period_ps"], load_end_s=record["run"].get("load_end_s"),
+                        nominal_hz=rec_expect["nominal_hz"], expect_pattern=rec_expect.get("pattern"))
+        before = record.get("decoded", {})
+        record.setdefault("redecoded", []).append({
+            "utc": utc(), "reason": args.reason, "checks_before": before.get("checks"),
+            "pass_before": before.get("pass"), "exit_status_before": record.get("exit_status")})
+        record["decoded"] = result
+        if record.get("exit_status") in (0, 1):
+            record["exit_status"] = 0 if result["pass"] else 1
+        path.write_text(json.dumps(record, indent=1) + "\n")
+        print(json.dumps({"pass": result["pass"], "checks": result["checks"], "final": result["final"]}, indent=1))
+        return 0 if result["pass"] else 1
+
     if args.decode:
         entries = []
-        for raw in args.decode.read_text().splitlines():
+        for raw in read_kept(args.decode).decode().splitlines():
             if raw.startswith("#") or not raw.strip():
                 continue
             t_s, _utc, line = raw.split("\t", 2)
@@ -494,6 +605,8 @@ def main() -> int:
 
     if not args.port or not args.output_dir or (not args.no_load and not args.bit):
         parser.error("a board run needs --port, --output-dir and --bit (or --no-load)")
+    if args.baud is None:
+        args.baud = 9600 if expect["uart_debug_bist"] else 115200
     run, status = board_run(args, expect, args.report)
     out = args.output_dir
     out.mkdir(parents=True, exist_ok=True)
@@ -520,7 +633,11 @@ def main() -> int:
                             "raw_file": "uart-raw.txt", "raw_sha256": hashlib.sha256(raw).hexdigest(),
                             "raw_bytes": len(raw)},
     }
-    if status == 0:
+    if status == 0 and expect["uart_debug_bist"]:
+        # Every byte received; lines of the design loaded before (115200 baud read at 9600) are noise.
+        record["decoded_bist"] = decode_bist_debug(raw, entries, load_end_s=run.get("load_end_s"))
+        status = 0 if record["decoded_bist"]["pass"] else 1
+    elif status == 0:
         record["decoded"] = decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                                    expect_period_ps=expect["period_ps"], load_end_s=run.get("load_end_s"),
                                    nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
@@ -528,6 +645,12 @@ def main() -> int:
     record["exit_status"] = status
     (out / "capture.json").write_text(json.dumps(record, indent=1) + "\n")
     summary = record.get("decoded", {})
+    if "decoded_bist" in record:
+        print(json.dumps({"exit_status": status, "stopped": run.get("stopped"),
+                          **{k: v for k, v in record["decoded_bist"].items() if k != "notes"},
+                          "xadc_before": run.get("xadc_before", {}).get("temp"),
+                          "xadc_after": run.get("xadc_after", {}).get("temp")}, indent=1))
+        return status
     print(json.dumps({"exit_status": status, "stopped": run.get("stopped"), "checks": summary.get("checks"),
                       "final": summary.get("final"), "clock": summary.get("clock"), "reset": summary.get("reset"),
                       "pattern_totals": (summary.get("pattern") or {}).get("totals"),

@@ -16,6 +16,7 @@ Board-free checks:
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import random
 import sys
@@ -125,6 +126,40 @@ class CaptureDecoder(unittest.TestCase):
         entries = [e for e in self.transcript() if not e["line"].startswith("H")]
         self.assertFalse(self.decode(entries, 9.99)["checks"]["header_line"])
 
+    def test_h_line_joined_to_a_cut_off_line(self):
+        # The design loaded before was sending: its cut-off line and the new H line arrive as one line.
+        entries = self.transcript()
+        i = next(k for k, e in enumerate(entries) if e["line"].startswith("H"))
+        entries[i] = {"t_s": entries[i]["t_s"], "line": "S00000�" + entries[i]["line"]}
+        result = self.decode(entries, 9.99)
+        self.assertTrue(result["pass"], result["checks"])
+        self.assertEqual([j["recovered"] for j in result["joined_lines"]], ["Hf07e91cd0102000bb8"])
+        # Garbage that does not end in a whole line stays unparsed.
+        entries[i] = {"t_s": entries[i]["t_s"], "line": "S00000�Hf07e91cd0102000bb"}
+        self.assertFalse(self.decode(entries, 9.99)["checks"]["header_line"])
+
+    def test_uart_debug_bist_text(self):
+        # UberDDR3's messages as the UART_DEBUG_BIST build sends them: 101 bytes, text right-aligned after NULs.
+        def message(text: bytes) -> bytes:
+            return b"\0" * (101 - len(text)) + text
+        count = capture.BIST1_CHECKED_READS
+        texts = [b"DONE BURST WRITE (ALL BYTES): BIST_MODE=1\n", b"DONE BURST READ: BIST_MODE=1\n",
+                 b"DONE RANDOM WRITE: BIST_MODE=1\n", b"DONE RANDOM READ: BIST_MODE=1\n",
+                 b"DONE ALTERNATING WRITE-READ\n",
+                 b"DONE BIST_MODE=1, correct_read_data=\n\n" + count.to_bytes(4, "big") + b"\n\n\n\n"]
+        raw = b"".join(message(t) for t in texts)
+        entries = [{"t_s": 20.0 + i, "line": line.decode("ascii", "replace")}
+                   for i, line in enumerate(raw.split(b"\n"))]
+        result = capture.decode_bist_debug(raw, entries, load_end_s=15.0)
+        self.assertTrue(result["pass"], result["checks"])
+        self.assertEqual(result["correct_read_data"], 33_554_431)
+        self.assertEqual(len(result["phases"]), 6)
+        # A wrong read: RESET reports and no DONE line.
+        bad = capture.decode_bist_debug(raw[:-101] + message(b"RESET, # correct(ascii)=0x123456\n"), entries)
+        self.assertFalse(bad["pass"])
+        self.assertFalse(bad["checks"]["no_reset_report"])
+        self.assertIsNone(bad["correct_read_data"])
+
     def test_wraps_come_from_the_load_time(self):
         # 2^40 clocks is 3.665 h: a load 1 wrap earlier than the count alone suggests.
         wrap_s = (1 << 40) / self.HZ
@@ -147,16 +182,17 @@ class CaptureDecoder(unittest.TestCase):
 class CommittedEvidence(unittest.TestCase):
     def test_bringup_captures(self):
         runs = sorted(ROOT.glob("reports/fpga/ddr3-bringup-*/*/capture.json"))
+        runs += sorted(ROOT.glob("reports/fpga/ddr3-bringup-*/*/capture.json.gz"))
         self.assertTrue(runs)
         for path in runs:
-            record = json.loads(path.read_text())
+            record = json.loads(capture.read_kept(path.with_name("capture.json")))
             self.assertEqual(record["schema"], "trinity.ddr3-capture.v1")
-            tsv = path.parent / record["uart_transcript"]["file"]
-            raw = path.parent / record["uart_transcript"]["raw_file"]
-            self.assertEqual(capture.sha256_file(tsv), record["uart_transcript"]["sha256"], path)
-            self.assertEqual(capture.sha256_file(raw), record["uart_transcript"]["raw_sha256"], path)
+            tsv = capture.read_kept(path.parent / record["uart_transcript"]["file"])
+            raw = capture.read_kept(path.parent / record["uart_transcript"]["raw_file"])
+            self.assertEqual(hashlib.sha256(tsv).hexdigest(), record["uart_transcript"]["sha256"], path)
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), record["uart_transcript"]["raw_sha256"], path)
             entries = []
-            for line in tsv.read_text().splitlines():
+            for line in tsv.decode().splitlines():
                 if line.startswith("#"):
                     continue
                 t_s, _utc, text = line.split("\t", 2)
@@ -164,7 +200,7 @@ class CommittedEvidence(unittest.TestCase):
             expect = record["expect"]
             again = capture.decode(entries, expect_build_id=expect["build_id"], expect_lanes=expect["lanes"],
                                    expect_period_ps=expect["period_ps"], load_end_s=record["run"].get("load_end_s"),
-                                   nominal_hz=expect["nominal_hz"])
+                                   nominal_hz=expect["nominal_hz"], expect_pattern=expect.get("pattern"))
             self.assertEqual(again["pass"], record["decoded"]["pass"], path)
             self.assertEqual(again["final"], record["decoded"]["final"], path)
             self.assertEqual(record["board"]["dna"], "0x00389c0c2d85e85c")
