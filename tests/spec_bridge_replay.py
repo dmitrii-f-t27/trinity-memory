@@ -106,14 +106,22 @@ def check(name, status, body, expect, request=None):
     for key in expect.get("result_keys", []):
         if not isinstance(result, dict) or key not in result:
             raise VectorFailure(f"{name}.result.{key}: missing")
-    # Lower bounds for counters that timing can raise but not lower (retransmissions of the
-    # fpga backend: a stalled process can add a timeout, never remove a fault's retransmission).
+    # Lower bounds for counters a stalled process cannot lower (retransmissions of the fpga
+    # backend: a stall can add a timeout, never remove a fault's retransmission). A key may be a
+    # sum of dotted paths joined by "+": a stall can move an answer from one counter to another
+    # (a nak or a bad line read while the host is already waiting out a retransmission counts as
+    # a late reply), so only their sum is bounded.
     for key, minimum in expect.get("result_at_least", {}).items():
-        value = result
-        for part in key.split("."):
-            value = value.get(part) if isinstance(value, dict) else None
-        if type(value) is not int or value < minimum:
-            raise VectorFailure(f"{name}.result.{key}: expected at least {minimum}, got {value!r}")
+        total = 0
+        for path in key.split("+"):
+            value = result
+            for part in path.split("."):
+                value = value.get(part) if isinstance(value, dict) else None
+            if type(value) is not int:
+                raise VectorFailure(f"{name}.result.{path}: expected an integer counter, got {value!r}")
+            total += value
+        if total < minimum:
+            raise VectorFailure(f"{name}.result.{key}: expected at least {minimum}, got {total}")
     for key, kind in expect.get("result_format", {}).items():
         value = result
         for part in key.split("."):          # a dotted key is a path into the result
