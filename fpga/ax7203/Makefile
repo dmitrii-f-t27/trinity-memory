@@ -9,7 +9,7 @@
 #   make -C fpga/ax7203 bit        yosys -> nextpnr-xilinx -> fasm2frames -> xc7frames2bit
 #   make -C fpga/ax7203 flash      openFPGALoader over the board's FT232H (SRAM only)
 #   make -C fpga/ax7203 capture    UART capture compared with the reference
-#   make -C fpga/ax7203 ddr3-bit DDR3_WIDTH=16   UberDDR3 DDR3 build (issue #60), see the DDR3 section
+#   make -C fpga/ax7203 ddr3-all   UberDDR3 DDR3 builds x16 and x32 (issue #60), see the DDR3 section
 ROOT      := $(abspath $(CURDIR)/../..)
 BUILD     := $(ROOT)/build/fpga
 RTL       := $(ROOT)/build/t27/specs/rtl
@@ -47,7 +47,8 @@ comma     := ,
 
 .PHONY: gen sim synth chipdb pnr bit flash capture detect clean \
         bram-gen bram-sim bram-synth bram-pnr bram-bit bram-flash bram-capture bram-ooc \
-        ddr3-fetch ddr3-cores ddr3-nextpnr ddr3-chipdb ddr3-synth ddr3-pnr ddr3-bit ddr3-report ddr3-flash ddr3-clean
+        ddr3-fetch ddr3-cores ddr3-nextpnr ddr3-chipdb ddr3-synth ddr3-pnr ddr3-bit ddr3-report ddr3-flash ddr3-clean \
+        ddr3-all ddr3-sweep
 
 gen: $(BUILD)/tms_trace_bank.v $(BUILD)/fpga_trace_rom.v $(foreach c,$(CORES),$(RTL)/$(c).v)
 
@@ -240,29 +241,52 @@ bram-capture:
 # clocking, XDC and t27 status line (ddr3/tms_ddr3_ax7203.v). Two variants:
 #   DDR3_WIDTH=16   BYTE_LANES 2, chip U6 (DQ[15:0])
 #   DDR3_WIDTH=32   BYTE_LANES 4, both chips
-# Place and route uses nextpnr-xilinx $(NEXTPNR_DDR3_REV), not the image's 45a986b8:
+# Two place-and-route lines (DDR3_PNR_LINE):
+#   release (default)  nextpnr-xilinx $(NEXTPNR_DDR3_REV), built from its release tag, with a chip
+#                      database from its own bbaexport and prjxray-db; fasm2frames reads that same
+#                      prjxray-db, so DDR3_TOOLS, DDR3_XRAY, DDR3_META and DDR3_CHIPDB belong together.
+#   image              the image's nextpnr-xilinx 45a986b8 (or NEXTPNR, as for the block-RAM designs),
+#                      the image's chip database ($(CHIPDB)) and prjxray-db: the nextpnr line of the
+#                      only hardware precedent (UberDDR3's AX7103B demo, 2025), kept as the fallback
+#                      for #61. Its builds go to ddr3-x<width>-nextpnr-45a986b8.
 # 45a986b8 writes Vivado's CLKFBOUT_MULT=8 lock and loop-filter tables into every
-# PLLE2 (fasm.cc, FIXME), and this design's PLL runs at MULT=5; 0.9.5 and later
-# program the per-MULT tables harvested from Vivado (openXC7/nextpnr-xilinx#138)
-# and carry the constant-holdout fix (#184, the bug of 0.9.1-0.9.4). The
-# block-RAM designs above stay on 45a986b8. A newer nextpnr needs a chip database
-# from its own bbaexport and prjxray-db, and fasm2frames must read that same
-# prjxray-db: DDR3_TOOLS, DDR3_XRAY, DDR3_META and DDR3_CHIPDB belong together.
+# PLLE2 (fasm.cc, FIXME) and this design's PLL runs at MULT=5, which the report
+# flags. The per-MULT tables harvested from Vivado (openXC7/nextpnr-xilinx#138)
+# are in 0.9.3 and later, the derivation of clocks through PLLs (#155) in 0.9.4
+# and later, the fix of the constant-holdout bug of 0.9.1-0.9.4 (#184) in 0.9.5
+# and later. The block-RAM designs above stay on 45a986b8, untouched.
 #
 #   make -C fpga/ax7203 ddr3-fetch                         UberDDR3 at the pinned commit, sha256 checked
 #   make -C fpga/ax7203 ddr3-nextpnr ddr3-chipdb           clone and build nextpnr-xilinx $(NEXTPNR_DDR3_REV), its chip database
 #   make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_WIDTH=16 yosys -> nextpnr -> prjxray -> .bit, then reports/fpga/...
-#   make -C fpga/ax7203 ddr3-flash DDR3_WIDTH=16           SRAM only (openFPGALoader); needs the board and approval
+#   make -C fpga/ax7203 ddr3-all                           both widths, bitstreams and reports (one command)
+#   make -C fpga/ax7203 ddr3-sweep DDR3_WIDTH=16           every seed of DDR3_SEEDS on the current netlist, summarised
+#   make -C fpga/ax7203 ddr3-flash DDR3_WIDTH=16 DDR3_EXPECT_SHA256=<sha256>
+#                                                          SRAM only; never builds; needs the board and approval (#61)
 #
-# Native Mac run (tools built once outside the repository, prjxray in the image):
-#   make -C fpga/ax7203 ddr3-bit DDR3_WIDTH=16 YOSYS='cd $(ROOT) && yosys' \
+# BUILD_ID (default: the short HEAD) is baked into the netlist and sent on the
+# UART H line, so a build at another commit is a different netlist, FASM and
+# bitstream. BUILD_ID=<id> rebuilds the netlist of an earlier commit when no
+# DDR3 source changed since. The report takes its commit from the netlist and
+# refuses a mismatch.
+#
+# Native Mac run (tools built once outside the repository, prjxray in the image), as for
+# the reports of docs/hardware.md; nextpnr-xilinx 0.9.7's CMake needs pkg-config for eigen3:
+#   make -C fpga/ax7203 ddr3-all YOSYS='cd $(ROOT) && yosys' IMAGE=regymm/openxc7@sha256:<digest> \
 #        DDR3_TOOLS=/path/to/nextpnr-xilinx-0.9.7 DDR3_XRAY=/path/to/prjxray-db DDR3_META=/path/to/nextpnr-xilinx-meta
 # DDR3_IN_IMAGE=1 (CI) runs every tool in the image: nextpnr is then built in
 # the image too and run there from build/tools/.
+# (ddr3-all sets the width itself: read before DDR3_WIDTH is overridden below)
+DDR3_ALL_CLASH := $(filter command line,$(origin DDR3_WIDTH) $(origin DDR3_BUILD) $(origin DDR3_REPORT))
 DDR3_WIDTH     ?= 16
 override DDR3_WIDTH := $(strip $(DDR3_WIDTH))
 ifneq ($(words $(DDR3_WIDTH)) $(filter 16 32,$(DDR3_WIDTH)),1 $(DDR3_WIDTH))
 $(error DDR3_WIDTH must be 16 or 32, not '$(DDR3_WIDTH)')
+endif
+DDR3_PNR_LINE  ?= release
+override DDR3_PNR_LINE := $(strip $(DDR3_PNR_LINE))
+ifneq ($(words $(DDR3_PNR_LINE)) $(filter release image,$(DDR3_PNR_LINE)),1 $(DDR3_PNR_LINE))
+$(error DDR3_PNR_LINE must be release or image, not '$(DDR3_PNR_LINE)')
 endif
 DDR3_LANES     := $(if $(filter 32,$(DDR3_WIDTH)),4,2)
 # PLL: VCO = 200 MHz * DDR3_PLL_MULT; DDR3 clock VCO / DDR3_DDR_DIV; controller clock a quarter of it.
@@ -271,13 +295,25 @@ DDR3_DDR_DIV   ?= 3
 DDR3_DIR       := $(CURDIR)/ddr3
 DDR3_LOCK      := $(DDR3_DIR)/uberddr3.lock
 DDR3_SRC       := $(ROOT)/build/uberddr3
-DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)
+DDR3_SUFFIX    := $(if $(filter image,$(DDR3_PNR_LINE)),-nextpnr-45a986b8)
+DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)
 DDR3_TOP       := tms_ddr3_ax7203
 DDR3_CORES     := fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status
 DDR3_UBER      := $(DDR3_SRC)/rtl/ddr3_top.v $(DDR3_SRC)/rtl/ddr3_controller.v $(DDR3_SRC)/rtl/ddr3_phy.v
 DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
 DDR3_YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -arch xc7
+ifeq ($(DDR3_PNR_LINE),image)
+override NEXTPNR_DDR3_REV := 45a986b8
+DDR3_NEXTPNR   ?= $(NEXTPNR)
+DDR3_CHIPDB    ?= $(CHIPDB)
+DDR3_NEXTPNR_DEP :=
+DDR3_PACK      ?= $(PACK)
+DDR3_XRAY_IN   ?= /nextpnr-xilinx/xilinx/external/prjxray-db
+DDR3_REV_NEXTPNR = echo "45a986b8 line: the image's nextpnr-xilinx (chip database and prjxray-db from /nextpnr-xilinx):"; \
+                   cd $(ROOT) && $(DOCKER) git -C /nextpnr-xilinx rev-parse HEAD
+DDR3_REV_XRAY  = cd $(ROOT) && $(DOCKER) git -C /nextpnr-xilinx/xilinx/external/prjxray-db rev-parse HEAD
+else
 NEXTPNR_DDR3_REV    ?= 0.9.7
 NEXTPNR_DDR3_COMMIT ?= 0eae9fbb19dfb83cdd30d5048d8b0ba744180ad0
 NEXTPNR_DDR3_URL    ?= https://github.com/openXC7/nextpnr-xilinx.git
@@ -285,6 +321,8 @@ DDR3_TOOLS     ?= $(ROOT)/build/tools/nextpnr-xilinx-$(NEXTPNR_DDR3_REV)
 DDR3_XRAY      ?= $(DDR3_TOOLS)/xilinx/external/prjxray-db
 DDR3_META      ?= $(DDR3_TOOLS)/xilinx/external/nextpnr-xilinx-meta
 DDR3_CHIPDB    ?= $(BUILD)/chipdb-nextpnr-$(NEXTPNR_DDR3_REV)/$(PART).bin
+# The binary names the commit it was built from; the chip database names its inputs.
+DDR3_NEXTPNR_DEP := $(DDR3_TOOLS)/build/built-from-$(NEXTPNR_DDR3_COMMIT)
 ifeq ($(DDR3_IN_IMAGE),1)
 DDR3_CMAKE_FLAGS ?=
 DDR3_TOOLS_RUN ?= $(DOCKER)
@@ -293,23 +331,36 @@ endif
 DDR3_TOOLS_RUN ?=
 DDR3_NEXTPNR   ?= cd $(ROOT) && $(DDR3_TOOLS)/build/nextpnr-xilinx
 DDR3_CMAKE_FLAGS ?= $(if $(filter Darwin,$(shell uname -s)),-DCMAKE_CXX_FLAGS=-I/opt/homebrew/include/eigen3,)
-DDR3_JOBS      ?= 4
 # fasm2frames and xc7frames2bit of the image, reading DDR3_XRAY (mounted at /xraydb).
 DDR3_PACK      ?= docker run --rm --platform linux/amd64 -v "$(ROOT):/work" -v "$(DDR3_XRAY):/xraydb:ro" -w /work $(IMAGE)
 DDR3_XRAY_IN   ?= /xraydb
+DDR3_REV_NEXTPNR = sh $(ROOT)/tools/git-revision.sh --describe $(DDR3_TOOLS); sh $(ROOT)/tools/git-revision.sh $(DDR3_TOOLS); \
+                   echo "binary built from $$(cd $(DDR3_TOOLS)/build 2>/dev/null && ls built-from-* 2>/dev/null | sed 's/^built-from-//' || echo unknown)"
+DDR3_REV_XRAY  = sh $(ROOT)/tools/git-revision.sh $(DDR3_XRAY)
+endif
+DDR3_JOBS      ?= 4
 # sa stops with 'No wire found for port O6' on this design (0.9.7), so heap only.
 DDR3_SEEDS     ?= 1 2 3 4 5 6 7 8
 DDR3_PLACERS   ?= heap
 DDR3_PNR_ARGS  ?= --router router2 --timing-allow-fail
 # Image digest recorded in the report (docker image inspect on the host that pulled it).
 IMAGE_DIGEST   ?= $(shell docker image inspect --format '{{index .RepoDigests 0}}' $(IMAGE) 2>/dev/null)
-DDR3_REPORT    ?= $(ROOT)/reports/fpga/ddr3-build-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)-x$(DDR3_WIDTH)
+DDR3_REPORT_ROOT ?= $(ROOT)/reports/fpga
+DDR3_REPORT    ?= $(DDR3_REPORT_ROOT)/ddr3-build-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)-x$(DDR3_WIDTH)$(DDR3_SUFFIX)
+DDR3_SWEEP_REPORT ?= $(DDR3_REPORT_ROOT)/ddr3-seed-sweep-$(shell date -u +%Y-%m-%d)-$(BUILD_ID)-x$(DDR3_WIDTH)$(DDR3_SUFFIX).json
 DDR3_SOURCE_LABEL ?= local
 DDR3_CABLE     ?= $(CABLE)
+OPENFPGALOADER ?= openFPGALoader
+DDR3_EXPECT_SHA256 ?=
+DDR3_FLASH_REPORT  ?=
 # Clock periods of the PLL outputs in ns (awk, so that non-default PLL settings keep a consistent XDC).
 ddr3_period    = $(shell awk 'BEGIN { printf "%.3f", $(1) }')
 DDR3_DDR_NS    := $(call ddr3_period,5.0 / $(DDR3_PLL_MULT) * $(DDR3_DDR_DIV))
 DDR3_CTRL_NS   := $(call ddr3_period,5.0 / $(DDR3_PLL_MULT) * $(DDR3_DDR_DIV) * 4)
+DDR3_PNR_OUT   = --chipdb $(call REL,$(DDR3_CHIPDB)) --xdc $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).xdc --json $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).json
+
+.PHONY: FORCE
+FORCE:
 
 # build/uberddr3/SOURCE is written last by the fetch script, after every hash matched.
 ddr3-fetch: $(DDR3_SRC)/SOURCE
@@ -319,11 +370,14 @@ $(DDR3_UBER): $(DDR3_SRC)/SOURCE ;
 
 ddr3-cores: $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v)
 
+ifneq ($(DDR3_PNR_LINE),image)
 # nextpnr-xilinx for the DDR3 build: the release tag, checked against its
 # commit, with the two submodules bbaexport and fasm2frames read (not the tests).
 # The source is cloned next to an existing build/ directory without touching it,
-# so a cached binary (CI) is kept; the binary is built only when it is missing.
-ddr3-nextpnr: $(DDR3_TOOLS)/build/nextpnr-xilinx
+# so a cached binary (CI) is kept. The binary is built when build/ has no
+# built-from-<commit> stamp, that is when it is missing or was built from
+# another commit; the stamp is written only after the source was checked.
+ddr3-nextpnr: $(DDR3_NEXTPNR_DEP)
 $(DDR3_TOOLS)/.source-$(NEXTPNR_DDR3_COMMIT):
 	rm -rf $(DDR3_TOOLS).src; mkdir -p $(dir $(DDR3_TOOLS))
 	git clone --depth 1 --branch $(NEXTPNR_DDR3_REV) --recurse-submodules=xilinx/external/prjxray-db \
@@ -331,20 +385,38 @@ $(DDR3_TOOLS)/.source-$(NEXTPNR_DDR3_COMMIT):
 	test "$$(git -C $(DDR3_TOOLS).src rev-parse HEAD)" = "$(NEXTPNR_DDR3_COMMIT)" || { echo "nextpnr-xilinx $(NEXTPNR_DDR3_REV) is not $(NEXTPNR_DDR3_COMMIT)"; exit 1; }
 	mkdir -p $(DDR3_TOOLS); cp -a $(DDR3_TOOLS).src/. $(DDR3_TOOLS)/; rm -rf $(DDR3_TOOLS).src
 	touch $@
-$(DDR3_TOOLS)/build/nextpnr-xilinx: | $(DDR3_TOOLS)/.source-$(NEXTPNR_DDR3_COMMIT)
+$(DDR3_NEXTPNR_DEP): | $(DDR3_TOOLS)/.source-$(NEXTPNR_DDR3_COMMIT)
+	@rev=$$(sh $(ROOT)/tools/git-revision.sh $(DDR3_TOOLS)); [ "$$rev" = "$(NEXTPNR_DDR3_COMMIT)" ] || \
+	  { echo "$(DDR3_TOOLS) is at $$rev, not $(NEXTPNR_DDR3_COMMIT): remove it and run ddr3-nextpnr again"; exit 1; }
 	cd $(ROOT) && $(DDR3_TOOLS_RUN) bash -c "cd $(call REL,$(DDR3_TOOLS)) && cmake -S . -B build -DARCH=xilinx -DBUILD_GUI=OFF -DBUILD_PYTHON=OFF \
 	  -DUSE_OPENMP=OFF -DCMAKE_BUILD_TYPE=Release $(DDR3_CMAKE_FLAGS) && cmake --build build -j$(DDR3_JOBS)"
+	rm -f $(DDR3_TOOLS)/build/built-from-*; touch $@
 
+# The chip database is remade when one of its inputs changes: the nextpnr commit,
+# the prjxray-db or the nextpnr-xilinx-meta revision. <chipdb>.inputs is
+# rewritten only when its content changes (it is cached with the database in CI).
 ddr3-chipdb: $(DDR3_CHIPDB)
-$(DDR3_CHIPDB): | $(DDR3_TOOLS)/build/nextpnr-xilinx
+$(DDR3_CHIPDB).inputs: FORCE | $(DDR3_NEXTPNR_DEP)
+	@mkdir -p $(dir $@); { echo "nextpnr-xilinx $(NEXTPNR_DDR3_COMMIT)"; \
+	  echo "prjxray-db $$(sh $(ROOT)/tools/git-revision.sh $(DDR3_XRAY))"; \
+	  echo "nextpnr-xilinx-meta $$(sh $(ROOT)/tools/git-revision.sh $(DDR3_META))"; } > $@.tmp; \
+	if cmp -s $@.tmp $@; then rm -f $@.tmp; else mv $@.tmp $@; echo "chip database inputs: $$(tr '\n' ' ' < $@)"; fi
+$(DDR3_CHIPDB): $(DDR3_CHIPDB).inputs | $(DDR3_NEXTPNR_DEP)
 	mkdir -p $(dir $@)
 	cd $(ROOT) && $(DDR3_TOOLS_RUN) bash -c "python3 $(call REL,$(DDR3_TOOLS))/xilinx/python/bbaexport.py --device $(PART) \
 	  --xray $(call REL,$(DDR3_XRAY))/artix7 --metadata $(call REL,$(DDR3_META))/artix7 --bba $(call REL,$@).bba \
 	  && $(call REL,$(DDR3_TOOLS))/build/bbasm -l $(call REL,$@).bba $(call REL,$@) && rm -f $(call REL,$@).bba"
+else
+ddr3-nextpnr:
+	@echo "DDR3_PNR_LINE=image uses the image's nextpnr-xilinx 45a986b8 (or NEXTPNR); nothing to build"
+ddr3-chipdb: $(DDR3_CHIPDB)
+endif
 
 # Stamps name the settings a directory was built with.
 $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)pll-*.stamp; touch $@
+$(DDR3_BUILD)/build-id-$(BUILD_ID).stamp:
+	mkdir -p $(dir $@); rm -f $(dir $@)build-id-*.stamp; touch $@
 
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
 # the four PLL outputs by net name.
@@ -357,9 +429,13 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 	  "create_clock -period $(DDR3_DDR_NS) -name clk_ddr_90 [get_nets clk_ddr_90]" >> $@.tmp
 	mv $@.tmp $@
 
+# Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
+# and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp
+	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
+	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_TOP); \
@@ -370,14 +446,20 @@ $(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$
 # Seed search: the first placer/seed whose routed design meets every clock
 # constraint wins; if none does, the first one that routed (its report then
 # carries the FAIL). Only the routed-design analysis (after "Router2 time")
-# counts, not the placer's estimate earlier in the log.
+# counts, not the placer's estimate earlier in the log. "Timing met" covers
+# register-to-register paths in the fabric only: nextpnr-xilinx gives the ports
+# of OSERDESE2, ISERDESE2, IDELAYE2 and IDELAYCTRL no timing class, so paths into
+# and out of the PHY primitives and the PHY's I/O timing are not analysed (the
+# report counts their LUT levels). The winner's SDF and routed netlist are kept
+# for the report (clock nets that leave the global network through a LUT).
 ddr3-pnr: $(DDR3_BUILD)/$(DDR3_TOP).fasm
-$(DDR3_BUILD)/$(DDR3_TOP).fasm: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(DDR3_BUILD)/$(DDR3_TOP).xdc | $(DDR3_TOOLS)/build/nextpnr-xilinx
+$(DDR3_BUILD)/$(DDR3_TOP).fasm: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(DDR3_BUILD)/$(DDR3_TOP).xdc | $(DDR3_NEXTPNR_DEP)
 	@rm -f $@ $(DDR3_BUILD)/try_*; pass=; first=; for p in $(DDR3_PLACERS); do for s in $(DDR3_SEEDS); do \
 	  t=$${p}_seed$$s; echo "nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer $$p seed $$s"; \
-	  $(DDR3_NEXTPNR) --chipdb $(call REL,$(DDR3_CHIPDB)) --xdc $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).xdc \
-	    --json $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).json --fasm $(call REL,$(DDR3_BUILD))/try_$$t.fasm \
-	    --report $(call REL,$(DDR3_BUILD))/try_$$t.json --seed $$s --placer $$p $(DDR3_PNR_ARGS) > $(DDR3_BUILD)/nextpnr_$$t.log 2>&1; st=$$?; \
+	  $(DDR3_NEXTPNR) $(DDR3_PNR_OUT) --fasm $(call REL,$(DDR3_BUILD))/try_$$t.fasm \
+	    --report $(call REL,$(DDR3_BUILD))/try_$$t.json --sdf $(call REL,$(DDR3_BUILD))/try_$$t.sdf \
+	    --write $(call REL,$(DDR3_BUILD))/try_$$t.routed.json \
+	    --seed $$s --placer $$p $(DDR3_PNR_ARGS) > $(DDR3_BUILD)/nextpnr_$$t.log 2>&1; st=$$?; \
 	  if [ $$st -eq 0 ] && [ -s $(DDR3_BUILD)/try_$$t.fasm ] && ! grep -q "Failed to find a route" $(DDR3_BUILD)/nextpnr_$$t.log; then \
 	    sed -n '/Router2 time/,$$p' $(DDR3_BUILD)/nextpnr_$$t.log | grep "Max frequency" | sed 's/^/  /'; \
 	    [ -n "$$first" ] || first=$$t; \
@@ -386,9 +468,10 @@ $(DDR3_BUILD)/$(DDR3_TOP).fasm: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(
 	done; done; pick=$${pass:-$$first}; \
 	[ -n "$$pick" ] || { echo "no placer/seed routed"; exit 1; }; \
 	mv $(DDR3_BUILD)/try_$$pick.fasm $@; mv $(DDR3_BUILD)/try_$$pick.json $(DDR3_BUILD)/nextpnr_report.json; \
+	mv $(DDR3_BUILD)/try_$$pick.sdf $(DDR3_BUILD)/$(DDR3_TOP).sdf; mv $(DDR3_BUILD)/try_$$pick.routed.json $(DDR3_BUILD)/$(DDR3_TOP).routed.json; \
 	cp $(DDR3_BUILD)/nextpnr_$$pick.log $(DDR3_BUILD)/nextpnr.log; rm -f $(DDR3_BUILD)/try_*; \
 	if [ -n "$$pass" ]; then v="timing met"; else v="no seed met timing"; fi; \
-	echo "chosen placer/seed $$pick ($$v)"; echo "$$pick $$v; tried placers '$(DDR3_PLACERS)' seeds '$(DDR3_SEEDS)'" > $(DDR3_BUILD)/nextpnr_choice.txt
+	echo "chosen placer/seed $$pick ($$v)"; echo "$$pick $$v; tried placers '$(DDR3_PLACERS)' seeds '$(DDR3_SEEDS)' in this order, stopping at the first that met timing" > $(DDR3_BUILD)/nextpnr_choice.txt
 	grep -E "SLICE_LUTX:|SLICE_FFX:|CARRY4:|OSERDESE2:|ISERDESE2:|IDELAYE2:|PLLE2_ADV:" $(DDR3_BUILD)/nextpnr.log || true
 
 ddr3-bit: $(DDR3_BUILD)/$(DDR3_TOP).bit
@@ -401,23 +484,59 @@ $(DDR3_BUILD)/$(DDR3_TOP).bit: $(DDR3_BUILD)/$(DDR3_TOP).fasm
 	@echo "frames: $$(wc -l < $(DDR3_BUILD)/$(DDR3_TOP).frames) lines; bit: $$(wc -c < $@) bytes"
 
 # Tool revisions and the report (trinity.fpga-build.v1). The report holds
-# sha256 values, counts and logs, never the bitstream or the FASM.
+# sha256 values, counts and logs, never the bitstream or the FASM. The .bit
+# header carries the time xc7frames2bit ran, so its whole-file sha256 names one
+# file; the FASM and frames sha256 (and the .bit's from its sync word on) are
+# what a rebuild reproduces.
 ddr3-report: $(DDR3_BUILD)/$(DDR3_TOP).bit
 	cd $(ROOT) && $(YOSYS) -V > $(DDR3_BUILD)/yosys_version.txt
-	cd $(ROOT) && git -C $(DDR3_TOOLS) describe --tags --always > $(DDR3_BUILD)/nextpnr_revision.txt 2>/dev/null || true
-	cd $(ROOT) && { git -C $(DDR3_TOOLS) rev-parse HEAD 2>/dev/null || echo unknown; } >> $(DDR3_BUILD)/nextpnr_revision.txt
+	{ $(DDR3_REV_NEXTPNR); } > $(DDR3_BUILD)/nextpnr_revision.txt 2>/dev/null || true
 	$(DDR3_NEXTPNR) --version >> $(DDR3_BUILD)/nextpnr_revision.txt 2>&1 || true
-	{ git -C $(DDR3_XRAY) rev-parse HEAD 2>/dev/null || awk '$$1 == "commit" { print $$2 }' $(DDR3_XRAY)/ASSEMBLED-*.txt 2>/dev/null || echo unknown; } | head -1 > $(DDR3_BUILD)/prjxray_db_revision.txt
+	{ $(DDR3_REV_XRAY); } 2>/dev/null | head -1 > $(DDR3_BUILD)/prjxray_db_revision.txt
 	python3 $(ROOT)/tools/fpga-build-report.py --artifact-dir $(DDR3_BUILD) --top $(DDR3_TOP) --commit $(BUILD_ID) \
 	  --source "$(DDR3_SOURCE_LABEL)" --output $(DDR3_REPORT) \
 	  --flow "yosys $(DDR3_YOSYS_SYNTH); nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer/seed search over '$(DDR3_PLACERS)' x '$(DDR3_SEEDS)' $(DDR3_PNR_ARGS); prjxray fasm2frames + xc7frames2bit ($(IMAGE))" \
 	  --ddr3 --uberddr3-dir $(DDR3_SRC) --lock $(DDR3_LOCK) --image-digest "$(IMAGE_DIGEST)" --chipdb $(DDR3_CHIPDB) \
 	  --variant "x$(DDR3_WIDTH) BYTE_LANES $(DDR3_LANES), PLL CLKFBOUT_MULT $(DDR3_PLL_MULT), DDR3 clock VCO/$(DDR3_DDR_DIV) ($(DDR3_DDR_NS) ns), controller $(DDR3_CTRL_NS) ns"
 
+# Both widths with one command. Each width is its own make run, so
+# DDR3_WIDTH, DDR3_BUILD and DDR3_REPORT cannot be set here: DDR3_REPORT_ROOT
+# places both reports.
+ddr3-all:
+	$(if $(DDR3_ALL_CLASH),$(error ddr3-all builds x16 and x32: set DDR3_REPORT_ROOT, not DDR3_WIDTH, DDR3_BUILD or DDR3_REPORT))
+	$(MAKE) ddr3-bit ddr3-report DDR3_WIDTH=16
+	$(MAKE) ddr3-bit ddr3-report DDR3_WIDTH=32
+
+# Every placer/seed of DDR3_PLACERS x DDR3_SEEDS on the current netlist, without
+# the seed search's early stop, into $(DDR3_BUILD)/sweep/, and a summary per run
+# (routed Fmax, critical path, utilisation, PLL tables, fabric-clock pips, sha256
+# of each log and FASM) in DDR3_SWEEP_REPORT. Evidence for the seed spread; the
+# build itself is untouched.
+ddr3-sweep: $(DDR3_BUILD)/$(DDR3_TOP).json $(DDR3_CHIPDB) $(DDR3_BUILD)/$(DDR3_TOP).xdc | $(DDR3_NEXTPNR_DEP)
+	@rm -rf $(DDR3_BUILD)/sweep; mkdir -p $(DDR3_BUILD)/sweep; for p in $(DDR3_PLACERS); do for s in $(DDR3_SEEDS); do \
+	  t=$${p}_seed$$s; echo "nextpnr-xilinx $(NEXTPNR_DDR3_REV) placer $$p seed $$s"; \
+	  $(DDR3_NEXTPNR) $(DDR3_PNR_OUT) --fasm $(call REL,$(DDR3_BUILD))/sweep/$$t.fasm \
+	    --seed $$s --placer $$p $(DDR3_PNR_ARGS) > $(DDR3_BUILD)/sweep/$$t.log 2>&1 || echo "  exit $$?"; \
+	  sed -n '/Router2 time/,$$p' $(DDR3_BUILD)/sweep/$$t.log | grep "Max frequency" | sed 's/^/  /'; \
+	done; done
+	python3 $(ROOT)/tools/fpga-seed-sweep.py --top $(DDR3_TOP) --commit $(BUILD_ID) \
+	  --label "nextpnr-xilinx $(NEXTPNR_DDR3_REV), x$(DDR3_WIDTH), $(DDR3_PNR_ARGS)" \
+	  --netlist $(DDR3_BUILD)/$(DDR3_TOP).json --chipdb $(DDR3_CHIPDB) --output $(DDR3_SWEEP_REPORT) $(DDR3_BUILD)/sweep/*.log
+
 # SRAM only: nothing is written to the configuration flash. Needs the board and
-# the founders' approval of the run (issue #61); never part of a build.
-ddr3-flash: $(DDR3_BUILD)/$(DDR3_TOP).bit
-	openFPGALoader -c $(DDR3_CABLE) $<
+# the founders' approval of the run (issue #61); never part of a build. It never
+# builds either: it flashes the existing bitstream only when its sha256 equals
+# DDR3_EXPECT_SHA256, or the bitstream sha256 of the report DDR3_FLASH_REPORT.
+ddr3-flash:
+	@bit=$(DDR3_BUILD)/$(DDR3_TOP).bit; want="$(DDR3_EXPECT_SHA256)"; \
+	if [ -z "$$want" ] && [ -n "$(DDR3_FLASH_REPORT)" ]; then \
+	  want=$$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["bitstream"]["sha256"])' "$(DDR3_FLASH_REPORT)") || exit 1; fi; \
+	[ -n "$$want" ] || { echo "ddr3-flash: set DDR3_EXPECT_SHA256=<sha256> or DDR3_FLASH_REPORT=<build.json>; nothing was flashed"; exit 1; }; \
+	[ -f "$$bit" ] || { echo "ddr3-flash: no $$bit (ddr3-flash never builds: make ddr3-bit ddr3-report first); nothing was flashed"; exit 1; }; \
+	got=$$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$$bit"); \
+	[ "$$got" = "$$want" ] || { echo "ddr3-flash: $$bit has sha256 $$got, not $$want; nothing was flashed"; exit 1; }; \
+	echo "ddr3-flash: $$bit sha256 $$got as expected"; \
+	$(OPENFPGALOADER) -c $(DDR3_CABLE) "$$bit"
 
 ddr3-clean:
 	rm -rf $(DDR3_BUILD)

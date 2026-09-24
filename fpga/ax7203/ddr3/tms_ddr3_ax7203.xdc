@@ -1,11 +1,12 @@
 ## ALINX AX7203 (XC7A200T-FBG484-2) DDR3 build, issue #60: pins shared by the
-## x16 and x32 variants. The Makefile appends tms_ddr3_x32.xdc (byte lanes 2-3)
-## for DDR3_WIDTH=32 and a generated clock file (create_clock on the four PLL
-## outputs, which nextpnr-xilinx 45a986b8 does not derive from the input clock;
-## 0.9.x derives them, openXC7/nextpnr-xilinx#155).
+## x16 and x32 variants. The XDC the Makefile hands nextpnr is this file, plus
+## tms_ddr3_x32.xdc (byte lanes 2-3) for DDR3_WIDTH=32, plus create_clock lines
+## the Makefile appends for the four PLL outputs (nextpnr-xilinx 45a986b8 does not
+## derive them from the input clock; 0.9.4 and later do, openXC7/nextpnr-xilinx#155).
 ## DDR3 pin assignments as on the board: litex-hub/litex-boards 9f84c87
 ## litex_boards/platforms/alinx_ax7203.py L102-L125, which agree pin for pin
-## with a third-party AX7203 MIG project and the ALINX manual excerpts (research
+## with a third-party AX7203 MIG project; the ALINX manual excerpts seen for #60
+## confirm only DQ0-DQ2 and DQS0_P (the manual itself was not read; research
 ## notes of #60). DQ, DQS and DM are in bank 35 (byte lane n in byte group Tn),
 ## address, command and CK in bank 34; VCCO of both banks is 1.5 V. HR banks have
 ## no DCI, so DQ and DQS use the on-chip split termination for reads. nextpnr
