@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Drift of the pinned upstream sources and model revisions (I/O only).
 
-Compares, by git blob SHA, every file pinned in specs/formats/upstream.lock.json
-and tests/upstream/llama.cpp.lock.json with the same path at the head of the
+Compares, by git blob SHA, every file pinned in specs/formats/upstream.lock.json,
+tests/upstream/llama.cpp.lock.json and specs/runtimes/*.json with the same path at the head of the
 upstream branch (and a pinned submodule gitlink with the one at the parent's
 head), and, by LFS SHA-256, every model file pinned in fixtures/manifest.json
 with the same file at the Hugging Face repository's current main. A head
@@ -35,6 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = "trinity.upstream-drift.v1"
 UPSTREAM_LOCK = "specs/formats/upstream.lock.json"
 LLAMACPP_LOCK = "tests/upstream/llama.cpp.lock.json"
+RUNTIMES = "specs/runtimes"
 MANIFEST = "fixtures/manifest.json"
 GITHUB_API = "https://api.github.com"
 HF_API = "https://huggingface.co/api"
@@ -147,6 +148,12 @@ def github_targets(root: Path):
     files = {path: entry["git_blob_sha"] for path, entry in llamacpp["files"].items()}
     targets.append((LLAMACPP_LOCK, "llama.cpp", llamacpp["repo"], branches.get(llamacpp["repo"], "master"),
                     llamacpp["commit"], files, None))
+    # The runtime tables of Ternary Check Live (issue #51) pin the same repositories.
+    for path in sorted((root / RUNTIMES).glob("*.json")):
+        spec = json.loads(path.read_text(encoding="utf-8"))
+        pin = next((p for p in upstream["upstreams"].values() if p["repo"] == spec["repo"]), {})
+        targets.append((f"{RUNTIMES}/{path.name}", path.stem, spec["repo"], pin.get("branch", branches.get(spec["repo"], "master")),
+                        spec["commit"], dict(spec["files"]), pin.get("submodule_of")))
     return targets, branches
 
 
