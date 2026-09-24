@@ -5,7 +5,8 @@ Reads a seed sweep of tools/fpga-seed-sweep.py (per seed: Fmax, FASM and, in nex
 delay model, the clock-buffer -> fabric-inverter-LUT -> CK / DQS delays) and the capture
 records of tools/fpga-ddr3-capture.py (capture.json or capture.json.gz), and writes one JSON:
 per seed the delays and the ranking metric of the seed choice, per load what the record says
-(calibration, the S lines before and after calibration complete, the reader's totals and
+(calibration, the S lines of the reset (from the last H line on) before and after calibration
+complete, the first of them against the load's return, the reader's totals and
 per-format ranges, the die temperature before and after), and every load in time order.
 Nothing here is measured anew: each value is copied or counted from the files named in it.
 
@@ -25,7 +26,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SCHEMA = "trinity.ddr3-reader-summary.v2"
+SCHEMA = "trinity.ddr3-reader-summary.v3"
 DONE_CALIBRATE = 23
 
 
@@ -76,8 +77,13 @@ def load_summary(directory: Path) -> dict:
     record = read_record(directory)
     run, dec = record["run"], record["decoded"]
     final, reset = dec.get("final") or {}, dec.get("reset") or {}
-    reset_s = reset.get("reset_s")
-    since = [s for s in dec.get("status_lines", []) if reset_s is not None and s["t_s"] >= reset_s]
+    # The S lines of this reset are those at or after the last H line (the set of the decoder's
+    # clock fit). The fitted reset_s is not used to select them: it is a median over lines that
+    # reach the host late (UART plus USB), so it falls after the first lines of the reset.
+    headers = dec.get("header") or []
+    last_h = headers[-1]["t_s"] if headers else None
+    since = [s for s in dec.get("status_lines", []) if last_h is not None and s["t_s"] >= last_h]
+    load_end = run.get("load_end_s")
     after = [s for s in since if s["calib_complete"]]
     before = [s for s in since if not s["calib_complete"]]
     out = {
@@ -92,6 +98,10 @@ def load_summary(directory: Path) -> dict:
         "calib_complete": final.get("calib_complete"), "state": final.get("state"),
         "highest_state": final.get("highest"), "returns_to_idle": final.get("returns_to_idle"),
         "seconds_after_reset": reset.get("last_line_since_reset_s"),
+        "reset_minus_load_end_s_fitted": reset.get("reset_minus_load_end_s"),
+        "first_s_line_clocks_since_reset": since[0]["clocks_low40"] if since else None,
+        "first_s_line_arrived_s_after_load_end": (round(since[0]["t_s"] - load_end, 4)
+                                                  if since and load_end is not None else None),
         "s_lines_since_reset": len(since),
         "s_lines_before_calib_complete": len(before),
         "s_lines_after_calib_complete": len(after),

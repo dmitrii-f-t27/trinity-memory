@@ -423,7 +423,10 @@ class ReaderSimulation(unittest.TestCase):
             first = next(r for r in runs if r["stray_acks"])
             self.assertEqual(first["stray_acks"], 1, plusargs)
             self.assertFalse(first["checks"]["no_stray_ack"], plusargs)
+            # all acks = fill and read words + stray acks is an identity: it holds here too, so only
+            # the stray-ack count is evidence (tools/fpga-ddr3-capture.py, IDENTITY_CHECKS).
             self.assertTrue(first["checks"]["all_acks_equal_the_words"], plusargs)
+            self.assertIn("all_acks_equal_the_words", capture.IDENTITY_CHECKS)
             # The words, bus bytes and fill words do not show it: they are fixed by the stop condition.
             for r in runs:
                 self.assertEqual(r["words"], model.words_of(r["format"], CONFIGS["base"]["TRITS"]))
@@ -669,6 +672,7 @@ class ReaderBoardRecords(unittest.TestCase):
         # The order of the a6d9745f loads: seed 1's second load came after seed 6's three.
         self.assertEqual([x["build"] for x in summary["load_order"]], ["seed1", "seed6", "seed6", "seed6", "seed1"])
         self.assertEqual([x["s_lines_after_calib_complete"] for x in seed6], [19, 19, 19])
+        self.assertEqual([x["s_lines_since_reset"] for x in seed6], [31, 31, 31])
         self.assertEqual(summary["seed_rank"][0], 6)
 
     def test_pinned_board_results_of_the_build_of_record(self):
@@ -682,11 +686,20 @@ class ReaderBoardRecords(unittest.TestCase):
             self.assertTrue(x["passing_runs"] == x["runs"] == x["model_checked_runs"])
             self.assertEqual((x["bad_words"], x["invalid_groups"], x["stray_acks"], x["checks_failed"]), (0, 0, 0, []))
             self.assertEqual((x["calib_complete"], x["state"], x["returns_to_idle"]), (1, 23, 0))
-            self.assertEqual((x["s_lines_before_calib_complete"], x["s_lines_after_calib_complete"]), (10, 19))
+            # From the H line on: 31 S lines, the first stamped 4 clocks after the reset (schema v3).
+            self.assertEqual((x["s_lines_since_reset"], x["s_lines_before_calib_complete"],
+                              x["s_lines_after_calib_complete"]), (31, 12, 19))
+            self.assertEqual(x["first_s_line_clocks_since_reset"], 4)
             self.assertTrue(x["after_calib_all_done_calibrate"])
             self.assertEqual(x["per_format"]["baseline2"]["words"], [276480])
             self.assertEqual(x["per_format"]["dense5"]["words"], [221184])
         self.assertEqual([x["all_acks_last"] for x in loads], [256352256, 256794624, 257789952])
+        self.assertEqual([x["first_s_line_arrived_s_after_load_end"] for x in loads], [0.0047, 0.0051, 0.0005])
+        # The records were decoded again with all_acks_equal_the_words among the identity checks.
+        import json
+        for directory in sorted((ROOT / "reports/fpga").glob("ddr3-reader-*-42b6f5a9-*/load*/")):
+            record = json.loads(capture.read_kept(directory / "capture.json"))
+            self.assertEqual(record["decoded"]["reader"]["identity_checks"], list(capture.IDENTITY_CHECKS))
 
 
 class ReaderDecoder(unittest.TestCase):

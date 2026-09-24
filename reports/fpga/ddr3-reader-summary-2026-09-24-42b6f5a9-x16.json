@@ -1,9 +1,9 @@
 {
- "schema": "trinity.ddr3-reader-summary.v2",
- "written_utc": "2026-09-24T16:48:51Z",
+ "schema": "trinity.ddr3-reader-summary.v3",
+ "written_utc": "2026-09-24T17:22:49Z",
  "written_by": {
   "tool": "tools/ddr3-reader-summary.py",
-  "repository_head": "42b6f5a9c026527066269532c1553250c562ad9c"
+  "repository_head": "3b0c9508662d8e25d08082a16fcfd8cc654fde2b"
  },
  "netlist": "42b6f5a9 x16, DDR3_APP=reader (READER trits 17694720, seed 98, cap 64, runs 0), READER_FORMAT 2 (x line: stray and all acks since calibration); yosys netlist sha256 084b4e88... (the sweep's netlist_sha256, equal to the seed-11 build's)",
  "sweep": "reports/fpga/ddr3-seed-sweep-2026-09-24-42b6f5a9-x16-reader.json",
@@ -254,8 +254,11 @@
     "highest_state": 23,
     "returns_to_idle": 0,
     "seconds_after_reset": 19.702,
-    "s_lines_since_reset": 29,
-    "s_lines_before_calib_complete": 10,
+    "reset_minus_load_end_s_fitted": 0.01,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0047,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
     "s_lines_after_calib_complete": 19,
     "after_calib_all_done_calibrate": true,
     "after_calib_span_s": 14.501,
@@ -337,8 +340,11 @@
     "highest_state": 23,
     "returns_to_idle": 0,
     "seconds_after_reset": 19.714,
-    "s_lines_since_reset": 29,
-    "s_lines_before_calib_complete": 10,
+    "reset_minus_load_end_s_fitted": 0.006,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0051,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
     "s_lines_after_calib_complete": 19,
     "after_calib_all_done_calibrate": true,
     "after_calib_span_s": 14.511,
@@ -420,8 +426,11 @@
     "highest_state": 23,
     "returns_to_idle": 0,
     "seconds_after_reset": 19.705,
-    "s_lines_since_reset": 29,
-    "s_lines_before_calib_complete": 10,
+    "reset_minus_load_end_s_fitted": 0.003,
+    "first_s_line_clocks_since_reset": 4,
+    "first_s_line_arrived_s_after_load_end": 0.0005,
+    "s_lines_since_reset": 31,
+    "s_lines_before_calib_complete": 12,
     "s_lines_after_calib_complete": 19,
     "after_calib_all_done_calibrate": true,
     "after_calib_span_s": 14.504,
@@ -518,5 +527,7 @@
    "calibrated": true
   }
  ],
- "notes": []
+ "notes": [
+  "S lines since reset are counted from the last H line on (schema v3); v2 counted them from the decoder's fitted reset_s, which falls a few ms after the first lines of the reset (it is a median over lines that reach the host late), and so left out the first two S lines of each 42b6f5a9 load (clock counts 4 and 137,417 since reset, states 0 and 17)."
+ ]
 }
