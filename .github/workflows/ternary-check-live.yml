@@ -1,9 +1,12 @@
 name: Ternary Check Live
-# Issue #48: every public ternary GGUF file on the Hugging Face Hub, checked
-# from its header. Discovery and range reads are anonymous (no token is sent)
-# and throttled; tensor data are never downloaded. Every verdict is made by
-# the t27 library built here (t27/formats.t27, t27/live.t27). The report is an
-# artifact; publishing it is issue #53 and #54. Nothing is posted anywhere.
+# Issues #48-#55: every public ternary GGUF file on the Hugging Face Hub,
+# checked from its header. Discovery and range reads are anonymous (no token is
+# sent) and throttled; the weights are never downloaded. Every verdict is made
+# by the t27 library built here (t27/live.t27 over t27/runtimes.t27); then
+# every cached header is fed to the real GGUF readers of the pinned runtimes
+# (tools/live-replay.sh) and each answer is compared with the t27 verdict.
+# The report is a short-lived artifact; the step summary holds counts only.
+# Publishing is issue #53 and #54. Nothing is posted anywhere.
 on:
   push:
     # Temporary: run the first full scan from the pull request's branch. Removed before merge.
@@ -24,13 +27,15 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 240
     env:
       CC: clang
       CXX: clang++
       T27_ROOT: ${{ github.workspace }}/build/compiler
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -42,7 +47,7 @@ jobs:
           git -C "$T27_ROOT" checkout --detach FETCH_HEAD
           rustup toolchain install 1.94.0 --profile minimal
           sudo apt-get update
-          sudo apt-get install -y clang lld libssl-dev
+          sudo apt-get install -y clang lld libssl-dev cmake
       - uses: actions/cache@v4
         with:
           path: |
@@ -51,30 +56,54 @@ jobs:
             build/compiler/target
           key: t27-${{ runner.os }}-${{ runner.arch }}-rust1.94-${{ hashFiles('native/compiler.lock') }}
       - name: Build the t27 library
-        run: sh tools/build-t27.sh
+        run: |
+          python3 tools/generate-runtime-tables.py --check
+          sh tools/build-t27.sh
+      - name: Build the upstream GGUF readers of the pinned runtimes
+        run: sh tools/live-replay.sh
       - name: Scan
         env:
           MIN_DOWNLOADS: ${{ inputs.min_downloads || '100' }}
           LIMIT: ${{ inputs.limit || '0' }}
         run: |
+          set -o pipefail
           mkdir -p build/live
           python3 -m trinity_memory.live --min-downloads "$MIN_DOWNLOADS" --limit "$LIMIT" --interval 1 \
-            --out build/live/scan.json 2> build/live/scan.log
+            --out build/live/scan.json 2>&1 | tee build/live/scan.log
+      - name: Replay every header through the upstream readers
+        run: |
+          set -o pipefail
+          python3 -m trinity_memory.live --out build/live/scan.json --replay build/replay 2>&1 | tee -a build/live/scan.log
+      - name: Summary
+        if: always()
+        run: |
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
-          import json
+          import json, os
+          if not os.path.exists("build/live/scan.json"):
+              print("No report."); raise SystemExit
           report = json.load(open("build/live/scan.json"))
           s = report["summary"]
           print("## Ternary Check Live\n")
-          print(f"{s['repositories']} repositories, {s['scanned']} scanned, {s['files']} files, "
+          print(f"{s['repositories']} repositories ({s['states']}), {s['files']} files, "
                 f"{s['downloads_30d_scanned']} downloads over 30 days in the scanned repositories.\n")
-          print("| Verdict | Files |\n|---|---|")
+          print("| File verdict | Files |\n|---|---|")
           for verdict, count in s["verdicts"].items():
               print(f"| {verdict} | {count} |")
+          print("\n| Runtime | " + " | ".join(sorted({v for r in s['runtimes'].values() for v in r})) + " |")
+          keys = sorted({v for r in s['runtimes'].values() for v in r})
+          print("|---|" + "---|" * len(keys))
+          for runtime, counts in s["runtimes"].items():
+              print(f"| {runtime} | " + " | ".join(str(counts.get(k, 0)) for k in keys) + " |")
+          replay = report.get("replay")
+          if replay:
+              print(f"\nUpstream readers: {replay['agree']} answers agree with t27, {replay['disagree']} disagree "
+                    f"({replay['files']} files).")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ternary-check-live
+          retention-days: 14
           path: |
             build/live/scan.json
             build/live/scan.log

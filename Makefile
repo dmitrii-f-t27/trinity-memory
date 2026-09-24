@@ -50,8 +50,14 @@ ternary-check-verify:
 
 # Ternary Check Live (issue #48): every public ternary GGUF on the Hugging Face
 # Hub, checked from its header with the t27 verdicts (anonymous, throttled;
-# headers cached in build/live/headers). MIN_DOWNLOADS bounds the discovery.
-.PHONY: live-scan
+# headers cached in build/live/headers, report in build/live/scan.json).
+.PHONY: live-scan live-replay
 MIN_DOWNLOADS ?= 100
 live-scan:
 	$(PYTHON) -m trinity_memory.live --min-downloads $(MIN_DOWNLOADS)
+
+# Feed the cached headers of build/live/scan.json to the real GGUF readers of
+# the pinned runtimes (built by tools/live-replay.sh) and record the agreement.
+live-replay:
+	sh tools/live-replay.sh
+	$(PYTHON) -m trinity_memory.live --replay build/replay

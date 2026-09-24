@@ -72,19 +72,33 @@ these classes has `"kind": "reject"`, and `reader` names the reader it exercises
 | `hadamard_arch` | -69 | `general.architecture` is not one the fork verified: `llama`, `qwen3`, `qwen3moe`, `qwen35`, `qwen35moe`, `qwen3next`, `dspark` | throws (`:1264-1277`) |
 | `hadamard_name` | -70 | an empty weight list, a weight that is neither `output.weight` nor `blk.N.<kind>.weight` for a listed kind (`dspark`: `output.weight` only), a duplicate, an inverse name other than `token_embd.weight` or also listed as a weight | throws (`:1226-1228`, `:1279-1335`) |
 | `hadamard_tensor` | -71 | a listed weight or inverse table that is not a tensor of the file, whose `ne[0]` the block size does not divide, or that has no sign vector of width `ne[0]` in explicit mode | throws while loading tensors (`:1971-2050`) |
-| `offsets` | -72 | a ternary GGUF record followed by another record whose data do not begin exactly where its own padded data end, a gap (`extent` catches overlap), read as `gguf.cpp` reads it (`tlv_record_check`) | `gguf.cpp` rejects: every offset must equal the padded sizes before it (ggml-org `ggml/src/gguf.cpp:787-801`, PrismML fork `:781-801`) |
+| `offsets` | -72 | a GGUF record whose offset is not the sum of the padded sizes of the records before it, in record order and starting at 0 (`tlv_walk`); for one ternary record in a diagnosis, bytes that stop short of where the next record begins | `gguf.cpp` rejects: "tensor '…' has offset …, expected …" (ggml-org `ggml/src/gguf.cpp:787-801`, PrismML fork `:781-801`, bitnet.cpp `:760-780`) |
+| `magic` | -73 | the file does not start with `GGUF` | "invalid magic characters" (`gguf.cpp:475-484`) |
+| `version` | -74 | GGUF version 0, 1, or newer than 3 | refused (`:492-516`) |
+| `endian` | -75 | a version whose low 16 bits are 0: a file written for the other byte order | "is there a mismatch between the host and model endianness?" (`:504-507`) |
+| `key` | -76 | an empty key, a key that repeats an earlier one byte for byte, or a value `gguf.cpp` cannot read (an unknown type, a nested array) | refused (`:558-612`) |
+| `alignment` | -77 | `general.alignment` that is not a u32, or not a power of two | refused (`:621-635`) |
+| `name` | -78 | a tensor name of 64 bytes or more, or one that repeats an earlier name up to the first NUL | refused (`:652-668`) |
+| `shape` | -79 | more than 4 dimensions, a dimension above INT64_MAX, an element count or byte size that does not fit | refused (`:675-742`) |
+| `type` | -80 | a tensor type id the runtime does not define (at or above its GGML_TYPE_COUNT, or without type traits there): `specs/runtimes/*.json` | "has invalid ggml type" or "not a multiple of block size (0)" (`:718-736`) |
+| `row` | -81 | `ne[0]` not a multiple of the type's block size | "elements per row, not a multiple of block size" (`:729-736`) |
+| `bounds` | -82 | a tensor's data reach past the end of the file | the model loader: "data is not within the file bounds" (`src/llama-model-loader.h:40-50`) |
+| `arch` | -83 | `general.architecture` missing, not a string, or not a name the runtime's loader knows (`specs/runtimes/*.json`) | "unknown model architecture" (`src/llama-model.cpp:359-363`) |
+| `limit` | -84 | a header beyond this scanner's limits (keys, tensors, names, header size): no verdict is made | — |
 
 The strict readers are the functions that return these statuses: `tf_decode_blocks`,
 `tf_decode_i2s`, `tf_decode_hf_packed`, `tf_decode_mlx2`, `tf_decode_onnx2` and the
 encoders, with `tf_scales_check` or `tf_affine_check` for scales kept outside the codes,
 `tf_gguf_check(info, file_size)` after `tf_gguf_find`, and
 `tf_safetensors_check(info, file_size)` after `tf_safetensors_find`. The scan of public
-files (issue #48, `t27/live.t27`) adds `tlv_record_check`, which reads the fork-only ids
-142 and 143 as PQ2_0 and PTQ1_0 even without a `prism.` key and applies `gguf.cpp`'s
-contiguity rule to ternary records, and `tlv_hadamard` for the `prism.hadamard.*` keys; a
-file without `prism.hadamard.version` passes it, because the fork then applies no
-rotation at all (PrismML-Eng/llama.cpp#242: such a file loads and generates garbage when
-its weights were rotated). Both checks look at
+files (issues #48-#51, `t27/live.t27`) reads a whole header as each pinned runtime's
+`gguf.cpp` reads it (`tlv_walk`, with the type ids, block sizes and byte-count rules of
+`specs/runtimes/*.json`), adds the loaders' file-end and architecture rules and, in the
+PrismML fork, `tlv_hadamard` for the `prism.hadamard.*` keys (`tlv_runtime`). A file
+without `prism.hadamard.version` passes the Hadamard rules, because the fork then applies
+no rotation at all (PrismML-Eng/llama.cpp#242: such a file loads and generates garbage
+when its weights were rotated); a runtime that does not apply the rotation accepts a file
+that declares one, and the scan reports that it ignores it. Both checks look at
 the tensor being read and its neighbours, not at the whole file, and the GGUF rules are
 weaker than upstream in two more ways. A gap between GGUF tensors is accepted: `gguf.cpp`
 requires each offset to be the padded end of the tensor before it, and that size depends

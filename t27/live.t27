@@ -1,32 +1,41 @@
 // SPDX-License-Identifier: Apache-2.0
-// Ternary Check Live (issues #49 and #50): verdicts on a complete GGUF header
-// beyond the per-tensor rules of t27/formats.t27. Canonical executable source:
-// the shared library is generated from it; Python only moves bytes.
+// Ternary Check Live (issues #48-#51): what a runtime's GGUF reader and model
+// loader decide about a file, from its header alone. Canonical executable
+// source: the shared library is generated from it; Python only moves bytes.
 //
-//  - tlv_hadamard: the PrismML fork's rules for the prism.hadamard.* keys,
-//    restated from PrismML-Eng/llama.cpp@bdc23b56b4458b9f1655aec5287f3ab56ee8daaa
-//    (the pin of specs/formats/upstream.lock.json; unchanged at 0324c665, the
-//    branch head on 2026-09-24): the keys, their GGUF types and values, the
-//    verified architectures and weight paths (src/llama-model.cpp:1196-1335,
-//    key getters in src/llama-model-loader.cpp:310-352 and GKV::get_kv), and,
-//    per listed weight, a tensor whose ne[0] the block size divides and a sign
-//    vector of that width (src/llama-model.cpp:1971-2050). The first rule
-//    that fails, in the order the fork checks them, gives the status. A file without
+// Runtimes and their tables are in t27/runtimes.t27 (generated from
+// specs/runtimes/*.json): ggml-org/llama.cpp@e6ab7c1a, the PrismML fork
+// PrismML-Eng/llama.cpp@bdc23b56 and bitnet.cpp's llama.cpp @390c3077.
+//
+//  - tlv_walk: the header as gguf.cpp reads it, in its order (ggml-org
+//    ggml/src/gguf.cpp:466-801; the fork :458-801 and bitnet.cpp :460-780 read
+//    the same way): magic; version (0, 1 and newer than 3 refused, a
+//    byte-swapped version is the endianness message); keys (none empty, none
+//    twice, readable values, general.alignment a u32 power of two); tensor
+//    records (name shorter than 64 bytes and unique up to its first NUL, at
+//    most 4 dims, no negative ne, the element count representable, a type id
+//    below GGML_TYPE_COUNT with traits, ne[0] whole blocks); then every offset
+//    equal to the padded sizes before it, in record order; then the model
+//    loader's rule that each tensor's data lie inside the file
+//    (src/llama-model-loader.h:40-50). The first refusal in that order is the
+//    status; for each record it also reports, when the caller gives room, its
+//    own status and, for a ternary record whose bytes do not fill its place,
+//    the layout that does (PrismML-Eng/llama.cpp#167: type 42 declared,
+//    128-weight groups stored).
+//  - tlv_hadamard: the fork's rules for prism.hadamard.* (src/llama-model.cpp
+//    :1196-1335 for the keys, :1971-2095 per listed weight), in its order. It
+//    assumes the architecture is one the fork knows (tlv_runtime checks that
+//    first, src/llama-model.cpp:359-363). A file without
 //    prism.hadamard.version passes with out.present false: the fork then
 //    applies no rotation at all (PrismML-Eng/llama.cpp#242).
-//  - tlv_layout_fit: for a ternary record rejected on its extent, the layout
-//    whose size fits the bytes the record really has (PrismML-Eng/llama.cpp#167:
-//    type 42 declared, 128-weight groups stored).
-//  - tlv_prism_unmarked: a record of the fork-only type ids 142 or 143 in a
-//    file without any "prism." key (the official Ternary Bonsai 27B PQ2_0 file
-//    has none).
-//  - tlv_record_check: one record as gguf.cpp reads it: tf_gguf_check (the
-//    unmarked fork ids read as the fork's layouts), then contiguous offsets.
+//  - tlv_runtime: the verdict of one runtime: accepts, refuses (with the first
+//    status in its order), or accepts but ignores the rotation a file declares.
 //
-// Status classes (specs/formats/OWNERS.md): -63 .. -71 reject the Hadamard
-// metadata, -72 a record whose data do not end where the next record begins;
-// header parse failures return TF_ERR_CONTAINER.
-// This module needs formats.h earlier in the same translation unit.
+// Strings are compared as C strings, as the readers compare them (strcmp and
+// c_str in gguf.cpp and the loaders): up to the first NUL. Duplicate keys are
+// compared on all their bytes, as gguf.cpp does.
+// Status classes (specs/formats/OWNERS.md): -63 .. -84. This module needs
+// formats.h and runtimes.h earlier in the same translation unit.
 module TrinityMemoryLive {
     const TLV_ERR_HADAMARD_TYPE: i32 = -63;
     const TLV_ERR_HADAMARD_MISSING: i32 = -64;
@@ -38,10 +47,38 @@ module TrinityMemoryLive {
     const TLV_ERR_HADAMARD_NAME: i32 = -70;
     const TLV_ERR_HADAMARD_TENSOR: i32 = -71;
     const TLV_ERR_OFFSETS: i32 = -72;
+    const TLV_ERR_MAGIC: i32 = -73;
+    const TLV_ERR_VERSION: i32 = -74;
+    const TLV_ERR_ENDIAN: i32 = -75;
+    const TLV_ERR_KEY: i32 = -76;
+    const TLV_ERR_ALIGNMENT: i32 = -77;
+    const TLV_ERR_NAME: i32 = -78;
+    const TLV_ERR_SHAPE: i32 = -79;
+    const TLV_ERR_TYPE: i32 = -80;
+    const TLV_ERR_ROW: i32 = -81;
+    const TLV_ERR_BOUNDS: i32 = -82;
+    const TLV_ERR_ARCH: i32 = -83;
+    const TLV_ERR_LIMIT: i32 = -84;
 
-    // One key-value pair of a GGUF header. `at` is the first byte of the
-    // value; for arrays, `elem` and `count` describe the elements and `items`
-    // is the first byte of the first one.
+    // Limits of this scanner, not of the readers: headers beyond them get
+    // TLV_ERR_LIMIT and no verdict.
+    const TLV_MAX_KEYS: u64 = 65536;
+    const TLV_MAX_TENSORS: u64 = 32768;
+    const TLV_MAX_NAME_WORK: u64 = 50000000;
+
+    const TLV_RUN_ACCEPTS: i32 = 0;
+    const TLV_RUN_REFUSES: i32 = 1;
+    const TLV_RUN_IGNORES_ROTATION: i32 = 2;
+
+    // A file's verdict in the runtime it is written for (tlv_native).
+    const TLV_FILE_OK: i32 = 0;
+    const TLV_FILE_REFUSED: i32 = 1;
+    const TLV_FILE_NO_TERNARY: i32 = 2;
+    const TLV_FILE_UNDECIDED: i32 = 3;
+
+    // One key-value pair. `at` is the first byte of the value; for arrays,
+    // `elem` and `count` describe the elements and `items` is the first byte
+    // of the first one.
     struct TLVKey {
         found: bool,
         vtype: u32,
@@ -51,9 +88,36 @@ module TrinityMemoryLive {
         items: u64,
     }
 
-    // What tlv_hadamard read. `index` is the position of the offending entry
-    // for the NAME, SIGNS and TENSOR statuses: a weight name, then the inverse
-    // names numbered after them; a sign width; or a sign value.
+    // What tlv_walk found. `status` is 0, the first refusal, TF_ERR_TRUNCATED
+    // (read at least `needed` bytes and call again) or TLV_ERR_LIMIT. `record`
+    // is the index of the record the status names (2^64 - 1 for the header),
+    // `expected` and `found` the two offsets of TLV_ERR_OFFSETS, or the end of
+    // the data and the file size of TLV_ERR_BOUNDS. `read` counts the records
+    // whose per-record outputs were written (all of them unless the walk stopped).
+    struct TLVWalk {
+        status: i32,
+        record: u64,
+        expected: u64,
+        found: u64,
+        needed: u64,
+        version: u32,
+        keys: u64,
+        tensors: u64,
+        records_at: u64,
+        data_start: u64,
+        alignment: u64,
+        ternary: u64,
+        ternary_ok: u64,
+        read: u64,
+        prism: bool,
+        bitnet: bool,
+    }
+
+    // What tlv_hadamard read. `index` is the listing position of the entry a
+    // NAME, SIGNS or TENSOR status names: a weight name, then the inverse names
+    // numbered after them; a sign width; or a sign value. The fork walks the
+    // weights in hash order (an unordered_map), so when several fail it may
+    // name another one; the status is the same.
     struct TLVHadamard {
         present: bool,
         block_size: u32,
@@ -62,17 +126,67 @@ module TrinityMemoryLive {
         widths: u64,
         signs: u64,
         explicit_signs: bool,
+        gdn_v_grouped: bool,
         index: u64,
     }
 
-    // ---- key-value pairs ---------------------------------------------------
+    struct TLVRun {
+        verdict: i32,
+        status: i32,
+        record: u64,
+        expected: u64,
+        found: u64,
+    }
 
-    // Position of the first tensor record of a complete GGUF v3 header, or
-    // TF_ERR_CONTAINER.
+    // ---- bytes and strings ----------------------------------------------------
+
+    fn tlv_pad(value: u64, alignment: u64) -> u64 {
+        return ((value + alignment - 1) / alignment) * alignment;
+    }
+
+    // Length of the C string at data[at .. at + length): up to its first NUL.
+    fn tlv_cstr(data: []u8, at: u64, length: u64) -> u64 {
+        var i: u64 = 0;
+        while (i < length) {
+            if (data[(at + i) as usize] == 0) { return i; }
+            i = i + 1;
+        }
+        return length;
+    }
+
+    fn tlv_same_bytes(data: []u8, a: u64, b: u64, length: u64) -> bool {
+        var i: u64 = 0;
+        while (i < length) {
+            if (data[(a + i) as usize] != data[(b + i) as usize]) { return false; }
+            i = i + 1;
+        }
+        return true;
+    }
+
+    // The string value at `at` (a u64 length, then its bytes), read as a C string, equals `text`.
+    fn tlv_text_at(data: []u8, at: u64, text: str, text_size: usize) -> bool {
+        var length: u64 = tlv_cstr(data, at + 8, tf_read_u64(data, at as usize));
+        if (length != (text_size as u64)) { return false; }
+        return tf_same_text(data, (at + 8) as usize, length as usize, text, text_size);
+    }
+
+    fn tlv_contains(data: []u8, at: u64, length: u64, text: str, text_size: usize) -> bool {
+        if (length < (text_size as u64)) { return false; }
+        var i: u64 = 0;
+        while (i + (text_size as u64) <= length) {
+            if (tf_same_text(data, (at + i) as usize, text_size, text, text_size)) { return true; }
+            i = i + 1;
+        }
+        return false;
+    }
+
+    // ---- key-value pairs -----------------------------------------------------------
+
+    // Position of the first tensor record of a complete header whose keys
+    // tlv_walk has accepted, or TF_ERR_CONTAINER.
     fn tlv_records(data: []u8, size: usize) -> i64 {
         var scratch: TFTensorInfo;
         if (size < 24) { return TF_ERR_CONTAINER as i64; }
-        if (tf_read_u32(data, 0) != 0x46554747 || tf_read_u32(data, 4) != 3) { return TF_ERR_CONTAINER as i64; }
         var keys: u64 = tf_read_u64(data, 16);
         var pos: u64 = 24;
         var k: u64 = 0;
@@ -89,13 +203,13 @@ module TrinityMemoryLive {
         return pos as i64;
     }
 
-    // The first key-value pair named `key`. Returns 0 (out.found tells
-    // whether it exists) or TF_ERR_CONTAINER.
+    // The first key whose name, read as a C string, is `key` (gguf_find_key
+    // compares with strcmp). Returns 0 (out.found says whether it exists) or
+    // TF_ERR_CONTAINER. Call it on headers tlv_walk has accepted.
     fn tlv_key(data: []u8, size: usize, key: str, key_size: usize, out: *TLVKey) -> i32 {
         var scratch: TFTensorInfo;
         out.found = false; out.vtype = 0; out.at = 0; out.elem = 0; out.count = 0; out.items = 0;
         if (size < 24) { return TF_ERR_CONTAINER; }
-        if (tf_read_u32(data, 0) != 0x46554747 || tf_read_u32(data, 4) != 3) { return TF_ERR_CONTAINER; }
         var keys: u64 = tf_read_u64(data, 16);
         var pos: u64 = 24;
         var k: u64 = 0;
@@ -107,7 +221,8 @@ module TrinityMemoryLive {
             var value_at: u64 = pos + 12 + length;
             var next: i64 = tf_gguf_skip(data, size, value_at, vtype, &scratch);
             if (next < 0) { return TF_ERR_CONTAINER; }
-            if (!out.found && tf_same_text(data, (pos + 8) as usize, length as usize, key, key_size)) {
+            var name_size: u64 = tlv_cstr(data, pos + 8, length);
+            if (!out.found && tf_same_text(data, (pos + 8) as usize, name_size as usize, key, key_size)) {
                 out.found = true;
                 out.vtype = vtype;
                 out.at = value_at;
@@ -123,25 +238,387 @@ module TrinityMemoryLive {
         return 0;
     }
 
-    // A string value (type 8) at `at` that equals `text`.
-    fn tlv_text_at(data: []u8, at: u64, text: str, text_size: usize) -> bool {
-        var length: u64 = tf_read_u64(data, at as usize);
-        if (length != (text_size as u64)) { return false; }
-        return tf_same_text(data, (at + 8) as usize, length as usize, text, text_size);
-    }
-
-    fn tlv_same_bytes(data: []u8, a: u64, b: u64, length: u64) -> bool {
-        var i: u64 = 0;
-        while (i < length) {
-            if (data[(a + i) as usize] != data[(b + i) as usize]) { return false; }
-            i = i + 1;
+    // The key `<arch>` + `suffix`, where `arch` is the string value at
+    // arch_at (up to its NUL), read as a strict u32 (the loaders' get_key).
+    // Returns the value, or 0 when the key is missing or not a u32.
+    fn tlv_arch_u32(data: []u8, size: usize, arch_at: u64, suffix: str, suffix_size: usize) -> u64 {
+        var scratch: TFTensorInfo;
+        var arch_size: u64 = tlv_cstr(data, arch_at + 8, tf_read_u64(data, arch_at as usize));
+        var keys: u64 = tf_read_u64(data, 16);
+        var pos: u64 = 24;
+        var k: u64 = 0;
+        while (k < keys) {
+            if (pos + 8 > (size as u64)) { return 0; }
+            var length: u64 = tf_read_u64(data, pos as usize);
+            if (length > 65535 || pos + 12 + length > (size as u64)) { return 0; }
+            var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
+            var value_at: u64 = pos + 12 + length;
+            var next: i64 = tf_gguf_skip(data, size, value_at, vtype, &scratch);
+            if (next < 0) { return 0; }
+            var name_size: u64 = tlv_cstr(data, pos + 8, length);
+            if (name_size == arch_size + (suffix_size as u64)
+                && tlv_same_bytes(data, pos + 8, arch_at + 8, arch_size)
+                && tf_same_text(data, (pos + 8 + arch_size) as usize, suffix_size, suffix, suffix_size)) {
+                if (vtype != 4) { return 0; }
+                return tf_read_u32(data, value_at as usize) as u64;
+            }
+            pos = next as u64;
+            k = k + 1;
         }
-        return true;
+        return 0;
     }
 
-    // The fork's get_key: a missing optional key is fine, a present one must
-    // have exactly the expected GGUF type (llama-model-loader.cpp GKV::get_kv).
-    // The fork's get_arr (llama-model-loader.cpp:310-352): a key that is
+    // ---- byte counts ---------------------------------------------------------------
+
+    // ggml_nbytes of a tensor in `runtime`: 0 when any dim is 0 (ggml.c:
+    // ggml_nbytes returns 0 for a tensor with no elements), 2^64 - 1 when the
+    // id has no traits there or the TL2 rule does not apply.
+    fn tlv_nbytes(runtime: i32, type_id: u32, ne0: u64, ne1: u64, ne2: u64, ne3: u64) -> u64 {
+        var top: u64 = 0xffffffffffffffff;
+        if (ne0 == 0 || ne1 == 0 || ne2 == 0 || ne3 == 0) { return 0; }
+        var blck: u64 = trt_blck(runtime, type_id);
+        var bytes: u64 = trt_bytes(runtime, type_id);
+        if (blck == 0 || bytes == 0) { return top; }
+        var rule: i32 = trt_rule(runtime, type_id);
+        if (rule == TRT_RULE_I2S) {
+            return (ne0 * ne1 * ne2 * ne3 * bytes) / 4 + 32;
+        }
+        if (rule == TRT_RULE_TL2) {
+            if (ne0 < 256) { return top; }
+            var n: u64 = (ne0 - 256) * ne1 / 3 * 5 / 8 + 256 * ne1 / 2 * 4 / 8;
+            if (n % 32 != 0) { n = 32 - n % 32 + n; }
+            return n + 32;
+        }
+        return (ne0 / blck) * bytes * ne1 * ne2 * ne3;
+    }
+
+    // The ternary layout of a type id as `runtime` reads it (the format ids of
+    // t27/formats.t27), 0 when it is not one.
+    fn tlv_ternary(runtime: i32, type_id: u32) -> i32 {
+        var format: i32 = tf_format_of_gguf(type_id, runtime == TRT_PRISMML, runtime == TRT_BITNET_CPP);
+        if (format < 0) { return 0; }
+        return format;
+    }
+
+    // The layout (Q2_0, PQ2_0, TQ2_0, TQ1_0, PTQ1_0, Q1_0 or I2_S) whose bytes
+    // for this shape fill `room`: exactly, padded to the alignment, when a
+    // record follows; else with less than one alignment unit left over. 0 when
+    // none or more than one does.
+    fn tlv_fit(ne0: u64, ne1: u64, ne2: u64, ne3: u64, room: u64, alignment: u64, last: bool) -> i32 {
+        var fit: i32 = 0;
+        var count: u32 = 0;
+        var c: u32 = 0;
+        while (c < 7) {
+            var id: u32 = 42;
+            var format: i32 = TF_Q2_0;
+            var prism: bool = false;
+            var bitnet: bool = false;
+            if (c == 1) { id = 142; format = TF_PQ2_0; prism = true; }
+            if (c == 2) { id = 35; format = TF_TQ2_0; }
+            if (c == 3) { id = 34; format = TF_TQ1_0; }
+            if (c == 4) { id = 143; format = TF_PTQ1_0; prism = true; }
+            if (c == 5) { id = 41; format = TF_Q1_0; }
+            if (c == 6) { id = 36; format = TF_I2_S; bitnet = true; }
+            var bytes: u64 = tf_gguf_record_bytes(id, prism, bitnet, ne0, ne1, ne2, ne3);
+            var fills: bool = false;
+            if (bytes != 0 && bytes != 0xffffffffffffffff) {
+                if (last) { fills = bytes <= room && room - bytes < alignment; }
+                else { fills = tlv_pad(bytes, alignment) == room; }
+            }
+            if (fills) { fit = format; count = count + 1; }
+            c = c + 1;
+        }
+        if (count == 1) { return fit; }
+        return 0;
+    }
+
+    // ---- the header as gguf.cpp reads it ---------------------------------------------
+
+    fn tlv_reset(out: *TLVWalk) {
+        out.status = 0; out.record = 0xffffffffffffffff; out.expected = 0; out.found = 0; out.needed = 0;
+        out.version = 0; out.keys = 0; out.tensors = 0; out.records_at = 0; out.data_start = 0;
+        out.alignment = 32; out.ternary = 0; out.ternary_ok = 0; out.read = 0; out.prism = false; out.bitnet = false;
+    }
+
+    // Returns out.status. With capacity >= out.tensors, status[i] holds for
+    // record i: the format id of a ternary record whose bytes fill its place,
+    // 0 for any other record that passes, or a negative status (the record's
+    // own refusal, or for a ternary record TF_ERR_EXTENT when its bytes run
+    // into the next record, TLV_ERR_OFFSETS when they stop short of it,
+    // TLV_ERR_BOUNDS past the end of the file); fit[i] the layout that fills
+    // the place instead (tlv_fit); type_ids[i] its type id; name_at[i] and
+    // name_size[i] where its name is (up to the first NUL). The per-record
+    // statuses cover every record whose shape could be read, also after the
+    // first refusal, so a caller can list them all.
+    fn tlv_walk(data: []u8, size: usize, file_size: u64, runtime: i32, status: []i32, fit: []i32,
+                type_ids: []u32, name_at: []u64, name_size: []u64, capacity: usize, out: *TLVWalk) -> i32 {
+        var scratch: TFTensorInfo;
+        var top: u64 = 0xffffffffffffffff;
+        tlv_reset(out);
+        if (size < 4) { out.needed = 4; out.status = TF_ERR_TRUNCATED; return out.status; }
+        if (!tf_same_text(data, 0, 4, "GGUF", 4)) { out.status = TLV_ERR_MAGIC; return out.status; }
+        if (size < 8) { out.needed = 8; out.status = TF_ERR_TRUNCATED; return out.status; }
+        var version: u32 = tf_read_u32(data, 4);
+        out.version = version;
+        if (version == 0) { out.status = TLV_ERR_VERSION; return out.status; }
+        if ((version & 0xffff) == 0) { out.status = TLV_ERR_ENDIAN; return out.status; }
+        if (version == 1 || version > 3) { out.status = TLV_ERR_VERSION; return out.status; }
+        if (size < 24) { out.needed = 24; out.status = TF_ERR_TRUNCATED; return out.status; }
+        var tensors: u64 = tf_read_u64(data, 8);
+        var keys: u64 = tf_read_u64(data, 16);
+        out.tensors = tensors;
+        out.keys = keys;
+        if (tensors > TLV_MAX_TENSORS || keys > TLV_MAX_KEYS) { out.status = TLV_ERR_LIMIT; return out.status; }
+        // Keys (gguf.cpp:558-640).
+        var pos: u64 = 24;
+        var k: u64 = 0;
+        var alignment_type: u32 = 4;
+        var alignment_found: bool = false;
+        var alignment_at: u64 = 0;
+        while (k < keys) {
+            if (pos + 8 > (size as u64)) { out.needed = pos + 8; out.status = TF_ERR_TRUNCATED; return out.status; }
+            var length: u64 = tf_read_u64(data, pos as usize);
+            if (length > 65535) { out.status = TLV_ERR_LIMIT; return out.status; }
+            if (pos + 12 + length > (size as u64)) { out.needed = pos + 12 + length; out.status = TF_ERR_TRUNCATED; return out.status; }
+            if (length == 0) { out.status = TLV_ERR_KEY; return out.status; }
+            // A duplicate compares all the bytes of both keys (std::string ==).
+            var other: u64 = 24;
+            var j: u64 = 0;
+            while (j < k) {
+                var other_length: u64 = tf_read_u64(data, other as usize);
+                if (other_length == length && tlv_same_bytes(data, other + 8, pos + 8, length)) {
+                    out.status = TLV_ERR_KEY; return out.status;
+                }
+                var other_type: u32 = tf_read_u32(data, (other + 8 + other_length) as usize);
+                other = tf_gguf_skip(data, size, other + 12 + other_length, other_type, &scratch) as u64;
+                j = j + 1;
+            }
+            var vtype: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
+            var value_at: u64 = pos + 12 + length;
+            if (vtype > 12) { out.status = TLV_ERR_KEY; return out.status; }
+            var next: i64 = tf_gguf_skip(data, size, value_at, vtype, &scratch);
+            if (next == (TF_ERR_TRUNCATED as i64)) { out.needed = scratch.needed; out.status = TF_ERR_TRUNCATED; return out.status; }
+            if (next < 0) { out.status = TLV_ERR_KEY; return out.status; }
+            var name: u64 = tlv_cstr(data, pos + 8, length);
+            if (tf_same_text(data, (pos + 8) as usize, name as usize, "general.alignment", 17) && !alignment_found) {
+                alignment_found = true; alignment_type = vtype; alignment_at = value_at;
+            }
+            if (name > 5 && tf_same_text(data, (pos + 8) as usize, 6, "prism.", 6)) { out.prism = true; }
+            if (vtype == 8 && tf_same_text(data, (pos + 8) as usize, name as usize, "general.architecture", 20)
+                && tlv_text_at(data, value_at, "bitnet-b1.58", 12)) { out.bitnet = true; }
+            pos = next as u64;
+            k = k + 1;
+        }
+        var alignment: u64 = 32;
+        if (alignment_found) {
+            if (alignment_type != 4) { out.status = TLV_ERR_ALIGNMENT; return out.status; }
+            alignment = tf_read_u32(data, alignment_at as usize) as u64;
+            if (alignment == 0 || (alignment & (alignment - 1)) != 0) { out.status = TLV_ERR_ALIGNMENT; return out.status; }
+        }
+        out.alignment = alignment;
+        out.records_at = pos;
+        // Tensor records (gguf.cpp:640-760): pass 1 reads every record and
+        // keeps the first refusal; per-record statuses continue after it.
+        var name_work: u64 = 0;
+        var first: i32 = 0;
+        var first_record: u64 = top;
+        var t: u64 = 0;
+        while (t < tensors) {
+            if (pos + 8 > (size as u64)) { out.needed = pos + 8; out.status = TF_ERR_TRUNCATED; return out.status; }
+            var length: u64 = tf_read_u64(data, pos as usize);
+            if (length > 65535) { out.status = TLV_ERR_LIMIT; return out.status; }
+            if (pos + 12 + length > (size as u64)) { out.needed = pos + 12 + length; out.status = TF_ERR_TRUNCATED; return out.status; }
+            var dims: u32 = tf_read_u32(data, (pos + 8 + length) as usize);
+            var own: i32 = 0;
+            if (length >= 64) { own = TLV_ERR_NAME; }
+            var cname: u64 = tlv_cstr(data, pos + 8, length);
+            if (own == 0) {
+                // Unique up to the first NUL (strcmp on ggml_set_name's copy).
+                name_work = name_work + t;
+                if (name_work > TLV_MAX_NAME_WORK) { out.status = TLV_ERR_LIMIT; return out.status; }
+                var other: u64 = out.records_at;
+                var j: u64 = 0;
+                while (j < t) {
+                    var other_length: u64 = tf_read_u64(data, other as usize);
+                    var other_dims: u64 = tf_read_u32(data, (other + 8 + other_length) as usize) as u64;
+                    var other_name: u64 = tlv_cstr(data, other + 8, other_length);
+                    if (other_length < 64 && other_name == cname && tlv_same_bytes(data, other + 8, pos + 8, cname)) {
+                        own = TLV_ERR_NAME;
+                    }
+                    other = other + 12 + other_length + 8 * other_dims + 12;
+                    j = j + 1;
+                }
+            }
+            if (dims > 4) {
+                // gguf.cpp checks the name before the dims.
+                if (first == 0 && own != 0) { first = own; first_record = t; }
+                if (first == 0) { first = TLV_ERR_SHAPE; first_record = t; }
+                out.status = first; out.record = first_record; return out.status;
+            }
+            var end: u64 = pos + 12 + length + 8 * (dims as u64) + 12;
+            if (end > (size as u64)) { out.needed = end; out.status = TF_ERR_TRUNCATED; return out.status; }
+            var dim_at: u64 = pos + 12 + length;
+            var ne0: u64 = 1;
+            var ne1: u64 = 1;
+            var ne2: u64 = 1;
+            var ne3: u64 = 1;
+            if (dims > 0) { ne0 = tf_read_u64(data, dim_at as usize); }
+            if (dims > 1) { ne1 = tf_read_u64(data, (dim_at + 8) as usize); }
+            if (dims > 2) { ne2 = tf_read_u64(data, (dim_at + 16) as usize); }
+            if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
+            var most: u64 = 0x7fffffffffffffff;
+            if (own == 0 && (ne0 > most || ne1 > most || ne2 > most || ne3 > most)) { own = TLV_ERR_SHAPE; }
+            if (own == 0 && ne0 != 0 && ne1 != 0 && ne2 != 0 && ne3 != 0) {
+                if (most / ne1 <= ne0 || most / ne2 <= ne0 * ne1 || most / ne3 <= ne0 * ne1 * ne2) { own = TLV_ERR_SHAPE; }
+            }
+            var type_id: u32 = tf_read_u32(data, (dim_at + 8 * (dims as u64)) as usize);
+            if (own == 0 && (type_id >= trt_type_count(runtime) || trt_blck(runtime, type_id) == 0)) { own = TLV_ERR_TYPE; }
+            if (own == 0 && ne0 % trt_blck(runtime, type_id) != 0) { own = TLV_ERR_ROW; }
+            // The byte size must be representable (gguf.cpp: elements / block <= SIZE_MAX / type size).
+            if (own == 0 && ne0 != 0 && ne1 != 0 && ne2 != 0 && ne3 != 0
+                && (ne0 * ne1 * ne2 * ne3) / trt_blck(runtime, type_id) > top / trt_bytes(runtime, type_id)) {
+                own = TLV_ERR_SHAPE;
+            }
+            if (own != 0 && first == 0) { first = own; first_record = t; }
+            if (t < (capacity as u64)) {
+                status[t as usize] = own; fit[t as usize] = 0; type_ids[t as usize] = type_id;
+                name_at[t as usize] = pos + 8; name_size[t as usize] = cname;
+            }
+            pos = end;
+            t = t + 1;
+            out.read = t;
+        }
+        var data_start: u64 = pos;
+        if (tensors > 0) { data_start = tlv_pad(pos, alignment); }
+        out.data_start = data_start;
+        out.needed = data_start;
+        // Pass 2: offsets in record order (gguf.cpp:776-801), the file's end
+        // (src/llama-model-loader.h:40-50), and the ternary records' places.
+        var expected: u64 = 0;
+        var offsets_ok: bool = first == 0;
+        pos = out.records_at;
+        t = 0;
+        while (t < tensors) {
+            var length: u64 = tf_read_u64(data, pos as usize);
+            var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+            var dim_at: u64 = pos + 12 + length;
+            var ne0: u64 = 1;
+            var ne1: u64 = 1;
+            var ne2: u64 = 1;
+            var ne3: u64 = 1;
+            if (dims > 0) { ne0 = tf_read_u64(data, dim_at as usize); }
+            if (dims > 1) { ne1 = tf_read_u64(data, (dim_at + 8) as usize); }
+            if (dims > 2) { ne2 = tf_read_u64(data, (dim_at + 16) as usize); }
+            if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
+            var type_id: u32 = tf_read_u32(data, (dim_at + 8 * dims) as usize);
+            var offset: u64 = tf_read_u64(data, (dim_at + 8 * dims + 4) as usize);
+            var next_pos: u64 = dim_at + 8 * dims + 12;
+            var own: i32 = 0;
+            if (t < (capacity as u64)) { own = status[t as usize]; }
+            var bytes: u64 = 0;
+            if (own == 0) { bytes = tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3); }
+            if (offsets_ok) {
+                if (offset != expected) {
+                    first = TLV_ERR_OFFSETS; first_record = t; out.expected = expected; out.found = offset;
+                    offsets_ok = false;
+                } else {
+                    var padded: u64 = tlv_pad(bytes, alignment);
+                    if (top - expected < padded) { first = TLV_ERR_SHAPE; first_record = t; offsets_ok = false; }
+                    else { expected = expected + padded; }
+                }
+            }
+            var format: i32 = tlv_ternary(runtime, type_id);
+            if (format > 0 && own == 0) {
+                out.ternary = out.ternary + 1;
+                // The place of the record: up to the next record in record
+                // order when that one starts at or above it, else to the end of the file.
+                var last: bool = true;
+                var room: u64 = 0;
+                if (t + 1 < tensors) {
+                    var n_length: u64 = tf_read_u64(data, next_pos as usize);
+                    var n_dims: u64 = tf_read_u32(data, (next_pos + 8 + n_length) as usize) as u64;
+                    var n_offset: u64 = tf_read_u64(data, (next_pos + 12 + n_length + 8 * n_dims + 4) as usize);
+                    if (n_offset >= offset) { last = false; room = n_offset - offset; }
+                }
+                if (last) {
+                    if (data_start <= file_size && file_size - data_start >= offset) { room = file_size - data_start - offset; }
+                }
+                var mine: i32 = format;
+                if (last && (data_start > file_size || file_size - data_start < offset || room < bytes)) { mine = TLV_ERR_BOUNDS; }
+                if (!last && room < bytes) { mine = TF_ERR_EXTENT; }
+                if (!last && room >= bytes && room != tlv_pad(bytes, alignment)) { mine = TLV_ERR_OFFSETS; }
+                if (mine == format) { out.ternary_ok = out.ternary_ok + 1; }
+                if (t < (capacity as u64)) {
+                    status[t as usize] = mine;
+                    if (mine < 0) { fit[t as usize] = tlv_fit(ne0, ne1, ne2, ne3, room, alignment, last); }
+                }
+            }
+            pos = next_pos;
+            t = t + 1;
+        }
+        if (first == 0) {
+            // The loader: every tensor's data inside the file.
+            pos = out.records_at;
+            t = 0;
+            while (t < tensors && first == 0) {
+                var length: u64 = tf_read_u64(data, pos as usize);
+                var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                var dim_at: u64 = pos + 12 + length;
+                var ne0: u64 = 1;
+                var ne1: u64 = 1;
+                var ne2: u64 = 1;
+                var ne3: u64 = 1;
+                if (dims > 0) { ne0 = tf_read_u64(data, dim_at as usize); }
+                if (dims > 1) { ne1 = tf_read_u64(data, (dim_at + 8) as usize); }
+                if (dims > 2) { ne2 = tf_read_u64(data, (dim_at + 16) as usize); }
+                if (dims > 3) { ne3 = tf_read_u64(data, (dim_at + 24) as usize); }
+                var type_id: u32 = tf_read_u32(data, (dim_at + 8 * dims) as usize);
+                var offset: u64 = tf_read_u64(data, (dim_at + 8 * dims + 4) as usize);
+                var bytes: u64 = tlv_nbytes(runtime, type_id, ne0, ne1, ne2, ne3);
+                if (data_start > file_size || top - data_start < offset || top - data_start - offset < bytes
+                    || data_start + offset + bytes > file_size) {
+                    first = TLV_ERR_BOUNDS; first_record = t; out.expected = data_start + offset + bytes; out.found = file_size;
+                }
+                pos = dim_at + 8 * dims + 12;
+                t = t + 1;
+            }
+        }
+        out.status = first;
+        out.record = first_record;
+        return out.status;
+    }
+
+    // The runtime a file is written for, to read its layouts in: the PrismML
+    // fork when a key starts "prism." or a record has id 142 or 143; bitnet.cpp
+    // when the architecture is bitnet-b1.58 or a record has id 36 or 38;
+    // llama.cpp otherwise. Call after tlv_walk accepted the header's structure.
+    fn tlv_native(data: []u8, size: usize, walk: *TLVWalk) -> i32 {
+        if (walk.prism) { return TRT_PRISMML; }
+        if (walk.bitnet) { return TRT_BITNET_CPP; }
+        var pos: u64 = walk.records_at;
+        var t: u64 = 0;
+        var fork: bool = false;
+        var bitnet: bool = false;
+        while (t < walk.tensors) {
+            if (pos + 12 > (size as u64)) { return TRT_LLAMA_CPP; }
+            var length: u64 = tf_read_u64(data, pos as usize);
+            if (pos + 12 + length > (size as u64)) { return TRT_LLAMA_CPP; }
+            var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+            if (dims > 4 || pos + 12 + length + 8 * dims + 12 > (size as u64)) { return TRT_LLAMA_CPP; }
+            var type_id: u32 = tf_read_u32(data, (pos + 12 + length + 8 * dims) as usize);
+            if (type_id == 142 || type_id == 143) { fork = true; }
+            if (type_id == 36 || type_id == 38) { bitnet = true; }
+            pos = pos + 12 + length + 8 * dims + 12;
+            t = t + 1;
+        }
+        if (fork) { return TRT_PRISMML; }
+        if (bitnet) { return TRT_BITNET_CPP; }
+        return TRT_LLAMA_CPP;
+    }
+
+    // ---- prism.hadamard.* --------------------------------------------------------
+
+    // The fork's get_arr (src/llama-model-loader.cpp:310-352): a key that is
     // missing or not an array counts as missing; string arrays need string
     // elements, integer arrays int32 or uint32 elements.
     fn tlv_string_array(key: *TLVKey) -> i32 {
@@ -156,8 +633,7 @@ module TrinityMemoryLive {
         return 0;
     }
 
-    // ---- verified weight paths (src/llama-model.cpp:1279-1303) ------------
-
+    // Verified weight paths (src/llama-model.cpp:1279-1303).
     fn tlv_kind(data: []u8, at: usize, size: usize) -> bool {
         if (tf_same_text(data, at, size, "attn_q.weight", 13)) { return true; }
         if (tf_same_text(data, at, size, "attn_k.weight", 13)) { return true; }
@@ -191,13 +667,10 @@ module TrinityMemoryLive {
         return tlv_kind(data, (at + p) as usize, (length - p) as usize);
     }
 
-    // ---- tensor records --------------------------------------------------------
-
-    // ne[0] of the tensor named data[name_at .. name_at + name_size), or
-    // 2^64 - 1 when no record has that name. `records` from tlv_records.
-    fn tlv_tensor_ne0(data: []u8, size: usize, records: u64, name_at: u64, name_size: u64) -> u64 {
+    // ne[0] of the tensor named data[name_at .. name_at + name_size) (C
+    // strings on both sides), or 2^64 - 1 when no record has that name.
+    fn tlv_tensor_ne0(data: []u8, size: usize, records: u64, tensors: u64, name_at: u64, name_size: u64) -> u64 {
         var none: u64 = 0xffffffffffffffff;
-        var tensors: u64 = tf_read_u64(data, 8);
         var pos: u64 = records;
         var t: u64 = 0;
         while (t < tensors) {
@@ -205,9 +678,10 @@ module TrinityMemoryLive {
             var length: u64 = tf_read_u64(data, pos as usize);
             if (length > 65535 || pos + 12 + length > (size as u64)) { return none; }
             var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
-            if (dims == 0 || dims > 4) { return none; }
-            if (pos + 12 + length + 8 * dims + 12 > (size as u64)) { return none; }
-            if (length == name_size && tlv_same_bytes(data, pos + 8, name_at, length)) {
+            if (dims > 4 || pos + 12 + length + 8 * dims + 12 > (size as u64)) { return none; }
+            var cname: u64 = tlv_cstr(data, pos + 8, length);
+            if (cname == name_size && tlv_same_bytes(data, pos + 8, name_at, cname)) {
+                if (dims == 0) { return 1; }
                 return tf_read_u64(data, (pos + 12 + length) as usize);
             }
             pos = pos + 12 + length + 8 * dims + 12;
@@ -216,9 +690,9 @@ module TrinityMemoryLive {
         return none;
     }
 
-    // Whether the explicit sign table holds a vector of `width` values: the
-    // widths array at `widths` (int32 or uint32 elements, validated).
-    fn tlv_has_width(data: []u8, widths: *TLVKey, width: u64) -> bool {
+    // Whether the explicit sign table holds a vector of width (uint32_t) ne0.
+    fn tlv_has_width(data: []u8, widths: *TLVKey, ne0: u64) -> bool {
+        var width: u64 = ne0 & 0xffffffff;
         var i: u64 = 0;
         while (i < widths.count) {
             if ((tf_read_u32(data, (widths.items + 4 * i) as usize) as u64) == width) { return true; }
@@ -227,22 +701,26 @@ module TrinityMemoryLive {
         return false;
     }
 
-    // One listed weight: a tensor of the file whose ne[0] the block size
-    // divides, with a sign vector of width ne[0] in explicit mode.
-    fn tlv_weight_ok(data: []u8, size: usize, records: u64, name_at: u64, name_size: u64, block: u32,
-                     explicit_signs: bool, widths: *TLVKey) -> bool {
-        var ne0: u64 = tlv_tensor_ne0(data, size, records, name_at, name_size);
+    // One listed entry (src/llama-model.cpp:1971-2095), in the fork's order: a
+    // tensor of the file, ne[0] divisible by the block size, a sign vector of
+    // width ne[0] in explicit mode, then for a grouped GDN ssm_out weight the
+    // head geometry (n_k > 0, n_v > 0, n_v % n_k == 0, ne[0] % n_v == 0 with
+    // n_v = <arch>.ssm.time_step_rank and n_k = <arch>.ssm.group_count).
+    fn tlv_entry_ok(data: []u8, size: usize, records: u64, tensors: u64, name_at: u64, name_size: u64, block: u32,
+                    explicit_signs: bool, widths: *TLVKey, gdn: bool, n_v: u64, n_k: u64) -> bool {
+        var ne0: u64 = tlv_tensor_ne0(data, size, records, tensors, name_at, name_size);
         if (ne0 == 0xffffffffffffffff) { return false; }
         if (ne0 % (block as u64) != 0) { return false; }
         if (explicit_signs && !tlv_has_width(data, widths, ne0)) { return false; }
+        if (gdn && tlv_contains(data, name_at, name_size, ".ssm_out.", 9)) {
+            if (n_k == 0 || n_v == 0 || n_v % n_k != 0 || ne0 % n_v != 0) { return false; }
+        }
         return true;
     }
 
-    // ---- prism.hadamard.* --------------------------------------------------------
-
     fn tlv_hadamard(data: []u8, size: usize, out: *TLVHadamard) -> i32 {
         out.present = false; out.block_size = 0; out.names = 0; out.inverse = 0;
-        out.widths = 0; out.signs = 0; out.explicit_signs = false; out.index = 0;
+        out.widths = 0; out.signs = 0; out.explicit_signs = false; out.gdn_v_grouped = false; out.index = 0;
         var version: TLVKey;
         var block_key: TLVKey;
         var transform: TLVKey;
@@ -254,8 +732,10 @@ module TrinityMemoryLive {
         var gdn: TLVKey;
         var inverse: TLVKey;
         var arch: TLVKey;
+        widths.found = false; widths.count = 0; widths.items = 0;
         var records: i64 = tlv_records(data, size);
         if (records < 0) { return records as i32; }
+        var tensors: u64 = tf_read_u64(data, 8);
         // :1196-1200 version (optional u32, must be 1)
         var status: i32 = tlv_key(data, size, "prism.hadamard.version", 22, &version);
         if (status < 0) { return status; }
@@ -294,6 +774,7 @@ module TrinityMemoryLive {
         var explicit_signs: bool = tlv_text_at(data, mode.at, "explicit", 8);
         if (!explicit_signs && !tlv_text_at(data, mode.at, "identity", 8)) { return TLV_ERR_HADAMARD_TRANSFORM; }
         if (names.count == 0) { out.index = 0; return TLV_ERR_HADAMARD_NAME; }
+        if (names.count > TLV_MAX_TENSORS || names.count * tensors > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
         // :1230-1257 explicit signs: widths partition the values, each a
         // positive multiple of the block size, every value +1 or -1
         out.explicit_signs = explicit_signs;
@@ -327,10 +808,13 @@ module TrinityMemoryLive {
             }
             if (offset != values.count) { out.index = offset; return TLV_ERR_HADAMARD_SIGNS; }
         }
-        // :1259 gdn_v_grouped (optional bool)
+        // :1259 gdn_v_grouped (optional bool; any nonzero byte is true)
         status = tlv_key(data, size, "prism.hadamard.gdn_v_grouped", 28, &gdn);
         if (status < 0) { return status; }
         if (gdn.found && gdn.vtype != 7) { return TLV_ERR_HADAMARD_TYPE; }
+        var gdn_on: bool = false;
+        if (gdn.found && data[gdn.at as usize] != 0) { gdn_on = true; }
+        out.gdn_v_grouped = gdn_on;
         // :1264-1277 verified architectures
         status = tlv_key(data, size, "general.architecture", 20, &arch);
         if (status < 0) { return status; }
@@ -348,15 +832,17 @@ module TrinityMemoryLive {
         while (i < names.count) {
             var length: u64 = tf_read_u64(data, at as usize);
             var name_at: u64 = at + 8;
-            if (!tlv_foldable(data, name_at, length)) { out.index = i; return TLV_ERR_HADAMARD_NAME; }
-            if (dspark && !tf_same_text(data, name_at as usize, length as usize, "output.weight", 13)) {
+            var cname: u64 = tlv_cstr(data, name_at, length);
+            if (!tlv_foldable(data, name_at, cname)) { out.index = i; return TLV_ERR_HADAMARD_NAME; }
+            if (dspark && !tf_same_text(data, name_at as usize, cname as usize, "output.weight", 13)) {
                 out.index = i; return TLV_ERR_HADAMARD_NAME;
             }
             var other: u64 = names.items;
             var j: u64 = 0;
             while (j < i) {
                 var other_length: u64 = tf_read_u64(data, other as usize);
-                if (other_length == length && tlv_same_bytes(data, other + 8, name_at, length)) {
+                var other_name: u64 = tlv_cstr(data, other + 8, other_length);
+                if (other_name == cname && tlv_same_bytes(data, other + 8, name_at, cname)) {
                     out.index = i; return TLV_ERR_HADAMARD_NAME;
                 }
                 other = other + 8 + other_length;
@@ -373,20 +859,23 @@ module TrinityMemoryLive {
             if (inverse.elem != 8) { return TLV_ERR_HADAMARD_TYPE; }
             inverse_count = inverse.count;
         }
+        if (inverse_count > TLV_MAX_TENSORS) { return TLV_ERR_LIMIT; }
         out.inverse = inverse_count;
         at = inverse.items;
         i = 0;
         while (i < inverse_count) {
             var length: u64 = tf_read_u64(data, at as usize);
             var name_at: u64 = at + 8;
-            if (dspark || !tf_same_text(data, name_at as usize, length as usize, "token_embd.weight", 17)) {
+            var cname: u64 = tlv_cstr(data, name_at, length);
+            if (dspark || !tf_same_text(data, name_at as usize, cname as usize, "token_embd.weight", 17)) {
                 out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
             }
             var listed: u64 = names.items;
             var j: u64 = 0;
             while (j < names.count) {
                 var listed_length: u64 = tf_read_u64(data, listed as usize);
-                if (listed_length == length && tlv_same_bytes(data, listed + 8, name_at, length)) {
+                var listed_name: u64 = tlv_cstr(data, listed + 8, listed_length);
+                if (listed_name == cname && tlv_same_bytes(data, listed + 8, name_at, cname)) {
                     out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
                 }
                 listed = listed + 8 + listed_length;
@@ -396,7 +885,8 @@ module TrinityMemoryLive {
             j = 0;
             while (j < i) {
                 var before_length: u64 = tf_read_u64(data, before as usize);
-                if (before_length == length && tlv_same_bytes(data, before + 8, name_at, length)) {
+                var before_name: u64 = tlv_cstr(data, before + 8, before_length);
+                if (before_name == cname && tlv_same_bytes(data, before + 8, name_at, cname)) {
                     out.index = names.count + i; return TLV_ERR_HADAMARD_NAME;
                 }
                 before = before + 8 + before_length;
@@ -405,14 +895,16 @@ module TrinityMemoryLive {
             at = name_at + length;
             i = i + 1;
         }
-        // :1971-2050 every listed weight, then every inverse table: a tensor
-        // of the file, ne[0] divisible by the block size, a sign vector of
-        // width ne[0] in explicit mode
+        // :1971-2095 every listed weight, then every inverse table
+        var n_v: u64 = tlv_arch_u32(data, size, arch.at, ".ssm.time_step_rank", 19);
+        var n_k: u64 = tlv_arch_u32(data, size, arch.at, ".ssm.group_count", 16);
         at = names.items;
         i = 0;
         while (i < names.count) {
             var length: u64 = tf_read_u64(data, at as usize);
-            if (!tlv_weight_ok(data, size, records as u64, at + 8, length, block, explicit_signs, &widths)) {
+            var cname: u64 = tlv_cstr(data, at + 8, length);
+            if (!tlv_entry_ok(data, size, records as u64, tensors, at + 8, cname, block, explicit_signs, &widths,
+                              gdn_on, n_v, n_k)) {
                 out.index = i; return TLV_ERR_HADAMARD_TENSOR;
             }
             at = at + 8 + length;
@@ -422,7 +914,9 @@ module TrinityMemoryLive {
         i = 0;
         while (i < inverse_count) {
             var length: u64 = tf_read_u64(data, at as usize);
-            if (!tlv_weight_ok(data, size, records as u64, at + 8, length, block, explicit_signs, &widths)) {
+            var cname: u64 = tlv_cstr(data, at + 8, length);
+            if (!tlv_entry_ok(data, size, records as u64, tensors, at + 8, cname, block, explicit_signs, &widths,
+                              gdn_on, n_v, n_k)) {
                 out.index = names.count + i; return TLV_ERR_HADAMARD_TENSOR;
             }
             at = at + 8 + length;
@@ -431,76 +925,52 @@ module TrinityMemoryLive {
         return 0;
     }
 
-    // ---- layout of a record rejected on its extent (issue #50) ----------------
+    // ---- the verdict of one runtime ------------------------------------------------------
 
-    // Whether a record of `bytes` bytes fills the space it has: up to the next
-    // record, padded to the alignment; or, for the last record, up to the end
-    // of the file with less than one alignment unit left over.
-    fn tlv_fills(info: *TFTensorInfo, file_size: u64, bytes: u64) -> bool {
-        if (bytes == 0) { return false; }
-        var padded: u64 = ((bytes + info.alignment - 1) / info.alignment) * info.alignment;
-        if (info.has_next) { return info.next_offset - info.offset == padded; }
-        if (info.data_start > file_size || file_size - info.data_start < info.offset) { return false; }
-        var room: u64 = file_size - info.data_start - info.offset;
-        return bytes <= room && room - bytes < info.alignment;
+    // In the runtime's order: its GGUF reader and the loader's file-end rule
+    // (tlv_walk), the architecture (src/llama-model.cpp:359-363: an unknown one
+    // is refused), then in the PrismML fork the Hadamard rules. A runtime that
+    // does not apply prism.hadamard.* accepts such a file but ignores the
+    // rotation it declares.
+    fn tlv_runtime(data: []u8, size: usize, file_size: u64, runtime: i32, out: *TLVRun) -> i32 {
+        var walk: TLVWalk;
+        var none_i: [1]i32 = [0];
+        var none_f: [1]i32 = [0];
+        var none_t: [1]u32 = [0];
+        var none_a: [1]u64 = [0];
+        var none_s: [1]u64 = [0];
+        out.verdict = TLV_RUN_REFUSES; out.status = 0; out.record = 0xffffffffffffffff; out.expected = 0; out.found = 0;
+        var status: i32 = tlv_walk(data, size, file_size, runtime, none_i, none_f, none_t, none_a, none_s, 0, &walk);
+        out.record = walk.record; out.expected = walk.expected; out.found = walk.found;
+        if (status == TF_ERR_TRUNCATED || status == TLV_ERR_LIMIT) { out.status = status; return status; }
+        if (status < 0) { out.status = status; return TLV_RUN_REFUSES; }
+        var arch: TLVKey;
+        status = tlv_key(data, size, "general.architecture", 20, &arch);
+        if (status < 0) { out.status = status; return TLV_RUN_REFUSES; }
+        if (!arch.found || arch.vtype != 8) { out.status = TLV_ERR_ARCH; return TLV_RUN_REFUSES; }
+        var arch_size: u64 = tlv_cstr(data, arch.at + 8, tf_read_u64(data, arch.at as usize));
+        if (!trt_arch_known(runtime, data, (arch.at + 8) as usize, arch_size as usize)) {
+            out.status = TLV_ERR_ARCH; return TLV_RUN_REFUSES;
+        }
+        var rotation: TLVHadamard;
+        status = tlv_hadamard(data, size, &rotation);
+        if (trt_hadamard(runtime)) {
+            if (status < 0) { out.status = status; out.record = rotation.index; return TLV_RUN_REFUSES; }
+            out.verdict = TLV_RUN_ACCEPTS; return TLV_RUN_ACCEPTS;
+        }
+        if (rotation.present) { out.verdict = TLV_RUN_IGNORES_ROTATION; return TLV_RUN_IGNORES_ROTATION; }
+        out.verdict = TLV_RUN_ACCEPTS;
+        return TLV_RUN_ACCEPTS;
     }
 
-    // The format id (Q2_0, PQ2_0, TQ2_0, TQ1_0, PTQ1_0 or Q1_0) whose size for
-    // this record's shape fills the space the record has, or 0 when none or
-    // more than one does.
-    fn tlv_layout_fit(info: *TFTensorInfo, file_size: u64) -> i32 {
-        var fit: i32 = 0;
-        var count: u32 = 0;
-        if (tlv_fills(info, file_size, tf_gguf_record_bytes(42, false, false, info.d0, info.d1, info.d2, info.d3))) {
-            fit = TF_Q2_0; count = count + 1;
-        }
-        if (tlv_fills(info, file_size, tf_gguf_record_bytes(142, true, false, info.d0, info.d1, info.d2, info.d3))) {
-            fit = TF_PQ2_0; count = count + 1;
-        }
-        if (tlv_fills(info, file_size, tf_gguf_record_bytes(35, false, false, info.d0, info.d1, info.d2, info.d3))) {
-            fit = TF_TQ2_0; count = count + 1;
-        }
-        if (tlv_fills(info, file_size, tf_gguf_record_bytes(34, false, false, info.d0, info.d1, info.d2, info.d3))) {
-            fit = TF_TQ1_0; count = count + 1;
-        }
-        if (tlv_fills(info, file_size, tf_gguf_record_bytes(143, true, false, info.d0, info.d1, info.d2, info.d3))) {
-            fit = TF_PTQ1_0; count = count + 1;
-        }
-        if (tlv_fills(info, file_size, tf_gguf_record_bytes(41, false, false, info.d0, info.d1, info.d2, info.d3))) {
-            fit = TF_Q1_0; count = count + 1;
-        }
-        if (count == 1) { return fit; }
-        return 0;
-    }
-
-    // ---- fork-only type ids without the fork's marker ---------------------------
-
-    fn tlv_prism_unmarked(info: *TFTensorInfo) -> bool {
-        return !info.prism && (info.tensor_type == 142 || info.tensor_type == 143);
-    }
-
-    // One tensor record as a gguf.cpp reader sees it. First tf_gguf_check,
-    // under the fork's marker for the unmarked ids 142 and 143: no other
-    // runtime defines those ids (ggml-org GGML_TYPE_COUNT is below them), so
-    // they can only mean PQ2_0 or PTQ1_0. Then gguf.cpp's rule that tensor data
-    // are contiguous in record order, every offset equal to the padded sizes
-    // before it (ggml-org/llama.cpp@e6ab7c1a ggml/src/gguf.cpp:787-801;
-    // PrismML-Eng/llama.cpp@bdc23b56 ggml/src/gguf.cpp:781-801): a record
-    // followed by another must fill the gap to it exactly, or the reader
-    // refuses the file (TLV_ERR_OFFSETS). tf_gguf_check alone catches data
-    // that run into the next record, not a gap left over. Returns the format
-    // id, 0 for a record that is not a ternary layout, or a negative status.
-    // The marker of `info` is restored before returning.
-    fn tlv_record_check(info: *TFTensorInfo, file_size: u64) -> i32 {
-        var marked: bool = info.prism;
-        if (tlv_prism_unmarked(info)) { info.prism = true; }
-        var status: i32 = tf_gguf_check(info, file_size);
-        if (status > 0 && info.has_next) {
-            var bytes: u64 = tf_gguf_tensor_bytes(info);
-            var padded: u64 = ((bytes + info.alignment - 1) / info.alignment) * info.alignment;
-            if (info.next_offset - info.offset != padded) { status = TLV_ERR_OFFSETS; }
-        }
-        info.prism = marked;
-        return status;
+    // The file verdict from tlv_runtime's return in the native runtime and
+    // the number of ternary records tlv_walk found there: refused, undecided
+    // (truncated or past a scanner limit), no ternary layout, or ok. A runtime
+    // that ignores a declared rotation cannot be the native one.
+    fn tlv_file_verdict(run: i32, ternary: u64) -> i32 {
+        if (run == TLV_RUN_REFUSES) { return TLV_FILE_REFUSED; }
+        if (run < 0) { return TLV_FILE_UNDECIDED; }
+        if (ternary == 0) { return TLV_FILE_NO_TERNARY; }
+        return TLV_FILE_OK;
     }
 }
