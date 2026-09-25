@@ -251,6 +251,7 @@ class Loader:
         self.seq = args.first_seq & 255
         self.drain = bool(getattr(args, "drain", False))
         self.design_hz = getattr(args, "design_hz", None) or DESIGN_HZ
+        self.store_bytes: int | None = None     # from the status line `config`, once read
 
     def next_seq(self) -> int:
         seq = self.seq
@@ -300,7 +301,10 @@ class Loader:
                     lines.append(event)
                     count = (event.a >> 16) & 0xFF
             if count is not None and len(lines) == count and {e.a & 0xFFFF for e in lines} == set(range(count)):
-                return proto.decode_status(lines)
+                status = proto.decode_status(lines)
+                if "config" in status:
+                    self.store_bytes = 1 << ((status["config"] >> 8) & 255)
+                return status
             self.link.drain()
             self.guard()
         return None
@@ -504,12 +508,15 @@ def read_range(loader: Loader, addr: int, length: int, chunk: int) -> tuple[byte
 
 
 def read_margins(loader: Loader, addr: int, length: int, margin: int, chunk: int) -> dict:
-    """The `margin` bytes before and after [addr, addr + length) (clipped at 0)."""
+    """The `margin` bytes before and after [addr, addr + length), clipped at 0 and at the end of
+    the store (its size from the status line `config`, when a status was read)."""
     lo = max(0, addr - margin)
+    end = addr + length
+    above = margin if loader.store_bytes is None else max(0, min(margin, loader.store_bytes - end))
     before, _ = read_range(loader, lo, addr - lo, chunk) if addr > lo else (b"", [])
-    after, _ = read_range(loader, addr + length, margin, chunk) if margin else (b"", [])
-    return {"below": [lo, addr - lo], "above": [addr + length, margin], "below_bytes": before, "above_bytes": after,
-            "complete": len(before) == addr - lo and len(after) == margin}
+    after, _ = read_range(loader, end, above, chunk) if above else (b"", [])
+    return {"below": [lo, addr - lo], "above": [end, above], "below_bytes": before, "above_bytes": after,
+            "complete": len(before) == addr - lo and len(after) == above}
 
 
 def transfer(loader: Loader, data: bytes, addr: int, chunk: int, faults: dict[str, set[int]],
@@ -690,8 +697,8 @@ def baud_trials(loader: Loader, args, data: bytes) -> list[dict]:
 def trial_ok(trial: dict) -> bool:
     t = trial.get("transfer") or {}
     return bool(trial.get("switch", {}).get("switched") and t and t.get("acked") == t.get("chunks")
-                and t.get("identical") and trial.get("back", {}).get("switched")
-                and trial.get("status_after") is not None)
+                and t.get("identical") and (t.get("margins") is None or t["margins"].get("unchanged"))
+                and trial.get("back", {}).get("switched") and trial.get("status_after") is not None)
 
 
 def main(argv=None) -> int:
@@ -781,9 +788,11 @@ def main(argv=None) -> int:
                 link.quiet(0.3)
             loader = Loader(link, args, rng)
             record["status_before"] = loader.status()
+            record["hello_lines_before_status"] = sum(1 for e in link.events if e.kind == "line" and e.tag == "H")
             if args.wait_calib and record["status_before"] and "calib" in record["status_before"] \
                     and not proto.decode_calib(record["status_before"]["calib"])["calib_complete"]:
-                record["calib_polls"] = wait_calibrated(loader, args.wait_calib)
+                first = {"t": round(link.now(), 3), "status": record["status_before"]}
+                record["calib_polls"] = [first] + wait_calibrated(loader, args.wait_calib)
                 record["status_before"] = record["calib_polls"][-1]["status"]
             record["transfer"] = transfer(loader, data, args.addr, args.chunk, faults, read_before=args.read_before,
                                           margin=args.margin)
@@ -818,11 +827,20 @@ def main(argv=None) -> int:
         checks["margins_unchanged"] = bool((transfer_record.get("margins") or {}).get("unchanged"))
     before, after = record.get("status_before"), record.get("status_after")
     if before and "calib" in before:
-        # DDR3: calibrated before and after the transfer, the same calibration (no reset between:
-        # the clock count at calib_complete is the same), and not one clock since it with
-        # calib_complete low or a state other than 23 (counted by the device every clock).
-        checks["calibration_held"] = bool(calib_ok(before) and calib_ok(after)
-                                          and before["calib_clocks"] == after["calib_clocks"] != 0)
+        # DDR3: calibrated in every status read, not one clock since the calibration with
+        # calib_complete low or a state other than 23 (counted by the device every clock), and no
+        # reset between the first and the last status. calib_clocks alone cannot show that (the
+        # calibration takes the same number of clocks after every reset), so also: no H line after
+        # the first status read, and frames_committed (zeroed by a reset) grown by exactly the
+        # chunks this run acknowledged.
+        statuses = [after] + [t.get("status_after") for t in record.get("baud_trials") or []]
+        hellos = sum(1 for e in record.get("device_events") or [] if e.get("kind") == "line" and e.get("tag") == "H")
+        committed = (after or {}).get("frames_committed", -1) - before.get("frames_committed", 0)
+        checks["calibration_held"] = bool(
+            all(calib_ok(s) and s["calib_clocks"] == before["calib_clocks"] for s in statuses)
+            and calib_ok(before) and before["calib_clocks"] != 0
+            and hellos == record.get("hello_lines_before_status", hellos)
+            and committed == transfer_record.get("acked"))
     if args.baud_try:
         trials = record.get("baud_trials") or []
         wanted = len([x for x in args.baud_try.split(",") if x.strip()])

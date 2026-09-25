@@ -1983,11 +1983,14 @@ front of UberDDR3 (x16): its own top `fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v`
 clocking, reset and `ddr3_top` parameters above, the t27 Wishbone master
 (`t27/rtl/fpga_loader_wb.t27`) and port arbiter (`t27/rtl/fpga_wb_arbiter.t27`) on the user
 port, and the loader on the controller clock. `tms_ddr3_ax7203.v` is not changed, and the
-pattern-test, reader and block-RAM builds keep their `make -n -B` commands and netlists
-([`ddr3-loader-netlist-identity-2026-09-24.json`](../reports/fpga/ddr3-loader-netlist-identity-2026-09-24.json)).
+pattern-test, reader and block-RAM builds keep their netlists
+([`ddr3-loader-netlist-identity-2026-09-24.json`](../reports/fpga/ddr3-loader-netlist-identity-2026-09-24.json))
+and their `make -n -B` commands (compared in the session, not committed).
 Build of record a9a56541 seed 3 (chosen before loading by the CK - DQS rule of #62, above);
 on the board it loaded BitNet layer-0 q_proj rows 0-319 as dense5 and baseline2 and the whole
 q_proj as dense5 (at 427.8 MiB) into DDR3 and read them back identical, with state 23 held at
-every clock from the calibration to the last status. Design, simulation, build and board
-results: [`docs/uart-loader.md`](uart-loader.md), "DDR3 (part 2, built)".
+every clock from the calibration to the last status. Four RTL defects the review found after
+those runs (none on the path they used) are fixed and shown in Icarus only. Design,
+simulation, build, board results and the fixes: [`docs/uart-loader.md`](uart-loader.md),
+"DDR3 (part 2, built)".
 

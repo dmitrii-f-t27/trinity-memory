@@ -118,8 +118,9 @@ with original commit and byte hashes recorded in
   port between two masters that changes owner only with nothing outstanding.
   `tests/test_ddr3_loader.py` checks the functions in C, that every difference from
   `fpga_uart_loader.t27` is marked, and runs the whole top in Icarus against our Wishbone
-  memory model, every device byte against the protocol model, with the #62 reader as second
-  master. See `docs/uart-loader.md`, "DDR3 (part 2, built)".
+  memory model, every device byte against the protocol model (except the status values that
+  depend on timing and the reads of the reader's region, which the reader rewrites), with the
+  #62 reader as second master. See `docs/uart-loader.md`, "DDR3 (part 2, built)".
 
 ## Current compiler boundaries
 
