@@ -3,6 +3,12 @@ module TrinityFpgaLineEmitterT27;
 // Report line serializer: one 20-byte line per request, tag, eight hex digits
 // of a, ten hex digits of b, newline, handed byte by byte to the UART
 // transmitter. idle is high when no line and no byte is in flight.
+// The digits are shifted out: a_q and b_q move up four bits after each of their
+// digits, so a character is the top nibble of one of them (a_q bits 31-28, b_q bits
+// 39-36) through the hex table, picked by the position (0 tag, 1-8 a, 9-18 b, 19
+// newline; pos kept to five bits). No subtraction or variable shift lies between the
+// registers and tx_byte (the DDR3 matvec build's timing at 83.33 MHz); the bytes and
+// the clocks they go out in are those of the earlier line_char(pos, tag, a, b).
 var line_busy: bool = false;
 var pos: u32 = 0;
 var tag_q: u32 = 0;
@@ -17,10 +23,13 @@ fn hex(nibble: u32) -> u32 {
     return 87 + nibble;
 }
 
-fn line_char(p: u32, tag: u32, a: u32, b: u64) -> u32 {
-    if (p == 0) { return tag; }
-    if (p <= 8) { return hex((a >> ((8 - p) * 4)) & 15); }
-    if (p <= 18) { return hex(((b >> ((18 - p) * 4)) & 15) as u32); }
+// Character `p` of the line whose unsent digits are the top nibbles of a (bits 31-28) and
+// b (bits 39-36).
+fn next_char(p: u32, tag: u32, a: u32, b: u64) -> u32 {
+    var q: u32 = p & 31;
+    if (q == 0) { return tag; }
+    if (q <= 8) { return hex((a >> 28) & 15); }
+    if (q <= 18) { return hex(((b >> 36) & 15) as u32); }
     return 10;
 }
 
@@ -35,15 +44,17 @@ fn on_clock(go: bool, tag: u32, a: u32, b: u64, tx_busy: bool) {
             b_q = b;
         }
     } else if (!tx_busy && !tx_start) {
-        tx_byte = line_char(pos, tag_q, a_q, b_q);
+        tx_byte = next_char(pos, tag_q, a_q, b_q);
         tx_start = true;
-        if (pos == 19) { line_busy = false; } else { pos = pos + 1; }
+        if ((pos & 31) >= 1 && (pos & 31) <= 8) { a_q = a_q << 4; }
+        if ((pos & 31) >= 9 && (pos & 31) <= 18) { b_q = b_q << 4; }
+        if ((pos & 31) == 19) { line_busy = false; } else { pos = (pos + 1) & 31; }
     }
 }
 idle = !line_busy && !tx_start;
 
 test hex_digits { assert_eq(hex(0), 48); assert_eq(hex(9), 57); assert_eq(hex(10), 97); assert_eq(hex(15), 102); }
-test first_hex_of_a_is_its_top_nibble { assert_eq(line_char(1, 72, 2882400001, 0), 97); }
-test last_hex_of_b_is_its_low_nibble { assert_eq(line_char(18, 72, 0, 11), 98); }
-test newline_closes_the_line { assert_eq(line_char(19, 72, 0, 0), 10); }
+test first_hex_of_a_is_its_top_nibble { assert_eq(next_char(1, 72, 2882400001, 0), 97); }
+test first_hex_of_b_is_its_bit_39_nibble { assert_eq(next_char(9, 72, 0, 755914244096), 98); }
+test tag_and_newline { assert_eq(next_char(0, 72, 0, 0), 72); assert_eq(next_char(19, 72, 0, 0), 10); }
 endmodule

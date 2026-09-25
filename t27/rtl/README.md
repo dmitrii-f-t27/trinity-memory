@@ -143,18 +143,23 @@ with original commit and byte hashes recorded in
 - DDR3 matvec build (`make ... DDR3_APP=matvec`, issue #64: the DDR3 loader's top read with
   `define DDR3_MATVEC`): the loader above at protocol 4 (`[matvec]`-marked changes: activation
   frames X into the matvec's banks, matvec frames M that check the region and start the run,
-  X and M refused `not_ready` while a run is busy and M before the calibration), the device
+  X, M and B refused `not_ready` while a run is busy and M before the calibration), the device
   matvec, `fpga_matvec_feed.t27` (Wishbone master 1: after the matvec's in_ready it reads exactly
   rows x words per row in address order, at most 64 outstanding, and hands each acknowledged word
-  to the matvec in its clock; a watchdog pulses the matvec's abort and drops the late acks) and
+  to the matvec in its clock; a watchdog pulses the matvec's abort, keeps a request it presented
+  until it is taken and drops the late acks) and
   `fpga_line_arbiter.t27` (the line emitter shared by the loader's and the matvec's lines: a side
   sees idle only while it holds the grant and no go is in flight; the grant alternates, and stays
   with the loader while it sends a read-back frame). `tests/test_ddr3_matvec_top.py` checks the
   loader's new functions in C and runs the whole top in Icarus against our Wishbone memory model,
   every device byte against `tools/bridge_link_protocol.MatvecDevice` (runs in both formats,
-  refusals, frames while a run is busy, the calibration, an abort on withheld acks, a load and a
-  read-back during a run, and the real q_proj chunk with the fixture cache). See
-  `docs/bridge.md`, "The DDR3 matvec build".
+  refusals, frames while a run is busy or while the feed drains, a B during a run, the
+  calibration, aborts on withheld acks with a few and with a full cap of requests in flight,
+  activations at nonzero blocks and in parts of blocks, a load and a read-back during a run, and
+  the real q_proj chunk with the fixture cache). For this build's timing at 83.33 MHz the
+  Wishbone master takes each byte into an input register, the outstanding counts are narrow,
+  the line emitter shifts its digits out, and the matvec registers its Z value a clock early.
+  See `docs/bridge.md`, "The DDR3 matvec build".
 
 ## Current compiler boundaries
 

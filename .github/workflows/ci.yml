@@ -48,7 +48,9 @@ jobs:
           path: build/t27/specs/
   native:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # tools/test-t27.sh runs the Icarus suites serially: the DDR3 loader's took 26 min on a
+    # runner (1,550 s), the DDR3 matvec top's 8 min more without the fixture cache.
+    timeout-minutes: 75
     env:
       CC: clang
       CXX: clang++

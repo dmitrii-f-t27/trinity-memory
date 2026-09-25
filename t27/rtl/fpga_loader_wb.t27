@@ -7,18 +7,29 @@ module TrinityFpgaLoaderWbT27;
 // word at bits 8n+7..8n, bytes 0-7 in the low u64 (lo) and 8-15 in the high one (hi).
 //
 // Write side (the packer). Every byte the loader hands over (wr_valid, wr_addr,
-// wr_data; a transfer on a clock with wr_valid and wr_ready) is merged into a buffer
-// word with a byte-select bit per byte that arrived. The buffer is issued as one
-// Wishbone write (wb_stb, wb_we, wb_addr = byte address >> 4, wb_sel, data) when a
-// byte for another word arrives (the new byte then starts the next buffer) or with
-// the chunk's last byte (wr_last), and before any read (flush). A presented request
-// stays unchanged until the clock that takes it (wb_stb and not stall). wr_ready is
-// low while a request is presented, while a flush waits, while a read is waiting for
-// its ack and while CAP requests are outstanding. UberDDR3 acknowledges in order, so
-// the outstanding count (requests taken minus acks) says when every write is done:
-// wr_idle is high only with no byte buffered, nothing presented and nothing
-// outstanding. The loader acknowledges a chunk only after wr_idle, so its ack means
-// the controller has acknowledged every write of the chunk.
+// wr_data; a transfer on a clock with wr_valid and wr_ready) first enters the input
+// register (in_*: its word, its byte already at its lane with the lane's mask and
+// select bit, and in_same: whether its word is the buffer's word as the buffer will be
+// when the byte is merged). From there it is merged into a buffer word with a
+// byte-select bit per byte that arrived, in a clock where no request is presented, no
+// flush waits, no read waits and fewer than CAP requests are outstanding. The buffer is
+// issued as one Wishbone write (wb_stb, wb_we, wb_addr = byte address >> 4, wb_sel,
+// data) when a byte for another word is merged (the new byte then starts the next
+// buffer) or with the chunk's last byte (wr_last), and before any read (flush). A
+// presented request stays unchanged until the clock that takes it (wb_stb and not
+// stall). wr_ready is high while the input register is empty or its byte is merged in
+// that clock, and no read waits for its ack. UberDDR3 acknowledges in order, so the
+// outstanding count (requests taken minus acks) says when every write is done: wr_idle
+// is high only with no byte in the input register or the buffer, nothing presented and
+// nothing outstanding. The loader acknowledges a chunk only after wr_idle, so its ack
+// means the controller has acknowledged every write of the chunk.
+// Timing (the DDR3 matvec build, 83.33 MHz): the input register takes the address
+// compare, the lane shift and the mask out of the clock that merges, so the enables of
+// the 128-bit buffer and request registers depend on registers through two LUT levels;
+// `room` (outstanding < CAP) and `none` (nothing outstanding) are registered from the
+// next count, and the count is kept to four bits (it never exceeds CAP), so no carry
+// chain sits in those paths. The read latency maximum is updated one clock after the
+// ack it measures.
 //
 // Read side. A read request (rd_req, rd_addr) is taken only when the write side is
 // idle (rd_ready = wr_idle), so a read never overtakes a write. The last word read
@@ -60,7 +71,22 @@ var buf_lo: u64 = 0;
 var buf_hi: u64 = 0;
 var flush: bool = false;
 
+// Input register: the byte from the loader, precomputed for the merge.
+var in_v: bool = false;
+var in_word: u32 = 0;
+var in_sel: u32 = 0;
+var in_lo: u64 = 0;
+var in_hi: u64 = 0;
+var in_mlo: u64 = 0;
+var in_mhi: u64 = 0;
+var in_last: bool = false;
+var in_same: bool = false;
+
 var outst: u32 = 0;
+var room: bool = true;
+var none: bool = true;
+var lat_new: u32 = 0;
+var lat_upd: bool = false;
 var rd_wait: bool = false;
 var rd_drop: bool = false;
 var rd_word: u32 = 0;
@@ -114,6 +140,15 @@ fn lane_bit(lane: u32) -> u32 {
     return one << (lane & 15);
 }
 
+// Byte v at byte `lane` of the half `h` (0 low, 1 high), zeros elsewhere (0 for a lane of the
+// other half); with v = 255 the lane's mask.
+fn at_lane(h: u32, lane: u32, v: u32) -> u64 {
+    var sh: u64 = ((lane & 7) << 3) as u64;
+    var b: u64 = (v & 255) as u64;
+    if ((lane >> 3) != h) { return 0; }
+    return b << sh;
+}
+
 // The outstanding count after this clock: + a request taken, - an ack (an ack while nothing
 // is outstanding, `ack` false here, is stray and changes nothing). n + 1 and n - 1 come from the
 // registered count; `taken` (which follows UberDDR3's o_wb_stall within the clock) only selects,
@@ -133,15 +168,14 @@ var w_lane: u32;
 var r_word: u32;
 var r_lane: u32;
 var port_busy: bool;
+var merge: bool;
 var wr_ready: bool;
 var wr_idle: bool;
 var rd_ready: bool;
 var accept_w: bool;
 var accept_r: bool;
+var keep_buf: bool;
 var new_word: bool;
-var base_sel: u32;
-var base_lo: u64;
-var base_hi: u64;
 var m_sel: u32;
 var m_lo: u64;
 var m_hi: u64;
@@ -155,30 +189,37 @@ var out_dec: u32;
 var ack_byte: u32;
 var kept_byte: u32;
 var drop_now: bool;
+var same_next: bool;
 taken = wb_stb && !stall;
 w_word = wr_addr >> 4;
 w_lane = wr_addr & 15;
 r_word = rd_addr >> 4;
 r_lane = rd_addr & 15;
 port_busy = wb_stb || flush || rd_wait;
-wr_ready = !port_busy && outst < CAP;
-wr_idle = !port_busy && !buf_valid && outst == 0;
+// The input register's byte is merged in this clock.
+merge = in_v && !port_busy && room;
+wr_ready = (!in_v || merge) && !rd_wait;
+wr_idle = !port_busy && !buf_valid && none && !in_v;
 rd_ready = wr_idle;
 accept_w = wr_valid && wr_ready;
 accept_r = rd_req && rd_ready;
-new_word = buf_valid && w_word != buf_addr;
-base_sel = pick(buf_valid && !new_word, buf_sel, 0);
-base_lo = pick64(buf_valid && !new_word, buf_lo, 0);
-base_hi = pick64(buf_valid && !new_word, buf_hi, 0);
-m_sel = base_sel | lane_bit(w_lane);
-m_lo = merge_half(base_lo, 0, w_lane, wr_data);
-m_hi = merge_half(base_hi, 1, w_lane, wr_data);
+// The byte merges into the buffer (same word) or starts a new one (another word, or no buffer).
+keep_buf = buf_valid && in_same;
+new_word = buf_valid && !in_same;
+// A byte taken now: is its word the buffer's as the buffer will be when it is merged? That is the
+// word of the byte merged in this clock, else the buffer's (a flush or give_up empties the
+// buffer without changing its word, which buf_valid at the merge covers).
+same_next = w_word == pick(merge, in_word, buf_addr);
+m_sel = pick(keep_buf, buf_sel, 0) | in_sel;
+m_lo = (pick64(keep_buf, buf_lo, 0) & ~in_mlo) | in_lo;
+m_hi = (pick64(keep_buf, buf_hi, 0) & ~in_mhi) | in_hi;
 hit = kept_valid && kept_addr == r_word;
-read_ack = ack && rd_wait && outst != 0;
-flush_now = !wb_stb && buf_valid && (flush || rd_req) && outst < CAP && !give_up;
-ack_counted = ack && outst != 0;
-out_inc = outst + 1;
-out_dec = outst - 1;
+read_ack = ack && rd_wait && !none;
+flush_now = !wb_stb && buf_valid && (flush || rd_req) && room && !give_up;
+ack_counted = ack && !none;
+// The count never exceeds CAP (8): four bits, so the adders and compares are four bits wide.
+out_inc = (outst + 1) & 15;
+out_dec = (outst - 1) & 15;
 out_next = out_sel(taken, ack_counted, outst, out_inc, out_dec);
 ack_byte = byte_of(rdata_lo, rdata_hi, rd_lane);
 kept_byte = byte_of(kept_lo, kept_hi, r_lane);
@@ -187,16 +228,20 @@ drop_now = rd_drop || rd_req || give_up;
 fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, wr_last: bool, rd_req: bool, rd_addr: u32,
             stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64, invalidate: bool, give_up: bool) {
     rd_valid = false;
+    // The read latency maximum, one clock after the ack it measures (lat_new, lat_upd; a statistic).
+    if (lat_upd && lat_new > rd_lat_max) { rd_lat_max = lat_new; }
     if (wb_stb && stall) { cmd_stalls = cmd_stalls + 1; }
     if (taken) {
         wb_stb = false;
         if (wb_we) { writes = writes + 1; } else { reads = reads + 1; }
     }
-    if (ack && outst == 0) { stray = stray + 1; }
+    if (ack && none) { stray = stray + 1; }
     if (outst > max_outst) { max_outst = outst; }
     outst = out_next;
+    room = out_next < CAP;
+    none = out_next == 0;
 
-    if (accept_w) {
+    if (merge) {
         if (new_word) {
             // The buffer goes out; the new byte starts the next buffer word.
             wb_stb = true;
@@ -205,28 +250,28 @@ fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, wr_last: bool, rd_req: b
             wb_sel = buf_sel;
             wb_lo = buf_lo;
             wb_hi = buf_hi;
-            buf_addr = w_word;
+            buf_addr = in_word;
             buf_sel = m_sel;
             buf_lo = m_lo;
             buf_hi = m_hi;
             buf_valid = true;
-            if (wr_last) { flush = true; }
-        } else if (wr_last) {
+            if (in_last) { flush = true; }
+        } else if (in_last) {
             wb_stb = true;
             wb_we = true;
-            wb_addr = w_word;
+            wb_addr = in_word;
             wb_sel = m_sel;
             wb_lo = m_lo;
             wb_hi = m_hi;
             buf_valid = false;
         } else {
-            buf_addr = w_word;
+            buf_addr = in_word;
             buf_sel = m_sel;
             buf_lo = m_lo;
             buf_hi = m_hi;
             buf_valid = true;
         }
-        if (kept_valid && kept_addr == w_word) { kept_valid = false; }
+        if (kept_valid && kept_addr == in_word) { kept_valid = false; }
     } else if (flush_now) {
         wb_stb = true;
         wb_we = true;
@@ -255,6 +300,21 @@ fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, wr_last: bool, rd_req: b
         }
     }
 
+    // Input register (after the merge that read it): empty after a merge, refilled by a byte taken
+    // in the same clock; in_same from same_next (module-level, from this clock's registers).
+    if (merge) { in_v = false; }
+    if (accept_w) {
+        in_v = true;
+        in_word = w_word;
+        in_sel = lane_bit(w_lane);
+        in_lo = at_lane(0, w_lane, wr_data);
+        in_hi = at_lane(1, w_lane, wr_data);
+        in_mlo = at_lane(0, w_lane, 255);
+        in_mhi = at_lane(1, w_lane, 255);
+        in_last = wr_last;
+        in_same = same_next;
+    }
+
     if (read_ack) {
         kept_lo = rdata_lo;
         kept_hi = rdata_hi;
@@ -268,14 +328,16 @@ fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, wr_last: bool, rd_req: b
             rd_valid = true;
             rdata = ack_byte;
         }
-        if (rd_clocks + 1 > rd_lat_max) { rd_lat_max = rd_clocks + 1; }
+        lat_new = rd_clocks + 1;
     } else if (rd_wait) {
         rd_clocks = rd_clocks + 1;
         if (rd_req || give_up) { rd_drop = true; }
     }
+    lat_upd = read_ack;
     if (give_up) {
         buf_valid = false;
         flush = false;
+        in_v = false;
     }
     if (invalidate) { kept_valid = false; }
     wb_cyc = !wr_idle || wr_valid || rd_req || rd_wait;

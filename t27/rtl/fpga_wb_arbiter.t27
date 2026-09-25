@@ -98,8 +98,10 @@ own_cyc = pickb(own0, m0_cyc, m1_cyc);
 other_cyc = pickb(own0, m1_cyc, m0_cyc);
 handover = !own_cyc && outst == 0 && other_cyc;
 ack_counted = wb_ack && outst != 0;
-out_inc = outst + 1;
-out_dec = outst - 1;
+// The owner never has more than 64 requests outstanding (the feed's cap; the loader's master 8):
+// seven bits, so the adders are seven bits wide.
+out_inc = (outst + 1) & 127;
+out_dec = (outst - 1) & 127;
 out_next = out_sel(taken, ack_counted, outst, out_inc, out_dec);
 m1_write = !own0 && m1_stb && m1_we && !wb_stall;
 

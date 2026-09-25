@@ -500,7 +500,13 @@ byte buffered, nothing presented and nothing outstanding, and part 1's loader ac
 a chunk only after `wr_idle`: **an ack means the controller has acknowledged every write
 of the chunk**, not that a buffer holds it. At most 8 requests are outstanding (the flush of
 a buffered word waits for that too since the review fixes; before them a ninth could go out
-after seven slow acks).
+after seven slow acks). Since the DDR3 matvec build (#64 wave 4) a byte first enters an input
+register with its word, its byte shifted to its lane with the lane's mask and select bit, and
+whether its word is the buffer's word as the buffer will be when the byte is merged; it is
+merged from there in a later clock (when nothing is presented, no flush or read waits and fewer
+than 8 requests are outstanding), and `wr_ready` is high while the input register is empty or
+is merged in that clock. The bytes, the words and their order on the bus are the same; a byte
+is taken one clock sooner and merged one clock later. The reason is timing (below).
 
 **Read side.** A read is taken only when the write side is idle, so it never overtakes a
 write. The last word read is kept: the next bytes of that word are answered from it in the
@@ -535,6 +541,19 @@ pipeline that P_RESP waits 11 clocks for, selects the status line with a tree of
 multiplexers (`status_all`, checked against part 1's `status_value`), and uses 8-bit state
 registers. The Wishbone master and arbiter select precomputed `n + 1` / `n - 1` by the
 request taken and the ack. Each response costs 11 clocks more than in part 1 (0.13 µs).
+The DDR3 matvec build (#64 wave 4: this top with the device matvec, about 10,000 more LUTs and
+21 more block RAMs) met 83.33 MHz on none of 7 seeds at first (routed 67.4-78.4 MHz with
+nextpnr-xilinx 0.9.7; `docs/bridge.md`, "Timing"). Its failing endpoints were the enables and
+data inputs of the master's 128-bit buffer and request registers (from the outstanding count's
+compare and the byte's word compare, through the merge, across the die), the line emitter's
+character (a subtraction and a variable shift of `pos`), the X header rule's 32-bit product and
+the outstanding counts' 32-bit adders. The master now has the input register above, keeps its
+count to four bits and registers `room` (fewer than 8 outstanding) and `none` (nothing
+outstanding) from the next count; the arbiter's and the feed's counts are seven bits; the line
+emitter shifts its digits out of `a_q` and `b_q` (the same bytes in the same clocks); the X
+header rule's widths are masked; the read latency maximum is taken one clock after its ack. A
+`DDR3_APP=loader` build from this RTL is therefore not a9a56541's netlist (its timing and seed
+records are those of a9a56541); it would need its own seed sweep.
 
 **Block RAM.** The loader's cores are read with `-nomem2reg` and every memory is mapped with
 part 1's 1K x 36 library (`brams_x36.txt`): the receive FIFO and the staging buffer are 2

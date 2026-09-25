@@ -135,13 +135,16 @@ class BridgeServer:
         return n.call("tm_runtime_object_count",n.SZ,[n.C.c_void_p],self._runtime) if self._runtime else 0
     def last_capture(self)->bytes:
         """Every byte the device sent during the last fpga call (the capture whose sha256 and count
-        that call's evidence holds), for the record of a board run; b"" for the emulator."""
+        that call's evidence holds), for the record of a board run; b"" for the emulator. One copy
+        under the server's lock into a buffer that holds any capture, so it is always one call's
+        whole capture; it is the caller's call's only when no other fpga call ran since, which its
+        sha256 against that call's evidence (capture_sha256) shows."""
         if self._runtime is None or self.backend!="fpga": return b""
-        size=n.call("tm_runtime_fpga_capture",n.SZ,[n.C.c_void_p,n.U8,n.SZ],self._runtime,None,0)
-        buffer=(n.C.c_uint8*max(1,size))()
-        got=n.call("tm_runtime_fpga_capture",n.SZ,[n.C.c_void_p,n.U8,n.SZ],self._runtime,buffer,size)
-        if got!=size: raise RuntimeError("the capture changed while it was read (a request was running)")
-        return bytes(buffer[:size])
+        capacity=n.call("tm_runtime_fpga_capture_capacity",n.SZ,[n.C.c_void_p],self._runtime)
+        buffer=(n.C.c_uint8*max(1,capacity))()
+        used=n.call("tm_runtime_fpga_capture",n.SZ,[n.C.c_void_p,n.U8,n.SZ],self._runtime,buffer,capacity)
+        if used>capacity: raise RuntimeError("the capture is larger than the capture buffer")
+        return bytes(buffer[:used])
     def __enter__(self): return self.start()
     def __exit__(self,*_): self.close()
     def start(self):

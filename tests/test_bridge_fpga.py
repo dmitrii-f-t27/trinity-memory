@@ -40,6 +40,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 sys.path.insert(0, str(ROOT / "tools"))
+import bridge_link_protocol as link  # noqa: E402
+import uart_loader_protocol as proto  # noqa: E402
 
 try:
     from trinity_memory import _native as n
@@ -132,6 +134,45 @@ class FpgaBackend(unittest.TestCase):
             with self.assertRaises(BridgeError):
                 check_identity(info)
         self.assertIs(check_identity({"backend": "emulator", "hardware": False})["hardware"], False)
+
+    def test_a_23_line_status_is_read_whole(self):
+        # A part-1 loader (23 status lines, protocol 2): the host takes its 23 lines as the whole
+        # reply (one status frame, nothing retransmitted) and then refuses the device by its protocol.
+        from trinity_memory.bridge import BridgeError
+        fake = self.fake(base_proto=proto.PROTO, protocol=2)
+        client = self.serve(fake)
+        with self.assertRaisesRegex(BridgeError, "below the configured minimum"):
+            client.call("trinity_chipInfo")
+        self.assertEqual(fake.frames.get(proto.CMD_STATUS), 1)
+        self.assertEqual(len(fake.tx_log), 23 * 20)
+
+    def test_status_twice_on_a_paced_line(self):
+        # At 115200 baud the 37 lines take 64 ms on the wire: every call's capture is its own 37 lines
+        # (a host that took the reply as whole after line 22 would leave 14 lines for the next call).
+        fake = self.fake(pace_baud=115200, byte_timeout=0.1)
+        client = self.serve(fake, baud=115200, reply_timeout=0.5, quiet=0.15)
+        seqs = []
+        for _ in range(2):
+            info = client.call("trinity_chipInfo")
+            capture = self.server.last_capture()
+            self.assertEqual((info["evidence"]["capture_bytes"], len(capture)), (37 * 20, 37 * 20))
+            events = link.LinkDecoder().feed(capture, 0.0)
+            self.assertEqual([(e.tag, (e.a >> 16) & 255, e.a & 0xFFFF) for e in events],
+                             [("C", 37, i) for i in range(37)])
+            seqs.append({e.a >> 24 for e in events})
+        self.assertEqual([len(s) for s in seqs], [1, 1])
+        self.assertNotEqual(seqs[0], seqs[1])
+
+    def test_a_line_of_the_other_count_is_ignored(self):
+        # The first line fixes the count, 37 here: a well-formed line of the same exchange that announces
+        # 23 lines and carries a wrong build id (index 21), sent after the real line 21, changes nothing.
+        fake = self.fake(faults=[{"kind": "extra_line", "before": "C", "nth": 30, "count": 23, "line_index": 21,
+                                  "value": 0xDEADBEEF}])
+        client = self.serve(fake)
+        info = client.call("trinity_chipInfo")
+        self.assertTrue(all(f["done"] for f in fake.faults))
+        self.assertEqual(info["evidence"]["build_id"], EVIDENCE["build_id"])
+        self.assertEqual(info["evidence"]["capture_bytes"], 38 * 20)             # the extra line is captured too
 
     def test_configuration_refusals(self):
         from trinity_memory.bridge import BridgeServer, FpgaDevice
@@ -514,6 +555,70 @@ class FpgaBackend(unittest.TestCase):
             self.assertTrue(all(c["accumulators_equal_reference"] and c["accumulators_equal_emulator"] for c in dots))
             # The repeat of each codec uses the upload cache: no image upload in the second call.
             self.assertEqual([c["result"]["transfer"]["uploaded"] for c in dots], [True, False, True, False])
+
+    def board_run_tool(self):
+        import importlib.util
+        import stage1_chunk
+        try:
+            stage1_chunk.chunk()
+        except Exception as error:  # noqa: BLE001 - fixtures.CacheMiss or a missing cache directory
+            if REQUIRE_CACHED:
+                self.fail(f"TRINITY_REQUIRE_CACHED=1: {error}")
+            self.skipTest(f"fixture cache: {error}")
+        spec = importlib.util.spec_from_file_location("fpga_bridge_dot", ROOT / "tools/fpga-bridge-dot.py")
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        return tool
+
+    def test_board_run_tool_fails_on_a_wrong_accumulator(self):
+        import json
+        import tempfile
+        tool = self.board_run_tool()
+        fake = self.fake(result_faults={7: 1})
+        with tempfile.TemporaryDirectory() as out:
+            code = tool.main(["--port", fake.path, "--bitstream-sha256", EVIDENCE["bitstream_sha256"],
+                              "--build-id", EVIDENCE["build_id"], "--idcode", EVIDENCE["idcode"], "--dna", EVIDENCE["dna"],
+                              "--codecs", "dense5", "--repeat", "1", "--region", "0", "--reply-timeout", "1.0",
+                              "--quiet", "0.08", "--output", out])
+            record = json.loads((Path(out) / "record.json").read_text())
+        self.assertEqual(code, 1)
+        self.assertFalse(record["all_equal"])
+        (dot,) = [c for c in record["calls"] if c["call"] == "dot-dense5"]
+        self.assertEqual((dot["accumulators_equal_reference"], dot["mismatching_rows"]), (False, [7]))
+
+    def test_board_run_tool_checks_the_bit_against_its_build_record(self):
+        import json
+        import tempfile
+        tool = self.board_run_tool()
+        with tempfile.TemporaryDirectory() as out:
+            out = Path(out)
+            sync = bytes.fromhex("AA995566") + bytes(range(64))
+            (out / "loaded.bit").write_bytes(b"header of another build time" + sync)
+            report = {"commit": EVIDENCE["build_id"] + "0" * 32,
+                      "bitstream": {"sha256": "0" * 64, "sha256_from_sync": hashlib.sha256(sync).hexdigest()}}
+            (out / "build.json").write_text(json.dumps(report))
+            # A rebuild: another header, the same bytes from the sync word on. Accepted; the evidence is
+            # the loaded file's own sha256, which the tool computed.
+            fake = self.fake()
+            code = tool.main(["--port", fake.path, "--bit", str(out / "loaded.bit"), "--build-report", str(out / "build.json"),
+                              "--idcode", EVIDENCE["idcode"], "--dna", EVIDENCE["dna"], "--codecs", "dense5",
+                              "--repeat", "1", "--region", "0", "--reply-timeout", "1.0", "--quiet", "0.08",
+                              "--output", str(out / "run1")])
+            record = json.loads((out / "run1/record.json").read_text())
+            self.assertEqual(code, 0, record.get("stopped"))
+            whole = hashlib.sha256((out / "loaded.bit").read_bytes()).hexdigest()
+            self.assertEqual(record["device"]["evidence"]["bitstream_sha256"], whole)
+            self.assertTrue(record["device"]["bit"]["matches_build_report"]["ok"])
+            self.assertEqual(record["device"]["bit"]["sha256_from_sync"], report["bitstream"]["sha256_from_sync"])
+            # Another bitstream: refused before the port is opened, with a record that says why.
+            (out / "other.bit").write_bytes(b"header" + bytes.fromhex("AA995566") + bytes(64))
+            fake2 = self.fake()
+            code = tool.main(["--port", fake2.path, "--bit", str(out / "other.bit"), "--build-report", str(out / "build.json"),
+                              "--idcode", EVIDENCE["idcode"], "--dna", EVIDENCE["dna"], "--output", str(out / "run2")])
+            record = json.loads((out / "run2/record.json").read_text())
+            self.assertEqual(code, 2)
+            self.assertIn("does not match its build record", record["stopped"])
+            self.assertEqual((record["calls"], len(fake2.rx_log)), ([], 0))
 
 
 if __name__ == "__main__":

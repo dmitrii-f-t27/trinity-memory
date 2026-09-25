@@ -21,10 +21,13 @@ module TrinityFpgaMatvecFeedT27;
 //
 // Watchdog: `watchdog` clocks without in_ready (WAIT), or with neither a request taken nor an
 // ack (READ), end the feed's part of the run: it pulses `abort` for one clock (the matvec ends
-// the run at once, status 2, only its Z lines, rather than after its own idle limit) and drops
-// cyc and stb. Acks of requests still outstanding then come as the arbiter delivers them; DRAIN
-// counts them (`dropped`, not handed to the matvec) and the feed stays busy until the last one,
-// so a later run never takes a word of this one. Acks while idle count as `stray` (must be 0).
+// the run at once, status 2, only its Z lines, rather than after its own idle limit) and asks for
+// nothing more. A request presented at that moment stays presented, unchanged, until it is taken
+// (the Wishbone rule the arbiter and the controller rely on: a stalled request is never
+// withdrawn). Acks of the requests taken then come as the arbiter delivers them; DRAIN counts
+// them (`dropped`, not handed to the matvec) and the feed keeps cyc and stays busy until the
+// last one, so a later run never takes a word of this one. Acks while idle, and in DRAIN with
+// nothing outstanding, count as `stray` (must be 0).
 // `busy` is high from `start` until the feed is idle again; the M handler refuses X and M
 // frames while it or the matvec is busy.
 // Every statement of on_clock reads a variable before the same tick writes it.
@@ -77,15 +80,22 @@ var can_issue: bool;
 var in_valid: bool;
 var in_lo: u64;
 var in_hi: u64;
+var ack_owed: bool;
+var out_drain: u32;
 accept = wb_stb && !stall;
 progress = accept || ack;
 final_ack = st == F_READ && ack && issue_done && outst == 1 && !accept;
 timeout = !progress && quiet >= watchdog;
-out_up = outst + 1;
-out_down = outst - 1;
+// At most `cap` (64 in the build) outstanding: seven bits, so the adders are seven bits wide.
+out_up = (outst + 1) & 127;
+out_down = (outst - 1) & 127;
 out_next = pick32(accept && !ack, out_up, pick32(ack && !accept, out_down, outst));
 can_issue = pick_bool(accept && !ack, out_up < cap, pick_bool(ack && !accept, out_down < cap, outst < cap));
 in_valid = st == F_READ && ack;
+// DRAIN counts only the acks it is owed: an ack with nothing outstanding (stray: the arbiter's
+// status line arb_stray counts it too) must not make the count wrap and the feed wait for ever.
+ack_owed = ack && outst != 0;
+out_drain = pick32(accept && !ack_owed, out_up, pick32(ack_owed && !accept, out_down, outst));
 in_lo = rdata_lo;
 in_hi = rdata_hi;
 
@@ -144,12 +154,12 @@ fn on_clock(start: bool, s_base: u32, s_words: u32, mv_ready: bool, stall: bool,
             busy = false;
             st = F_IDLE;
         } else if (timeout) {
-            wb_cyc = false;
-            wb_stb = false;
+            // No request taken and no ack in this clock: out_next is the count that stays, and a
+            // presented request stays presented (wb_stb unchanged) until DRAIN sees it taken.
             abort = true;
             timeouts = timeouts + 1;
-            // No request taken and no ack in this clock: out_next is the count that stays.
-            if (out_next == 0) {
+            if (out_next == 0 && !wb_stb) {
+                wb_cyc = false;
                 busy = false;
                 st = F_IDLE;
             } else {
@@ -157,14 +167,16 @@ fn on_clock(start: bool, s_base: u32, s_words: u32, mv_ready: bool, stall: bool,
             }
         }
     } else {
-        // DRAIN: the acks of requests taken before the watchdog gave up.
-        if (ack) {
-            dropped = dropped + 1;
-            if (outst == 1) {
-                busy = false;
-                st = F_IDLE;
-            }
-            outst = outst - 1;
+        // DRAIN: the request still presented when the watchdog gave up is taken, then the acks of
+        // every request taken are dropped; idle again when nothing is presented or outstanding.
+        if (accept) { wb_stb = false; }
+        if (ack_owed) { dropped = dropped + 1; }
+        if (ack && !ack_owed) { stray = stray + 1; }
+        outst = out_drain;
+        if ((!wb_stb || accept) && out_drain == 0) {
+            wb_cyc = false;
+            busy = false;
+            st = F_IDLE;
         }
     }
 }

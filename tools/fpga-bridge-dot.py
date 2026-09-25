@@ -22,10 +22,21 @@ q_proj, whose sha256 over all 2,560 must equal reports/ternary-check/matvec-2026
 against the emulator backend's, and for every call the capture (<call>.capture.gz: the bytes the
 device sent; their sha256 must equal the evidence's capture_sha256).
 
+The evidence is what the tool is told unless it can check it: with --bit (the .bit the board was
+loaded with) the tool hashes the file itself, whole and from the sync word on, and with
+--build-report too the file must match the report (whole file, or from the sync word on, as
+make ddr3-flash accepts it); with --identity it reads IDCODE, DNA and XADC with openFPGALoader
+before the run and XADC after it, and the IDCODE (without its version nibble) and the DNA must be
+the ones given. The device itself confirms only the build id (its status). A call that fails before
+the device sent anything has no capture of its own: the record then says so instead of keeping the
+previous call's bytes under its name.
+
 The chunk comes from the fixture cache (tools/fetch-fixtures.py; tests/stage1_chunk.py). The tool
-touches only the serial port given; the board must already hold the bitstream (SRAM load, e.g.
-make -C fpga/ax7203 ddr3-flash ...) and nothing else may use the port while it runs. Exit status 0
-when every call succeeded and every accumulator equals the reference, 1 otherwise.
+touches only the serial port given (and the JTAG cable with --identity); the board must already hold
+the bitstream (SRAM load, e.g. make -C fpga/ax7203 ddr3-flash ...) and nothing else may use the port
+while it runs. record.json is written whatever happens. Exit status 0 when every call succeeded and
+every accumulator equals the reference, 1 otherwise, 2 when the run did not start (the .bit does not
+match its report, or the identity is not the one given).
 """
 from __future__ import annotations
 
@@ -33,8 +44,10 @@ import argparse
 import datetime
 import gzip
 import hashlib
+import importlib.util
 import json
 import platform
+import re
 import subprocess
 import sys
 import time
@@ -63,12 +76,52 @@ def revision() -> str:
         return "unknown"
 
 
+def flash_check():
+    spec = importlib.util.spec_from_file_location("ddr3_flash_check", ROOT / "tools/ddr3-flash-check.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def read_identity(args, when: str) -> dict:
+    """IDCODE and DNA (before only) and XADC through openFPGALoader, as tools/fpga-uart-loader.py."""
+    base = [args.openfpgaloader, "-c", args.cable]
+    out = {}
+    for key, extra in (("idcode", ["--detect"]), ("dna", ["--read-dna"]), ("xadc", ["--read-xadc"])):
+        if when == "after" and key != "xadc":
+            continue
+        proc = subprocess.run(base + extra, capture_output=True, text=True)
+        text = proc.stdout + proc.stderr
+        entry = {"cmd": base + extra, "utc": utc(), "returncode": proc.returncode, "output": text.strip().splitlines()[-12:]}
+        if proc.returncode == 0:
+            if key == "idcode":
+                m = re.search(r"idcode\s+(0x[0-9a-fA-F]+)", text)
+                entry["value"] = m.group(1).lower() if m else None
+            elif key == "dna":
+                m = re.search(r'"dna"\s*:\s*"(0x[0-9a-fA-F]+)"', text)
+                entry["value"] = m.group(1).lower() if m else None
+            else:
+                body = text[text.find("{"):text.rfind("}") + 1]
+                try:
+                    entry["value"] = json.loads(re.sub(r",\s*}", "}", body))
+                except ValueError:
+                    entry["value"] = None
+        out[key] = entry
+    return out
+
+
 def parse(argv):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--port", required=True, help="the board's serial port (the CP2102N)")
     p.add_argument("--build-report", type=Path, help="build.json of the loaded bitstream: its sha256 and commit (BUILD_ID)")
-    p.add_argument("--bitstream-sha256", help="instead of --build-report: the loaded .bit's sha256")
+    p.add_argument("--bit", type=Path, help="the .bit the board was loaded with: hashed here (and checked against "
+                                            "--build-report); its whole-file sha256 is the evidence")
+    p.add_argument("--bitstream-sha256", help="instead of --bit / --build-report: the loaded .bit's sha256")
     p.add_argument("--build-id", help="instead of --build-report: its BUILD_ID (8 hex digits)")
+    p.add_argument("--identity", action="store_true",
+                   help="read IDCODE, DNA and XADC with openFPGALoader and require the IDCODE and DNA given")
+    p.add_argument("--openfpgaloader", default="openFPGALoader")
+    p.add_argument("--cable", default="digilent_hs2")
     p.add_argument("--idcode", required=True, help="0x and 8 hex digits (see docs/bridge.md, IDCODE)")
     p.add_argument("--dna", required=True, help="0x and 16 hex digits (openFPGALoader --read-dna)")
     p.add_argument("--baud", type=int, default=115200)
@@ -81,12 +134,20 @@ def parse(argv):
     p.add_argument("--repeat", type=int, default=2, help="dot calls per codec (the later ones use the upload cache)")
     p.add_argument("--output", type=Path, required=True, help="directory for record.json and the captures")
     args = p.parse_args(argv)
+    args.bit_identity = args.bit_check = None
+    if args.bit:
+        fc = flash_check()
+        args.bit_identity = fc.identity(args.bit.read_bytes())
+        if args.build_report:
+            ok, message = fc.check(args.bit, report=args.build_report)
+            args.bit_check = {"ok": ok, "message": message}
+        args.bitstream_sha256 = args.bitstream_sha256 or args.bit_identity["sha256"]
     if args.build_report:
         report = json.loads(args.build_report.read_text())
         args.bitstream_sha256 = args.bitstream_sha256 or report["bitstream"]["sha256"]
         args.build_id = args.build_id or report["commit"][:8]
     if not (args.bitstream_sha256 and args.build_id):
-        p.error("give --build-report, or --bitstream-sha256 and --build-id")
+        p.error("give --bit or --build-report, or --bitstream-sha256 and --build-id")
     if args.repeat < 1:
         p.error("--repeat must be at least 1")
     args.codecs = [c for c in args.codecs.split(",") if c]
@@ -107,33 +168,44 @@ def main(argv=None) -> int:
     rows, cols = stage1_chunk.ROWS, stage1_chunk.COLS
     want = list(chunk["y"])
     args.output.mkdir(parents=True, exist_ok=True)
-    device = FpgaDevice(port=args.port, bitstream_sha256=args.bitstream_sha256, idcode=args.idcode, dna=args.dna,
-                        build_id=args.build_id, baud=args.baud, reply_timeout=args.reply_timeout, quiet=args.quiet,
-                        attempts=args.attempts, region=args.region)
     record = {"schema": SCHEMA, "argv": sys.argv if argv is None else ["tools/fpga-bridge-dot.py", *argv],
               "tool_revision": revision(), "host": {"platform": platform.platform(), "python": platform.python_version()},
               "device": {"port": args.port, "baud": args.baud, "region": args.region,
                          "evidence": {"bitstream_sha256": args.bitstream_sha256, "idcode": args.idcode,
-                                      "dna": args.dna, "build_id": args.build_id}},
+                                      "dna": args.dna, "build_id": args.build_id},
+                         "bit": None if args.bit is None else {"file": str(args.bit), **args.bit_identity,
+                                                                "matches_build_report": args.bit_check}},
               "chunk": {"tensor": stage1_chunk.TENSOR, "rows": [0, rows], "cols": cols,
                         "activations": f"tmv_activations seed {stage1_chunk.SEED} (t27/matvec.t27)",
                         "reference": "first 320 accumulators of t27/matvec.t27's q_proj product",
                         "reference_full_sha256": chunk["full_sha256"], "reference_first8": want[:8]},
               "calls": [], "started_utc": utc()}
     ok = True
+    last_sha = None
+
+    def write_record():
+        record["ended_utc"] = utc()
+        record["all_equal"] = ok
+        (args.output / "record.json").write_text(json.dumps(record, indent=1) + "\n")
 
     def keep(call, server, result=None, error=None, started=None, ended=None, extra=None):
-        nonlocal ok
+        nonlocal ok, last_sha
         capture = server.last_capture()
+        sha = hashlib.sha256(capture).hexdigest()
         name = f"{len(record['calls']):02d}-{call}"
-        (args.output / f"{name}.capture.gz").write_bytes(gzip.compress(capture, mtime=0))
-        entry = {"call": call, "name": name, "started_utc": started, "ended_utc": ended,
-                 "capture": {"file": f"{name}.capture.gz", "bytes": len(capture),
-                             "sha256": hashlib.sha256(capture).hexdigest()}}
+        entry = {"call": call, "name": name, "started_utc": started, "ended_utc": ended}
+        if result is None and sha == last_sha:
+            # A call that failed before the device sent anything leaves the previous call's capture.
+            entry["capture"] = {"file": None, "note": "no bytes of this call: the server's capture is still the "
+                                                      "previous call's"}
+        else:
+            (args.output / f"{name}.capture.gz").write_bytes(gzip.compress(capture, mtime=0))
+            entry["capture"] = {"file": f"{name}.capture.gz", "bytes": len(capture), "sha256": sha}
+            last_sha = sha
         if result is not None:
             entry["result"] = result
             evidence = result.get("evidence", {})
-            entry["capture"]["equals_evidence"] = (evidence.get("capture_sha256") == entry["capture"]["sha256"]
+            entry["capture"]["equals_evidence"] = (evidence.get("capture_sha256") == entry["capture"].get("sha256")
                                                    and evidence.get("capture_bytes") == len(capture))
             ok = ok and entry["capture"]["equals_evidence"]
         if error is not None:
@@ -143,47 +215,79 @@ def main(argv=None) -> int:
         record["calls"].append(entry)
         return entry
 
-    with BridgeServer(backend="fpga", device=device, max_trits=1_000_000) as server:
-        client = BridgeClient(server.url, timeout=600)
-        started = utc()
-        try:
-            info = client.call("trinity_chipInfo")
-            check_identity(info)
-            keep("chip_info", server, result=info, started=started, ended=utc())
-        except Exception as error:  # noqa: BLE001 - recorded, then the run stops
-            keep("chip_info", server, error=f"{type(error).__name__}: {error}", started=started, ended=utc())
-            (args.output / "record.json").write_text(json.dumps(record, indent=1) + "\n")
-            print(f"chip_info failed: {error}", file=sys.stderr)
-            return 1
-        emulator = {}
-        for codec in args.codecs:
-            data = encode_tensors([Tensor(NAME, (rows, cols), tuple(chunk["trits"]), codec=codec)])
-            with BridgeServer(max_trits=1_000_000) as reference_server:
-                ref = BridgeClient(reference_server.url, timeout=600)
-                emulator[codec] = ref.dot(ref.upload(data), NAME, chunk["x"])["accumulators"]
-            handle = client.upload(data)
-            for attempt in range(args.repeat):
-                started, t0 = utc(), time.monotonic()
+    # Checks that need no device: the .bit against its build record, the board's identity.
+    stop = None
+    if args.bit_check is not None and not args.bit_check["ok"]:
+        stop = f"the .bit does not match its build record: {args.bit_check['message']}"
+    if args.identity and stop is None:
+        record["identity_before"] = read_identity(args, "before")
+        got_id = (record["identity_before"].get("idcode") or {}).get("value")
+        got_dna = (record["identity_before"].get("dna") or {}).get("value")
+        # openFPGALoader prints the IDCODE without its version nibble (0x3636093 for 0x13636093).
+        same_id = got_id is not None and int(got_id, 16) & 0x0FFFFFFF == int(args.idcode, 16) & 0x0FFFFFFF
+        if not same_id or got_dna != args.dna.lower():
+            stop = f"the board is not the one given: IDCODE {got_id}, DNA {got_dna}"
+    if stop is not None:
+        record["stopped"] = stop
+        ok = False
+        write_record()
+        print(stop, file=sys.stderr)
+        return 2
+
+    device = FpgaDevice(port=args.port, bitstream_sha256=args.bitstream_sha256, idcode=args.idcode, dna=args.dna,
+                        build_id=args.build_id, baud=args.baud, reply_timeout=args.reply_timeout, quiet=args.quiet,
+                        attempts=args.attempts, region=args.region)
+    try:
+        with BridgeServer(backend="fpga", device=device, max_trits=1_000_000) as server:
+            client = BridgeClient(server.url, timeout=600)
+            started = utc()
+            try:
+                info = client.call("trinity_chipInfo")
+                check_identity(info)
+                keep("chip_info", server, result=info, started=started, ended=utc())
+            except Exception as error:  # noqa: BLE001 - recorded, then the run stops
+                keep("chip_info", server, error=f"{type(error).__name__}: {error}", started=started, ended=utc())
+                print(f"chip_info failed: {error}", file=sys.stderr)
+                return 1
+            for codec in args.codecs:
+                started = utc()
                 try:
-                    result = client.dot(handle, NAME, chunk["x"])
-                except Exception as error:  # noqa: BLE001 - recorded, the next call goes on
-                    keep(f"dot-{codec}", server, error=f"{type(error).__name__}: {error}", started=started, ended=utc())
+                    data = encode_tensors([Tensor(NAME, (rows, cols), tuple(chunk["trits"]), codec=codec)])
+                    with BridgeServer(max_trits=1_000_000) as reference_server:
+                        ref = BridgeClient(reference_server.url, timeout=600)
+                        emulator = ref.dot(ref.upload(data), NAME, chunk["x"])["accumulators"]
+                    handle = client.upload(data)
+                except Exception as error:  # noqa: BLE001 - recorded, the next codec goes on
+                    keep(f"prepare-{codec}", server, error=f"{type(error).__name__}: {error}", started=started,
+                         ended=utc())
                     continue
-                seconds = time.monotonic() - t0
-                acc = result["accumulators"]
-                equal_ref, equal_emu = acc == want, acc == emulator[codec]
-                ok = ok and equal_ref and equal_emu and result.get("hardware") is True
-                entry = keep(f"dot-{codec}", server, result=result, started=started, ended=utc(),
-                             extra={"codec": codec, "repeat": attempt, "host_seconds": round(seconds, 3),
-                                    "accumulators_equal_reference": equal_ref,
-                                    "accumulators_equal_emulator": equal_emu,
-                                    "mismatching_rows": [i for i, (a, b) in enumerate(zip(acc, want)) if a != b][:32]})
-                print(f"{codec} #{attempt}: {len(acc)} accumulators, reference {'equal' if equal_ref else 'DIFFERENT'}, "
-                      f"emulator {'equal' if equal_emu else 'DIFFERENT'}, {seconds:.1f} s, capture "
-                      f"{entry['capture']['bytes']} bytes")
-    record["ended_utc"] = utc()
-    record["all_equal"] = ok
-    (args.output / "record.json").write_text(json.dumps(record, indent=1) + "\n")
+                for attempt in range(args.repeat):
+                    started, t0 = utc(), time.monotonic()
+                    try:
+                        result = client.dot(handle, NAME, chunk["x"])
+                    except Exception as error:  # noqa: BLE001 - recorded, the next call goes on
+                        keep(f"dot-{codec}", server, error=f"{type(error).__name__}: {error}", started=started,
+                             ended=utc(), extra={"codec": codec, "repeat": attempt})
+                        continue
+                    seconds = time.monotonic() - t0
+                    acc = result["accumulators"]
+                    equal_ref, equal_emu = acc == want, acc == emulator
+                    ok = ok and equal_ref and equal_emu and result.get("hardware") is True
+                    entry = keep(f"dot-{codec}", server, result=result, started=started, ended=utc(),
+                                 extra={"codec": codec, "repeat": attempt, "host_seconds": round(seconds, 3),
+                                        "accumulators_equal_reference": equal_ref,
+                                        "accumulators_equal_emulator": equal_emu,
+                                        "mismatching_rows": [i for i, (a, b) in enumerate(zip(acc, want)) if a != b][:32]})
+                    print(f"{codec} #{attempt}: {len(acc)} accumulators, reference {'equal' if equal_ref else 'DIFFERENT'}, "
+                          f"emulator {'equal' if equal_emu else 'DIFFERENT'}, {seconds:.1f} s, capture "
+                          f"{entry['capture'].get('bytes')} bytes")
+    except Exception as error:  # noqa: BLE001 - the server or the port failed: recorded
+        record["stopped"] = f"{type(error).__name__}: {error}"
+        ok = False
+    finally:
+        if args.identity:
+            record["identity_after"] = read_identity(args, "after")
+        write_record()
     print(f"record: {args.output / 'record.json'} ({'all equal' if ok else 'NOT all equal'})")
     return 0 if ok else 1
 

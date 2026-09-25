@@ -259,10 +259,16 @@ size_t tm_runtime_object_count(TMRuntime *runtime) {
     pthread_mutex_unlock(&runtime->state_lock);
     return result;
 }
+/* The capture buffer's size, fixed when the fpga backend is configured: a buffer this large holds
+ * any capture, so one call of tm_runtime_fpga_capture copies a whole one. 0 without an fpga link. */
+size_t tm_runtime_fpga_capture_capacity(TMRuntime *runtime) {
+    return runtime && runtime->link.configured ? runtime->link.capture_capacity : 0;
+}
 /* The bytes the device sent during the last fpga call (chip_info or compute.dot: the capture whose
  * sha256 and count that call's evidence reports), for the record of a board run. Returns their
- * count and copies them into out when capacity holds them (a first call with capacity 0 asks
- * for the count); 0 without an fpga link. Taken under the state lock, so between requests. */
+ * count and copies them into out when capacity holds them; 0 without an fpga link. Count and
+ * copy are taken together under the state lock, so between requests: with a buffer of
+ * tm_runtime_fpga_capture_capacity bytes the copy is always one whole capture. */
 size_t tm_runtime_fpga_capture(TMRuntime *runtime, uint8_t *out, size_t capacity) {
     if (!runtime || !runtime->link.configured) return 0;
     pthread_mutex_lock(&runtime->state_lock);

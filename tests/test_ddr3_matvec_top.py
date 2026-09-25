@@ -270,6 +270,103 @@ def scenario_abort(rng):
     return s
 
 
+def scenario_abort_long(rng):
+    """An abort with the feed's cap nearly full: 80 words asked for while every ack is withheld, so the
+    memory model's queue fills and the feed's next request is presented and stalled when its
+    watchdog fires. The request stays presented until it is taken (the Wishbone rule: the model
+    stops the run if a stalled request changes or goes away), and its ack is dropped with the rest."""
+    s = MvScenario("abort_long", feed_watchdog=2000)
+    rows, cols = 40, 160
+    trits = rand_trits(rng, rows * cols)
+    x = rand_x(rng, cols)
+    s.put(0x0800_0000, link.image(trits, rows, cols, 1))
+    s.act(1, 0, link.act_image(x, cols, 1))
+    s.hang(2)
+    s.model.run_faults.append({"status": link.Z_SHORT})
+    s.matvec(2, 0x0800_0000, rows, cols, 1)
+    s.hang(0)
+    s.cmds.append(f"w {2000 * CLK_PS}")
+    s.matvec(3, 0x0800_0000, rows, cols, 1)
+    s.status(4)
+    s.extra = {"y": exact_y(trits, rows, cols, x), "words": rows * link.words_per_row(cols, 1)}
+    return s
+
+
+def scenario_drain_busy(rng):
+    """An M and an X while the feed still waits for the late acks of an aborted run (the matvec is
+    idle again, the feed is not): both refused not_ready, then the next run exact."""
+    s = MvScenario("drain_busy", feed_watchdog=2000)
+    rows, cols = 8, 160
+    trits = rand_trits(rng, rows * cols)
+    x = rand_x(rng, cols)
+    s.put(0x0800_0000, link.image(trits, rows, cols, 1))
+    s.act(1, 0, link.act_image(x, cols, 1))
+    s.hang(2)
+    s.model.run_faults.append({"status": link.Z_SHORT})
+    s.matvec(2, 0x0800_0000, rows, cols, 1)
+    s.model.busy = True
+    s.matvec(3, 0x0800_0000, rows, cols, 1)
+    s.act(4, 0, link.act_image(x, cols, 1))
+    s.model.busy = False
+    s.hang(0)
+    s.cmds.append(f"w {2000 * CLK_PS}")
+    s.matvec(5, 0x0800_0000, rows, cols, 1)
+    s.extra = {"y": exact_y(trits, rows, cols, x)}
+    return s
+
+
+def scenario_act_blocks(rng):
+    """Activations in X frames at nonzero blocks and of lengths that are not whole blocks (the host's
+    path for more than 51 blocks), overwriting parts of blocks, then runs in both formats compared
+    with sums over the activations as the frames left them."""
+    s = MvScenario("act_blocks")
+    seq, runs = 1, []
+    for fmt, rows, cols, addr in ((1, 4, 400, 0x0200_0000), (0, 3, 320, 0x0300_1000)):
+        trits = rand_trits(rng, rows * cols)
+        s.put(addr, link.image(trits, rows, cols, fmt))
+        img = bytearray(link.act_image(rand_x(rng, cols), cols, fmt))       # 5 blocks of 80 bytes
+        s.act(seq, 0, bytes(img[0:88]))                                    # block 0 and 8 bytes of block 1
+        s.act(seq + 1, 1, bytes(img[80:400]))                              # blocks 1-4
+        new2 = bytes(rng.getrandbits(8) for _ in range(72))
+        img[160:232] = new2
+        s.act(seq + 2, 2, new2)                                            # part of block 2
+        new4 = bytes(rng.getrandbits(8) for _ in range(40))
+        img[320:360] = new4
+        s.act(seq + 3, 4, new4)                                            # part of block 4
+        n = link.lanes(fmt)
+        xs = [(b - 256 if b >= 128 else b) for k in range(5) for b in img[k * 80:k * 80 + n]][:cols]
+        s.matvec(seq + 4, addr, rows, cols, fmt)
+        runs.append((seq + 4, exact_y(trits, rows, cols, xs)))
+        seq += 5
+    s.extra = {"runs": runs}
+    return s
+
+
+def scenario_baud_busy(rng):
+    """A B frame while a run's lines go out is refused not_ready (the lines share the transmitter);
+    the run's lines all arrive at the old rate. After the run a B is taken and holds."""
+    s = MvScenario("baud_busy")
+    rows, cols = 40, 200
+    trits = rand_trits(rng, rows * cols)
+    x = rand_x(rng, cols)
+    s.put(0x0600_0000, link.image(trits, rows, cols, 0))
+    s.act(1, 0, link.act_image(x, cols, 0))
+    s.matvec(2, 0x0600_0000, rows, cols, 0, wait=False)
+    s.cmds.append(f"w {40 * 10 * s.bit_ps}")
+    s.model.busy = True
+    s.send(proto.baud_frame(3, 20))
+    s.model.busy = False
+    s.wait()
+    s.send(proto.baud_frame(4, 20))
+    s.wait()
+    s.set_rate(20)
+    s.cmds.append(f"w {4 * 20 * CLK_PS}")
+    s.status(5)
+    s.interleaved = True
+    s.extra = {"y": exact_y(trits, rows, cols, x)}
+    return s
+
+
 def scenario_arbitration(rng):
     # A slow memory (90 % of the clocks stalled) makes the run's 1,000 words take longer than the
     # load frame sent right after the M, so the load's commit asks for the port while the feed
@@ -296,6 +393,9 @@ def scenario_real_chunk(chunk):
     import stage1_chunk
     s = MvScenario("real_chunk")
     rows, cols = stage1_chunk.ROWS, stage1_chunk.COLS
+    # The model answers with t27/matvec.t27's accumulators (the chunk's reference), set before the
+    # frames are fed to it, so the device's Y lines are compared with those and not the model's sums.
+    s.model.compute = lambda trits, r, c, x: list(chunk["y"])
     seq = 1
     for fmt, addr in ((1, 0x0100_0000), (0, 0x0B04_0000)):     # model slots 0.. and 16384.. (no alias)
         s.put(addr, link.image(chunk["trits"], rows, cols, fmt))
@@ -303,7 +403,6 @@ def scenario_real_chunk(chunk):
         s.matvec(seq + 1, addr, rows, cols, fmt)
         seq += 2
     s.status(seq)
-    s.model.compute = lambda trits, r, c, x: list(chunk["y"])
     return s
 
 
@@ -401,7 +500,8 @@ class MatvecTop(unittest.TestCase):
         work.mkdir(parents=True, exist_ok=True)
         rng = random.Random(6464)
         scenarios = [scenario_runs(rng), scenario_refusals(rng), scenario_busy(rng), scenario_not_ready(rng),
-                     scenario_abort(rng), scenario_arbitration(rng)]
+                     scenario_abort(rng), scenario_arbitration(rng), scenario_abort_long(rng), scenario_drain_busy(rng),
+                     scenario_act_blocks(rng), scenario_baud_busy(rng)]
         cls.chunk, cls.chunk_error = None, None
         try:
             import stage1_chunk
@@ -563,6 +663,7 @@ class MatvecTop(unittest.TestCase):
         self.assertEqual([proto.REASONS[(e.a >> 20) & 15] for e in dup], ["ok", "duplicate"])
         self.assertEqual(self.run_values(r["events"], 15)[0], s.extra["y"])
         self.assertEqual(r["monitors"]["TBMV"]["feed_runs"], 1)             # the refused runs never read DDR3
+        self.assertEqual(r["monitors"]["TBMV"]["feed_timeouts"], 0)
 
     def test_frames_while_a_run_is_busy(self):
         r = self.assert_as_predicted("busy")
@@ -591,11 +692,51 @@ class MatvecTop(unittest.TestCase):
         s = self.scenarios["abort"]
         y, z = self.run_values(r["events"], 2)
         self.assertEqual((y, z["status"], z["words"]), ([], link.Z_SHORT, 0))
+        # Ended by the feed's abort (its watchdog, 2,000 clocks here), not by the matvec's own idle
+        # limit (65,536): a matvec that never saw the abort passes every other check of this test.
+        self.assertLess(z["latency"], 2 * 2000, z)
         self.assertEqual(self.run_values(r["events"], 3)[0], s.extra["y"])
         mon = r["monitors"]["TBMV"]
         self.assertEqual(mon["feed_timeouts"], 1)
         self.assertGreater(mon["feed_dropped"], 0)                           # the late acks of the aborted run
         self.assertEqual(r["monitors"]["TBWB"]["taken1"], mon["feed_dropped"] + 8 * link.words_per_row(160, 1))
+
+    def test_abort_with_a_stalled_request(self):
+        r = self.assert_as_predicted("abort_long")
+        s = self.scenarios["abort_long"]
+        y, z = self.run_values(r["events"], 2)
+        self.assertEqual((y, z["status"], z["words"]), ([], link.Z_SHORT, 0))
+        self.assertLess(z["latency"], 2 * 2000, z)                          # the feed's abort, as above
+        self.assertEqual(self.run_values(r["events"], 3)[0], s.extra["y"])
+        mon = r["monitors"]
+        self.assertEqual(mon["TBMV"]["feed_timeouts"], 1)
+        # Every request of the aborted run was taken, the stalled one too, and every ack dropped.
+        self.assertEqual(mon["TBWB"]["taken1"], mon["TBMV"]["feed_dropped"] + s.extra["words"])
+        self.assertGreater(mon["TBMV"]["feed_dropped"], 62)
+
+    def test_frames_while_the_feed_drains(self):
+        r = self.assert_as_predicted("drain_busy")
+        s = self.scenarios["drain_busy"]
+        naks = [e for e in r["events"] if e.kind == "line" and e.tag in "AN" and e.a >> 24 in (3, 4)]
+        self.assertEqual([(e.tag, proto.REASONS[(e.a >> 20) & 15]) for e in naks], [("N", "not_ready")] * 2)
+        y, z = self.run_values(r["events"], 5)
+        self.assertEqual((y, z["status"]), (s.extra["y"], link.Z_RAN))
+
+    def test_activations_at_blocks_and_in_parts(self):
+        r = self.assert_as_predicted("act_blocks")
+        for seq, want in self.scenarios["act_blocks"].extra["runs"]:
+            y, z = self.run_values(r["events"], seq)
+            self.assertEqual((y, z["status"]), (want, link.Z_RAN), seq)
+
+    def test_baud_change_waits_for_the_run(self):
+        r = self.assert_as_predicted("baud_busy")
+        s = self.scenarios["baud_busy"]
+        answers = [e for e in r["events"] if e.kind == "line" and e.tag in "AN" and e.a >> 24 in (3, 4)]
+        self.assertEqual([(e.tag, e.a >> 24, (e.a >> 17) & 7, proto.REASONS[(e.a >> 20) & 15]) for e in answers],
+                         [("N", 3, 4, "not_ready"), ("A", 4, 4, "ok")])
+        self.assertEqual(self.run_values(r["events"], 2)[0], s.extra["y"])
+        status = proto.decode_status(r["events"][-37:])
+        self.assertEqual(status["baud_div"], 20)
 
     def test_load_and_read_back_during_a_run(self):
         r = self.assert_as_predicted("arbitration")
