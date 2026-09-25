@@ -122,8 +122,8 @@ with original commit and byte hashes recorded in
   depend on timing and the reads of the reader's region, which the reader rewrites), with the
   #62 reader as second master. See `docs/uart-loader.md`, "DDR3 (part 2, built)".
 
-- Device matvec (`fpga_ddr3_matvec.t27`, issue #64, consumer (B) of #65; not yet wired into a
-  board top, the DDR3 integration is the next wave): y = W x for a ternary matrix streamed one
+- Device matvec (`fpga_ddr3_matvec.t27`, issue #64, consumer (B) of #65; wired into the DDR3
+  matvec build below, not yet on the board): y = W x for a ternary matrix streamed one
   128-bit bus word per controller clock (the word #62's reader delivers) as baseline2 (64 lanes)
   or dense5 (80 lanes) with every row padded to whole words, and int8 activations held on chip in
   ten block-RAM banks read 80 at a time (one read per word in both formats). Decode (the dense5
@@ -139,6 +139,22 @@ with original commit and byte hashes recorded in
   real q_proj chunk (rows 0-319) in both formats, on 6,912-column rows, on +1 codes in every
   padding lane, at the 1,024-row and 1,024-word limits, and on the handshake, a short stream and
   an abort. See `docs/bridge.md`, "Device matvec (#64)".
+
+- DDR3 matvec build (`make ... DDR3_APP=matvec`, issue #64: the DDR3 loader's top read with
+  `define DDR3_MATVEC`): the loader above at protocol 4 (`[matvec]`-marked changes: activation
+  frames X into the matvec's banks, matvec frames M that check the region and start the run,
+  X and M refused `not_ready` while a run is busy and M before the calibration), the device
+  matvec, `fpga_matvec_feed.t27` (Wishbone master 1: after the matvec's in_ready it reads exactly
+  rows x words per row in address order, at most 64 outstanding, and hands each acknowledged word
+  to the matvec in its clock; a watchdog pulses the matvec's abort and drops the late acks) and
+  `fpga_line_arbiter.t27` (the line emitter shared by the loader's and the matvec's lines: a side
+  sees idle only while it holds the grant and no go is in flight; the grant alternates, and stays
+  with the loader while it sends a read-back frame). `tests/test_ddr3_matvec_top.py` checks the
+  loader's new functions in C and runs the whole top in Icarus against our Wishbone memory model,
+  every device byte against `tools/bridge_link_protocol.MatvecDevice` (runs in both formats,
+  refusals, frames while a run is busy, the calibration, an abort on withheld acks, a load and a
+  read-back during a run, and the real q_proj chunk with the fixture cache). See
+  `docs/bridge.md`, "The DDR3 matvec build".
 
 ## Current compiler boundaries
 

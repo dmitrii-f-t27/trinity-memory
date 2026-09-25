@@ -31,6 +31,9 @@
 //   copy, a whole line older).
 // With `define DDR3_LOADER_READER the #62 reader is master 1; its report lines (uart_tx2)
 // are decoded into +capture2= as "<time in ns>\t<line>", for tools/fpga-ddr3-capture.py.
+// With `define DDR3_MATVEC (tests/test_ddr3_matvec_top.py) the top carries the device matvec;
+// TBMV prints the line arbiter's collisions (must be 0) and lines per side, the feed's runs,
+// timeouts, dropped and stray acks (stray must be 0) and the matvec's runs.
 `timescale 1ps/1ps
 `default_nettype none
 
@@ -67,6 +70,8 @@ module tb_ddr3_loader;
     parameter integer READER_TRITS = 1237;
     parameter integer READER_RUNS = 0;
     parameter integer READER_UART_DIV = 4;
+    parameter integer FEED_CAP = 64;
+    parameter integer FEED_WATCHDOG = 32768;
     reg clk200 = 1'b0;
     always #2500 clk200 = ~clk200;
     wire rx_line, tx_line, button_n, tx2;
@@ -83,6 +88,9 @@ module tb_ddr3_loader;
         .PROBATION_CLOCKS(PROBATION_CLOCKS)
 `ifdef DDR3_LOADER_READER
         , .READER_TRITS(READER_TRITS), .READER_RUNS(READER_RUNS), .READER_UART_DIV(READER_UART_DIV)
+`endif
+`ifdef DDR3_MATVEC
+        , .FEED_CAP(FEED_CAP), .FEED_WATCHDOG(FEED_WATCHDOG)
 `endif
     ) dut (
         .clk200_p(clk200), .clk200_n(~clk200), .rst_n(button_n), .led(led), .uart_tx(tx_line), .uart_rx(rx_line),
@@ -181,6 +189,11 @@ module tb_ddr3_loader;
         end
     end
     final begin
+`ifdef DDR3_MATVEC
+        $display("TBMV collisions=%0d lines0=%0d lines1=%0d feed_runs=%0d feed_timeouts=%0d feed_dropped=%0d feed_stray=%0d mv_runs=%0d preloaded=%0d",
+                 dut.line_arbiter.collisions, dut.line_arbiter.lines0, dut.line_arbiter.lines1, dut.feed.runs,
+                 dut.feed.timeouts, dut.feed.dropped, dut.feed.stray, dut.matvec.runs, dut.ddr3.preloaded);
+`endif
         $display("TBCLK lines=%0d age_min=%0d age_max=%0d", clk_lines, clk_age_min, clk_age_max);
         $display("TBPORT idle_held_max=%0d", idle_held_max);
         $display("TBRACE state=%0d", race_state);

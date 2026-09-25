@@ -378,6 +378,13 @@ loader-clean:
 # other DDR3 builds. Build and report directories end in -loader.
 # Simulation: tests/test_ddr3_loader.py.
 #   make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_APP=loader
+# DDR3_APP=matvec is that loader at protocol 4 with the device matvec of issue #64
+# (docs/bridge.md, "Wire protocol extension"): the same top read with `define DDR3_MATVEC,
+# which adds t27/rtl/fpga_ddr3_matvec.t27, its feed on the arbiter's master 1
+# (fpga_matvec_feed.t27) and the line arbiter (fpga_line_arbiter.t27); cores, block RAM
+# library and XDC as the loader. Build and report directories end in -matvec.
+# Simulation: tests/test_ddr3_matvec_top.py.
+#   make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_APP=matvec
 # Two place-and-route lines (DDR3_PNR_LINE):
 #   release (default)  nextpnr-xilinx $(NEXTPNR_DDR3_REV), built from its release tag, with a chip
 #                      database from its own bbaexport and prjxray-db; fasm2frames reads that same
@@ -436,15 +443,18 @@ DDR3_SRC       := $(ROOT)/build/uberddr3
 DDR3_SUFFIX    := $(if $(filter image,$(DDR3_PNR_LINE)),-nextpnr-45a986b8)
 DDR3_APP       ?= pattern
 override DDR3_APP := $(strip $(DDR3_APP))
-ifneq ($(words $(DDR3_APP)) $(filter pattern reader loader,$(DDR3_APP)),1 $(DDR3_APP))
-$(error DDR3_APP must be pattern, reader or loader, not '$(DDR3_APP)')
+ifneq ($(words $(DDR3_APP)) $(filter pattern reader loader matvec,$(DDR3_APP)),1 $(DDR3_APP))
+$(error DDR3_APP must be pattern, reader, loader or matvec, not '$(DDR3_APP)')
 endif
 DDR3_READER    := $(filter reader,$(DDR3_APP))
-DDR3_LOADER    := $(filter loader,$(DDR3_APP))
-DDR3_APP_SUFFIX := $(if $(DDR3_READER),-reader)$(if $(DDR3_LOADER),-loader)
+# The loader's top, cores and flow serve DDR3_APP=loader and DDR3_APP=matvec.
+DDR3_LOADER    := $(filter loader matvec,$(DDR3_APP))
+DDR3_MATVEC    := $(filter matvec,$(DDR3_APP))
+DDR3_APP_SUFFIX := $(if $(DDR3_READER),-reader)$(if $(DDR3_LOADER),-$(DDR3_APP))
 DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)$(DDR3_APP_SUFFIX)
 DDR3_TOP       := $(if $(DDR3_LOADER),tms_ddr3_loader_ax7203,tms_ddr3_ax7203)
-DDR3_LOADER_CORES := fpga_reset fpga_uart_tx fpga_uart_rx fpga_line_emitter fpga_ddr3_loader fpga_loader_wb fpga_wb_arbiter
+DDR3_LOADER_CORES := fpga_reset fpga_uart_tx fpga_uart_rx fpga_line_emitter fpga_ddr3_loader fpga_loader_wb fpga_wb_arbiter \
+                     $(if $(DDR3_MATVEC),fpga_ddr3_matvec fpga_matvec_feed fpga_line_arbiter)
 DDR3_CORES     := $(if $(DDR3_LOADER),$(DDR3_LOADER_CORES),fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status $(if $(DDR3_READER),fpga_ddr3_reader,fpga_ddr3_pattern))
 DDR3_PATTERN   ?= 1
 DDR3_PATTERN_BURSTS ?= 33554432
@@ -500,19 +510,19 @@ ifneq ($(shell awk 'BEGIN { t = "$(strip $(DDR3_READER_TRITS))"; c = "$(strip $(
 $(error DDR3_READER_TRITS (1 .. 2^31-1), DDR3_READER_CAP (1 .. 2^24-1), DDR3_READER_RUNS (0 .. 2^31-1) and DDR3_READER_SEED must be decimal)
 endif
 endif
-# The loader (#63 part 2): x16 only, no pattern test, no UberDDR3 debug UART.
+# The loader (#63 part 2) and the matvec on it (#64): x16 only, no pattern test, no UberDDR3 debug UART.
 ifneq ($(DDR3_LOADER),)
 ifneq ($(DDR3_WIDTH),16)
-$(error DDR3_APP=loader is built for x16 only (a 128-bit Wishbone word), not DDR3_WIDTH=$(DDR3_WIDTH))
+$(error DDR3_APP=$(DDR3_APP) is built for x16 only (a 128-bit Wishbone word), not DDR3_WIDTH=$(DDR3_WIDTH))
 endif
 ifeq ($(origin DDR3_PATTERN),command line)
 ifeq ($(DDR3_PATTERN),1)
-$(error DDR3_APP=loader replaces the pattern test: leave DDR3_PATTERN unset)
+$(error DDR3_APP=$(DDR3_APP) replaces the pattern test: leave DDR3_PATTERN unset)
 endif
 endif
 override DDR3_PATTERN := 0
 ifeq ($(DDR3_UART_DEBUG_BIST),1)
-$(error DDR3_APP=loader needs DDR3_UART_DEBUG_BIST=0)
+$(error DDR3_APP=$(DDR3_APP) needs DDR3_UART_DEBUG_BIST=0)
 endif
 endif
 DDR3_READER_TAG := $(if $(DDR3_READER),$(DDR3_READER_TRITS)-$(DDR3_READER_SEED)-$(DDR3_READER_CAP)-$(DDR3_READER_RUNS))
@@ -521,7 +531,7 @@ DDR3_READER_CHPARAM := $(if $(DDR3_READER),-set READER_TRITS $(DDR3_READER_TRITS
 DDR3_PATTERN_TAG := $(DDR3_PATTERN)-$(DDR3_PATTERN_BURSTS)-$(DDR3_PATTERN_HOLD)-$(DDR3_PATTERN_ROUNDS)-uart$(DDR3_UART_DEBUG_BIST)
 DDR3_PATTERN_VARIANT := PATTERN_TEST $(DDR3_PATTERN)$(if $(filter 1,$(DDR3_PATTERN)), (bursts $(DDR3_PATTERN_BURSTS)$(comma) hold $(DDR3_PATTERN_HOLD) clocks$(comma) rounds $(DDR3_PATTERN_ROUNDS)))$(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(comma) UART_DEBUG_BIST 1 (ddr3_top uart_tx on N15$(comma) 9600 baud))
 # The reader's variant names READER (tools/fpga-ddr3-capture.py reads it) and no PATTERN_TEST.
-DDR3_APP_VARIANT := $(if $(DDR3_READER),READER (trits $(DDR3_READER_TRITS)$(comma) seed $(DDR3_READER_SEED)$(comma) cap $(DDR3_READER_CAP)$(comma) runs $(DDR3_READER_RUNS)),$(if $(DDR3_LOADER),LOADER (UART 115200 baud$(comma) timeout 50 ms$(comma) probation 3 s$(comma) store 2^29 bytes$(comma) arbiter master 1 idle),$(DDR3_PATTERN_VARIANT)))
+DDR3_APP_VARIANT := $(if $(DDR3_READER),READER (trits $(DDR3_READER_TRITS)$(comma) seed $(DDR3_READER_SEED)$(comma) cap $(DDR3_READER_CAP)$(comma) runs $(DDR3_READER_RUNS)),$(if $(DDR3_MATVEC),MATVEC (loader protocol 4$(comma) UART 115200 baud$(comma) timeout 50 ms$(comma) probation 3 s$(comma) store 2^29 bytes$(comma) device matvec with its feed on arbiter master 1$(comma) line arbiter),$(if $(DDR3_LOADER),LOADER (UART 115200 baud$(comma) timeout 50 ms$(comma) probation 3 s$(comma) store 2^29 bytes$(comma) arbiter master 1 idle),$(DDR3_PATTERN_VARIANT))))
 DDR3_UBER      := $(DDR3_SRC)/rtl/ddr3_top.v $(DDR3_SRC)/rtl/ddr3_controller.v $(DDR3_SRC)/rtl/ddr3_phy.v
 DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v \
                   $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(DDR3_DIR)/uart_tx_t27.v) \
@@ -680,7 +690,7 @@ else
 # The loader (#63 part 2): its t27 cores with -nomem2reg (block RAM for the receive FIFO and the
 # staging buffer), every memory in the RAMB36 1K x 36 configuration (brams_x36.txt), as part 1.
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach c,$(DDR3_CORES),$(call REL,$(RTL)/$(c).v)); \
-	  read_verilog $(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
+	  read_verilog $(if $(DDR3_MATVEC),-DDDR3_MATVEC )$(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_TOP); \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :map_memory; \

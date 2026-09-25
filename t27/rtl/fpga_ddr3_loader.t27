@@ -28,6 +28,27 @@ module TrinityFpgaDdr3LoaderT27;
 //   written yet and the ack of a read still outstanding, whenever it comes, and gives the
 //   port back once nothing is outstanding (a block-RAM store never stalls, so part 1 has
 //   no use for it).
+// [matvec] 5. Protocol 4 (issue #64, docs/bridge.md "Wire protocol extension") in a build with
+//   the device matvec (`matvec` high: fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v with `define
+//   DDR3_MATVEC; low, the loader is protocol 3 as above and X and M are unknown commands).
+//   'X' (0x58) activations: len a multiple of 8, 8..4080, addr = the first 80-byte block (entry
+//   of the matvec's ten banks), addr + ceil(len / 80) <= 1024; after its CRC the payload goes
+//   into the banks, one u64 per bank entry (act_we, act_entry, act_bank, act_data; bank b holds
+//   bytes 8b .. 8b+7 of a block, little endian), then `A` (command 5); a repeat of the last X
+//   (seq, addr, len, crc) is answered `duplicate` and not written again. 'M' (0x4D) matvec:
+//   len 12 (rows, cols, format u32), addr a multiple of 16 below the store's size; after its CRC
+//   the handler reads the three words, computes the words per row (ceil(cols / 64 or 80), by
+//   repeated subtraction as the matvec's SETUP) and the run's words (rows x words per row, by
+//   repeated addition), checks the configuration and that the region addr .. addr + words x 16
+//   lies in the store, sends `A` (command 6) and then starts the matvec (mv_start with rows,
+//   cols, format and seq; rows 0 for a region that does not fit, which the matvec refuses:
+//   status 1, only its Z lines) and, for a run that goes ahead, the feed of its words
+//   (t27/rtl/fpga_matvec_feed.t27: feed_start with the first burst and the words). X and M
+//   wait for a run: while `mv_busy` (the matvec or the feed) they are refused NOT_READY after
+//   their CRC, as an M before the calibration. Neither counts in frames_committed or
+//   bytes_committed. The config word reports protocol 4. `tx_lock` (module level) is high
+//   while a read-back frame goes out byte by byte past the line emitter, which the matvec's
+//   lines share through t27/rtl/fpga_line_arbiter.t27.
 //
 // Part 1's description of the protocol follows unchanged.
 // Host-to-board UART loader with per-chunk acknowledgement (issue #63). The frame
@@ -117,6 +138,17 @@ const P_RB_RESP: u32 = 17;
 const P_RB_SEND: u32 = 18;
 const P_STATUS: u32 = 19;
 const P_BAUD: u32 = 20;
+const P_ACT_RD0: u32 = 21;           // [matvec] X: two staging words, then one bank entry
+const P_ACT_RD1: u32 = 22;           // [matvec]
+const P_ACT_WR: u32 = 23;            // [matvec]
+const P_MV_RD0: u32 = 24;            // [matvec] M: rows, cols, format from the staging buffer
+const P_MV_RD1: u32 = 25;            // [matvec]
+const P_MV_RD2: u32 = 26;            // [matvec]
+const P_MV_RD3: u32 = 27;            // [matvec]
+const P_MV_WPR: u32 = 28;            // [matvec] words per row
+const P_MV_MUL: u32 = 29;            // [matvec] words of the run
+const P_MV_FIT: u32 = 30;            // [matvec] the region in the store, then the ack
+const P_MV_GO: u32 = 31;             // [matvec] start the run after the ack line
 
 const MAGIC0: u32 = 165;
 const MAGIC1: u32 = 90;
@@ -124,6 +156,8 @@ const CMD_LOAD: u32 = 76;
 const CMD_READ: u32 = 82;
 const CMD_STATUS: u32 = 83;
 const CMD_BAUD: u32 = 66;
+const CMD_ACT: u32 = 88;             // [matvec] 'X'
+const CMD_MATVEC: u32 = 77;          // [matvec] 'M'
 const RESP_READ: u32 = 114;
 
 const R_OK: u32 = 0;
@@ -143,6 +177,11 @@ const TAG_N: u32 = 78;
 const TAG_C: u32 = 67;
 
 const PROTO: u32 = 3;                // [ddr3] 2 in part 1
+const PROTO_MATVEC: u32 = 4;         // [matvec] with the matvec
+const ACT_ENTRIES: u32 = 1024;       // [matvec] entries of each activation bank
+const ACT_MAX_LEN: u32 = 4080;       // [matvec] 51 blocks of 80 bytes per X frame
+const MV_MAX_ROWS: u32 = 1024;       // [matvec] rows of one run (the matvec's result memory)
+const MV_MAX_WPR: u32 = 1024;        // [matvec] words per row (the activation banks)
 const MAX_LEN: u32 = 4096;
 const MAX_LEN_LOG2: u32 = 12;
 const STAGE_WORD_MASK: u32 = 1023;
@@ -295,6 +334,41 @@ var rd_req: bool = false;
 var rd_addr: u32 = 0;
 var port_give_up: bool = false;       // [ddr3] one clock: the loader gave up on the port (t27/rtl/fpga_loader_wb.t27)
 
+// [matvec] Protocol 4: the X frame's bank writes and duplicate check, the M frame's run.
+var act_lo: u32 = 0;
+var a_entry: u32 = 0;
+var a_bank: u32 = 0;
+var act_last_q: bool = false;
+var act_dup_q: bool = false;
+var last_act_valid: bool = false;
+var last_act_seq: u32 = 0;
+var last_act_addr: u32 = 0;
+var last_act_len: u32 = 0;
+var last_act_crc: u32 = 0;
+var mv_r: u32 = 0;
+var mv_c: u32 = 0;
+var mv_f: u32 = 0;
+var mv_ok: bool = false;
+var mv_rem: u32 = 0;
+var mv_wpr: u32 = 0;
+var mv_ri: u32 = 0;
+var mv_words: u32 = 0;
+var mv_room: u32 = 0;
+// [matvec] Outputs: activation bank writes (t27/rtl/fpga_ddr3_matvec.t27), the run's start and
+// the feed's (one clock each).
+var act_we: bool = false;
+var act_entry: u32 = 0;
+var act_bank: u32 = 0;
+var act_data: u64 = 0;
+var mv_start: bool = false;
+var mv_rows: u32 = 0;
+var mv_cols: u32 = 0;
+var mv_fmt: u32 = 0;
+var mv_seq: u32 = 0;
+var feed_start: bool = false;
+var feed_base: u32 = 0;
+var feed_words: u32 = 0;
+
 fn crc_byte(c: u32, b: u32) -> u32 {
     var x: u32 = c ^ (b & 255);
     var i: u32 = 0;
@@ -404,6 +478,27 @@ fn header_ok(cmd: u32, addr: u32, len: u32, store: u32) -> bool {
     }
     if (cmd == CMD_BAUD) { return len == 0 && addr >= MIN_DIV && addr <= MAX_DIV; }
     return len == 0;
+}
+
+// [matvec] Header rules of X and M (docs/bridge.md, "Wire protocol extension"): X len a multiple
+// of 8 in 8..4080 from block addr with addr + ceil(len / 80) <= 1024, that is len <= 80 x (1024
+// - addr); M len 12 at a multiple of 16 below the store's size.
+fn header_ok_mv(cmd: u32, addr: u32, len: u32, store: u32) -> bool {
+    if (cmd == CMD_ACT) {
+        if (len < 8 || len > ACT_MAX_LEN || (len & 7) != 0 || addr >= ACT_ENTRIES) { return false; }
+        var room: u32 = ACT_ENTRIES - addr;
+        return len <= (room << 6) + (room << 4);
+    }
+    if (cmd == CMD_MATVEC) { return len == 12 && (addr & 15) == 0 && addr < store; }
+    return false;
+}
+
+// [matvec] The command field of a response word for X (5) and M (6) in a build with the matvec,
+// 0 otherwise (resp_word has the index of every other command; cmd_index leaves X and M at 0).
+fn mv_index(cmd: u32, mv: bool) -> u32 {
+    if (mv && cmd == CMD_ACT) { return 5; }
+    if (mv && cmd == CMD_MATVEC) { return 6; }
+    return 0;
 }
 
 fn fifo_entry(d: u32, fe: bool, gap: bool) -> u32 {
@@ -550,6 +645,11 @@ var lcn6: u32;
 var lcn7: u32;
 var lcn8: u32;
 var needs_calib: bool;              // [ddr3]
+var mv_cmd: bool;                   // [matvec] an X or M frame, in a build with the matvec
+var mv_bits: u32;                   // [matvec] its command field in a response word
+var mv_lanes: u32;                  // [matvec] lanes per word of the M frame's format
+var tx_lock: bool;                  // [matvec] a read-back frame is going out (t27/rtl/fpga_line_arbiter.t27)
+var stage_re: bool;                 // [matvec] the staging buffer is read in this clock (word ci / 4)
 fifo_level = (wp - rp) & PTR_MASK;
 cur = (fifo_rdata as u32) & 255;
 cur_ferr = ((fifo_rdata as u32) & 256) != 0;
@@ -563,7 +663,7 @@ receiving = waiting_byte || pstate == P_HUNT;
 store_bytes = pow2(store_log2);
 div_now = pick(baud_sel, baud_custom, default_div);
 is_dup = last_valid && h_seq == last_seq && h_addr == last_addr && h_len == last_len && h_crc == last_crc;
-config_word = (PROTO << 24) | (MAX_LEN_LOG2 << 16) | ((store_log2 & 255) << 8) | FIFO_LOG2;
+config_word = (pick(matvec, PROTO_MATVEC, PROTO) << 24) | (MAX_LEN_LOG2 << 16) | ((store_log2 & 255) << 8) | FIFO_LOG2;   // [matvec]
 line_value = pick(resp_counts, ((frames_ok & 65535) << 16) | (naks & 65535), resp_v);
 resp_bits = resp_bits_q;             // [ddr3] line_bits(...), pipelined (lc0-lc8)
 last_word = pick(last_valid, 256 | last_seq, last_seq);
@@ -592,7 +692,13 @@ status_next = status_all(st_i, rx_bytes, rx_ferrs, rx_false, fifo_overflows, fif
                          cal_word(calib, cal_now, cal_top, cal_recals), cal_at, cal_lost, wb_writes, wb_reads,
                          wb_hits, wb_dropped, wb_stray, wb_max_outst, wb_rd_lat_max, wb_cmd_stalls, arb_switches,
                          arb_stray);
-needs_calib = (h_cmd == CMD_LOAD || h_cmd == CMD_READ) && !calib; // [ddr3]
+needs_calib = (h_cmd == CMD_LOAD || h_cmd == CMD_READ || (matvec && h_cmd == CMD_MATVEC)) && !calib; // [ddr3] [matvec] M too
+mv_cmd = matvec && (h_cmd == CMD_ACT || h_cmd == CMD_MATVEC);                           // [matvec]
+mv_bits = mv_index(h_cmd, matvec) << 17;                                                // [matvec]
+mv_lanes = pick(mv_f == 1, 80, 64);                                                     // [matvec]
+tx_lock = pstate == P_RB_NEXT || pstate == P_RB_REQ || pstate == P_RB_RESP || pstate == P_RB_SEND;   // [matvec]
+stage_re = pstate == P_COMMIT_RD || pstate == P_ACT_RD0 || pstate == P_ACT_RD1 || pstate == P_MV_RD0
+           || pstate == P_MV_RD1 || pstate == P_MV_RD2;                                 // [matvec]
 
 fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs: u32, rx_false: u32,
             line_idle: bool, tx_busy: bool, wr_ready: bool, wr_idle: bool,
@@ -600,7 +706,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             store_log2: u32, default_div: u32, timeout_clocks: u32, probation_clocks: u32, build_id: u32,
             calib: bool, cal_state: u32, wb_writes: u32, wb_reads: u32, wb_hits: u32, wb_dropped: u32,
             wb_stray: u32, wb_max_outst: u32, wb_rd_lat_max: u32, wb_cmd_stalls: u32, arb_switches: u32,
-            arb_stray: u32) {
+            arb_stray: u32, matvec: bool, mv_busy: bool) {   // [ddr3] [matvec] matvec, mv_busy
     // [ddr3] Calibration watch (cal_at: this clock's count, as the clocks counter below).
     if (cal_now > cal_top) { cal_top = cal_now; }
     if (cal_now == 0 && cal_prev != 0) { cal_recals = bump(cal_recals); }
@@ -613,6 +719,12 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
     line_go = false;
     tx_start = false;
     port_give_up = false;                                // [ddr3]
+    act_we = false;                                      // [matvec]
+    mv_start = false;                                    // [matvec]
+    feed_start = false;                                  // [matvec]
+    // [matvec] The staging buffer's one read (block RAM, one read address): word ci / 4, for the
+    // load's commit and for the X and M handlers (P_COMMIT_RD's read in part 1).
+    if (stage_re) { stage_rdata = staging[(ci >> 2) & STAGE_WORD_MASK]; }
     clocks = clocks + 1;
 
     // Receive FIFO, write side.
@@ -740,7 +852,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
         } else if (!hdr_good_q) {                        // [ddr3] header_ok(...), registered
             nak_reason = R_LENGTH;
             pstate = P_NAK;
-        } else if (h_cmd == CMD_LOAD) {
+        } else if (h_cmd == CMD_LOAD || mv_cmd) {       // [matvec] X and M carry a payload
             pay_i = 0;
             pstate = P_PAYLOAD;
         } else {
@@ -759,6 +871,12 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             prob_count = 0;                              // [ddr3] 0 outside a probation (see the revert)
             nak_reason = R_NOT_READY;
             pstate = P_NAK;
+        } else if (mv_cmd && mv_busy) {
+            // [matvec] X and M wait for a run: the banks are in use and the matvec takes no start.
+            probation = false;
+            prob_count = 0;
+            nak_reason = R_NOT_READY;
+            pstate = P_NAK;
         } else {
             probation = false;
             prob_count = 0;                              // [ddr3] 0 outside a probation (see the revert)
@@ -774,6 +892,22 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
                     ci = 0;
                     pstate = P_COMMIT_RD;
                 }
+            } else if (h_cmd == CMD_ACT) {                // [matvec] (only with the matvec: mv_cmd)
+                if (act_dup_q) {
+                    resp_tag = TAG_A;
+                    resp_a = resp_word(h_seq, true, R_DUP, h_cmd, h_len) | mv_bits;
+                    resp_counts = true;
+                    resp_after = P_HUNT;
+                    pstate = P_RESP;
+                } else {
+                    ci = 0;
+                    a_entry = h_addr;
+                    a_bank = 0;
+                    pstate = P_ACT_RD0;
+                }
+            } else if (h_cmd == CMD_MATVEC) {             // [matvec]
+                ci = 0;
+                pstate = P_MV_RD0;
             } else if (h_cmd == CMD_READ) {
                 rb_k = 0;
                 rb_fail = false;
@@ -801,7 +935,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
         if (nak_reason == R_PORT) { nak_port = nak_port + 1; }
         if (nak_reason == R_NOT_READY) { nak_not_ready = nak_not_ready + 1; }   // [ddr3]
         resp_tag = TAG_N;
-        resp_a = resp_word(h_seq, seq_known, nak_reason, h_cmd, h_len);
+        resp_a = resp_word(h_seq, seq_known, nak_reason, h_cmd, h_len) | mv_bits;   // [matvec] X 5, M 6
         resp_counts = true;
         resp_after = P_HUNT;
         pstate = P_RESP;
@@ -817,7 +951,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
     } else if (pstate == P_RESP_WAIT) {
         pstate = resp_after;
     } else if (pstate == P_COMMIT_RD) {
-        stage_rdata = staging[(ci >> 2) & STAGE_WORD_MASK];
+        // [matvec] staging[ci / 4] is read above (stage_re): one read port for every state that reads.
         pstate = P_COMMIT_SET;
     } else if (pstate == P_COMMIT_SET) {
         wr_valid = true;
@@ -935,6 +1069,99 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             st_i = st_i + 1;
             pstate = P_RESP;
         }
+    } else if (pstate == P_ACT_RD0) {
+        // [matvec] X: the payload into the banks, one u64 per three clocks: bytes 8g .. 8g+7 of
+        // the frame (staging words 2g and 2g + 1, read above at ci = 8g and 8g + 4) go to bank
+        // g mod 10 of entry addr + g / 10.
+        ci = ci + 4;
+        pstate = P_ACT_RD1;
+    } else if (pstate == P_ACT_RD1) {
+        act_lo = stage_rdata;                            // [matvec]
+        ci = ci + 4;
+        pstate = P_ACT_WR;
+    } else if (pstate == P_ACT_WR) {
+        act_we = true;                                   // [matvec]
+        act_entry = a_entry;
+        act_bank = a_bank;
+        act_data = ((stage_rdata as u64) << 32) | (act_lo as u64);
+        if (a_bank == 9) {
+            a_bank = 0;
+            a_entry = a_entry + 1;
+        } else {
+            a_bank = a_bank + 1;
+        }
+        if (act_last_q) {                                // ci == len (8g + 8), registered in P_ACT_RD1
+            last_act_valid = true;
+            last_act_seq = h_seq;
+            last_act_addr = h_addr;
+            last_act_len = h_len;
+            last_act_crc = h_crc;
+            resp_tag = TAG_A;
+            resp_a = resp_word(h_seq, true, R_OK, h_cmd, h_len) | mv_bits;
+            resp_counts = true;
+            resp_after = P_HUNT;
+            pstate = P_RESP;
+        } else {
+            pstate = P_ACT_RD0;
+        }
+    } else if (pstate == P_MV_RD0) {
+        // [matvec] M: rows, cols and format, staging words 0, 1 and 2 (read above at ci = 0, 4, 8).
+        ci = ci + 4;
+        pstate = P_MV_RD1;
+    } else if (pstate == P_MV_RD1) {
+        mv_r = stage_rdata;                              // [matvec]
+        ci = ci + 4;
+        pstate = P_MV_RD2;
+    } else if (pstate == P_MV_RD2) {
+        mv_c = stage_rdata;                              // [matvec]
+        pstate = P_MV_RD3;
+    } else if (pstate == P_MV_RD3) {
+        mv_f = stage_rdata;                              // [matvec]
+        mv_rem = mv_c;
+        mv_wpr = 0;
+        pstate = P_MV_WPR;
+    } else if (pstate == P_MV_WPR) {
+        // [matvec] Words per row = ceil(cols / lanes) by repeated subtraction, as the matvec's
+        // SETUP; at most MV_MAX_WPR + 1 steps (more words per row are refused).
+        if (mv_rem == 0 || mv_wpr > MV_MAX_WPR) {
+            mv_ok = mv_r >= 1 && mv_r <= MV_MAX_ROWS && mv_c >= 1 && mv_f <= 1 && mv_wpr <= MV_MAX_WPR;
+            mv_ri = 0;
+            mv_words = 0;
+            pstate = P_MV_MUL;
+        } else {
+            mv_wpr = mv_wpr + 1;
+            mv_rem = pick(mv_rem > mv_lanes, mv_rem - mv_lanes, 0);
+        }
+    } else if (pstate == P_MV_MUL) {
+        // [matvec] The run's words, rows x words per row, by repeated addition (no multiplier).
+        if (!mv_ok || mv_ri == mv_r) {
+            mv_room = store_bytes - h_addr;
+            pstate = P_MV_FIT;
+        } else {
+            mv_words = mv_words + mv_wpr;
+            mv_ri = mv_ri + 1;
+        }
+    } else if (pstate == P_MV_FIT) {
+        // [matvec] The region addr .. addr + words x 16 must lie in the store (the header check
+        // bounds addr only); a run that does not fit is started with rows 0, which the matvec
+        // refuses (status 1, only its Z lines). The ack first: the run's lines follow it.
+        mv_ok = mv_ok && (mv_words << 4) <= mv_room;
+        resp_tag = TAG_A;
+        resp_a = resp_word(h_seq, true, R_OK, h_cmd, h_len) | mv_bits;
+        resp_counts = true;
+        resp_after = P_MV_GO;
+        pstate = P_RESP;
+    } else if (pstate == P_MV_GO) {
+        // [matvec] The ack line is with the emitter: start the run and, if it goes ahead, its feed.
+        mv_start = true;
+        mv_rows = pick(mv_ok, mv_r, 0);
+        mv_cols = mv_c;
+        mv_fmt = mv_f;
+        mv_seq = h_seq;
+        feed_start = mv_ok;
+        feed_base = h_addr >> 4;
+        feed_words = mv_words;
+        pstate = P_HUNT;
     } else if (pstate == P_BAUD) {
         // The ack line has left the transmitter: change the rate.
         // Back to the built-in divisor is no custom rate: no probation, baud_sel (LED 1) low.
@@ -947,10 +1174,12 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
         }
     }
     // [ddr3] Registered checks (see `settle_n`), last, so every branch above reads the previous clock's.
-    cmd_known_q = cmd_index(h_cmd) != 0;
-    hdr_good_q = header_ok(h_cmd, h_addr, h_len, store_bytes);
+    cmd_known_q = cmd_index(h_cmd) != 0 || mv_cmd;       // [matvec] X and M with the matvec
+    hdr_good_q = (mv_cmd && header_ok_mv(h_cmd, h_addr, h_len, store_bytes)) || (!mv_cmd && header_ok(h_cmd, h_addr, h_len, store_bytes));   // [matvec]
     crc_good_q = (crc ^ ALL_ONES) == h_crc;
     dup_q = is_dup;
+    act_dup_q = last_act_valid && h_seq == last_act_seq && h_addr == last_act_addr && h_len == last_act_len && h_crc == last_act_crc;   // [matvec]
+    act_last_q = ci + 4 == h_len;                        // [matvec] read in P_ACT_WR, from P_ACT_RD1's ci
     quiet_over_q = quiet >= timeout_clocks;
     port_over_q = port_wait >= timeout_clocks;
     prob_over_q = prob_count >= probation_clocks;

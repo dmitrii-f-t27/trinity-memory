@@ -25,6 +25,15 @@
 // DDR3_LOADER_READER (simulation only, tests/test_ddr3_loader.py) the #62 burst reader
 // (tms_ddr3_reader.v, t27/rtl/fpga_ddr3_reader.t27) is master 1, with its report lines on
 // a second line emitter and transmitter (uart_tx2); nothing of it exists otherwise.
+//
+// Read with `define DDR3_MATVEC (make ... DDR3_APP=matvec, issue #64) the build carries the
+// device matvec: the loader runs protocol 4 (`matvec` high: activation frames X into the
+// matvec's banks, matvec frames M), t27/rtl/fpga_ddr3_matvec.t27 computes y = W x from the
+// words t27/rtl/fpga_matvec_feed.t27 reads as master 1 (FEED_CAP requests outstanding at
+// most, FEED_WATCHDOG clocks without progress end a run with an abort), and
+// t27/rtl/fpga_line_arbiter.t27 shares the line emitter between the loader's lines and the
+// matvec's Y and Z lines (docs/bridge.md, "Wire protocol extension"). The two defines
+// exclude each other.
 `timescale 1ns/1ps
 `default_nettype none
 module tms_ddr3_loader_ax7203 #(
@@ -35,6 +44,11 @@ module tms_ddr3_loader_ax7203 #(
     parameter integer TIMEOUT_CLOCKS = 0,       // 0 = 50 ms of the controller clock
     parameter integer PROBATION_CLOCKS = 0,     // 0 = 3 s of the controller clock
     parameter integer STORE_LOG2 = 29           // 512 MiB: 2^25 bursts of 16 bytes (x16)
+`ifdef DDR3_MATVEC
+    ,
+    parameter [31:0] FEED_CAP = 32'd64,
+    parameter [31:0] FEED_WATCHDOG = 32'd32768
+`endif
 `ifdef DDR3_LOADER_READER
     ,
     parameter [31:0] READER_TRITS = 32'd1237,
@@ -79,6 +93,11 @@ module tms_ddr3_loader_ax7203 #(
     localparam integer TIMEOUT = TIMEOUT_CLOCKS != 0 ? TIMEOUT_CLOCKS : CTRL_HZ / 20;         // 50 ms
     localparam integer PROBATION = PROBATION_CLOCKS != 0 ? PROBATION_CLOCKS : 3 * CTRL_HZ;   // 3 s
     localparam integer WB_ADDR = 15 + 10 + 3 - 3;
+`ifdef DDR3_MATVEC
+`ifdef DDR3_LOADER_READER
+    DDR3_MATVEC_and_DDR3_LOADER_READER_exclude_each_other both_defined();
+`endif
+`endif
 
     // ---- clocks (as tms_ddr3_ax7203.v) ----
     wire clk200_in, pll_fb, pll_locked;
@@ -179,6 +198,10 @@ module tms_ddr3_loader_ax7203 #(
     wire        em_tx_start, ld_tx_start, tx_busy, line_idle, line_go;
     wire [31:0] em_tx_byte, ld_tx_byte, line_tag, line_a;
     wire [63:0] line_b;
+    // The emitter's request and idle: the loader's own, or through the line arbiter (DDR3_MATVEC).
+    wire        em_go, em_idle;
+    wire [31:0] em_tag, em_a;
+    wire [63:0] em_b;
     TrinityFpgaUartTxT27 transmitter (
         .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
         .start(em_tx_start | ld_tx_start), .data(ld_tx_start ? ld_tx_byte : em_tx_byte), .baud_div(div_now),
@@ -186,9 +209,13 @@ module tms_ddr3_loader_ax7203 #(
     );
     TrinityFpgaLineEmitterT27 emitter (
         .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
-        .go(line_go), .tag(line_tag), .a(line_a), .b(line_b), .tx_busy(tx_busy),
-        .line_busy(), .pos(), .tag_q(), .a_q(), .b_q(), .tx_start(em_tx_start), .tx_byte(em_tx_byte), .idle(line_idle)
+        .go(em_go), .tag(em_tag), .a(em_a), .b(em_b), .tx_busy(tx_busy),
+        .line_busy(), .pos(), .tag_q(), .a_q(), .b_q(), .tx_start(em_tx_start), .tx_byte(em_tx_byte), .idle(em_idle)
     );
+`ifndef DDR3_MATVEC
+    assign {em_go, em_tag, em_a, em_b} = {line_go, line_tag, line_a, line_b};
+    assign line_idle = em_idle;
+`endif
 
     // ---- the loader's store: Wishbone master 0 ----
     wire        wr_valid, wr_last, wr_ready, wr_idle, rd_req, rd_ready, rd_valid, port_give_up;
@@ -242,6 +269,41 @@ module tms_ddr3_loader_ax7203 #(
         .start(r_tx_start), .data(r_tx_byte), .baud_div(READER_UART_DIV),
         .busy(r_tx_busy), .shift(), .count(), .bits(), .tx(uart_tx2)
     );
+`elsif DDR3_MATVEC
+    // ---- master 1: the matvec's feed (reads only), and the device matvec (issue #64) ----
+    wire        mv_start, feed_start, act_we, tx_lock, mv_busy, matvec_busy, feed_busy, feed_abort;
+    wire        mv_in_ready, feed_valid, mv_line_go, mv_idle;
+    wire [31:0] mv_rows, mv_cols, mv_fmt, mv_seq, feed_base, feed_words, act_entry, act_bank;
+    wire [31:0] mv_line_tag, mv_line_a;
+    wire [63:0] act_data, feed_lo, feed_hi, mv_line_b;
+    TrinityFpgaMatvecFeedT27 feed (
+        .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
+        .start(feed_start), .s_base(feed_base), .s_words(feed_words), .mv_ready(mv_in_ready),
+        .stall(m1_stall), .ack(m1_ack), .rdata_lo(wb_rdata[63:0]), .rdata_hi(wb_rdata[127:64]),
+        .cap(FEED_CAP), .watchdog(FEED_WATCHDOG),
+        .busy(feed_busy), .abort(feed_abort), .wb_cyc(m1_cyc), .wb_stb(m1_stb), .wb_addr(m1_addr),
+        .in_valid(feed_valid), .in_lo(feed_lo), .in_hi(feed_hi)
+    );
+    assign m1_we = 1'b0;
+    assign m1_sel = 32'h0000ffff;
+    assign {m1_hi, m1_lo} = 128'd0;
+    TrinityFpgaDdr3MatvecT27 matvec (
+        .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
+        .start(mv_start), .cfg_rows(mv_rows), .cfg_cols(mv_cols), .cfg_fmt(mv_fmt), .cfg_seq(mv_seq),
+        .in_valid(feed_valid), .in_lo(feed_lo), .in_hi(feed_hi),
+        .act_we(act_we), .act_entry(act_entry), .act_bank(act_bank), .act_data(act_data),
+        .line_idle(mv_idle), .abort(feed_abort),
+        .line_go(mv_line_go), .line_tag(mv_line_tag), .line_a(mv_line_a), .line_b(mv_line_b),
+        .busy(matvec_busy), .in_ready(mv_in_ready)
+    );
+    assign mv_busy = matvec_busy | feed_busy;
+    TrinityFpgaLineArbiterT27 line_arbiter (
+        .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
+        .go0(line_go), .tag0(line_tag), .a0(line_a), .b0(line_b),
+        .go1(mv_line_go), .tag1(mv_line_tag), .a1(mv_line_a), .b1(mv_line_b),
+        .em_idle(em_idle), .lock0(tx_lock),
+        .go(em_go), .tag(em_tag), .a(em_a), .b(em_b), .idle0(line_idle), .idle1(mv_idle)
+    );
 `else
     assign {m1_cyc, m1_stb, m1_we} = 3'b000;
     assign m1_addr = 32'd0;
@@ -274,6 +336,14 @@ module tms_ddr3_loader_ax7203 #(
         .calib(calib_complete), .cal_state(debug1), .wb_writes(w_writes), .wb_reads(w_reads), .wb_hits(w_hits),
         .wb_dropped(w_dropped), .wb_stray(w_stray), .wb_max_outst(w_outst), .wb_rd_lat_max(w_lat),
         .wb_cmd_stalls(w_stalls), .arb_switches(a_switches), .arb_stray(a_stray),
+`ifdef DDR3_MATVEC
+        .matvec(1'b1), .mv_busy(mv_busy),
+        .act_we(act_we), .act_entry(act_entry), .act_bank(act_bank), .act_data(act_data),
+        .mv_start(mv_start), .mv_rows(mv_rows), .mv_cols(mv_cols), .mv_fmt(mv_fmt), .mv_seq(mv_seq),
+        .feed_start(feed_start), .feed_base(feed_base), .feed_words(feed_words), .tx_lock(tx_lock),
+`else
+        .matvec(1'b0), .mv_busy(1'b0),
+`endif
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
         .tx_start(ld_tx_start), .tx_byte(ld_tx_byte),
         .wr_valid(wr_valid), .wr_addr(wr_addr), .wr_data(wr_data), .wr_last(wr_last),

@@ -1,0 +1,66 @@
+module TrinityFpgaLineArbiterT27;
+
+// The one line emitter (t27/rtl/fpga_line_emitter.t27) shared by the loader (port 0) and the
+// device matvec (port 1) in the DDR3 matvec build (issue #64; docs/bridge.md, "Wire protocol
+// extension"; fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v with `define DDR3_MATVEC).
+//
+// Both sides raise `go` one clock after they saw their idle, and neither checks that its line
+// was taken: the emitter ignores a `go` while it is busy, so a plain multiplexer loses a line
+// when both go in the same clock. Here a side sees idle only while it holds the grant, the
+// emitter is idle and no go is in flight (in this clock or the one before, while the emitter
+// takes the line): at most one side can see idle in any clock, so at most one go reaches the
+// emitter at a time. The grant alternates on every such quiet clock, so a side that wants to
+// send waits for at most one line of the other. `lock0` (the loader sends a read-back frame
+// byte by byte, past the emitter, straight to the transmitter) keeps the grant at the loader
+// and hides idle from the matvec, so no line starts inside that frame.
+//
+// `collisions` counts clocks with both go high (must stay 0); `lines0` and `lines1` the lines
+// each side sent.
+// Every statement of on_clock reads a variable before the same tick writes it.
+var owner1: bool = false;
+var go_d: bool = false;
+var lines0: u32 = 0;
+var lines1: u32 = 0;
+var collisions: u32 = 0;
+
+fn pick(sel: bool, x: u32, y: u32) -> u32 {
+    if (sel) { return x; }
+    return y;
+}
+
+fn pick64(sel: bool, x: u64, y: u64) -> u64 {
+    if (sel) { return x; }
+    return y;
+}
+
+// Module-level (combinational): the request to the emitter and each side's idle.
+var go: bool;
+var tag: u32;
+var a: u32;
+var b: u64;
+var quiet: bool;
+var idle0: bool;
+var idle1: bool;
+
+fn on_clock(go0: bool, tag0: u32, a0: u32, b0: u64, go1: bool, tag1: u32, a1: u32, b1: u64,
+            em_idle: bool, lock0: bool) {
+    go_d = go0 || go1;
+    if (go0) { lines0 = lines0 + 1; }
+    if (go1) { lines1 = lines1 + 1; }
+    if (go0 && go1) { collisions = collisions + 1; }
+    if (lock0) {
+        owner1 = false;
+    } else if (quiet) {
+        owner1 = !owner1;
+    }
+}
+go = go0 || go1;
+tag = pick(go1, tag1, tag0);
+a = pick(go1, a1, a0);
+b = pick64(go1, b1, b0);
+quiet = em_idle && !go0 && !go1 && !go_d;
+idle0 = quiet && !owner1;
+idle1 = quiet && owner1 && !lock0;
+
+test picks_the_side_that_goes { assert_eq(pick(true, 89, 65), 89); assert_eq(pick64(false, 1, 2), 2); }
+endmodule

@@ -153,10 +153,16 @@ class MatvecDevice(proto.DeviceModel):
     Z lines, status 2), {"stray": n} / {"invalid": n} report n stray words / invalid codes.
     The Z counters of a run are those of an ideal device (one word per clock, no idle clock,
     no latency): this is a model of the protocol, not of the timing.
+    The device is the DDR3 loader of #63 part 2 with the extension (t27/rtl/fpga_ddr3_loader.t27
+    with `matvec` high): construct it with proto=uart_loader_protocol.PROTO_DDR3 for its 37 status
+    lines and not_ready; then an M before the calibration is refused not_ready, as a load. A run
+    takes no time here; `busy` (set by a test while a run of the device is under way) makes X
+    and M answer not_ready after their CRC, as the device does until the run's last Z line.
     """
     compute: object = None
     result_faults: dict = field(default_factory=dict)
     run_faults: list = field(default_factory=list)
+    busy: bool = False
 
     def __post_init__(self):
         self.act = bytearray(ACT_ENTRIES * ACT_BLOCK_BYTES)
@@ -198,6 +204,8 @@ class MatvecDevice(proto.DeviceModel):
             return self._nak(proto.R_CRC)
         self.state = "hunt"
         self.probation = False
+        if self.proto >= proto.PROTO_DDR3 and (self.busy or (self.cmd == CMD_MATVEC and not self.calibrated)):
+            return self._nak(proto.R_NOT_READY)
         if self.cmd == CMD_ACT:
             key = (self.seq, self.addr, self.len, got)
             if self.last_act == key:
