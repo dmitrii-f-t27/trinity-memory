@@ -2,7 +2,8 @@
 fpga_wb_arbiter.t27 in the top fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v, before any board run.
 
 - The DDR3 loader is the part-1 loader (t27/rtl/fpga_uart_loader.t27) with marked changes:
-  every hunk in which the two files differ carries a `[ddr3]` mark (or is the header).
+  every hunk in which the two files differ carries a `[ddr3]` mark, or `[matvec]` for protocol 4
+  (issue #64), or is the header.
 - The C that the pinned compiler generates from the Wishbone master's and the arbiter's
   functions (byte of a word, byte merge, select bit, outstanding count) and from the DDR3
   loader's new functions agrees with Python on random inputs.
@@ -104,7 +105,9 @@ class SourceDiff(unittest.TestCase):
             if j2 <= header_end:
                 continue                     # the module name and the header that lists the changes
             text = "\n".join(ddr3[j1:j2])
-            self.assertIn("[ddr3]", text, f"unmarked difference at line {j1 + 1}: {part1[i1:i2]} -> {ddr3[j1:j2]}")
+            # [ddr3]: part 2's changes; [matvec]: protocol 4 with the device matvec (#64).
+            self.assertTrue("[ddr3]" in text or "[matvec]" in text,
+                            f"unmarked difference at line {j1 + 1}: {part1[i1:i2]} -> {ddr3[j1:j2]}")
         self.assertGreater(hunks, 5)
         # Nothing of part 1 is removed except in hunks that replace it with marked lines.
         removed = [part1[i1:i2] for op, i1, i2, j1, j2 in matcher.get_opcodes() if op == "delete"]

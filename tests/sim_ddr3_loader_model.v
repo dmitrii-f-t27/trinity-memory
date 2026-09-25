@@ -25,6 +25,10 @@
 //   that takes no request), bench_hold freezes the ack queue (acks withheld, a write or read
 //   that does not finish); both release what they held when they go low.
 // - Protocol checks ($fatal): a stalled request must stay presented unchanged until taken.
+// - +preload=<file> (the matvec build's tests, tests/test_ddr3_matvec_top.py): lines
+//   "<burst address, hex> <128-bit word, hex>" stored before the first clock, as if written
+//   (a weight image without its upload through the UART); counted in `preloaded`, not in
+//   `writes`.
 //
 // Background word of burst address a (Python: tests/test_ddr3_loader.py, bg_word):
 //   32-bit lane k (k = 0..3, bits 32k+31..32k) = (a * 32'h9E3779B1) ^ (32'h5EED0000 + k * 32'h01010101)
@@ -119,7 +123,10 @@ module ddr3_top #(
     reg take;
     // Bench controls and counts.
     reg bench_stall, bench_hold;
-    integer writes, reads, partial, acks;
+    integer writes, reads, partial, acks, preloaded, preload_fd;
+    reg [4095:0] preload_path;
+    reg [31:0] preload_addr;
+    reg [WB_DATA_BITS-1:0] preload_word;
 
     initial begin
         if (!$value$plusargs("calib_clocks=%d", calib_clocks)) calib_clocks = 3000;
@@ -131,7 +138,16 @@ module ddr3_top #(
         used = {SLOTS{1'b0}};
         bench_stall = 1'b0;
         bench_hold = 1'b0;
-        writes = 0; reads = 0; partial = 0; acks = 0;
+        writes = 0; reads = 0; partial = 0; acks = 0; preloaded = 0;
+        if ($value$plusargs("preload=%s", preload_path)) begin
+            preload_fd = $fopen(preload_path, "r");
+            if (preload_fd == 0) $fatal(1, "model: cannot open +preload");
+            while ($fscanf(preload_fd, "%h %h\n", preload_addr, preload_word) == 2) begin
+                store(preload_addr, preload_word, {WB_SEL_BITS{1'b1}});
+                preloaded = preloaded + 1;
+            end
+            $fclose(preload_fd);
+        end
     end
 
     function [WB_DATA_BITS-1:0] bg(input [31:0] a);
