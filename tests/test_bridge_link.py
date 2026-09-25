@@ -219,6 +219,17 @@ def write_port(fd: int, data: bytes, timeout_ms: int) -> int:
 
 
 @unittest.skipUnless(n, "native library required (tools/build-t27.sh)")
+def has_cap_sys_admin() -> bool:
+    """Whether this process holds CAP_SYS_ADMIN (bit 21 of CapEff in /proc/self/status, Linux)."""
+    try:
+        for line in Path("/proc/self/status").read_text().splitlines():
+            if line.startswith("CapEff:"):
+                return bool(int(line.split()[1], 16) >> 21 & 1)
+    except OSError:
+        pass
+    return False
+
+
 class SerialHooks(unittest.TestCase):
     def test_refusals(self):
         self.assertEqual(open_port("/nonexistent/tty"), -1)
@@ -253,7 +264,9 @@ class SerialHooks(unittest.TestCase):
             self.assertGreaterEqual(first, 0)
             second = open_port(path)
             if sys.platform.startswith("linux"):
-                self.assertEqual(second, -1)                   # TIOCEXCL: EBUSY for the second opener
+                # TIOCEXCL: EBUSY for the second opener, unless it has CAP_SYS_ADMIN (the kernel's
+                # tty_reopen lets such a process in; root in a container usually has it).
+                self.assertEqual(second >= 0, has_cap_sys_admin(), second)
             if second >= 0:
                 n.call("tm_os_serial_close", I32, [I32], second)
             self.assertEqual(n.call("tm_os_serial_close", I32, [I32], first), 0)
