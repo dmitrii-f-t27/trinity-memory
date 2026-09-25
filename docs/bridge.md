@@ -266,11 +266,11 @@ What changes with `backend="fpga"`:
   words per row, codecs baseline2 and dense5) and the configured part of the evidence. Nothing is
   read from the device for capabilities. The emulator's capabilities have no `transport` key, as
   before.
-- **Identity** (`chip_info`, `trinity_chipInfo`): the Bridge first asks the device for its 23
-  status lines and checks the protocol of its config word (at least `min_protocol`) and its build
-  id against the configuration. The DDR3 loader answers with 37 lines, which this host does not
-  accept yet ("Not yet on the board"): against it the exchange ends in `device did not acknowledge
-  a frame`, so the protocol refusal below is shown with the device double at 23 lines. Every refusal is error `-32000`, told apart by its message: `device
+- **Identity** (`chip_info`, `trinity_chipInfo`): the Bridge first asks the device for its status
+  lines (23 in part 1's layout, 37 from the DDR3 loader of #63 part 2 and the matvec build; the
+  first line fixes the count, lines 0-22 mean the same in both) and checks the protocol of its
+  config word (at least `min_protocol`) and its build id against the configuration. The DDR3
+  loader without the extension (protocol 3) is therefore refused by its protocol. Every refusal is error `-32000`, told apart by its message: `device
   protocol is below the configured minimum`, `device build id does not match the configured
   evidence`, `cannot open the device serial port` (missing, busy, not a terminal, or settings
   refused), `device serial I/O failed`, `device did not acknowledge a frame`. The 16-byte IDs stay
@@ -365,8 +365,8 @@ upload (someone else loaded, or the device was reset).
 ## Device matvec (#64)
 
 `t27/rtl/fpga_ddr3_matvec.t27` is consumer (B) of #65: y = W x on the device, fed at bus-word
-width by #62's reader. It is not wired into a board top yet; that and the device side of the
-frames below are the next wave.
+width from DDR3. The DDR3 matvec build ("The DDR3 matvec build" below) wires it to the loader's
+frames and to DDR3; it has run in Icarus only.
 
 - **Input and handshake.** One 128-bit word per controller clock at most (`in_valid`, bytes 0-7
   in `in_lo`, 8-15 in `in_hi`). A word is taken in a clock where `in_valid` and `in_ready` are
@@ -527,7 +527,8 @@ the row-padded one (`tms_device_image_bytes = rows x wpr x 16`), loaded with ord
 Both carry the loader's check byte (low byte of the CRC-32 of tag, a, v). A refused run (status 1)
 and a run that ended early (status 2) send only their eleven Z lines.
 
-Rules for the device side (next wave), which the module alone cannot enforce:
+Rules for the device side, which the module alone cannot enforce; the DDR3 matvec build keeps
+each of them ("The DDR3 matvec build" below says where):
 
 - **Header checks** (nak `length`): `X` outside the bounds above; `M` with len other than 12, an
   address not a multiple of 16 or not below the store's size.
@@ -539,7 +540,8 @@ Rules for the device side (next wave), which the module alone cannot enforce:
 - **While a run is busy** (from `M` to the module's `done`): an `X` must not write the banks (it
   would change the activations under the run) and an `M` must not start the module (a start while
   busy is ignored); both are nakked `not_ready` (reason 9 of the DDR3 loader, protocol 3) and the
-  host retransmits them after its quiet time.
+  host retransmits them after its quiet time. An `M` before UberDDR3's calibration is refused
+  `not_ready` as a load is (an `X` writes block RAM and needs no calibration).
 - **The reader** starts over the region after the module's `in_ready` rose, or holds its words
   until it does; it must deliver exactly rows x wpr words. A reader that gives up (its watchdog)
   should also pulse the module's `abort` once, while the run is in RUN, so the run ends at once
@@ -558,6 +560,120 @@ Rules for the device side (next wave), which the module alone cannot enforce:
 - `X` and `M` frames count in neither `frames_committed` nor `bytes_committed`: the host's upload
   cache relies on `bytes_committed` moving only with loads (`MatvecDevice` follows this rule).
 
+## The DDR3 matvec build (the device side, simulation)
+
+`make -C fpga/ax7203 ddr3-bit DDR3_APP=matvec` reads the DDR3 loader's top
+(`fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v`) with `define DDR3_MATVEC`: the loader of #63 part 2
+at protocol 4, the device matvec above, and two new t27 cores. Cores, block RAM library, XDC and
+the seed and build flow are the loader's (`docs/uart-loader.md`, "DDR3 (part 2, built)"); build
+and report directories end in `-matvec`. Every rule of "Wire protocol extension" is kept by one of
+the parts below.
+
+- **The loader** (`t27/rtl/fpga_ddr3_loader.t27`, its `[matvec]`-marked changes; with its
+  `matvec` input low, as in `DDR3_APP=loader`, it is the protocol-3 loader it was and X and M are
+  unknown commands). `X`: the header rules above (nak `length`); after its CRC the payload goes
+  into the banks, one u64 per three clocks, then `A` with command 5; a repeat of the last X (seq,
+  addr, len, CRC) is answered `duplicate` and not written. `M`: the header rules; after its CRC the
+  handler reads rows, cols and format from the staging buffer, computes the words per row by
+  repeated subtraction (as the matvec's SETUP) and the run's words by repeated addition (t27c
+  lowers `*` to a 64-bit shift-and-add loop, so the RTL has none), checks the configuration and
+  that the region `addr .. addr + words x 16` lies in the store, sends `A` with command 6 and only
+  then starts the matvec (with rows 0 for a region that does not fit, which the matvec refuses:
+  status 1, only its Z lines) and, for a run that goes ahead, the feed. X and M are refused
+  `not_ready` after their CRC while the matvec or the feed is busy, and an M also before the
+  calibration. Neither counts in `frames_committed` or `bytes_committed`; the config word and
+  status line 19 say protocol 4. Every read of the staging buffer (the load's commit, X and M) goes
+  through one read address, word `ci / 4`, so it stays one block RAM (with two read addresses
+  synthesis turned part 1's store into LUT RAM, `docs/uart-loader.md`).
+- **The feed** (`t27/rtl/fpga_matvec_feed.t27`, master 1 of the arbiter): after the matvec's
+  `in_ready` rose it asks for exactly rows x wpr words in address order, at most `FEED_CAP` (64)
+  outstanding, and hands each acknowledged word to the matvec in the clock of its ack. There is no
+  FIFO: the matvec takes a word in every clock of RUN, so an ack is always taken. `cyc` is high
+  from the first request to the last ack, so the arbiter keeps the port with the feed for the run;
+  a load or read-back that comes meanwhile waits for it (the loader's port watchdog, 50 ms on the
+  board, is far longer than a run's reads: 1,024 rows of 1,024 words are 2^20 words). Watchdog:
+  `FEED_WATCHDOG` clocks (32,768, 393 us at 83.33 MHz, arithmetic; half the matvec's own idle
+  limit) without in_ready, or without a request taken or an ack, end its part of the run with a
+  one-clock `abort` (the matvec ends the run at once, status 2, only its Z lines); it drops `cyc`,
+  drops the late acks as they come and stays busy until the last one, so a later run never takes
+  a word of this one.
+- **The line arbiter** (`t27/rtl/fpga_line_arbiter.t27`) shares the one line emitter between the
+  loader's lines and the matvec's Y and Z lines. Neither side checks that its line was taken, so a
+  side sees idle only while it holds the grant, the emitter is idle and no go is in flight (in
+  this clock or the one before); the grant alternates on every such quiet clock, so a side waits
+  for at most one line of the other. While the loader sends a read-back frame byte by byte past
+  the emitter (`tx_lock`), the grant stays with the loader, so no line starts inside the frame.
+  `collisions` counts clocks with both go high.
+- **The host** (`t27/fpga_link.t27`) accepts a status of 23 or 37 lines, so it talks to this
+  build; the device double (`tests/fake_fpga_device.py`) now answers as this build does (37
+  status lines under protocol 4), which moved the identity vector's capture to 740 bytes (37 x 20;
+  `conformance/memory_bridge.json`, sha256 `3c9ba3ba…`). `BridgeServer.last_capture()` returns the
+  bytes the device sent in the last fpga call (the capture whose sha256 the evidence reports), and
+  `tools/fpga-bridge-dot.py` runs the board part of #64 with it (below).
+
+**Simulation (Icarus, `tests/test_ddr3_matvec_top.py`; summary
+[`reports/fpga/ddr3-matvec-top-sim-2026-09-25-b7b86e6c.json`](../reports/fpga/ddr3-matvec-top-sim-2026-09-25-b7b86e6c.json), 11 tests OK in 1,424 s with the fixture cache).**
+The whole top with `tests/sim_ddr3_loader_model.v` in place of UberDDR3 (our Wishbone memory with
+stalls and late acks, not UberDDR3), the bit-level host of `tests/tb_uart_loader.v` at 12.5 Mbaud
+(divisor 16 of the 200 MHz the PLL stub runs everything at). Every byte the device sent is compared
+with `tools/bridge_link_protocol.MatvecDevice` on the DDR3 loader's base, except the status lines
+that depend on timing and Z lines 4-6 (cycles, idle clocks, latency; cycles = words + idle clocks
+is checked); where lines interleave by timing, the loader's events and the matvec's lines are
+compared in order each.
+
+| Scenario | What it does | Result |
+| --- | --- | --- |
+| `runs` | weights loaded with L frames, activations with an X frame, M runs: 5 x 200 baseline2 (20 words), 5 x 200 dense5 (15), 3 x 81 dense5 (6; 79 padding lanes in each row's last word), the last run again, then the status | every accumulator exact; the feed read 47 words (47 acks) in 4 runs; the config word says protocol 4 and `frames_committed` is 3 (X and M count no frame) |
+| `refusals` | X of 7 and 4,088 bytes, X of 160 bytes at block 1023, X at block 1024; M at address 8, at the store's size, M of 11 bytes | seven naks `length`, with command 5 (X) or 6 (M) |
+| | M with rows 0 and 1025, cols 0, format 2, 81,921 dense5 columns, a region past the store | each acknowledged, then status 1 and only its Z lines; the feed never started |
+| | the same X twice, then a run | the second X answered `duplicate`; the run exact |
+| `busy` | an X and an M sent while a 40 x 200 baseline2 run's lines go out | both nakked `not_ready`, their N lines between the run's first Y line and its last Z line; the X after the run taken and the next run exact; `nak_not_ready` 2 |
+| `not_ready` | an M before the calibration (400,000 clocks), an X, then the M again after it | the first M nakked `not_ready`, the X taken, the second M exact |
+| `abort` | every ack of an 8 x 160 dense5 run withheld (the memory model's queue frozen), released after the run's lines; then the run again | the feed's watchdog (2,000 clocks in this scenario) aborts the run: status 2, only the Z lines, 0 words; the feed drops the 16 late acks; the second run exact |
+| `arbitration` | a load of 16 bytes and a read-back of them sent right after the M of a 50 x 1,280 baseline2 run (1,000 words) while the memory stalls 90 % of the clocks | the load's commit waits for the feed's port (2 owner changes) and is acknowledged; the read-back frame arrives whole among the run's lines; the run exact |
+| `real_chunk` | q_proj rows 0-319 in dense5, then baseline2: the images put into the memory model (10,240 and 12,800 words), the activations with X frames of 2,560 and 3,200 bytes | 320 of 320 accumulators equal t27/matvec.t27's in both formats (sha256 `a2366b57…`, first eight -2561, 2660, -52, -2385, 1269, 3446, 3451, -2365); 0 invalid codes; dense5 10,240 words in 13,331 cycles, baseline2 12,800 in 16,613 (the idle clocks, 3,091 and 3,813, are our memory model's stalls) |
+
+In every scenario: 0 line collisions at the arbiter, 0 acks to the feed while it was idle, 0
+misrouted acks, 0 kept-word mismatches, and every status line `clocks` 2 clocks behind the counter.
+The memory model's stalls and ack delays are ours (`docs/uart-loader.md`, "Simulation"), so the
+idle clocks and latencies of these runs say nothing about UberDDR3; the synthesis of the build
+(yosys 0.69, the YoWASP build of the native flow's version; not placed or routed) counts 12,796
+LUTs, 9,442 flip-flops, 1,262 CARRY4, 0 DSP48E1 and 23 RAMB36E1: the loader of a9a56541 (7,541
+LUTs, 5,465 flip-flops, 2 RAMB36E1) plus the matvec's 21 block RAMs, the matvec, the feed and the
+arbiter ([`ddr3-matvec-synth-2026-09-25-b7b86e6c/`](../reports/fpga/ddr3-matvec-synth-2026-09-25-b7b86e6c/synth.json);
+32 warnings of conflicting drivers, all inside UberDDR3's controller).
+
+Still open for the build: no bitstream of it exists; its placement and timing at 83.33 MHz are
+not known (the matvec alone estimated 96-107 MHz out of context, above); the feed's rate from UberDDR3
+(words per clock, the idle clocks of Z line 5) is what the board run measures.
+
+**The board run (#64's board part), in this order on the host with the board:**
+
+```sh
+# 1. The netlist and a seed sweep, as the loader's (tool variables of docs/uart-loader.md, "Build"):
+make -C fpga/ax7203 ddr3-sweep DDR3_APP=matvec ... DDR3_SEEDS='1 2 3 4 5 6 7 8 9 10 11 12'
+python3 tools/ddr3-seed-choice.py --sweep reports/fpga/ddr3-seed-sweep-<date>-<id>-x16-matvec.json \
+  --output reports/fpga/ddr3-seed-choice-<date>-<id>-x16-matvec.json
+# 2. The chosen seed on its own, its record, the SRAM load (checks the record's sha256 first):
+make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_APP=matvec ... DDR3_SEEDS=<seed> \
+  DDR3_BUILD=$PWD/build/fpga/ddr3-x16-matvec-<id>-seed<seed> \
+  DDR3_REPORT=$PWD/reports/fpga/ddr3-build-<date>-<id>-x16-matvec-seed<seed>
+make -C fpga/ax7203 ddr3-flash DDR3_APP=matvec DDR3_BUILD=$PWD/build/fpga/ddr3-x16-matvec-<id>-seed<seed> \
+  DDR3_FLASH_REPORT=reports/fpga/ddr3-build-<date>-<id>-x16-matvec-seed<seed>/build.json
+# 3. compute.dot on q_proj rows 0-319 in both formats through the Bridge (fixture cache needed):
+python3 tools/fpga-bridge-dot.py --port /dev/cu.usbserial-110 --build-report <its build.json> \
+  --idcode 0x13636093 --dna 0x00389c0c2d85e85c --output reports/fpga/bridge-dot-<date>-<id>
+```
+
+`tools/fpga-bridge-dot.py` asks for the identity, then per format uploads the chunk (L frames,
+read back and compared), sends the activations and runs the matvec, twice (the second call uses the
+upload cache), and writes `record.json` (every result as returned, host times, the accumulators
+against t27/matvec.t27's and the emulator's) with each call's capture (`*.capture.gz`, its sha256
+checked against the evidence). Its exit status is 0 only when every accumulator equals the
+reference. At 115200 baud the first call of a format moves the image twice (dense5 163,840 bytes,
+baseline2 204,800; about 29 and 36 s at the loader's 11.37 kB/s, arithmetic), the second only the
+activations and the lines. `tests/test_bridge_fpga.py` runs the tool against the device double.
+
 ## Upstream delta for #66 (not applied here)
 
 gHashTag/t27 at 7e9de07d holds `specs/memory/tmem/bridge.t27`, identical to this repository's
@@ -572,7 +688,7 @@ here:
    7 invariants and 4 test blocks), line 2 unchanged. The result's sha256 is `27ea45d6…`
    (computed here from that file; `spec_hash` of the new seal).
 2. `conformance/tmem_bridge.json`: this repository's new `conformance/memory_bridge.json`
-   (`tools/generate-spec-vectors.py`, sha256 `bc5de7ca…`): the 55 vectors unchanged, 8 fpga
+   (`tools/generate-spec-vectors.py`, sha256 `3c9ba3ba…`): the 55 vectors unchanged, 8 fpga
    vectors (63 in all), `constants.fpga`, `sdk_adapter.fpga_chip_info_requires`, 6 more
    invariants (15 in all), and the replay keys `replay.backend`, `replay.result_format`,
    `replay.result_at_least` (lower bounds for counters a stalled process can raise but not
@@ -589,9 +705,10 @@ here:
 
 ## Not yet on the board
 
-- No bitstream contains the device matvec or the `X`/`M` frame handler; nothing of this section
-  ran on the AX7203. Every result above is simulation (Icarus), a C check, a synthesis count or a
-  place-and-route estimate.
+- No bitstream contains the device matvec or the `X`/`M` handler yet: the DDR3 matvec build above
+  is RTL checked in Icarus (with our memory model, not UberDDR3), C checks of its functions, and the
+  matvec's own out-of-context estimates. Its build, seed choice and board run are the steps listed
+  under "The board run".
 - The host link has run only against the fake device on a pseudo-terminal and the OS hooks only on
   ptys (macOS here; Linux in CI). The paced fake (`FakeDevice(pace_baud=...)`, bytes at 10 / baud
   seconds each way, with the default deadlines at 115200 and 9600 baud) exercises the wire-time
@@ -599,15 +716,11 @@ here:
   untried with this code (the loader's Python tool reached them with pyserial): whether macOS
   `poll(2)`, whose manual says it "does not support devices", wakes on its data, and whether its
   driver honours TIOCEXCL, are open.
-- The DDR3 loader (#63 part 2) reports 37 status lines at protocol 3 (the 23 of protocol 2 plus 14);
-  the host's status exchange accepts only a set of 23 lines. A matvec build on top of it (protocol
-  4) needs the host to accept that count: next wave, with the device side.
 - `compute.dot` with `backend: fpga` and `hardware: true` for a real layer chunk on the board, and
-  the committed captures with hashes, are #64's board part.
+  the committed captures with hashes, are #64's board part (`tools/fpga-bridge-dot.py`).
 - The upload at 115200 baud: the loader tool moved 11.37 kB/s of payload (`docs/uart-loader.md`),
   so the chunk's 163,840-byte dense5 image would take about 14.4 s to load and as long to read back,
   and the 204,800-byte baseline2 image about 18 s each way (arithmetic from that rate, not
   measured with this link). Faster rates are not used by the link yet (no `B` frame).
-- `reports/fpga/README.md` lists the two records of this section; if the parallel DDR3 loader
-  branch renumbers its protocol, `TL_PROTO_MATVEC`, `TMS_DEVICE_PROTOCOL_MATVEC`,
-  `bridge_link_protocol.PROTO` and `FpgaDevice`'s default move with it (one above the loader's).
+- `reports/fpga/README.md` lists the records of this section. The protocol numbers are settled:
+  3 is the DDR3 loader (#63 part 2), 4 the extension on top of it.
