@@ -674,6 +674,23 @@ reference. At 115200 baud the first call of a format moves the image twice (dens
 baseline2 204,800; about 29 and 36 s at the loader's 11.37 kB/s, arithmetic), the second only the
 activations and the lines. `tests/test_bridge_fpga.py` runs the tool against the device double.
 
+**Consumer (B) of #65, on the same load** (the device matvec's weights per second from DDR3):
+
+```sh
+python3 tools/fpga-matvec-capture.py --port /dev/cu.usbserial-110 --identity --build-report <its build.json> \
+  --runs 10 --output reports/fpga/matvec-ddr3-<date>-<id>/capture.json
+```
+
+It loads the chunk's image per format (read back and compared), sends the activations, runs the
+matvec `--runs` times on data loaded once and records every run's Z lines
+(`trinity.fpga-ddr-capture.v1`): weights per second = rows x cols x f_ctrl / cycles (f_ctrl
+250/3 MHz from the oscillator and the PLL settings, not measured), words per clock, the idle
+fraction, min / median / max and mean +- s.d. over the runs whose every accumulator equals the
+reference, the ratio of the medians against the ceiling 1.25, and memory-bound (consumer stalls
+0 in every run). A run after which the calibration had dropped is excluded with the reason.
+`tests/test_matvec_capture.py` runs it against the timed protocol model (ideal: one word per
+clock, so its figures are the arithmetic peaks, 6.67 and 5.33 G weights per second).
+
 ## Upstream delta for #66 (not applied here)
 
 gHashTag/t27 at 7e9de07d holds `specs/memory/tmem/bridge.t27`, identical to this repository's
