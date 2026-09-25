@@ -551,7 +551,13 @@ the outstanding counts' 32-bit adders. The master now has the input register abo
 count to four bits and registers `room` (fewer than 8 outstanding) and `none` (nothing
 outstanding) from the next count; the arbiter's and the feed's counts are seven bits; the line
 emitter shifts its digits out of `a_q` and `b_q` (the same bytes in the same clocks); the X
-header rule's widths are masked; the read latency maximum is taken one clock after its ack. A
+header rule's widths are masked; the read latency maximum is taken one clock after its ack.
+fb1dd5a's netlist then met the clock on 5 of 12 seeds; of the seven that missed, seed 10 missed
+at the X header rule (-1.9 ns, and inside UberDDR3) and seed 11 at the matvec, behind UberDDR3's
+read acknowledge (`docs/bridge.md`, "Timing"). So the X rule's bound, 80 x (1024 - addr), is now
+registered a clock ahead of the rule (`act_room_q`, from `h_addr`, which is complete at least four
+clocks before the rule is taken), and the feed hands the matvec each word from a register, a
+clock after its ack. A
 `DDR3_APP=loader` build from this RTL is therefore not a9a56541's netlist (its timing and seed
 records are those of a9a56541); it would need its own seed sweep. In simulation it behaves as
 before: the loader's suite at fb1dd5a

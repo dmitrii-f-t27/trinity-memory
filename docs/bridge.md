@@ -590,8 +590,9 @@ the parts below.
   synthesis turned part 1's store into LUT RAM, `docs/uart-loader.md`).
 - **The feed** (`t27/rtl/fpga_matvec_feed.t27`, master 1 of the arbiter): after the matvec's
   `in_ready` rose it asks for exactly rows x wpr words in address order, at most `FEED_CAP` (64)
-  outstanding, and hands each acknowledged word to the matvec in the clock of its ack. There is no
-  FIFO: the matvec takes a word in every clock of RUN, so an ack is always taken. `cyc` is high
+  outstanding, and hands each acknowledged word to the matvec in the clock after its ack (a
+  register, so the path from UberDDR3's acknowledge ends at the feed). There is no FIFO: the
+  matvec takes a word in every clock of RUN, so a word handed on is always taken. `cyc` is high
   from the first request to the last ack, so the arbiter keeps the port with the feed for the run;
   a load or read-back that comes meanwhile waits for it. The loader's port watchdog (50 ms on the
   board) is longer than the largest run's reads: 1,024 rows of 1,024 words are 2^20 words, 12.6 ms
@@ -689,6 +690,8 @@ feed (-7 ps). The loader alone (a9a56541) met the clock on 10 of 12 seeds, the U
 build (f07e91cd x16) on 6 of 8. The seed choice by the #61/#62 rule, written before any load of
 this netlist: seed 5 (91.99 MHz; CK - DQS -222 / -217 ps in nextpnr's model), then 12, 2, 1, 7
 ([`ddr3-seed-choice-2026-09-25-fb1dd5aa-x16-matvec.json`](../reports/fpga/ddr3-seed-choice-2026-09-25-fb1dd5aa-x16-matvec.json)).
+Since then the X rule's bound and the feed's word to the matvec are registered
+(`docs/uart-loader.md`, "Timing"), so this sweep and choice are fb1dd5a's, not the current RTL's.
 
 Still open for the build: no bitstream of it exists; the feed's rate from UberDDR3 (words per
 clock, the idle clocks of Z line 5) is what the board run measures.

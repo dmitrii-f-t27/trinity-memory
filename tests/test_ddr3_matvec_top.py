@@ -416,8 +416,8 @@ class Functions(unittest.TestCase):
         cls.work = tempfile.TemporaryDirectory(prefix="trinity-ddr3-matvec-c-")
         cls.ld = base.build_library(ROOT / "t27/rtl/fpga_ddr3_loader.t27", Path(cls.work.name))
         u32, b = ctypes.c_uint32, ctypes.c_bool
-        for name, args, res in (("header_ok_mv", (u32, u32, u32, u32), b), ("mv_index", (u32, b), u32),
-                                ("resp_word", (u32, b, u32, u32, u32), u32)):
+        for name, args, res in (("header_ok_mv", (u32, u32, u32, u32, u32), b), ("act_room80", (u32,), u32),
+                                ("mv_index", (u32, b), u32), ("resp_word", (u32, b, u32, u32, u32), u32)):
             function = getattr(cls.ld, name)
             function.argtypes, function.restype = args, res
 
@@ -441,8 +441,13 @@ class Functions(unittest.TestCase):
             model.cmd, model.addr, model.len, model.seq, model.seq_known = cmd, addr, length, 0, True
             model.out.clear()
             model._check_header()
-            self.assertEqual(self.ld.header_ok_mv(cmd, addr, length, store), not (model.out and model.out[-1][0] == "N"),
-                             (chr(cmd), addr, length))
+            # The loader registers act_room80(h_addr) a clock ahead of the rule (act_room_q); the rule with it
+            # is the model's.
+            room80 = self.ld.act_room80(addr)
+            self.assertEqual(self.ld.header_ok_mv(cmd, addr, length, store, room80),
+                             not (model.out and model.out[-1][0] == "N"), (chr(cmd), addr, length))
+            if cmd == link.CMD_ACT and addr < 1024:
+                self.assertEqual(room80, 80 * (1024 - addr), addr)
 
     def test_command_field_of_x_and_m(self):
         rng = random.Random(6402)

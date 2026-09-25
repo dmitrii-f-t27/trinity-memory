@@ -299,6 +299,10 @@ var cmd_known_q: bool = false;
 var hdr_good_q: bool = false;
 var crc_good_q: bool = false;
 var dup_q: bool = false;
+// [matvec] act_room80(h_addr), registered every clock and read by hdr_good_q the clock after. The
+// address is complete at least four clocks before hdr_good_q is taken for a frame (the two length
+// bytes follow it, each fetched and then handled), so the rule reads the frame's own address.
+var act_room_q: u32 = 0;
 // [ddr3] More registered conditions, each read at least one clock after what it depends on last
 // changed: the timeouts (one clock later than part 1's, of 4 166 666), the last payload and
 // commit byte, the read-back frame's lengths and the response line's check byte. prob_count
@@ -486,17 +490,23 @@ fn header_ok(cmd: u32, addr: u32, len: u32, store: u32) -> bool {
     return len == 0;
 }
 
+// [matvec] The bytes an X frame may carry from block addr on: 80 x (1024 - addr) for addr below
+// 1024 (1..1024 entries of 80 bytes). The masks change no value there; they let synthesis make the
+// subtraction and the sum 11 and 17 bits wide instead of 32. It depends on the address alone and
+// is registered as act_room_q, a clock ahead of the header rule that reads it (the DDR3 matvec
+// build's timing at 83.33 MHz: one path from h_addr to hdr_good_q missed the clock).
+fn act_room80(addr: u32) -> u32 {
+    var room: u32 = (ACT_ENTRIES - (addr & 1023)) & 2047;
+    return ((room << 6) + (room << 4)) & 131071;
+}
+
 // [matvec] Header rules of X and M (docs/bridge.md, "Wire protocol extension"): X len a multiple
 // of 8 in 8..4080 from block addr with addr + ceil(len / 80) <= 1024, that is len <= 80 x (1024
-// - addr); M len 12 at a multiple of 16 below the store's size.
-fn header_ok_mv(cmd: u32, addr: u32, len: u32, store: u32) -> bool {
+// - addr) = room80 (act_room80(addr)); M len 12 at a multiple of 16 below the store's size.
+fn header_ok_mv(cmd: u32, addr: u32, len: u32, store: u32, room80: u32) -> bool {
     if (cmd == CMD_ACT) {
         if (len < 8 || len > ACT_MAX_LEN || (len & 7) != 0 || addr >= ACT_ENTRIES) { return false; }
-        // 1..1024 entries from addr on, times 80 bytes. After the checks above the masks change
-        // no value; they let synthesis make the subtraction, the sum and the compare 11, 17 and 17
-        // bits wide instead of 32 (the DDR3 matvec build's timing at 83.33 MHz).
-        var room: u32 = (ACT_ENTRIES - (addr & 1023)) & 2047;
-        return (len & 4095) <= (((room << 6) + (room << 4)) & 131071);
+        return (len & 4095) <= (room80 & 131071);
     }
     if (cmd == CMD_MATVEC) { return len == 12 && (addr & 15) == 0 && addr < store; }
     return false;
@@ -1185,7 +1195,8 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
     }
     // [ddr3] Registered checks (see `settle_n`), last, so every branch above reads the previous clock's.
     cmd_known_q = cmd_index(h_cmd) != 0 || mv_cmd;       // [matvec] X and M with the matvec
-    hdr_good_q = (mv_cmd && header_ok_mv(h_cmd, h_addr, h_len, store_bytes)) || (!mv_cmd && header_ok(h_cmd, h_addr, h_len, store_bytes));   // [matvec]
+    hdr_good_q = (mv_cmd && header_ok_mv(h_cmd, h_addr, h_len, store_bytes, act_room_q)) || (!mv_cmd && header_ok(h_cmd, h_addr, h_len, store_bytes));   // [matvec]
+    act_room_q = act_room80(h_addr);                     // [matvec] hdr_good_q reads the previous clock's
     crc_good_q = (crc ^ ALL_ONES) == h_crc;
     dup_q = is_dup;
     act_dup_q = last_act_valid && h_seq == last_act_seq && h_addr == last_act_addr && h_len == last_act_len && h_crc == last_act_crc;   // [matvec]
@@ -1241,4 +1252,6 @@ test status_tree { assert_eq(mux4(2, 1, 2, 3, 4), 3); assert_eq(status_all(36, 0
 // [ddr3]
 test ddr3_status_words { assert_eq(cal_word(true, 23, 23, 0), 18290432); assert_eq(status_ddr3(24, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14), 2); assert_eq(status_ddr3(36, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14), 14); assert_eq(bump(255), 255); }
 test staging_lanes { assert_eq(pick((5 & 3) == 0, 0, 170) | (187 << ((5 & 3) << 3)), 48042); assert_eq((48042 >> ((5 & 3) << 3)) & 255, 187); }
+// [matvec]
+test x_room { assert_eq(act_room80(0), 81920); assert_eq(act_room80(972), 4160); assert_eq(act_room80(1023), 80); assert_eq(header_ok_mv(88, 1023, 80, 0, act_room80(1023)), true); assert_eq(header_ok_mv(88, 1023, 88, 0, act_room80(1023)), false); }
 endmodule

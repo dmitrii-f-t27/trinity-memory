@@ -12,12 +12,14 @@ module TrinityFpgaMatvecFeedT27;
 // run has left SETUP and MASK), then asks for the words in address order, one request per word
 // (a request is taken on a clock with stb and not stall; a presented request is never withdrawn
 // or changed), at most `cap` outstanding, and hands every acknowledged word to the matvec in
-// the clock of its ack (in_valid, in_lo, in_hi: module-level, straight from the ack). UberDDR3
-// acknowledges in order, so ack k carries word k. The matvec takes a word in every clock of RUN
-// while words are expected (docs/bridge.md, "Device matvec"), and in_ready rose before the first
-// request: every ack is taken in its clock, so there is no FIFO, and the feed asks for exactly
-// the run's words, so in_ready stays high until the last one. cyc is high from the first
-// request to the last ack: the arbiter keeps the port with the feed for the whole run.
+// the clock after its ack (in_valid, in_lo, in_hi: registers loaded from the ack and its data, so
+// the path from UberDDR3's acknowledge through the arbiter ends here and the matvec's logic starts
+// at a register: the DDR3 matvec build's timing at 83.33 MHz). UberDDR3 acknowledges in order, so
+// ack k carries word k. The matvec takes a word in every clock of RUN while words are expected
+// (docs/bridge.md, "Device matvec"), and in_ready rose before the first request: every word is
+// taken in the clock it is handed on, so there is no FIFO, and the feed asks for exactly the run's
+// words, so in_ready stays high until the last one. cyc is high from the first request to the
+// last ack: the arbiter keeps the port with the feed for the whole run.
 //
 // Watchdog: `watchdog` clocks without in_ready (WAIT), or with neither a request taken nor an
 // ack (READ), end the feed's part of the run: it pulses `abort` for one clock (the matvec ends
@@ -54,6 +56,10 @@ var dropped: u32 = 0;
 var stray: u32 = 0;
 var max_outst: u32 = 0;
 var cmd_stalls: u32 = 0;
+// The word handed to the matvec: an ack in READ and its data, one clock later.
+var v_q: bool = false;
+var lo_q: u64 = 0;
+var hi_q: u64 = 0;
 
 fn pick32(sel: bool, x: u32, y: u32) -> u32 {
     if (sel) { return x; }
@@ -91,13 +97,13 @@ out_up = (outst + 1) & 127;
 out_down = (outst - 1) & 127;
 out_next = pick32(accept && !ack, out_up, pick32(ack && !accept, out_down, outst));
 can_issue = pick_bool(accept && !ack, out_up < cap, pick_bool(ack && !accept, out_down < cap, outst < cap));
-in_valid = st == F_READ && ack;
+in_valid = v_q;
 // DRAIN counts only the acks it is owed: an ack with nothing outstanding (stray: the arbiter's
 // status line arb_stray counts it too) must not make the count wrap and the feed wait for ever.
 ack_owed = ack && outst != 0;
 out_drain = pick32(accept && !ack_owed, out_up, pick32(ack_owed && !accept, out_down, outst));
-in_lo = rdata_lo;
-in_hi = rdata_hi;
+in_lo = lo_q;
+in_hi = hi_q;
 
 // start: begin a run (one clock, only while idle); s_base: first burst; s_words: words (>= 1);
 // mv_ready: the matvec's in_ready; stall, ack, rdata_lo, rdata_hi: master 1's side of the
@@ -105,6 +111,11 @@ in_hi = rdata_hi;
 fn on_clock(start: bool, s_base: u32, s_words: u32, mv_ready: bool, stall: bool, ack: bool,
             rdata_lo: u64, rdata_hi: u64, cap: u32, watchdog: u32) {
     abort = false;
+    // An ack in READ goes to the matvec in the next clock; one in DRAIN (dropped) or while idle
+    // (stray) never does. A timeout clock has no ack, so no word follows an abort.
+    v_q = st == F_READ && ack;
+    lo_q = rdata_lo;
+    hi_q = rdata_hi;
     if (st == F_IDLE) {
         if (ack) { stray = stray + 1; }
         if (start) {
