@@ -24,13 +24,20 @@ HARNESS_DEFAULTS = {"max_request_bytes": 65536, "max_object_bytes": 65536, "max_
 
 
 class NativeSession:
-    def __init__(self, lib, limits):
+    def __init__(self, lib, limits, device=None):
         config = dict(HARNESS_DEFAULTS, **{k: v for k, v in limits.items() if k != "timeout"})
         self.lib = lib
         self.handle = lib.bridge_test_new(config["max_request_bytes"], config["max_object_bytes"],
                                           config["max_storage_bytes"], config["max_objects"], config["max_trits"])
         if not self.handle:
             raise RuntimeError(f"harness refused limits {config}")
+        if device is not None:
+            # (path, FpgaDevice options): the same argument checks and encoding as BridgeServer.
+            sys.path.insert(0, str(ROOT))
+            from trinity_memory.bridge import FpgaDevice
+            path, options = device
+            if lib.bridge_test_fpga(self.handle, *FpgaDevice(port=path, **options).native_arguments()) != 0:
+                raise RuntimeError("harness refused the fpga backend")
         self.capacity = 16384 + 2 * config["max_object_bytes"] + 40 * config["max_trits"]
         self.output = C.create_string_buffer(self.capacity)
 
@@ -57,14 +64,26 @@ def main():
     lib.bridge_test_free.argtypes = [C.c_void_p]
     lib.bridge_test_call.argtypes = [C.c_void_p, C.c_void_p, C.c_size_t, C.c_void_p, C.c_size_t, C.POINTER(C.c_int32)]
     lib.bridge_test_call.restype = C.c_int64
+    lib.bridge_test_fpga.argtypes = [C.c_void_p, C.POINTER(C.c_uint8), C.c_size_t, C.c_uint32, C.c_uint32, C.c_uint32,
+                                     C.c_uint32, C.c_uint32, C.c_uint32, C.POINTER(C.c_uint8), C.c_uint32, C.c_uint64,
+                                     C.c_uint32]
+    lib.bridge_test_fpga.restype = C.c_int32
 
     @contextlib.contextmanager
-    def session(limits):
-        item = NativeSession(lib, limits)
-        try:
-            yield item
-        finally:
-            item.close()
+    def session(limits, backend=None):
+        if backend is None:
+            item = NativeSession(lib, limits)
+            try:
+                yield item
+            finally:
+                item.close()
+            return
+        with replay.fpga_double(backend) as device:
+            item = NativeSession(lib, limits, device)
+            try:
+                yield item
+            finally:
+                item.close()
 
     document = replay.load_document()
     run, steps, skipped = replay.replay(document, session, transport=False)

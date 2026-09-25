@@ -340,6 +340,165 @@ def step(name, method, params=None, *, request_id=1, capture=None, description="
     return item
 
 
+FPGA_EVIDENCE = {"bitstream_sha256": "bcf6e804" + "0" * 56, "idcode": "0x13636093",
+                 "dna": "0x00389c0c2d85e85c", "build_id": "1d474000"}
+# quiet (the host's silence before a retransmission) is longer than the double's inter-byte
+# timeout (byte_timeout below), as on the board, so a partial frame is dropped before the resend.
+FPGA_DEVICE = {"evidence": FPGA_EVIDENCE, "baud": 115200, "reply_timeout": 1.0, "quiet": 0.3, "attempts": 8}
+FPGA_CONSTANTS = {
+    "backends": {"emulator": {"id": 0, "transport": "in-process", "hardware": False},
+                 "fpga": {"id": 1, "transport": "uart", "hardware": True}},
+    "evidence_fields": {"bitstream_sha256": "64 lowercase hex", "capture_sha256": "64 lowercase hex",
+                        "idcode": "0x and 8 lowercase hex", "dna": "0x and 16 lowercase hex", "build_id": "8 lowercase hex"},
+    "device": {"word_bytes": 16, "lanes": {"baseline2": 64, "dense5": 80}, "max_rows_per_run": 1024,
+               "max_words_per_row": 1024, "accumulator_bits": 32, "codecs": ["baseline2", "dense5"],
+               "row_layout": "row-padded: every row starts at a 16-byte word; padding lanes are zero trits"},
+    "wire": {"protocol": 4, "frames": {"X": {"cmd": 88, "index": 5, "addr": "first 80-byte activation block",
+                                             "len": "multiple of 8, at most 51 * 80 = 4080"},
+                                       "M": {"cmd": 77, "index": 6, "addr": "region byte address, multiple of 16",
+                                             "len": 12, "payload": "rows u32, cols u32, format u32 (0 baseline2, 1 dense5)"}},
+             "lines": {"Y": "a = seq << 24 | row, v = y (32-bit two's complement)",
+                       "Z": "a = seq << 24 | 11 << 16 | index, v = counter"},
+             "z": ["status", "rows", "words_per_row", "words", "cycles", "idle_clocks", "latency",
+                   "invalid_codes", "stray_words", "consumer_stalls", "checksum"],
+             "z_status": {"0": "ran", "1": "refused (configuration, or a region past the store)",
+                          "2": "ended early (bus words stopped, or aborted)"}},
+}
+
+
+def fpga_backend(**double):
+    return {"name": "fpga", "device": FPGA_DEVICE,
+            "double": {"build_id": "1d474000", "protocol": 4, "byte_timeout": 0.2, **double}}
+
+
+def exact_rows(values, rows, cols, x):
+    return [sum(values[r * cols + c] * x[c] for c in range(cols)) for r in range(rows)]
+
+
+def fpga_vectors():
+    """Vectors of the fpga backend, replayed against the device double (docs/bridge.md)."""
+    import random
+    rng = random.Random(64)
+    a_rows, a_cols, b_rows, b_cols = 3, 100, 2, 70
+    a_values = [rng.choice((-1, 0, 1)) for _ in range(a_rows * a_cols)]
+    b_values = [rng.choice((-1, 0, 1)) for _ in range(b_rows * b_cols)]
+    tensors = [tensor("a", (a_rows, a_cols), a_values, "dense5", scales=(0.5, 1.0, 2.0), scale_axis=0),
+               tensor("b", (b_rows, b_cols), b_values, "baseline2"),
+               tensor("d17", (2, 17), [1] * 34, "dense17")]
+    pack = ttpk(tensors)
+    xa = [rng.randint(-128, 127) for _ in range(a_cols)]
+    xa2 = [rng.randint(-128, 127) for _ in range(a_cols)]
+    xb = [rng.randint(-128, 127) for _ in range(b_cols)]
+    evidence_format = {"evidence.capture_sha256": "sha256-hex64"}
+    wide_values = [rng.choice((-1, 0, 1)) for _ in range(4 * 1100)]
+    wide = ttpk([tensor("w", (4, 1100), wide_values, "dense5")])
+    xw = [rng.randint(-128, 127) for _ in range(1100)]
+    ids = {f"{part}_id": identity(part) for part in IDENTITY_PARTS}
+    return [
+        dict(rpc("fpga_capabilities_name_the_device", "trinity.capabilities",
+                 result={"backend": "fpga", "hardware": True, "transport": "uart", "version": 1,
+                         "device": {"baud": 115200, "protocol_min": 4, "region": 0, "max_rows_per_run": 1024,
+                                    "max_words_per_row": 1024, "codecs": ["baseline2", "dense5"], "evidence": FPGA_EVIDENCE}},
+                 description="Backend fpga: hardware true, transport uart and the configured evidence; the device is not asked"),
+             backend=fpga_backend()),
+        dict(rpc("fpga_chip_info_checks_the_device", "trinity_chipInfo",
+                 result=dict(ids, anchor=18368, backend="fpga", hardware=True, identity_kind="synthetic-public-16-byte",
+                             status="memory device (fpga)", evidence=dict(FPGA_EVIDENCE)),
+                 result_format=evidence_format,
+                 result_at_least={"evidence.capture_bytes": 460},
+                 description="The identity asks the device for its 23 status lines (460 bytes; more if a stalled host "
+                             "process asked again) first; the IDs stay the public synthetic constants and the evidence "
+                             "block identifies the device"),
+             backend=fpga_backend()),
+        dict(rpc("fpga_chip_info_refuses_another_build", "chip_info", error_code=-32000,
+                 error_message_contains="build id",
+                 description="The device reports a build id other than the configured evidence"),
+             backend=fpga_backend(build_id="12345678")),
+        dict(rpc("fpga_chip_info_refuses_protocol_3", "trinity_chipInfo", error_code=-32000,
+                 error_message_contains="protocol",
+                 description="A loader without the matvec extension (protocol 3, the DDR3 loader) is not an fpga "
+                             "backend device"),
+             backend=fpga_backend(protocol=3)),
+        dict(rpc("fpga_chip_info_without_a_device", "trinity_chipInfo", error_code=-32000,
+                 error_message_contains="cannot open",
+                 description="The configured serial port does not exist"),
+             backend={"name": "fpga", "device": FPGA_DEVICE, "double": {"absent": True}}),
+        {
+            "id": "fpga_dot_lifecycle", "kind": "sequence", "backend": fpga_backend(),
+            "description": "upload a TensorPack, dot a dense5 and a baseline2 matrix on the device: exact accumulators, "
+                           "scales unapplied, the image uploaded once and read back, the emulator's sums as reference",
+            "steps": [
+                step("upload", "memory.upload", {"data": b64(pack)}, capture={"handle": "handle"},
+                     result={"bytes": len(pack), "backend": "fpga"}, result_format={"handle": "uuid4-hex32"}),
+                step("dot_dense5", "compute.dot", {"handle": "$handle", "tensor_name": "a", "activations": xa},
+                     result={"accumulators": exact_rows(a_values, a_rows, a_cols, xa), "scales": [0.5, 1.0, 2.0],
+                             "backend": "fpga", "hardware": True, "arithmetic": "exact-integer", "tensor_name": "a",
+                             "input_shape": [a_rows, a_cols], "output_shape": [a_rows], "scale_applied": False,
+                             "reference": {"backend": "emulator", "mismatches": 0, "first_mismatch": -1},
+                             "evidence": FPGA_EVIDENCE,
+                             "transfer": {"codec": "dense5", "image_bytes": a_rows * 2 * 16, "uploaded": True,
+                                          "readback_bytes": a_rows * 2 * 16, "matvec_runs": 1, "store_reloads": 0,
+                                          "device_counters": {"words": a_rows * 2, "consumer_stalls": 0}}},
+                     result_at_least={"transfer.matvec_attempts": 1},
+                     result_format=evidence_format,
+                     description="Retransmissions and repeated runs depend on timing (a stalled host process can "
+                                 "cause one), so they are not fixed here; tests/test_bridge_fpga.py checks them"),
+                step("dot_dense5_again", "compute.dot", {"handle": "$handle", "tensor_name": "a", "activations": xa2},
+                     result={"accumulators": exact_rows(a_values, a_rows, a_cols, xa2),
+                             "transfer": {"uploaded": False, "readback_bytes": 0}},
+                     description="The same image is on the device: only the activations and the run go out"),
+                step("dot_baseline2", "compute.dot", {"handle": "$handle", "tensor_name": "b", "activations": xb},
+                     result={"accumulators": exact_rows(b_values, b_rows, b_cols, xb), "scales": [1.0, 1.0],
+                             "transfer": {"codec": "baseline2", "image_bytes": b_rows * 2 * 16, "uploaded": True}}),
+                step("dot_dense17_refused", "compute.dot", {"handle": "$handle", "tensor_name": "d17", "activations": [1] * 17},
+                     error_code=-32602),
+                step("info", "memory.info", {"handle": "$handle"}, result={"format": "TensorPack", "backend": "fpga"}),
+                step("delete", "memory.delete", {"handle": "$handle"}, result={"deleted": True, "backend": "fpga"}),
+            ],
+        },
+        {
+            "id": "fpga_dot_retransmits_and_reports", "kind": "sequence",
+            "backend": fpga_backend(faults=[{"kind": "corrupt", "cmd": "L", "nth": 1, "offset": 100},
+                                            {"kind": "drop_line", "tag": "A", "index": 5, "nth": 1},
+                                            {"kind": "corrupt_line", "tag": "Y", "nth": 2}],
+                                    result_faults={"1": 5}),
+            "description": "a corrupted chunk (crc nak), a lost activation ack (the retransmission is answered duplicate), "
+                           "a corrupted Y line (the run is "
+                           "repeated) and a device whose row 1 is 5 too high: the retransmissions are counted and the "
+                           "wrong row is reported under reference, not hidden",
+            "steps": [
+                step("upload", "memory.upload", {"data": b64(wide)}, capture={"handle": "handle"}, result={"backend": "fpga"}),
+                step("dot", "compute.dot", {"handle": "$handle", "tensor_name": "w", "activations": xw},
+                     result={"accumulators": [y + (5 if r == 1 else 0) for r, y in enumerate(exact_rows(wide_values, 4, 1100, xw))],
+                             "reference": {"backend": "emulator", "mismatches": 1, "first_mismatch": 1},
+                             "transfer": {"image_bytes": 4 * 14 * 16, "matvec_runs": 1}},
+                     result_at_least={"transfer.matvec_attempts": 2, "transfer.retransmits": 3,
+                                      "transfer.timeouts": 1,
+                                      "transfer.naks+transfer.late_replies": 1,
+                                      "transfer.bad_lines+transfer.late_replies": 1},
+                     result_format=evidence_format,
+                     description="Each fault forces at least one retransmission or repeated run, and a stalled "
+                                 "host process can add more, never fewer: retransmits, matvec_attempts and "
+                                 "timeouts (the lost ack never arrives, so at least one attempt of that frame "
+                                 "ends at its deadline) are lower bounds. A stall longer than the reply timeout can make "
+                                 "the host read the nak or the corrupted Y line while it waits out the "
+                                 "retransmission, where it counts as a late reply, so naks and bad_lines are "
+                                 "bounded only together with late_replies"),
+            ],
+        },
+        {
+            "id": "fpga_dot_without_a_device", "kind": "sequence",
+            "backend": {"name": "fpga", "device": FPGA_DEVICE, "double": {"absent": True}},
+            "description": "uploads are held in process memory; the dot fails with a transport error",
+            "steps": [
+                step("upload", "memory.upload", {"data": b64(pack)}, capture={"handle": "handle"}, result={"backend": "fpga"}),
+                step("dot", "compute.dot", {"handle": "$handle", "tensor_name": "a", "activations": xa}, error_code=-32000,
+                     error_message_contains="cannot open"),
+            ],
+        },
+    ]
+
+
 def build_bridge():
     six = [-1, 0, 1, 1, -1, 0]
     tmem6 = tmem("dense5", six)
@@ -543,6 +702,7 @@ def build_bridge():
             ],
         },
     ]
+    vectors += fpga_vectors()
     constants = {
         "protocol": {"name": "trinity-memory-bridge", "version": 1, "backend": "emulator", "hardware": False,
                      "persistence": "process-memory", "authentication": "none-loopback-only",
@@ -567,7 +727,10 @@ def build_bridge():
         "identity": {"derivation": "sha256('trinity-memory-emulator-v1:' + part)[0:16] for phi, euler, gamma",
                      **{f"{part}_id": identity(part) for part in IDENTITY_PARTS}, "anchor": 18368, "anchor_hex": "0x47C0",
                      "identity_kind": "synthetic-public-16-byte"},
+        "fpga": FPGA_CONSTANTS,
         "sdk_adapter": {"backend_class": "trinity_memory.bridge.SDKMemoryBackend", "chip_info_requires": {"backend": "emulator", "hardware": False},
+                        "fpga_chip_info_requires": {"backend": "fpga", "hardware": True,
+                                                    "evidence": "all five fields present and well formed"},
                         "unsupported": ["prove_inference", "submit_to_bittensor"],
                         "pins": {"trinity-sdk": "fa8476397ac69438315268342958759e91da9e20", "trinity-node": "4da4d7f7fee7a76c78f91c3b80e97a23b54e344d"}},
     }
@@ -581,6 +744,12 @@ def build_bridge():
         {"id": "default_accumulators_fit_a_signed_32_bit_word", "condition": "1000000 * 128 <= 2^31 - 1"},
         {"id": "handles_serialize_two_hex_chars_per_byte", "condition": "32 == 2 * 16"},
         {"id": "identity_anchor_is_0x47c0", "condition": "18368 == 0x47C0"},
+        {"id": "evidence_mask_names_five_fields", "condition": "COMPLETE == bitstream|capture|idcode|dna|build_id == 31"},
+        {"id": "a_device_word_holds_64_baseline2_or_80_dense5_lanes", "condition": "64 * 2 == 16 * 8; 80 == 16 * 5"},
+        {"id": "an_activation_frame_fits_a_loader_chunk", "condition": "51 * 80 <= 4096 < 52 * 80"},
+        {"id": "device_accumulators_hold_the_widest_row", "condition": "1024 * 80 * 128 <= 2^31 - 1"},
+        {"id": "down_proj_needs_21_signed_bits", "condition": "2^19 < 6912 * 128 < 2^20"},
+        {"id": "the_stage_one_chunk_fits_the_default_trit_limit", "condition": "320 * 2560 == 819200 <= 1000000"},
     ]
     return {
         "module": "TrinityMemoryBridgeSpec",
@@ -594,6 +763,18 @@ def build_bridge():
         "created_at": "2026-09-11T00:00:00Z",
         "generator": "tools/generate-spec-vectors.py",
         "replay": {"tcp": "tests/test_spec_bridge.py", "native": "tests/native/test_spec_bridge_vectors.py",
+                   "backend": "a vector with `backend` runs on that backend; for fpga the replay starts the device "
+                              "double of tests/fake_fpga_device.py (tools/bridge_link_protocol.MatvecDevice) on a "
+                              "pseudo-terminal with the vector's `double` options, or a port that does not exist "
+                              "when `double` is {\"absent\": true}",
+                   "result_format": "keys may be dotted paths into the result",
+                   "result_at_least": "dotted paths to integer counters, or sums of such paths joined by "
+                                      "\"+\", and their lower bounds: counters a stalled process can raise "
+                                      "but not lower, such as retransmissions; a sum where a stall can move "
+                                      "a count from one counter to another (a nak or bad line read as a "
+                                      "late reply)",
+                   "error_message_contains": "with error_code: a substring the error message must contain (which "
+                                             "refusal it was, when several share one code)",
                    "kinds": {"rpc": "one request body, default or per-vector limits",
                              "transport": "raw HTTP framing (TCP replay only)",
                              "sequence": "ordered steps on one server; $name substitutes a captured result field"}},

@@ -107,6 +107,24 @@ with original commit and byte hashes recorded in
   stalling memory in Icarus, every device byte against the model. See
   `docs/uart-loader.md`.
 
+- Device matvec (`fpga_ddr3_matvec.t27`, issue #64, consumer (B) of #65; not yet wired into a
+  board top, the DDR3 integration is the next wave): y = W x for a ternary matrix streamed one
+  128-bit bus word per controller clock (the word #62's reader delivers) as baseline2 (64 lanes)
+  or dense5 (80 lanes) with every row padded to whole words, and int8 activations held on chip in
+  ten block-RAM banks read 80 at a time (one read per word in both formats). Decode (the dense5
+  constant tables of `fpga_ddr3_reader.t27`), padding mask, biased 8-bit terms (+1: x xor 0x80,
+  -1: x xor 0x7F, the missing +1 of each -1 lane added as a count), an adder tree over 80 lanes in
+  pipeline stages, 32-bit signed row accumulators, a 1024 x u32 result memory, then one Y line per
+  row and eleven Z counter lines through `fpga_line_emitter.t27`. Words are taken on the
+  in_valid / in_ready handshake (in_ready: RUN and words still expected); a run with no word for
+  65,536 clocks, or an `abort`, ends with status 2 and only its Z lines, and the module is idle
+  again. Its counters (idle clocks, latency, consumer stalls: words held off before RUN, stray
+  words: words offered outside a run) measure what it was offered; cycles = words + idle clocks by
+  construction. `tests/test_ddr3_matvec.py` checks its functions in C and runs it in Icarus on the
+  real q_proj chunk (rows 0-319) in both formats, on 6,912-column rows, on +1 codes in every
+  padding lane, at the 1,024-row and 1,024-word limits, and on the handshake, a short stream and
+  an abort. See `docs/bridge.md`, "Device matvec (#64)".
+
 ## Current compiler boundaries
 
 - `trinity_dot_stream_t27` supports `ACC_WIDTH=2..32`; the native accumulator is

@@ -24,12 +24,13 @@ DOCUMENT = replay.load_document()
 
 
 class TcpSession:
-    def __init__(self, server):
+    def __init__(self, server, timeout=5):
         self.server = server
         self.port = int(server.url.split(":")[-1].strip("/"))
+        self.timeout = timeout
 
     def send(self, body, headers=None):
-        connection = HTTPConnection("127.0.0.1", self.port, timeout=5)
+        connection = HTTPConnection("127.0.0.1", self.port, timeout=self.timeout)
         try:
             connection.request("POST", "/", body, headers or {"Content-Type": "application/json"})
             response = connection.getresponse()
@@ -49,9 +50,15 @@ class TcpSession:
 
 
 @contextlib.contextmanager
-def tcp_session(limits):
-    with BridgeServer(**limits) as server:
-        yield TcpSession(server)
+def tcp_session(limits, backend=None):
+    if backend is None:
+        with BridgeServer(**limits) as server:
+            yield TcpSession(server)
+        return
+    with replay.fpga_double(backend) as (path, options):
+        from trinity_memory.bridge import FpgaDevice
+        with BridgeServer(**limits, backend="fpga", device=FpgaDevice(port=path, **options)) as server:
+            yield TcpSession(server, timeout=60)
 
 
 class SpecBridgeTcpReplay(unittest.TestCase):
@@ -65,6 +72,25 @@ class SpecBridgeTcpReplay(unittest.TestCase):
         self.assertEqual(skipped, [])
         self.assertEqual(run, len(DOCUMENT["vectors"]))
         self.assertGreaterEqual(steps, 40)
+
+    def test_lower_bounds_accept_sums_of_counters(self):
+        # A stall can move a nak or a bad line into late_replies: the fault vector bounds the sum.
+        def body(**transfer):
+            return {"jsonrpc": "2.0", "id": 1, "result": {"transfer": transfer}}
+        expect = {"result_at_least": {"transfer.retransmits": 3, "transfer.naks+transfer.late_replies": 1}}
+        replay.check("sum", 200, body(retransmits=3, naks=1, late_replies=0), expect)
+        replay.check("sum", 200, body(retransmits=4, naks=0, late_replies=2), expect)
+        for transfer, fragment in (({"retransmits": 3, "naks": 0, "late_replies": 0}, "expected at least 1, got 0"),
+                                   ({"retransmits": 2, "naks": 1, "late_replies": 0}, "expected at least 3, got 2"),
+                                   ({"retransmits": 3, "naks": 1}, "expected an integer counter"),
+                                   ({"retransmits": 3, "naks": True, "late_replies": 1}, "expected an integer counter")):
+            with self.assertRaisesRegex(replay.VectorFailure, fragment):
+                replay.check("sum", 200, body(**transfer), expect)
+        vector = next(v for v in DOCUMENT["vectors"] if v["id"] == "fpga_dot_retransmits_and_reports")
+        bounds = vector["steps"][-1]["expect"]["result_at_least"]
+        self.assertEqual(set(bounds), {"transfer.matvec_attempts", "transfer.retransmits", "transfer.timeouts",
+                                       "transfer.naks+transfer.late_replies",
+                                       "transfer.bad_lines+transfer.late_replies"})
 
     def test_identity_follows_the_documented_derivation(self):
         expected = DOCUMENT["constants"]["identity"]

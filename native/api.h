@@ -11,6 +11,7 @@
 #include "tensorpack_json.abi.h"
 #include "tensorpack_cli.abi.h"
 #include "http.abi.h"
+#include "fpga_link.abi.h"
 #include "bridge.abi.h"
 #include "client.abi.h"
 #include "random.abi.h"
