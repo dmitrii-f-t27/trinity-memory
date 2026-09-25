@@ -16,6 +16,10 @@ Faults act on the byte streams, each once:
                                                             that command index) the device sends
   {"kind": "corrupt_line", "tag": "Y", "nth": 5}            flip one hex digit of the nth such line
   {"kind": "garbage", "before": "Y", "nth": 1, "data": "..."} send bytes (hex) before the nth such line
+  {"kind": "extra_line", "before": "C", "nth": 30, "count": 23, "line_index": 21, "value": v}
+                                                            before the nth such line, one more well-formed
+                                                            line of the same seq announcing `count` lines,
+                                                            with index `line_index` and value v
   {"kind": "reset", "after_frames": n}                      after the host's nth frame: the reset button
                                                             (the H line; the store keeps its data)
 `result_faults` {row: delta} make the device's accumulator of that row wrong by delta.
@@ -23,6 +27,8 @@ Faults act on the byte streams, each once:
 entry each, end early (status 2, only the Z lines) or report n stray words or n invalid codes.
 Everything the device sent is in `tx_log`, everything it received in `rx_log`.
 
+`base_proto`: the loader the device is built on, uart_loader_protocol.PROTO_DDR3 (37 status lines,
+the matvec build) by default, or PROTO (part 1's 23 status lines).
 `pace_baud`: without it the fake answers as fast as the pty takes bytes. With it, the host's
 bytes reach the model one per 10 / pace_baud seconds (the UART line into the device) and the
 device's bytes leave on the same schedule (the line out), so the host's deadlines meet a line of
@@ -62,11 +68,11 @@ def t27_compute(trits, rows, cols, x):
 class FakeDevice:
     def __init__(self, *, build_id: int = 0x1D474000, store_log2: int = 20, compute=t27_compute, faults=(),
                  result_faults=None, byte_timeout: float = 0.05, protocol: int | None = None,
-                 run_faults=(), pace_baud: int | None = None):
+                 run_faults=(), pace_baud: int | None = None, base_proto: int = proto.PROTO_DDR3):
         # The DDR3 loader's base (37 status lines, not_ready) under protocol 4, as the matvec build.
         self.model = link.MatvecDevice(store_log2=store_log2, build_id=build_id, compute=compute,
                                        result_faults=dict(result_faults or {}), run_faults=list(run_faults),
-                                       proto=proto.PROTO_DDR3)
+                                       proto=base_proto)
         if protocol is not None:
             self.model.c["config"] = (protocol << 24) | (self.model.c["config"] & 0xFFFFFF)
         self.model.out.clear()            # powered up long ago: no H line is waiting
@@ -158,6 +164,9 @@ class FakeDevice:
                 data = data[:5] + bytes([ord("0") if digit != ord("0") else ord("1")]) + data[6:]
             if fault["kind"] == "garbage":
                 prefix += bytes.fromhex(fault["data"])
+            if fault["kind"] == "extra_line":
+                a = (item[1] & 0xFF000000) | (fault["count"] << 16) | fault["line_index"]
+                prefix += proto.format_line(tag, a, fault["value"])
         return prefix + data
 
     def _flush(self):

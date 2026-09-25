@@ -117,6 +117,12 @@ module TrinityFpgaDdr3LoaderT27;
 // Every statement of on_clock reads a variable before the same tick writes it,
 // so the C and the Verilog backends agree on the functions; the module as a whole
 // is checked in Icarus (tests/test_uart_loader.py).
+// [ddr3] [matvec] Except where a read must see the previous clock: the registered checks at
+// the end of on_clock read h_*, ci and crc after the branches above wrote them, and the X and M
+// states read stage_rdata below the line that loads it. In the Verilog (non-blocking assignment)
+// every such read is of the previous clock's value, as intended; the generated C runs the
+// statements in order and would not, so on_clock is the Verilog's (tests/test_ddr3_loader.py and
+// tests/test_ddr3_matvec_top.py run it in Icarus) and the C serves the functions only.
 const P_HELLO: u32 = 0;
 const P_HUNT: u32 = 1;
 const P_SYNC1: u32 = 2;
@@ -486,8 +492,11 @@ fn header_ok(cmd: u32, addr: u32, len: u32, store: u32) -> bool {
 fn header_ok_mv(cmd: u32, addr: u32, len: u32, store: u32) -> bool {
     if (cmd == CMD_ACT) {
         if (len < 8 || len > ACT_MAX_LEN || (len & 7) != 0 || addr >= ACT_ENTRIES) { return false; }
-        var room: u32 = ACT_ENTRIES - addr;
-        return len <= (room << 6) + (room << 4);
+        // 1..1024 entries from addr on, times 80 bytes. After the checks above the masks change
+        // no value; they let synthesis make the subtraction, the sum and the compare 11, 17 and 17
+        // bits wide instead of 32 (the DDR3 matvec build's timing at 83.33 MHz).
+        var room: u32 = (ACT_ENTRIES - (addr & 1023)) & 2047;
+        return (len & 4095) <= (((room << 6) + (room << 4)) & 131071);
     }
     if (cmd == CMD_MATVEC) { return len == 12 && (addr & 15) == 0 && addr < store; }
     return false;
@@ -871,8 +880,9 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             prob_count = 0;                              // [ddr3] 0 outside a probation (see the revert)
             nak_reason = R_NOT_READY;
             pstate = P_NAK;
-        } else if (mv_cmd && mv_busy) {
+        } else if ((mv_cmd || h_cmd == CMD_BAUD) && mv_busy) {
             // [matvec] X and M wait for a run: the banks are in use and the matvec takes no start.
+            // B too: the run's Y and Z lines share the transmitter, and a new rate would reach them.
             probation = false;
             prob_count = 0;
             nak_reason = R_NOT_READY;

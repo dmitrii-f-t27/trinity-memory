@@ -156,8 +156,9 @@ class MatvecDevice(proto.DeviceModel):
     The device is the DDR3 loader of #63 part 2 with the extension (t27/rtl/fpga_ddr3_loader.t27
     with `matvec` high): construct it with proto=uart_loader_protocol.PROTO_DDR3 for its 37 status
     lines and not_ready; then an M before the calibration is refused not_ready, as a load. A run
-    takes no time here; `busy` (set by a test while a run of the device is under way) makes X
-    and M answer not_ready after their CRC, as the device does until the run's last Z line.
+    takes no time here; `busy` (set by a test while a run of the device is under way) makes X, M
+    and B answer not_ready after their CRC, as the device does while its matvec or its feed is
+    busy (from the M's start until the run's lines are out and every word it asked for came).
     """
     compute: object = None
     result_faults: dict = field(default_factory=dict)
@@ -196,6 +197,14 @@ class MatvecDevice(proto.DeviceModel):
         self.state = "payload"
 
     def _check_frame(self):
+        if self.cmd == proto.CMD_BAUD and self.busy and self.proto >= proto.PROTO_DDR3:
+            # A rate change waits for the run as X and M do: its Y and Z lines share the transmitter.
+            body = bytes(self.hdr) + bytes(self.payload)
+            if proto.crc32(body) != struct.unpack("<I", bytes(self.crcb))[0]:
+                return self._nak(proto.R_CRC)
+            self.state = "hunt"
+            self.probation = False
+            return self._nak(proto.R_NOT_READY)
         if self.cmd not in (CMD_ACT, CMD_MATVEC):
             return super()._check_frame()
         body = bytes(self.hdr) + bytes(self.payload)

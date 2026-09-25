@@ -255,6 +255,9 @@ var line_tag: u32 = 0;
 var line_a: u32 = 0;
 var line_b: u64 = 0;
 var em_v: u32 = 0;
+// The Z value of line e_idx, registered in E_READ (the index and the counters do not change in
+// EMIT): the selection among eleven counters is not in one clock with the line's other fields.
+var z_q: u32 = 0;
 var busy: bool = false;
 var done: bool = false;
 var runs: u32 = 0;
@@ -589,17 +592,19 @@ fn rotl1_32(x: u32) -> u32 {
 
 fn zval(i: u32, refd: bool, sh: bool, rd: u32, w: u32, wd: u32, cy: u32, idl: u32, lat: u32, inv: u32, sw: u32,
         cs: u32, c: u32) -> u32 {
+    // Z lines have indices 0-10: four bits (for a Y line's index the value is not used).
+    var j: u32 = i & 15;
     var v: u32 = c;
-    if (i == 0) { v = 0; if (sh) { v = 2; } if (refd) { v = 1; } }
-    if (i == 1) { v = rd; }
-    if (i == 2) { v = w; }
-    if (i == 3) { v = wd; }
-    if (i == 4) { v = cy; }
-    if (i == 5) { v = idl; }
-    if (i == 6) { v = lat; }
-    if (i == 7) { v = inv; }
-    if (i == 8) { v = sw; }
-    if (i == 9) { v = cs; }
+    if (j == 0) { v = 0; if (sh) { v = 2; } if (refd) { v = 1; } }
+    if (j == 1) { v = rd; }
+    if (j == 2) { v = w; }
+    if (j == 3) { v = wd; }
+    if (j == 4) { v = cy; }
+    if (j == 5) { v = idl; }
+    if (j == 6) { v = lat; }
+    if (j == 7) { v = inv; }
+    if (j == 8) { v = sw; }
+    if (j == 9) { v = cs; }
     return v;
 }
 
@@ -744,7 +749,7 @@ z_a = ((seq & 255) << 24) | (Z_COUNT << 16) | e_idx;
 z_v = zval(e_idx, refused, short_run, rows_done, wpr, words, cycles, idle_clocks, latency, invalid, stray, cons_stalls, chk);
 e_tag = pick32(e_z, TAG_Z, TAG_Y);
 e_a = pick32(e_z, z_a, y_a);
-e_v = pick32(e_z, z_v, res_rd);
+e_v = pick32(e_z, z_q, res_rd);
 e_bits = line_bits(line_tag, line_a, em_v);
 
 // start with cfg_rows, cfg_cols, cfg_fmt, cfg_seq: a run (taken while idle). in_valid,
@@ -971,6 +976,7 @@ fn on_clock(start: bool, cfg_rows: u32, cfg_cols: u32, cfg_fmt: u32, cfg_seq: u3
         }
     } else if (st == ST_EMIT) {
         if (e_ph == E_READ) {
+            z_q = z_v;
             e_ph = E_FORM;
         } else if (e_ph == E_FORM) {
             line_tag = e_tag;

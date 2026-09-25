@@ -537,11 +537,13 @@ each of them ("The DDR3 matvec build" below says where):
   the module's own configuration check sees rows, cols and format only); the spec states it as
   `tms_device_region_fits`, and `MatvecDevice` applies it. The host never sends such a run
   (`tl_dot` checks the same bound first and answers `-32010`).
-- **While a run is busy** (from `M` to the module's `done`): an `X` must not write the banks (it
-  would change the activations under the run) and an `M` must not start the module (a start while
-  busy is ignored); both are nakked `not_ready` (reason 9 of the DDR3 loader, protocol 3) and the
-  host retransmits them after its quiet time. An `M` before UberDDR3's calibration is refused
-  `not_ready` as a load is (an `X` writes block RAM and needs no calibration).
+- **While a run is busy** (from the `M`'s start until the module's last Z line is out and the
+  reader has every ack of the words it asked for): an `X` must not write the banks (it would
+  change the activations under the run), an `M` must not start the module (a start while busy is
+  ignored) and a `B` must not change the rate (the run's Y and Z lines share the transmitter); all
+  three are nakked `not_ready` (reason 9 of the DDR3 loader, protocol 3) and the host retransmits
+  them after its quiet time. An `M` before UberDDR3's calibration is refused `not_ready` as a
+  load is (an `X` writes block RAM and needs no calibration).
 - **The reader** starts over the region after the module's `in_ready` rose, or holds its words
   until it does; it must deliver exactly rows x wpr words. A reader that gives up (its watchdog)
   should also pulse the module's `abort` once, while the run is in RUN, so the run ends at once
@@ -579,9 +581,10 @@ the parts below.
   lowers `*` to a 64-bit shift-and-add loop, so the RTL has none), checks the configuration and
   that the region `addr .. addr + words x 16` lies in the store, sends `A` with command 6 and only
   then starts the matvec (with rows 0 for a region that does not fit, which the matvec refuses:
-  status 1, only its Z lines) and, for a run that goes ahead, the feed. X and M are refused
-  `not_ready` after their CRC while the matvec or the feed is busy, and an M also before the
-  calibration. Neither counts in `frames_committed` or `bytes_committed`; the config word and
+  status 1, only its Z lines) and, for a run that goes ahead, the feed. X, M and B are refused
+  `not_ready` after their CRC while the matvec or the feed is busy (a B then would change the rate
+  under the run's lines: the review found that a B during a run could put a Y or Z line on the wire
+  at the old rate after its A), and an M also before the calibration. Neither counts in `frames_committed` or `bytes_committed`; the config word and
   status line 19 say protocol 4. Every read of the staging buffer (the load's commit, X and M) goes
   through one read address, word `ci / 4`, so it stays one block RAM (with two read addresses
   synthesis turned part 1's store into LUT RAM, `docs/uart-loader.md`).
@@ -590,13 +593,21 @@ the parts below.
   outstanding, and hands each acknowledged word to the matvec in the clock of its ack. There is no
   FIFO: the matvec takes a word in every clock of RUN, so an ack is always taken. `cyc` is high
   from the first request to the last ack, so the arbiter keeps the port with the feed for the run;
-  a load or read-back that comes meanwhile waits for it (the loader's port watchdog, 50 ms on the
-  board, is far longer than a run's reads: 1,024 rows of 1,024 words are 2^20 words). Watchdog:
-  `FEED_WATCHDOG` clocks (32,768, 393 us at 83.33 MHz, arithmetic; half the matvec's own idle
-  limit) without in_ready, or without a request taken or an ack, end its part of the run with a
-  one-clock `abort` (the matvec ends the run at once, status 2, only its Z lines); it drops `cyc`,
-  drops the late acks as they come and stays busy until the last one, so a later run never takes
-  a word of this one.
+  a load or read-back that comes meanwhile waits for it. The loader's port watchdog (50 ms on the
+  board) is longer than the largest run's reads: 1,024 rows of 1,024 words are 2^20 words, 12.6 ms
+  at one word per clock and 13.3 ms at the 0.9447 words per clock #62's reader measured from
+  UberDDR3 on this board (arithmetic from that rate; this build's own rate is what the board run
+  measures). Watchdog: `FEED_WATCHDOG` clocks (32,768, 393 us at 83.33 MHz, arithmetic; half the
+  matvec's own idle limit) without in_ready, or without a request taken or an ack, end its part of
+  the run with a one-clock `abort` (the matvec ends the run at once, status 2, only its Z lines).
+  It asks for nothing more, but a request presented at that moment stays presented, unchanged,
+  until it is taken (the Wishbone rule; the first version withdrew it, which the review showed
+  with a run of 80 words: the memory model stops at a withdrawn request); then it drops the late
+  acks of every request taken as they come and stays busy, with `cyc` high, until the last one, so
+  a later run never takes a word of this one. UberDDR3 acknowledges every request it took (the
+  arbiter holds its `cyc` high), so the wait ends; were an ack ever lost, X, M and B would be
+  refused `not_ready` until the next reset, and only `nak_not_ready` in the status would grow (the
+  feed's own counters reach no status line).
 - **The line arbiter** (`t27/rtl/fpga_line_arbiter.t27`) shares the one line emitter between the
   loader's lines and the matvec's Y and Z lines. Neither side checks that its line was taken, so a
   side sees idle only while it holds the grant, the emitter is idle and no go is in flight (in
@@ -605,10 +616,18 @@ the parts below.
   the emitter (`tx_lock`), the grant stays with the loader, so no line starts inside the frame.
   `collisions` counts clocks with both go high.
 - **The host** (`t27/fpga_link.t27`) accepts a status of 23 or 37 lines, so it talks to this
-  build; the device double (`tests/fake_fpga_device.py`) now answers as this build does (37
-  status lines under protocol 4), which moved the identity vector's capture to 740 bytes (37 x 20;
-  `conformance/memory_bridge.json`, sha256 `3c9ba3ba…`). `BridgeServer.last_capture()` returns the
-  bytes the device sent in the last fpga call (the capture whose sha256 the evidence reports), and
+  build: the first line of an exchange fixes the count, and the reply is whole when every index
+  below it has come. The device double (`tests/fake_fpga_device.py`) now answers as this build does
+  (37 status lines under protocol 4), which moved the identity vector's capture to 740 bytes (37 x
+  20; `conformance/memory_bridge.json`, sha256 `3c9ba3ba…`); `base_proto` makes it a part-1 loader
+  (23 lines). `tests/test_bridge_fpga.py` checks that a 23-line device is read whole in one
+  exchange and refused by its protocol, that two status calls on a paced line (115200 baud) each
+  capture their own 37 lines, and that a well-formed line of the same exchange announcing the other
+  count changes nothing; the review's three mutants of the count rule (37 only, whole after line
+  22, no count fixed) each fail one of them. `BridgeServer.last_capture()` returns the bytes the
+  device sent in the last fpga call (the capture whose sha256 the evidence reports), copied under
+  the server's lock in one call into a buffer that holds any capture (the first version read the
+  size and the bytes in two calls, so a request between them could go unnoticed), and
   `tools/fpga-bridge-dot.py` runs the board part of #64 with it (below).
 
 **Simulation (Icarus, `tests/test_ddr3_matvec_top.py`; summary
@@ -659,20 +678,30 @@ make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_APP=matvec ... DDR3_SEEDS=<seed> \
   DDR3_BUILD=$PWD/build/fpga/ddr3-x16-matvec-<id>-seed<seed> \
   DDR3_REPORT=$PWD/reports/fpga/ddr3-build-<date>-<id>-x16-matvec-seed<seed>
 make -C fpga/ax7203 ddr3-flash DDR3_APP=matvec DDR3_BUILD=$PWD/build/fpga/ddr3-x16-matvec-<id>-seed<seed> \
-  DDR3_FLASH_REPORT=reports/fpga/ddr3-build-<date>-<id>-x16-matvec-seed<seed>/build.json
+  DDR3_FLASH_REPORT=$PWD/reports/fpga/ddr3-build-<date>-<id>-x16-matvec-seed<seed>/build.json
 # 3. compute.dot on q_proj rows 0-319 in both formats through the Bridge (fixture cache needed):
-python3 tools/fpga-bridge-dot.py --port /dev/cu.usbserial-110 --build-report <its build.json> \
+python3 tools/fpga-bridge-dot.py --port /dev/cu.usbserial-110 --identity \
+  --bit build/fpga/ddr3-x16-matvec-<id>-seed<seed>/tms_ddr3_loader_ax7203.bit --build-report <its build.json> \
   --idcode 0x13636093 --dna 0x00389c0c2d85e85c --output reports/fpga/bridge-dot-<date>-<id>
 ```
 
+With `--bit` the tool hashes the loaded file itself (whole and from the sync word on) and, with
+`--build-report`, requires it to match the report as `make ddr3-flash` does; with `--identity` it
+reads IDCODE, DNA and XADC with openFPGALoader and requires the IDCODE and DNA given (without them
+the evidence is what the command line says; the device confirms only the build id). It stops with
+exit status 2 and a record that says why when either check fails, before it opens the port.
 `tools/fpga-bridge-dot.py` asks for the identity, then per format uploads the chunk (L frames,
 read back and compared), sends the activations and runs the matvec, twice (the second call uses the
 upload cache), and writes `record.json` (every result as returned, host times, the accumulators
 against t27/matvec.t27's and the emulator's) with each call's capture (`*.capture.gz`, its sha256
 checked against the evidence). Its exit status is 0 only when every accumulator equals the
-reference. At 115200 baud the first call of a format moves the image twice (dense5 163,840 bytes,
+reference. It writes `record.json` whatever happens (a call that fails before the device sent a
+byte is recorded without a capture rather than with the previous call's). At 115200 baud the
+first call of a format moves the image twice (dense5 163,840 bytes,
 baseline2 204,800; about 29 and 36 s at the loader's 11.37 kB/s, arithmetic), the second only the
-activations and the lines. `tests/test_bridge_fpga.py` runs the tool against the device double.
+activations and the lines. `tests/test_bridge_fpga.py` runs the tool against the device double:
+the whole run, a wrong accumulator (exit status 1, the row named), and a `.bit` that matches its
+build record only from the sync word on (accepted) or not at all (refused before the port).
 
 **Consumer (B) of #65, on the same load** (the device matvec's weights per second from DDR3):
 

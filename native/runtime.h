@@ -17,6 +17,10 @@ int32_t tm_runtime_fpga(TMRuntime *runtime, uint8_t *path, size_t path_size, uin
                         uint32_t reply_ms, uint32_t quiet_ms, uint32_t attempts, uint32_t min_protocol,
                         uint32_t region, uint8_t *bitstream_sha256, uint32_t idcode, uint64_t dna,
                         uint32_t build_id);
+/* The fpga backend's capture of the last call (tm_runtime_fpga_capture copies it, count and bytes
+ * under one lock, when capacity holds it) and the capacity that always holds one. */
+size_t tm_runtime_fpga_capture_capacity(TMRuntime *runtime);
+size_t tm_runtime_fpga_capture(TMRuntime *runtime, uint8_t *out, size_t capacity);
 size_t tm_runtime_stored_bytes(TMRuntime *runtime);
 size_t tm_runtime_object_count(TMRuntime *runtime);
 struct TMTPJSONWorkspace *tm_runtime_tensor_new(size_t json_bytes, size_t max_trits);
