@@ -1,0 +1,275 @@
+{
+ "schema": "trinity.ddr3-weights-per-second.v1",
+ "issue": "#65",
+ "written_by": "tools/ddr3-weights-per-second.py",
+ "inputs": {
+  "delivery": [
+   "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11"
+  ],
+  "workload": []
+ },
+ "f_ctrl_hz": 83333333.33333333,
+ "definitions": {
+  "weights_per_s": "logical trits of the run (padding lanes excluded) x f_ctrl / cycles",
+  "f_ctrl_hz": "250/3 MHz: the board's 200 MHz oscillator x 5 / (4 x 3) in the DDR3 tops' PLL (PLL_MULT 5, DDR_DIV 3); arithmetic, not an instrument measurement",
+  "cycles": {
+   "A": "line c of the read path: clocks from the first read request presented to the last read ack, inclusive (the first read's latency is in them)",
+   "B": "Z line 4 of the matvec: clocks from the first word taken to the last, inclusive (the first read's latency is in Z line 6, with SETUP and MASK, not in them)"
+  },
+  "statistic": "over the runs used: n, min, median, max, mean and sample s.d., every figure to 9 significant digits",
+  "ratio": "median(dense5) / median(baseline2) of the weights per second; bracket min(dense5) / max(baseline2) .. max(dense5) / min(baseline2)",
+  "ceiling": "80 / 64 = 1.25 logical trits per 128-bit word, payload only (padding, scales and metadata count against it); x16 at 667 MT/s moves one 128-bit word per controller clock, so the peaks are 80 and 64 trits per clock: 6.667 G (dense5) and 5.333 G (baseline2) weights per second",
+  "memory_bound": "consumer stalls 0 in every run used of both formats: the consumer never held the bus off, so the gap to one word per clock is the bus's (command and wait stalls, refresh, row changes)"
+ },
+ "ceiling": {
+  "ratio": 1.25,
+  "peak_weights_per_s": {
+   "dense5": 6666666670.0,
+   "baseline2": 5333333330.0
+  }
+ },
+ "rows": [
+  {
+   "consumer": "A",
+   "source": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11",
+   "what": "delivery: shows whether DDR3 delivers and the decoders keep up; not by itself evidence for the thesis (#65)",
+   "design": "t27/rtl/fpga_ddr3_reader.t27 (#62), make -C fpga/ax7203 ddr3-bit DDR3_APP=reader",
+   "region": {
+    "logical_trits_per_run": 17694720,
+    "seed": 98,
+    "cap": 64,
+    "note": "trits from the reader's generator (a new key per pair of runs), written by each run's fill before its read; both formats of a pair carry the same trits, from burst 0"
+   },
+   "loads": [
+    {
+     "load": "load1",
+     "label": "x16 read path (#62), 42b6f5a9 seed 11, load 1",
+     "t0_utc": "2026-09-24T16:42:26.283Z",
+     "capture": {
+      "file": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load1/capture.json.gz",
+      "sha256": "683f6087781e501a74307e822b50abf825becdd5088f85e8be65c0a0baba1a9d"
+     },
+     "transcript": {
+      "file": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load1/uart.tsv.gz",
+      "sha256": "d4a51231a922386f5d78eb09f08d1f605a29086a06a5081556c164f840a42dcc",
+      "equals_record": true,
+      "counters_decoded_again_equal": true
+     },
+     "bitstream": {
+      "report": "reports/fpga/ddr3-build-2026-09-24-42b6f5a9-x16-reader-seed11/build.json",
+      "report_sha256": "6629220763cca38297d4a35aeb746e41570264a20e821a6cb290ead7ac7c030a",
+      "report_sha256_from_sync": "65ac66d683aeb39cc52015bad242978891d4e88e8fcbbc33487da28ed59b319f"
+     },
+     "build_id": "42b6f5a9",
+     "idcode": "0x3636093",
+     "dna": "0x00389c0c2d85e85c",
+     "die_c_before_after": [
+      37.6548,
+      39.8926
+     ],
+     "calibration": {
+      "calib_complete": true,
+      "done_calibrate": true,
+      "no_return_to_idle": true,
+      "reset_at_load": true
+     },
+     "calibration_held": true,
+     "runs": 515,
+     "partial_run_at_end_not_counted": true
+    },
+    {
+     "load": "load2",
+     "label": "x16 read path (#62), 42b6f5a9 seed 11, load 2",
+     "t0_utc": "2026-09-24T16:44:42.523Z",
+     "capture": {
+      "file": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load2/capture.json.gz",
+      "sha256": "c2323933ddbf971e20da228411ece5f5cb4cdff5336cf4b2e5cf61608e7786ef"
+     },
+     "transcript": {
+      "file": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load2/uart.tsv.gz",
+      "sha256": "158d222a0238ac4a3e9abd317dc4fbd23d9aa26f8ed165fdea786f55b6577ab6",
+      "equals_record": true,
+      "counters_decoded_again_equal": true
+     },
+     "bitstream": {
+      "report": "reports/fpga/ddr3-build-2026-09-24-42b6f5a9-x16-reader-seed11/build.json",
+      "report_sha256": "6629220763cca38297d4a35aeb746e41570264a20e821a6cb290ead7ac7c030a",
+      "report_sha256_from_sync": "65ac66d683aeb39cc52015bad242978891d4e88e8fcbbc33487da28ed59b319f"
+     },
+     "build_id": "42b6f5a9",
+     "idcode": "0x3636093",
+     "dna": "0x00389c0c2d85e85c",
+     "die_c_before_after": [
+      44.3759,
+      44.7412
+     ],
+     "calibration": {
+      "calib_complete": true,
+      "done_calibrate": true,
+      "no_return_to_idle": true,
+      "reset_at_load": true
+     },
+     "calibration_held": true,
+     "runs": 516,
+     "partial_run_at_end_not_counted": true
+    },
+    {
+     "load": "load3",
+     "label": "x16 read path (#62), 42b6f5a9 seed 11, load 3",
+     "t0_utc": "2026-09-24T16:46:39.547Z",
+     "capture": {
+      "file": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load3/capture.json.gz",
+      "sha256": "88b0ca2a39a736562076626154d7dd48b957040c53c2078901c664ada653d086"
+     },
+     "transcript": {
+      "file": "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load3/uart.tsv.gz",
+      "sha256": "20541a96040264089011502e892158ab703bea00b1d16b579cdb08df31dcde0c",
+      "equals_record": true,
+      "counters_decoded_again_equal": true
+     },
+     "bitstream": {
+      "report": "reports/fpga/ddr3-build-2026-09-24-42b6f5a9-x16-reader-seed11/build.json",
+      "report_sha256": "6629220763cca38297d4a35aeb746e41570264a20e821a6cb290ead7ac7c030a",
+      "report_sha256_from_sync": "65ac66d683aeb39cc52015bad242978891d4e88e8fcbbc33487da28ed59b319f"
+     },
+     "build_id": "42b6f5a9",
+     "idcode": "0x3636093",
+     "dna": "0x00389c0c2d85e85c",
+     "die_c_before_after": [
+      46.6906,
+      46.5945
+     ],
+     "calibration": {
+      "calib_complete": true,
+      "done_calibrate": true,
+      "no_return_to_idle": true,
+      "reset_at_load": true
+     },
+     "calibration_held": true,
+     "runs": 518,
+     "partial_run_at_end_not_counted": true
+    }
+   ],
+   "formats": {
+    "dense5": {
+     "runs": 774,
+     "used": 774,
+     "excluded": [],
+     "logical_trits": [
+      17694720
+     ],
+     "words": [
+      221184
+     ],
+     "cycles": {
+      "min": 234116,
+      "max": 234125
+     },
+     "weights_per_s": {
+      "n": 774,
+      "min": 6298174050.0,
+      "median": 6298227850.0,
+      "max": 6298416170.0,
+      "mean": 6298305330.0,
+      "sd": 106461.562
+     },
+     "words_per_clock": {
+      "n": 774,
+      "min": 0.944726108,
+      "median": 0.944734178,
+      "max": 0.944762425,
+      "mean": 0.944745799,
+      "sd": 1.59692342e-05
+     },
+     "consumer_stalls_max": 0,
+     "command_stalls": {
+      "min": 12923,
+      "max": 12932
+     },
+     "wait_stalls": {
+      "min": 2730,
+      "max": 2740
+     },
+     "cap_holds_max": 0,
+     "max_outstanding": 9
+    },
+    "baseline2": {
+     "runs": 775,
+     "used": 775,
+     "excluded": [],
+     "logical_trits": [
+      17694720
+     ],
+     "words": [
+      276480
+     ],
+     "cycles": {
+      "min": 292614,
+      "max": 292653
+     },
+     "weights_per_s": {
+      "n": 775,
+      "min": 5038595200.0,
+      "median": 5038612410.0,
+      "max": 5039266750.0,
+      "mean": 5038705460.0,
+      "sd": 109769.159
+     },
+     "words_per_clock": {
+      "n": 775,
+      "min": 0.944736599,
+      "median": 0.944739828,
+      "max": 0.944862515,
+      "mean": 0.944757273,
+      "sd": 2.05817174e-05
+     },
+     "consumer_stalls_max": 0,
+     "command_stalls": {
+      "min": 16125,
+      "max": 16164
+     },
+     "wait_stalls": {
+      "min": 3412,
+      "max": 3422
+     },
+     "cap_holds_max": 0,
+     "max_outstanding": 9
+    }
+   },
+   "ratio_dense5_baseline2": {
+    "of_medians": 1.24999253,
+    "bracket": [
+     1.24981954,
+     1.25003417
+    ],
+    "ceiling": 1.25
+   },
+   "memory_bound": {
+    "verdict": true,
+    "consumer_stalls_max": 0,
+    "basis": "by construction: consumer (A)'s ready is the constant 1 (docs/hardware.md, 'Which counters are evidence'), so its stall count cannot be nonzero; that it keeps up rests on one word taken in every clock and on the build meeting 83.33 MHz. Its command stalls, wait stalls and cap holds split the gap"
+   },
+   "every_run_passed": true
+  }
+ ],
+ "outcome": [
+  "Consumer (A), delivery, reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11: dense5 6.2982 G weights per second (median of 774 runs, 6.2982-6.2984 G); baseline2 5.0386 G weights per second (median of 775 runs, 5.0386-5.0393 G); dense5 / baseline2 1.24999 (bracket 1.24982-1.25003) against the ceiling 1.25; memory-bound yes, by construction of the design."
+ ],
+ "not_measured": [
+  "consumer (B), the device matvec from DDR3: no board capture yet (the DDR3 matvec build has not been built into a bitstream)",
+  "consumer (A) on the #64 chunk: no build reads loaded weights through consumer (A); its rows here are on the #62 reader's own generated region"
+ ],
+ "problems": [],
+ "written_utc": "2026-09-25T04:26:11.183Z",
+ "tool_revision": {
+  "head": "e7ab5a11affaf9e1a3f7161dbc699d0d2031f603",
+  "tracked_changes": false
+ },
+ "argv": [
+  "tools/ddr3-weights-per-second.py",
+  "--delivery",
+  "reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11",
+  "--output",
+  "reports/fpga/ddr3-weights-per-second-2026-09-25.json"
+ ]
+}

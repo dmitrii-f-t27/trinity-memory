@@ -687,7 +687,10 @@ matvec `--runs` times on data loaded once and records every run's Z lines
 250/3 MHz from the oscillator and the PLL settings, not measured), words per clock, the idle
 fraction, min / median / max and mean +- s.d. over the runs whose every accumulator equals the
 reference, the ratio of the medians against the ceiling 1.25, and memory-bound (consumer stalls
-0 in every run). A run after which the calibration had dropped is excluded with the reason.
+0 in every run; in this build 0 by construction, since the feed asks only after `in_ready` rose,
+so what the runs measure is the idle clocks). A run after which the calibration had dropped is
+excluded with the reason. `tools/ddr3-weights-per-second.py --workload <capture.json>` adds the
+record to #65's summary ([`docs/hardware.md`](hardware.md), "Weights per second from DDR3 (#65)").
 `tests/test_matvec_capture.py` runs it against the timed protocol model (ideal: one word per
 clock, so its figures are the arithmetic peaks, 6.67 and 5.33 G weights per second).
 

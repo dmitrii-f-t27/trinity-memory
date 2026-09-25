@@ -1974,7 +1974,9 @@ ack in a fill or outside the phases would not have shown there.
   simulated. No scales are stored or read, so the scale/metadata counter is 0 by construction.
 - Not done here: consumer (B), the matvec (#64); loading real weights over the UART (#63); the
   weights-per-second comparison of the two layouts (#65). The words-per-clock figures above
-  are the read path's, measured by the reader's own counters at the controller clock.
+  are the read path's, measured by the reader's own counters at the controller clock
+  (consumer (A)'s weights per second from these captures: "Weights per second from DDR3
+  (#65)", below).
 
 ### DDR3 loader (#63 part 2)
 
@@ -1994,3 +1996,84 @@ those runs (none on the path they used) are fixed and shown in Icarus only. Desi
 simulation, build, board results and the fixes: [`docs/uart-loader.md`](uart-loader.md),
 "DDR3 (part 2, built)".
 
+
+### Weights per second from DDR3 (#65)
+
+Issue #65 measures how many weights per second the board takes from DDR3 in dense5 (1.6 bits
+per weight) and baseline2 (2 bits per weight), the same logical weights at the same clock, for
+two consumers in separate rows: consumer (A), delivery, #62's decode and check at bus rate
+("DDR3 read path (#62)", above), and consumer (B), the workload, the device matvec of #64 fed
+from DDR3 ([`docs/bridge.md`](bridge.md), "The DDR3 matvec build"). The summary is built from
+committed captures by [`tools/ddr3-weights-per-second.py`](../tools/ddr3-weights-per-second.py)
+(`trinity.ddr3-weights-per-second.v1`); `--check` recomputes a committed summary from the
+captures it names, and `tests/test_ddr3_weights_per_second.py` does that for the one below.
+
+**Definitions.**
+- *Weights per second* of a run = logical trits delivered (padding lanes excluded) x f_ctrl /
+  cycles. f_ctrl is the controller clock derived from the board's 200 MHz oscillator,
+  200 MHz x 5 / (4 x 3) = 83.33 MHz in the DDR3 tops' PLL (`PLL_MULT` 5, `DDR_DIV` 3):
+  arithmetic, not an instrument measurement. The cycles are consumer (A)'s read cycles (line
+  `c`: the first read request presented to the last read ack, inclusive, so the first read's
+  latency is in them) and consumer (B)'s Z line 4 (the first word taken to the last, inclusive;
+  the first read's latency is in Z line 6, with SETUP and MASK).
+- *Memory-bound*: consumer stalls 0 in every run used of both formats, so that the gap to one
+  word per clock belongs to DDR3 (command and wait stalls, refresh, row changes). In both designs
+  the count is 0 by construction and states the design, not a measurement: consumer (A)'s ready
+  is the constant 1 ("Which counters are evidence", above), and in the matvec build the feed asks
+  for the first word only after the matvec's `in_ready` rose, which stays high until the run's
+  last word, so Z line 9 cannot count there. That a consumer keeps up rests on one word taken in
+  every clock and on the build meeting 83.33 MHz. What the runs measure is the gap: (A) splits it
+  into command stalls, wait stalls and cap holds; (B) reports it as idle clocks (Z line 5), which
+  would also hold the clocks in which the feed's cap of 64 outstanding requests held a request
+  back. The board does not report the feed's counters; #62's reader, with the same cap on the
+  same port, never had more than 9 requests outstanding.
+- *Ceiling* (arithmetic, not a result): x16 DDR3 at 667 MT/s moves one 128-bit word per
+  controller clock, so the peaks are 80 trits per clock in dense5 and 64 in baseline2, 6.667 G
+  and 5.333 G weights per second, and the ratio is at most 80 / 64 = 1.25 ("What the memory
+  comparison measures", above). It holds for payload only: padding lanes, scales and metadata
+  count against it (#64's chunk has 2,560 columns, whole words in both formats, and no scale is
+  stored).
+- *Statistic*: at least 10 runs per format and per region; min / median / max and mean +-
+  sample s.d. of the weights per second over the runs used, and the ratio of the medians with the
+  bracket min(dense5) / max(baseline2) .. max(dense5) / min(baseline2). A run is used when it
+  passed every check of its capture and the calibration is shown to hold around it; the others
+  are listed in the summary with the reason (none below).
+
+**Consumer (A) on #62's region, board captures of the build of record** (42b6f5a9 seed 11,
+routed estimate 87.44 MHz for the 83.33 MHz controller clock;
+[`ddr3-weights-per-second-2026-09-25.json`](../reports/fpga/ddr3-weights-per-second-2026-09-25.json)
+from the three loads of
+[`ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/`](../reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/),
+2026-09-24 16:42-16:47 UTC). Every load's transcript has the sha256 its record gives and,
+decoded again by the summary, gives its record's counters for every run and the same
+calibration checks; every run equals `tools/ddr3_read_model.py` (the record's decode) with 0 bad
+words and 0 invalid groups.
+
+| Consumer, region | Format | Runs used | Weights per second, median (min-max) | Mean +- s.d. | Words per clock, median | Command / wait stalls per run | Memory-bound |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| (A), 17,694,720 logical trits per run, bursts from 0 | dense5 | 774 of 774 | 6.29823 G (6.29817-6.29842 G) | 6.29831 G +- 0.11 M | 0.944734 | 12,923-12,932 / 2,730-2,740 | yes, by construction |
+| | baseline2 | 775 of 775 | 5.03861 G (5.03860-5.03927 G) | 5.03871 G +- 0.11 M | 0.944740 | 16,125-16,164 / 3,412-3,422 | yes, by construction |
+| (B), #64 chunk (q_proj rows 0-319) | both | - | not run on the board | - | - | - | - |
+
+Ratio dense5 / baseline2: 1.24999 of the medians (bracket 1.24982-1.25003), against the
+ceiling 1.25.
+
+In plain words: on this region consumer (A) takes 6.30 G weights per second from DDR3 in dense5
+and 5.04 G in baseline2, 1.2500 times as many in dense5, because DDR3 delivers 0.9447 words per
+clock in both formats and the decoders keep up; that is the arithmetic 80 / 64 of delivery and
+is not by itself evidence for the thesis, which consumer (B) tests and which has not run on the
+board.
+
+What these figures are not, against #65's protocol:
+- The region is the reader's own: trits from its generator (a new key per pair of runs, both
+  formats of a pair the same trits), not the #64 chunk, and each run writes it in a fill phase
+  before the read that is measured, so the data is not loaded once. It covers bursts 0-276,479
+  (baseline2) and 0-221,183 (dense5), 0.82 % and 0.66 % of U6, the same bursts in every run.
+- The die temperature is read per load, before and after its 20 s (37.7-46.7 °C), not per run.
+- Evidence per load: the bitstream's build record (whole-file sha256 and the sha256 from the
+  sync word), IDCODE, DNA and the transcript's sha256. There are no specs, vectors or fixture
+  ranges behind this region: its reference is `tools/ddr3_read_model.py`.
+- Not measured: consumer (A) on the #64 chunk (no build reads loaded weights through consumer
+  (A)) and consumer (B) (the DDR3 matvec build has no bitstream yet;
+  `tools/fpga-matvec-capture.py` records its runs, [`docs/bridge.md`](bridge.md), and
+  `tools/ddr3-weights-per-second.py --workload` adds them to the summary).
