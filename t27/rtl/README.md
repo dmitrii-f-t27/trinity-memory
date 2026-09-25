@@ -146,7 +146,7 @@ with original commit and byte hashes recorded in
   X, M and B refused `not_ready` while a run is busy and M before the calibration), the device
   matvec, `fpga_matvec_feed.t27` (Wishbone master 1: after the matvec's in_ready it reads exactly
   rows x words per row in address order, at most 64 outstanding, and hands each acknowledged word
-  to the matvec in its clock; a watchdog pulses the matvec's abort, keeps a request it presented
+  to the matvec in the next clock; a watchdog pulses the matvec's abort, keeps a request it presented
   until it is taken and drops the late acks) and
   `fpga_line_arbiter.t27` (the line emitter shared by the loader's and the matvec's lines: a side
   sees idle only while it holds the grant and no go is in flight; the grant alternates, and stays
@@ -158,9 +158,9 @@ with original commit and byte hashes recorded in
   activations at nonzero blocks and in parts of blocks, a load and a read-back during a run, and
   the real q_proj chunk with the fixture cache). For this build's timing at 83.33 MHz the
   Wishbone master takes each byte into an input register, the outstanding counts are narrow,
-  the line emitter shifts its digits out, and the matvec registers its Z value a clock early
-  (fb1dd5a's netlist meets the clock on 5 of 12 seeds). See `docs/bridge.md`, "The DDR3 matvec
-  build" and its "Timing".
+  the line emitter shifts its digits out, the matvec registers its Z value a clock early, the X
+  header rule's bound is registered a clock ahead of the rule, and the feed hands on each word
+  from a register. See `docs/bridge.md`, "The DDR3 matvec build" and its "Timing".
 
 ## Current compiler boundaries
 
