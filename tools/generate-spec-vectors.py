@@ -405,8 +405,8 @@ def fpga_vectors():
                  result=dict(ids, anchor=18368, backend="fpga", hardware=True, identity_kind="synthetic-public-16-byte",
                              status="memory device (fpga)", evidence=dict(FPGA_EVIDENCE)),
                  result_format=evidence_format,
-                 result_at_least={"evidence.capture_bytes": 460},
-                 description="The identity asks the device for its 23 status lines (460 bytes; more if a stalled host "
+                 result_at_least={"evidence.capture_bytes": 740},
+                 description="The identity asks the device for its 37 status lines (740 bytes; more if a stalled host "
                              "process asked again) first; the IDs stay the public synthetic constants and the evidence "
                              "block identifies the device"),
              backend=fpga_backend()),

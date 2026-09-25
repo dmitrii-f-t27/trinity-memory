@@ -259,6 +259,18 @@ size_t tm_runtime_object_count(TMRuntime *runtime) {
     pthread_mutex_unlock(&runtime->state_lock);
     return result;
 }
+/* The bytes the device sent during the last fpga call (chip_info or compute.dot: the capture whose
+ * sha256 and count that call's evidence reports), for the record of a board run. Returns their
+ * count and copies them into out when capacity holds them (a first call with capacity 0 asks
+ * for the count); 0 without an fpga link. Taken under the state lock, so between requests. */
+size_t tm_runtime_fpga_capture(TMRuntime *runtime, uint8_t *out, size_t capacity) {
+    if (!runtime || !runtime->link.configured) return 0;
+    pthread_mutex_lock(&runtime->state_lock);
+    size_t used = runtime->link.capture_used;
+    if (out && used <= capacity) memcpy(out, runtime->link.capture, used);
+    pthread_mutex_unlock(&runtime->state_lock);
+    return used;
+}
 void *tm_host_server_new(int32_t port, size_t request, size_t object, size_t storage,
                          size_t objects, size_t trits, double timeout) {
     return tm_runtime_new(port, request, object, storage, objects, trits, timeout);
@@ -369,7 +381,7 @@ int32_t tm_runtime_fpga(TMRuntime *runtime, uint8_t *path, size_t path_size, uin
     l->act = link_allocate(runtime, l->act_capacity, 1);
     l->acc = link_allocate(runtime, l->acc_capacity, sizeof *l->acc);
     l->seen = link_allocate(runtime, 1024, 1);
-    l->status = link_allocate(runtime, 23, sizeof *l->status);
+    l->status = link_allocate(runtime, 37, sizeof *l->status);   /* 23 or 37 status lines */
     l->z = link_allocate(runtime, 11, sizeof *l->z);
     l->loaded_digest = link_allocate(runtime, 32, 1);
     l->image_digest = link_allocate(runtime, 32, 1);

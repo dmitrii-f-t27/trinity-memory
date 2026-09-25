@@ -90,7 +90,7 @@ int32_t bridge_test_fpga(BridgeHarness *h, uint8_t *path, size_t path_size, uint
     l->path = malloc(path_size); l->bitstream = malloc(32); l->rx = malloc(l->rx_capacity);
     l->frame = malloc(l->frame_capacity); l->capture = malloc(l->capture_capacity); l->image = malloc(l->image_capacity);
     l->x = malloc(l->x_capacity); l->act = calloc(l->act_capacity, 1); l->acc = calloc(trits, sizeof(*l->acc));
-    l->seen = calloc(1024, 1); l->status = calloc(23, sizeof(*l->status)); l->z = calloc(11, sizeof(*l->z));
+    l->seen = calloc(1024, 1); l->status = calloc(37, sizeof(*l->status)); l->z = calloc(11, sizeof(*l->z));
     l->loaded_digest = calloc(32, 1); l->image_digest = calloc(32, 1);
     if (!l->path || !l->bitstream || !l->rx || !l->frame || !l->capture || !l->image || !l->x || !l->act || !l->acc ||
         !l->seen || !l->status || !l->z || !l->loaded_digest || !l->image_digest) return -1;

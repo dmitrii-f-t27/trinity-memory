@@ -63,8 +63,10 @@ class FakeDevice:
     def __init__(self, *, build_id: int = 0x1D474000, store_log2: int = 20, compute=t27_compute, faults=(),
                  result_faults=None, byte_timeout: float = 0.05, protocol: int | None = None,
                  run_faults=(), pace_baud: int | None = None):
+        # The DDR3 loader's base (37 status lines, not_ready) under protocol 4, as the matvec build.
         self.model = link.MatvecDevice(store_log2=store_log2, build_id=build_id, compute=compute,
-                                       result_faults=dict(result_faults or {}), run_faults=list(run_faults))
+                                       result_faults=dict(result_faults or {}), run_faults=list(run_faults),
+                                       proto=proto.PROTO_DDR3)
         if protocol is not None:
             self.model.c["config"] = (protocol << 24) | (self.model.c["config"] & 0xFFFFFF)
         self.model.out.clear()            # powered up long ago: no H line is waiting
