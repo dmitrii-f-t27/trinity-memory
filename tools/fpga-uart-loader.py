@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Host side of the AX7203 UART loader (issue #63): load a file into the board's
-block-RAM store chunk by chunk with stop-and-wait, read it back and compare, with
-optional fault injection, and write a `trinity.uart-loader-capture.v2` record.
+block-RAM store (part 1) or DDR3 (part 2) chunk by chunk with stop-and-wait, read it
+back and compare, with optional fault injection, and write a
+`trinity.uart-loader-capture.v2` record.
 
 Protocol: docs/uart-loader.md, in Python tools/uart_loader_protocol.py (shared
-with tests/test_uart_loader.py). The design: fpga/ax7203/tms_uart_loader.v.
+with tests/test_uart_loader.py and tests/test_ddr3_loader.py). The designs:
+fpga/ax7203/tms_uart_loader.v (block RAM, 25 MHz, protocol 2) and
+fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v (DDR3, 83.33 MHz, protocol 3: pass
+--design-hz 83333333.33 so that baud divisors are computed for its clock; the status
+has 37 lines, read from the lines themselves).
 
 One run, in this order, every step timed on one monotonic clock:
 
@@ -13,11 +18,14 @@ One run, in this order, every step timed on one monotonic clock:
 2. The port opens (and, with --open-glitch N, closes and opens N more times: the
    glitch a port can put on RX when it opens). With --bit, the bitstream is loaded
    into SRAM (never flash) while the port records, so the design's H line is kept.
-3. Status (the device's counters before the run).
+3. Status (the device's counters before the run). With --wait-calib S (DDR3): while
+   the status says the DDR3 calibration is not complete, ask again every 0.5 s for up to
+   S seconds (every status read is kept in the record).
 4. With --read-before: the range is read first, so the record shows how many bytes
    the load changed (a read-back of bytes the store already held proves nothing).
 5. Load: --payload (a file) or --payload-tmem-trits (a file of signed-byte trits,
-   packed into a TMEM v1 dense5 container, docs/format.md) goes to --addr in
+   packed into a TMEM v1 container, docs/format.md, with --tmem-codec: dense5 by
+   default, or baseline2) goes to --addr in
    chunks of --chunk bytes. Each chunk is one load frame; the host waits for the
    ack with its sequence number and retransmits after a nak or when no reply came
    by --ack-timeout after the later of (write start + the frame's wire time) and
@@ -28,7 +36,9 @@ One run, in this order, every step timed on one monotonic clock:
    restarts mid-transfer), --garbage (random bytes on the line before the frame),
    --duplicate (the chunk sent again after its ack, as when an ack is lost).
 6. Read-back of the whole range in --chunk-sized read frames, each CRC-checked
-   and compared byte for byte with the payload.
+   and compared byte for byte with the payload. With --margin N the N bytes before and
+   the N bytes after the range are read before the load and after the read-back and
+   must be unchanged (a partial-word write must not touch its neighbours).
 7. Status again; with --identity, XADC after (IDCODE and DNA are read before only).
 8. With --baud-try R1,R2,...: for each rate a 'B' frame switches the device, the
    host follows, and a load plus read-back of --baud-bytes runs at that rate. Each
@@ -84,7 +94,7 @@ sys.path.insert(0, str(ROOT))
 import uart_loader_protocol as proto  # noqa: E402
 
 SCHEMA = "trinity.uart-loader-capture.v2"
-DESIGN_HZ = 25_000_000
+DESIGN_HZ = 25_000_000                        # the block-RAM build; --design-hz for the DDR3 build
 DEVICE_TIMEOUT_S = 1_250_000 / DESIGN_HZ      # the board build's inter-byte timeout (50 ms)
 PROBATION_S = 75_000_000 / DESIGN_HZ          # the board build's baud probation (3 s)
 OPENER = None                                 # tests put a fake port here
@@ -240,6 +250,8 @@ class Loader:
         self.link, self.args, self.rng = link, args, rng
         self.seq = args.first_seq & 255
         self.drain = bool(getattr(args, "drain", False))
+        self.design_hz = getattr(args, "design_hz", None) or DESIGN_HZ
+        self.store_bytes: int | None = None     # from the status line `config`, once read
 
     def next_seq(self) -> int:
         seq = self.seq
@@ -273,20 +285,26 @@ class Loader:
         return out
 
     def status(self) -> dict | None:
+        """The device's counters; the number of lines (23, or 37 on the DDR3 build) is read
+        from the lines themselves (a >> 16)."""
         for _ in range(3):
             seq = self.next_seq()
             frame = proto.status_frame(seq)
             start, queued, _ = self.link.write(frame)
-            until = self.deadline(start, queued, len(frame) + len(proto.STATUS_NAMES) * proto.LINE_BYTES, 0.3)
-            lines = []
-            while len(lines) < len(proto.STATUS_NAMES):
+            until = self.deadline(start, queued, len(frame) + len(proto.STATUS_NAMES_DDR3) * proto.LINE_BYTES, 0.3)
+            lines, count = [], None
+            while count is None or len(lines) < count:
                 event = self.link.take(lambda e, s=seq: e.kind == "line" and e.tag == "C" and e.a >> 24 == s, until)
                 if event is None:
                     break
                 if event.check_ok:
                     lines.append(event)
-            if len(lines) == len(proto.STATUS_NAMES):
-                return proto.decode_status(lines)
+                    count = (event.a >> 16) & 0xFF
+            if count is not None and len(lines) == count and {e.a & 0xFFFF for e in lines} == set(range(count)):
+                status = proto.decode_status(lines)
+                if "config" in status:
+                    self.store_bytes = 1 << ((status["config"] >> 8) & 255)
+                return status
             self.link.drain()
             self.guard()
         return None
@@ -388,14 +406,15 @@ class Loader:
         return record
 
     def set_rate(self, baud: int) -> dict:
-        divisor = round(DESIGN_HZ / baud)
+        hz = self.design_hz
+        divisor = round(hz / baud)
         seq = self.next_seq()
         frame = proto.baud_frame(seq, divisor)
         start, queued, _ = self.link.write(frame)
         reply = self.link.take(self._matches(seq, proto.CMD_BAUD, start),
                                self.deadline(start, queued, len(frame) + proto.LINE_BYTES))
-        out = {"baud": baud, "divisor": divisor, "device_baud": DESIGN_HZ / divisor,
-               "error_ppm": round((DESIGN_HZ / divisor / baud - 1) * 1e6), "at_baud": self.link.baud,
+        out = {"baud": baud, "divisor": divisor, "device_baud": hz / divisor,
+               "error_ppm": round((hz / divisor / baud - 1) * 1e6), "at_baud": self.link.baud,
                "reply": self.reply_of(reply)}
         if reply is None or reply.tag != "A":
             return out
@@ -415,8 +434,9 @@ def load_payload(args) -> tuple[bytes, dict]:
         trits = [b - 256 if b > 127 else b for b in raw]
         from trinity_memory import container
 
-        data = container.encode_file(trits, "dense5")
-        info = {"kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+        codec = getattr(args, "tmem_codec", None) or "dense5"
+        data = container.encode_file(trits, codec)
+        info = {"kind": f"TMEM v1 {codec} container (docs/format.md) of the trits in the source file", "codec": codec,
                 "source": str(path.resolve().relative_to(ROOT)) if path.resolve().is_relative_to(ROOT) else str(path),
                 "source_sha256": sha256(raw), "trits": len(trits),
                 "counts": {"+1": trits.count(1), "0": trits.count(0), "-1": trits.count(-1)},
@@ -487,10 +507,23 @@ def read_range(loader: Loader, addr: int, length: int, chunk: int) -> tuple[byte
     return bytes(got), reads
 
 
+def read_margins(loader: Loader, addr: int, length: int, margin: int, chunk: int) -> dict:
+    """The `margin` bytes before and after [addr, addr + length), clipped at 0 and at the end of
+    the store (its size from the status line `config`, when a status was read)."""
+    lo = max(0, addr - margin)
+    end = addr + length
+    above = margin if loader.store_bytes is None else max(0, min(margin, loader.store_bytes - end))
+    before, _ = read_range(loader, lo, addr - lo, chunk) if addr > lo else (b"", [])
+    after, _ = read_range(loader, end, above, chunk) if above else (b"", [])
+    return {"below": [lo, addr - lo], "above": [end, above], "below_bytes": before, "above_bytes": after,
+            "complete": len(before) == addr - lo and len(after) == above}
+
+
 def transfer(loader: Loader, data: bytes, addr: int, chunk: int, faults: dict[str, set[int]],
-             read_before: bool = False) -> dict:
+             read_before: bool = False, margin: int = 0) -> dict:
     link = loader.link
     out: dict = {}
+    margins_before = read_margins(loader, addr, len(data), margin, chunk) if margin else None
     if read_before:
         t_before = link.now()
         before, before_reads = read_range(loader, addr, len(data), chunk)
@@ -513,6 +546,17 @@ def transfer(loader: Loader, data: bytes, addr: int, chunk: int, faults: dict[st
     got, reads = read_range(loader, addr, len(data), chunk)
     t_read = link.now()
     mismatch = next((i for i, (a, b) in enumerate(zip(got, data)) if a != b), None)
+    if margin:
+        margins_after = read_margins(loader, addr, len(data), margin, chunk)
+        out["margins"] = {
+            "bytes_each_side": margin, "below": margins_before["below"], "above": margins_before["above"],
+            "complete": margins_before["complete"] and margins_after["complete"],
+            "unchanged": margins_before["complete"] and margins_after["complete"]
+            and margins_before["below_bytes"] == margins_after["below_bytes"]
+            and margins_before["above_bytes"] == margins_after["above_bytes"],
+            "below_sha256": sha256(margins_before["below_bytes"]), "above_sha256": sha256(margins_before["above_bytes"]),
+            "note": "the bytes next to the range, read before the load and after the read-back: a write with byte "
+                    "selects must leave the other bytes of its first and last words as they were"}
     retransmits: dict[str, int] = {}
     for record in records:
         for attempt in record["attempts"][:-1] if record.get("acked") else record["attempts"]:
@@ -554,6 +598,31 @@ def transfer(loader: Loader, data: bytes, addr: int, chunk: int, faults: dict[st
         "per_chunk": records, "reads": reads,
     })
     return out
+
+
+def calib_ok(status: dict | None) -> bool | None:
+    """DDR3 build: calibration complete, state and highest state 23 (DONE_CALIBRATE), no
+    return to IDLE, and no clock since the calibration with calib_complete low or another
+    state. None on a build without these lines."""
+    if not status or "calib" not in status:
+        return None
+    word = proto.decode_calib(status["calib"])
+    return (word["calib_complete"], word["state"], word["highest"], word["returns_to_idle"]) == (1, 23, 23, 0) \
+        and status["calib_lost_clocks"] == 0
+
+
+def wait_calibrated(loader: Loader, seconds: float) -> list[dict]:
+    """Status reads every 0.5 s until the DDR3 calibration is complete or `seconds` passed."""
+    polls = []
+    end = loader.link.now() + seconds
+    while True:
+        status = loader.status()
+        polls.append({"t": round(loader.link.now(), 3), "status": status})
+        if status is None or "calib" not in status or proto.decode_calib(status["calib"])["calib_complete"]:
+            return polls
+        if loader.link.now() >= end:
+            return polls
+        loader.link.quiet(0.5)
 
 
 def trial_key(index: int) -> int:
@@ -609,7 +678,8 @@ def baud_trials(loader: Loader, args, data: bytes) -> list[dict]:
             trial["pattern"] = {"xor": key, "bytes": size, "sha256": sha256(pattern),
                                 "note": "the payload's first bytes XOR this key, so that every byte written "
                                         "differs from the main transfer's and the other trials' at that address"}
-            trial["transfer"] = transfer(loader, pattern, args.addr, args.chunk, {}, read_before=args.read_before)
+            trial["transfer"] = transfer(loader, pattern, args.addr, args.chunk, {}, read_before=args.read_before,
+                                         margin=args.margin)
         trial["back"] = back_to_default(loader, args, rate)
         if not trial["back"]["switched"]:
             # A good frame at the trial rate ended the device's probation: it stays there
@@ -627,8 +697,8 @@ def baud_trials(loader: Loader, args, data: bytes) -> list[dict]:
 def trial_ok(trial: dict) -> bool:
     t = trial.get("transfer") or {}
     return bool(trial.get("switch", {}).get("switched") and t and t.get("acked") == t.get("chunks")
-                and t.get("identical") and trial.get("back", {}).get("switched")
-                and trial.get("status_after") is not None)
+                and t.get("identical") and (t.get("margins") is None or t["margins"].get("unchanged"))
+                and trial.get("back", {}).get("switched") and trial.get("status_after") is not None)
 
 
 def main(argv=None) -> int:
@@ -638,6 +708,8 @@ def main(argv=None) -> int:
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--payload", help="file to load")
     src.add_argument("--payload-tmem-trits", help="signed-byte trits (tools/extract-bram-trits.py), sent as TMEM dense5")
+    parser.add_argument("--tmem-codec", default="dense5", choices=["dense5", "baseline2"],
+                        help="the TMEM container's codec for --payload-tmem-trits")
     parser.add_argument("--length", type=int, default=0, help="load only the first N bytes")
     parser.add_argument("--addr", type=lambda x: int(x, 0), default=0)
     parser.add_argument("--chunk", type=int, default=proto.MAX_LEN)
@@ -653,6 +725,12 @@ def main(argv=None) -> int:
     parser.add_argument("--garbage-bytes", type=int, default=64)
     parser.add_argument("--duplicate", default="")
     parser.add_argument("--read-before", action="store_true", help="read the range before loading it")
+    parser.add_argument("--margin", type=int, default=0,
+                        help="read N bytes on each side of the range before and after, which must not change")
+    parser.add_argument("--design-hz", type=float, default=DESIGN_HZ,
+                        help="the design clock (25e6 block RAM, 83333333.33 DDR3): baud divisors of --baud-try")
+    parser.add_argument("--wait-calib", type=float, default=0.0,
+                        help="DDR3: wait up to S seconds for the calibration before loading")
     parser.add_argument("--drain", action="store_true",
                         help="wait for tcdrain after each load frame and record when it returned")
     parser.add_argument("--open-glitch", type=int, default=0, help="close and reopen the port N times first")
@@ -675,7 +753,7 @@ def main(argv=None) -> int:
     record = {"schema": SCHEMA, "started_utc": utc(), "label": args.label, "argv": sys.argv if argv is None else argv,
               "tool_revision": tool_revision(), "port": args.port, "baud": args.baud, "payload": payload_info,
               "addr": args.addr, "chunk": args.chunk, "faults": {k: sorted(v) for k, v in faults.items()},
-              "design_hz": DESIGN_HZ, "t0_note": "every time is host seconds after the start on one monotonic clock; "
+              "design_hz": args.design_hz, "t0_note": "every time is host seconds after the start on one monotonic clock; "
               "a reply's t is when the reader thread read its last byte"}
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -710,7 +788,14 @@ def main(argv=None) -> int:
                 link.quiet(0.3)
             loader = Loader(link, args, rng)
             record["status_before"] = loader.status()
-            record["transfer"] = transfer(loader, data, args.addr, args.chunk, faults, read_before=args.read_before)
+            record["hello_lines_before_status"] = sum(1 for e in link.events if e.kind == "line" and e.tag == "H")
+            if args.wait_calib and record["status_before"] and "calib" in record["status_before"] \
+                    and not proto.decode_calib(record["status_before"]["calib"])["calib_complete"]:
+                first = {"t": round(link.now(), 3), "status": record["status_before"]}
+                record["calib_polls"] = [first] + wait_calibrated(loader, args.wait_calib)
+                record["status_before"] = record["calib_polls"][-1]["status"]
+            record["transfer"] = transfer(loader, data, args.addr, args.chunk, faults, read_before=args.read_before,
+                                          margin=args.margin)
             record["status_after"] = loader.status()
             if args.baud_try:
                 record["baud_trials"] = baud_trials(loader, args, data)
@@ -738,6 +823,24 @@ def main(argv=None) -> int:
     checks = {"all_chunks_acked": transfer_record.get("acked") == transfer_record.get("chunks") and bool(transfer_record),
               "read_back_identical": bool(transfer_record.get("identical")),
               "status_read": record.get("status_before") is not None and record.get("status_after") is not None}
+    if args.margin:
+        checks["margins_unchanged"] = bool((transfer_record.get("margins") or {}).get("unchanged"))
+    before, after = record.get("status_before"), record.get("status_after")
+    if before and "calib" in before:
+        # DDR3: calibrated in every status read, not one clock since the calibration with
+        # calib_complete low or a state other than 23 (counted by the device every clock), and no
+        # reset between the first and the last status. calib_clocks alone cannot show that (the
+        # calibration takes the same number of clocks after every reset), so also: no H line after
+        # the first status read, and frames_committed (zeroed by a reset) grown by exactly the
+        # chunks this run acknowledged.
+        statuses = [after] + [t.get("status_after") for t in record.get("baud_trials") or []]
+        hellos = sum(1 for e in record.get("device_events") or [] if e.get("kind") == "line" and e.get("tag") == "H")
+        committed = (after or {}).get("frames_committed", -1) - before.get("frames_committed", 0)
+        checks["calibration_held"] = bool(
+            all(calib_ok(s) and s["calib_clocks"] == before["calib_clocks"] for s in statuses)
+            and calib_ok(before) and before["calib_clocks"] != 0
+            and hellos == record.get("hello_lines_before_status", hellos)
+            and committed == transfer_record.get("acked"))
     if args.baud_try:
         trials = record.get("baud_trials") or []
         wanted = len([x for x in args.baud_try.split(",") if x.strip()])

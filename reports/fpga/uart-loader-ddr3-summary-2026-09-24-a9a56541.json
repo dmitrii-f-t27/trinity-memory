@@ -1,0 +1,1524 @@
+{
+ "schema": "trinity.uart-loader-summary.v1",
+ "written_at": "2026-09-25T00:22:10+00:00",
+ "directory": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3",
+ "runs": [
+  {
+   "record": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run1-rows-dense5.json",
+   "label": "run1-rows-dense5",
+   "started_utc": "2026-09-24T20:12:20.249+00:00",
+   "ended_utc": "2026-09-24T20:13:23.361+00:00",
+   "pass": true,
+   "checks": {
+    "all_chunks_acked": true,
+    "read_back_identical": true,
+    "status_read": true,
+    "margins_unchanged": true,
+    "calibration_held": true
+   },
+   "stopped": null,
+   "bitstream": {
+    "path": "/Users/ssdm4/Documents/Claude/Projects/clodex/trinity-memory/wt/stage2-ddr3loader/build/fpga/ddr3-x16-loader-a9a56541-seed3/tms_ddr3_loader_ax7203.bit",
+    "sha256": "070362429acdda62bb9e77cd661548b07474ad6367af7766ad5079aa90b71c05",
+    "load_output": [
+     "",
+     "Load SRAM: [==================================================] 100.00%",
+     "",
+     "Done",
+     "Shift IR 35",
+     "ir: 1 isc_done 1 isc_ena 0 init 1 done 1"
+    ],
+    "load_returncode": 0
+   },
+   "hello": {
+    "kind": "line",
+    "t": 13.623406,
+    "tag": "H",
+    "a": "a9a56541",
+    "v": 51125514,
+    "check_ok": true
+   },
+   "idcode": "0x3636093",
+   "dna": "0x00389c0c2d85e85c",
+   "die_c_before_after": [
+    38.0047,
+    41.5133
+   ],
+   "vccint_before_after": [
+    0.994629,
+    0.993896
+   ],
+   "payload": {
+    "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+    "codec": "dense5",
+    "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+    "bytes": 163864,
+    "sha256": "6397485188b58c6bc7fb0facb827bed54ba34c312d0fb9c3e0f7b0e51f91f6a6",
+    "trits": 819200,
+    "counts": {
+     "+1": 284129,
+     "0": 251701,
+     "-1": 283370
+    }
+   },
+   "addr": 16777223,
+   "addr_hex": "0x01000007",
+   "chunk": 4096,
+   "faults": {
+    "corrupt": [],
+    "drop": [],
+    "abort": [],
+    "garbage": [],
+    "duplicate": []
+   },
+   "open_glitch": 0,
+   "chunks": 41,
+   "acked": 41,
+   "attempts": 41,
+   "retransmits": {},
+   "late_replies": 0,
+   "identical": true,
+   "bytes_the_load_changes": 163215,
+   "read_before_s": 14.416885,
+   "margins": {
+    "bytes_each_side": 64,
+    "below": [
+     16777159,
+     64
+    ],
+    "above": [
+     16941087,
+     64
+    ],
+    "complete": true,
+    "unchanged": true,
+    "below_sha256": "ab0b7c7622d66ba70eba77d4d4070b912844af1dbde679778a7fa942ac6d6aaa",
+    "above_sha256": "84667e4b3e714e303f61e9291eb48c3ef77a62a5d231751919b25115f0d199ae",
+    "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+   },
+   "load_s": 14.388001,
+   "load_payload_Bps": 11388.9,
+   "readback_s": 14.417866,
+   "readback_payload_Bps": 11365.3,
+   "ideal_payload_Bps": 11480.8,
+   "latency_s": {
+    "n": 41,
+    "min": 0.007508,
+    "p50": 0.359446,
+    "p90": 0.359482,
+    "p99": 0.359529,
+    "max": 0.359531,
+    "mean": 0.3508550975609756,
+    "sd": 0.05496236809163379
+   },
+   "turnaround_s": {
+    "n": 40,
+    "min": 0.00257116666666668,
+    "p50": 0.002676166666666674,
+    "p90": 0.002712266666666707,
+    "p99": 0.0027582166666666836,
+    "max": 0.0027601666666666747,
+    "mean": 0.002667941666666687,
+    "sd": 4.117223828174091e-05
+   },
+   "gap_s": {
+    "n": 40,
+    "min": 5.4e-05,
+    "p50": 6.5e-05,
+    "p90": 9.070000000000002e-05,
+    "p99": 0.00014131999999999998,
+    "max": 0.000146,
+    "mean": 7.2e-05,
+    "sd": 2.1174488762635437e-05
+   },
+   "queued_s": {
+    "n": 40,
+    "min": 7.199999999585316e-05,
+    "p50": 9.399999999715192e-05,
+    "p90": 0.00011210000000119181,
+    "p99": 0.00013759000000270304,
+    "max": 0.00014500000000339242,
+    "mean": 9.567500000002837e-05,
+    "sd": 1.4333728378712843e-05
+   },
+   "calib_polls": [
+    {
+     "t": 14.265,
+     "calib": {
+      "calib_complete": 0,
+      "state": 17,
+      "highest": 17,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 14.838,
+     "calib": {
+      "calib_complete": 0,
+      "state": 17,
+      "highest": 17,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 15.408,
+     "calib": {
+      "calib_complete": 0,
+      "state": 18,
+      "highest": 18,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 15.981,
+     "calib": {
+      "calib_complete": 0,
+      "state": 19,
+      "highest": 19,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 16.552,
+     "calib": {
+      "calib_complete": 0,
+      "state": 19,
+      "highest": 19,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 17.123,
+     "calib": {
+      "calib_complete": 0,
+      "state": 20,
+      "highest": 20,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 17.695,
+     "calib": {
+      "calib_complete": 0,
+      "state": 20,
+      "highest": 20,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 18.266,
+     "calib": {
+      "calib_complete": 0,
+      "state": 21,
+      "highest": 21,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 18.839,
+     "calib": {
+      "calib_complete": 0,
+      "state": 21,
+      "highest": 21,
+      "returns_to_idle": 0
+     }
+    },
+    {
+     "t": 19.412,
+     "calib": {
+      "calib_complete": 1,
+      "state": 23,
+      "highest": 23,
+      "returns_to_idle": 0
+     }
+    }
+   ],
+   "status_before": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 0,
+    "frames_duplicate": 0,
+    "bytes_committed": 0,
+    "readbacks": 0,
+    "nak_crc": 0,
+    "nak_timeout": 0,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 0,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 0,
+    "wb_reads": 0,
+    "wb_read_hits": 0,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 0,
+    "wb_read_latency_max": 0,
+    "wb_cmd_stalls": 0,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "status_after": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 41,
+    "frames_duplicate": 0,
+    "bytes_committed": 163864,
+    "readbacks": 86,
+    "nak_crc": 0,
+    "nak_timeout": 0,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 0,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 10282,
+    "wb_reads": 20504,
+    "wb_read_hits": 307480,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 1,
+    "wb_read_latency_max": 46,
+    "wb_cmd_stalls": 32258,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "duplicate_replies": [],
+   "rx_raw": {
+    "file": "run1-rows-dense5.json.rx.bin.gz",
+    "bytes": 338908,
+    "sha256_uncompressed": "c07fc74a4c12a6670eeaa4030198bb44c89e6e6823997f0b254d18d2a73ce9d7",
+    "tx_bytes": 165810
+   }
+  },
+  {
+   "record": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run2-rows-baseline2.json",
+   "label": "run2-rows-baseline2",
+   "started_utc": "2026-09-24T20:13:23.590+00:00",
+   "ended_utc": "2026-09-24T20:14:18.660+00:00",
+   "pass": true,
+   "checks": {
+    "all_chunks_acked": true,
+    "read_back_identical": true,
+    "status_read": true,
+    "margins_unchanged": true,
+    "calibration_held": true
+   },
+   "stopped": null,
+   "bitstream": null,
+   "hello": null,
+   "idcode": "0x3636093",
+   "dna": "0x00389c0c2d85e85c",
+   "die_c_before_after": [
+    41.4941,
+    43.5377
+   ],
+   "vccint_before_after": [
+    0.993896,
+    0.993896
+   ],
+   "payload": {
+    "kind": "TMEM v1 baseline2 container (docs/format.md) of the trits in the source file",
+    "codec": "baseline2",
+    "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+    "bytes": 204824,
+    "sha256": "47791ce32c817cf9d2812b68aaad35d66e92474f5ec49b39d9cfd39bcd3a09b9",
+    "trits": 819200,
+    "counts": {
+     "+1": 284129,
+     "0": 251701,
+     "-1": 283370
+    }
+   },
+   "addr": 150999043,
+   "addr_hex": "0x09001003",
+   "chunk": 4096,
+   "faults": {
+    "corrupt": [],
+    "drop": [],
+    "abort": [],
+    "garbage": [],
+    "duplicate": []
+   },
+   "open_glitch": 0,
+   "chunks": 51,
+   "acked": 51,
+   "attempts": 51,
+   "retransmits": {},
+   "late_replies": 0,
+   "identical": true,
+   "bytes_the_load_changes": 204111,
+   "read_before_s": 18.019152,
+   "margins": {
+    "bytes_each_side": 64,
+    "below": [
+     150998979,
+     64
+    ],
+    "above": [
+     151203867,
+     64
+    ],
+    "complete": true,
+    "unchanged": true,
+    "below_sha256": "079e296fbe686c446bec20ce37c63a284e3ddac6be2e940976d4c71c29933797",
+    "above_sha256": "e0c7ad4540ad00ec36093b3a75cc901775675599a8c65b4ac88d0cc12cb6011d",
+    "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+   },
+   "load_s": 17.984304,
+   "load_payload_Bps": 11389.0,
+   "readback_s": 18.019088,
+   "readback_payload_Bps": 11367.1,
+   "ideal_payload_Bps": 11480.8,
+   "latency_s": {
+    "n": 51,
+    "min": 0.00756,
+    "p50": 0.359479,
+    "p90": 0.359517,
+    "p99": 0.3595775,
+    "max": 0.359585,
+    "mean": 0.35256880392156864,
+    "sd": 0.049277137828416785
+   },
+   "turnaround_s": {
+    "n": 50,
+    "min": 0.002600166666666681,
+    "p50": 0.0027086666666666925,
+    "p90": 0.0027462666666666635,
+    "p99": 0.0028068166666666795,
+    "max": 0.002814166666666673,
+    "mean": 0.0026981466666666865,
+    "sd": 4.935274530750958e-05
+   },
+   "gap_s": {
+    "n": 50,
+    "min": 5.1e-05,
+    "p50": 5.9e-05,
+    "p90": 6.71e-05,
+    "p99": 0.00016876999999999973,
+    "max": 0.000231,
+    "mean": 6.428e-05,
+    "sd": 2.572383949505491e-05
+   },
+   "queued_s": {
+    "n": 50,
+    "min": 5.499999999969418e-05,
+    "p50": 0.00012249999999802696,
+    "p90": 0.00014810000000231582,
+    "p99": 0.00016658999999883404,
+    "max": 0.00017099999999814486,
+    "mean": 0.00011845999999962942,
+    "sd": 2.8638642368549357e-05
+   },
+   "calib_polls": [],
+   "status_before": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 41,
+    "frames_duplicate": 0,
+    "bytes_committed": 163864,
+    "readbacks": 86,
+    "nak_crc": 0,
+    "nak_timeout": 0,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 0,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 10282,
+    "wb_reads": 20504,
+    "wb_read_hits": 307480,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 1,
+    "wb_read_latency_max": 46,
+    "wb_cmd_stalls": 32258,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "status_after": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 92,
+    "frames_duplicate": 0,
+    "bytes_committed": 368688,
+    "readbacks": 192,
+    "nak_crc": 0,
+    "nak_timeout": 0,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 0,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 23134,
+    "wb_reads": 46128,
+    "wb_read_hits": 691760,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 71877,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "duplicate_replies": [],
+   "rx_raw": {
+    "file": "run2-rows-baseline2.json.rx.bin.gz",
+    "bytes": 413888,
+    "sha256_uncompressed": "c39726efd40c7c810ae5f2b1816be5cd0bd16891a29619b27a90440f50a67782",
+    "tx_bytes": 207050
+   }
+  },
+  {
+   "record": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run3-qproj-dense5-high.json",
+   "label": "run3-qproj-dense5-high",
+   "started_utc": "2026-09-24T20:14:19.727+00:00",
+   "ended_utc": "2026-09-24T20:20:06.664+00:00",
+   "pass": true,
+   "checks": {
+    "all_chunks_acked": true,
+    "read_back_identical": true,
+    "status_read": true,
+    "margins_unchanged": true,
+    "calibration_held": true
+   },
+   "stopped": null,
+   "bitstream": null,
+   "hello": null,
+   "idcode": "0x3636093",
+   "dna": "0x00389c0c2d85e85c",
+   "die_c_before_after": [
+    43.6338,
+    47.9422
+   ],
+   "vccint_before_after": [
+    0.993896,
+    0.993896
+   ],
+   "payload": {
+    "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+    "codec": "dense5",
+    "source": "build/fpga/loader-payload/qproj-all.trits",
+    "bytes": 1310744,
+    "sha256": "174a1a0417301daad0347881a8edaa525447a4702da983f98b0cebe2bad582f5",
+    "trits": 6553600,
+    "counts": {
+     "+1": 1652240,
+     "0": 3251715,
+     "-1": 1649645
+    }
+   },
+   "addr": 448581639,
+   "addr_hex": "0x1abcd007",
+   "chunk": 4096,
+   "faults": {
+    "corrupt": [],
+    "drop": [],
+    "abort": [],
+    "garbage": [],
+    "duplicate": []
+   },
+   "open_glitch": 0,
+   "chunks": 321,
+   "acked": 321,
+   "attempts": 321,
+   "retransmits": {},
+   "late_replies": 0,
+   "identical": true,
+   "bytes_the_load_changes": 1306376,
+   "read_before_s": 115.289526,
+   "margins": {
+    "bytes_each_side": 64,
+    "below": [
+     448581575,
+     64
+    ],
+    "above": [
+     449892383,
+     64
+    ],
+    "complete": true,
+    "unchanged": true,
+    "below_sha256": "ab0b7c7622d66ba70eba77d4d4070b912844af1dbde679778a7fa942ac6d6aaa",
+    "above_sha256": "84667e4b3e714e303f61e9291eb48c3ef77a62a5d231751919b25115f0d199ae",
+    "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+   },
+   "load_s": 115.061813,
+   "load_payload_Bps": 11391.7,
+   "readback_s": 115.373166,
+   "readback_payload_Bps": 11360.9,
+   "ideal_payload_Bps": 11480.8,
+   "latency_s": {
+    "n": 321,
+    "min": 0.007651,
+    "p50": 0.359474,
+    "p90": 0.359531,
+    "p99": 0.359614,
+    "max": 0.361211,
+    "mean": 0.35838070404984423,
+    "sd": 0.019637314567145243
+   },
+   "turnaround_s": {
+    "n": 320,
+    "min": 0.0025701666666667067,
+    "p50": 0.0027036666666666875,
+    "p90": 0.0027603666666666748,
+    "p99": 0.002843216666666697,
+    "max": 0.0044401666666666895,
+    "mean": 0.0027059010416666863,
+    "sd": 0.000111751465481333
+   },
+   "gap_s": {
+    "n": 320,
+    "min": 5e-05,
+    "p50": 6.3e-05,
+    "p90": 7.510000000000002e-05,
+    "p99": 0.00013942999999999998,
+    "max": 0.000328,
+    "mean": 6.7178125e-05,
+    "sd": 2.0743155903804265e-05
+   },
+   "queued_s": {
+    "n": 320,
+    "min": 3.699999999184911e-05,
+    "p50": 0.00012000000000966793,
+    "p90": 0.00014600000000086766,
+    "p99": 0.00018081000002126757,
+    "max": 0.002426000000014028,
+    "mean": 0.0001247906249997488,
+    "sd": 0.0001349246274202876
+   },
+   "calib_polls": [],
+   "status_before": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 92,
+    "frames_duplicate": 0,
+    "bytes_committed": 368688,
+    "readbacks": 192,
+    "nak_crc": 0,
+    "nak_timeout": 0,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 0,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 23134,
+    "wb_reads": 46128,
+    "wb_read_hits": 691760,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 71877,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "status_after": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 413,
+    "frames_duplicate": 0,
+    "bytes_committed": 1679432,
+    "readbacks": 838,
+    "nak_crc": 0,
+    "nak_timeout": 0,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 0,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 105376,
+    "wb_reads": 209992,
+    "wb_read_hits": 3149640,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 326168,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "duplicate_replies": [],
+   "rx_raw": {
+    "file": "run3-qproj-dense5-high.json.rx.bin.gz",
+    "bytes": 2638688,
+    "sha256_uncompressed": "6fbf8e83ebe65e50836749772309b1f629e9285e3973cd6d9673a897a9f43b32",
+    "tx_bytes": 1324310
+   }
+  },
+  {
+   "record": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run4-faults.json",
+   "label": "run4-faults",
+   "started_utc": "2026-09-24T20:20:06.862+00:00",
+   "ended_utc": "2026-09-24T20:20:56.932+00:00",
+   "pass": true,
+   "checks": {
+    "all_chunks_acked": true,
+    "read_back_identical": true,
+    "status_read": true,
+    "margins_unchanged": true,
+    "calibration_held": true
+   },
+   "stopped": null,
+   "bitstream": null,
+   "hello": null,
+   "idcode": "0x3636093",
+   "dna": "0x00389c0c2d85e85c",
+   "die_c_before_after": [
+    47.9576,
+    48.1556
+   ],
+   "vccint_before_after": [
+    0.994629,
+    0.993896
+   ],
+   "payload": {
+    "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+    "codec": "dense5",
+    "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+    "bytes": 163864,
+    "sha256": "6397485188b58c6bc7fb0facb827bed54ba34c312d0fb9c3e0f7b0e51f91f6a6",
+    "trits": 819200,
+    "counts": {
+     "+1": 284129,
+     "0": 251701,
+     "-1": 283370
+    }
+   },
+   "addr": 67108875,
+   "addr_hex": "0x0400000b",
+   "chunk": 4096,
+   "faults": {
+    "corrupt": [
+     3,
+     25
+    ],
+    "drop": [
+     7,
+     30
+    ],
+    "abort": [
+     11
+    ],
+    "garbage": [
+     15
+    ],
+    "duplicate": [
+     19
+    ]
+   },
+   "open_glitch": 5,
+   "chunks": 41,
+   "acked": 41,
+   "attempts": 46,
+   "retransmits": {
+    "crc": 2,
+    "timeout": 3
+   },
+   "late_replies": 0,
+   "identical": true,
+   "bytes_the_load_changes": 163221,
+   "read_before_s": 14.430116,
+   "margins": {
+    "bytes_each_side": 64,
+    "below": [
+     67108811,
+     64
+    ],
+    "above": [
+     67272739,
+     64
+    ],
+    "complete": true,
+    "unchanged": true,
+    "below_sha256": "2ded296af1a926ec345966b55275fe4e4f23f482650455109ca7305db1bae597",
+    "above_sha256": "64dd73f3fbe91319ae39b90475eaa045563efadd8373090569d8fa62c5bb916b",
+    "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+   },
+   "load_s": 19.880723,
+   "load_payload_Bps": 8242.4,
+   "readback_s": 14.427374,
+   "readback_payload_Bps": 11357.9,
+   "ideal_payload_Bps": 11480.8,
+   "latency_s": {
+    "n": 41,
+    "min": 0.007709,
+    "p50": 0.359695,
+    "p90": 0.359835,
+    "p99": 0.3605018,
+    "max": 0.360851,
+    "mean": 0.3511508048780488,
+    "sd": 0.05497789266160513
+   },
+   "turnaround_s": {
+    "n": 35,
+    "min": 0.002728166666666698,
+    "p50": 0.002924166666666672,
+    "p90": 0.0030821666666666857,
+    "p99": 0.003783346666666674,
+    "max": 0.0040801666666666625,
+    "mean": 0.002966338095238116,
+    "sd": 0.00022069788848829528
+   },
+   "gap_s": {
+    "n": 26,
+    "min": 6.9e-05,
+    "p50": 0.000178,
+    "p90": 0.00022400000000000002,
+    "p99": 0.000267,
+    "max": 0.000279,
+    "mean": 0.00017773076923076925,
+    "sd": 4.4735272608810774e-05
+   },
+   "queued_s": {
+    "n": 35,
+    "min": 9.599999999920783e-05,
+    "p50": 0.00022000000000232944,
+    "p90": 0.0002846000000005234,
+    "p99": 0.0004149199999989145,
+    "max": 0.00046999999999997044,
+    "mean": 0.00020748571428578697,
+    "sd": 7.379716694213241e-05
+   },
+   "calib_polls": [],
+   "status_before": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 413,
+    "frames_duplicate": 0,
+    "bytes_committed": 1679432,
+    "readbacks": 838,
+    "nak_crc": 0,
+    "nak_timeout": 0,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 0,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 105376,
+    "wb_reads": 209992,
+    "wb_read_hits": 3149640,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 326168,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "status_after": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 454,
+    "frames_duplicate": 1,
+    "bytes_committed": 1843296,
+    "readbacks": 924,
+    "nak_crc": 2,
+    "nak_timeout": 3,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 64,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 115659,
+    "wb_reads": 230498,
+    "wb_read_hits": 3457118,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 358161,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "duplicate_replies": [
+    {
+     "kind": "line",
+     "t": 25.648368,
+     "tag": "A",
+     "check_ok": true,
+     "seq": 64,
+     "reason": 1,
+     "reason_name": "duplicate",
+     "cmd": 76,
+     "seq_known": true,
+     "len": 4096,
+     "frames_committed": 433,
+     "naks": 3
+    }
+   ],
+   "rx_raw": {
+    "file": "run4-faults.json.rx.bin.gz",
+    "bytes": 331608,
+    "sha256_uncompressed": "eae0ee8785bb990ab4116053526d10be21241af039493cfbe0ab0f4efb82f32a",
+    "tx_bytes": 188337
+   }
+  },
+  {
+   "record": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run5-recheck-rows-dense5.json",
+   "label": "run5-recheck-rows-dense5",
+   "started_utc": "2026-09-24T20:20:57.136+00:00",
+   "ended_utc": "2026-09-24T20:21:41.491+00:00",
+   "pass": true,
+   "checks": {
+    "all_chunks_acked": true,
+    "read_back_identical": true,
+    "status_read": true,
+    "margins_unchanged": true,
+    "calibration_held": true
+   },
+   "stopped": null,
+   "bitstream": null,
+   "hello": null,
+   "idcode": "0x3636093",
+   "dna": "0x00389c0c2d85e85c",
+   "die_c_before_after": [
+    48.1883,
+    48.344
+   ],
+   "vccint_before_after": [
+    0.993896,
+    0.993164
+   ],
+   "payload": {
+    "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+    "codec": "dense5",
+    "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+    "bytes": 163864,
+    "sha256": "6397485188b58c6bc7fb0facb827bed54ba34c312d0fb9c3e0f7b0e51f91f6a6",
+    "trits": 819200,
+    "counts": {
+     "+1": 284129,
+     "0": 251701,
+     "-1": 283370
+    }
+   },
+   "addr": 16777223,
+   "addr_hex": "0x01000007",
+   "chunk": 4096,
+   "faults": {
+    "corrupt": [],
+    "drop": [],
+    "abort": [],
+    "garbage": [],
+    "duplicate": []
+   },
+   "open_glitch": 0,
+   "chunks": 41,
+   "acked": 41,
+   "attempts": 41,
+   "retransmits": {},
+   "late_replies": 0,
+   "identical": true,
+   "bytes_the_load_changes": 0,
+   "read_before_s": 14.428935,
+   "margins": {
+    "bytes_each_side": 64,
+    "below": [
+     16777159,
+     64
+    ],
+    "above": [
+     16941087,
+     64
+    ],
+    "complete": true,
+    "unchanged": true,
+    "below_sha256": "ab0b7c7622d66ba70eba77d4d4070b912844af1dbde679778a7fa942ac6d6aaa",
+    "above_sha256": "84667e4b3e714e303f61e9291eb48c3ef77a62a5d231751919b25115f0d199ae",
+    "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+   },
+   "load_s": 14.405602,
+   "load_payload_Bps": 11375.0,
+   "readback_s": 14.429419,
+   "readback_payload_Bps": 11356.2,
+   "ideal_payload_Bps": 11480.8,
+   "latency_s": {
+    "n": 41,
+    "min": 0.007796,
+    "p50": 0.359727,
+    "p90": 0.359818,
+    "p99": 0.3598512,
+    "max": 0.35986,
+    "mean": 0.35114856097560976,
+    "sd": 0.0549632594885205
+   },
+   "turnaround_s": {
+    "n": 40,
+    "min": 0.0028431666666666744,
+    "p50": 0.0029576666666666918,
+    "p90": 0.003047566666666707,
+    "p99": 0.00308058666666669,
+    "max": 0.0030891666666666984,
+    "mean": 0.0029615416666666896,
+    "sd": 5.993316255929501e-05
+   },
+   "gap_s": {
+    "n": 40,
+    "min": 0.000104,
+    "p50": 0.00020800000000000001,
+    "p90": 0.0002542,
+    "p99": 0.00037189,
+    "max": 0.000391,
+    "mean": 0.00020615,
+    "sd": 5.178483591524869e-05
+   },
+   "queued_s": {
+    "n": 40,
+    "min": 0.00010699999999985721,
+    "p50": 0.0002464999999993722,
+    "p90": 0.0003077000000025976,
+    "p99": 0.00039117000000036476,
+    "max": 0.0004290000000004568,
+    "mean": 0.00023169999999983482,
+    "sd": 7.208157771721591e-05
+   },
+   "calib_polls": [],
+   "status_before": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 454,
+    "frames_duplicate": 1,
+    "bytes_committed": 1843296,
+    "readbacks": 924,
+    "nak_crc": 2,
+    "nak_timeout": 3,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 64,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 115659,
+    "wb_reads": 230498,
+    "wb_read_hits": 3457118,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 358161,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "status_after": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 495,
+    "frames_duplicate": 1,
+    "bytes_committed": 2007160,
+    "readbacks": 1010,
+    "nak_crc": 2,
+    "nak_timeout": 3,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 64,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 125941,
+    "wb_reads": 251002,
+    "wb_read_hits": 3764598,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 389874,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "duplicate_replies": [],
+   "rx_raw": {
+    "file": "run5-recheck-rows-dense5.json.rx.bin.gz",
+    "bytes": 331488,
+    "sha256_uncompressed": "d870b37c381ff8a65f6f428f6b1308d1f777be8cca319f402295b0a462a2e3ef",
+    "tx_bytes": 165670
+   }
+  },
+  {
+   "record": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run6-recheck-rows-baseline2.json",
+   "label": "run6-recheck-rows-baseline2",
+   "started_utc": "2026-09-24T20:21:41.680+00:00",
+   "ended_utc": "2026-09-24T20:22:36.867+00:00",
+   "pass": true,
+   "checks": {
+    "all_chunks_acked": true,
+    "read_back_identical": true,
+    "status_read": true,
+    "margins_unchanged": true,
+    "calibration_held": true
+   },
+   "stopped": null,
+   "bitstream": null,
+   "hello": null,
+   "idcode": "0x3636093",
+   "dna": "0x00389c0c2d85e85c",
+   "die_c_before_after": [
+    48.3421,
+    48.5478
+   ],
+   "vccint_before_after": [
+    0.993896,
+    0.993896
+   ],
+   "payload": {
+    "kind": "TMEM v1 baseline2 container (docs/format.md) of the trits in the source file",
+    "codec": "baseline2",
+    "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+    "bytes": 204824,
+    "sha256": "47791ce32c817cf9d2812b68aaad35d66e92474f5ec49b39d9cfd39bcd3a09b9",
+    "trits": 819200,
+    "counts": {
+     "+1": 284129,
+     "0": 251701,
+     "-1": 283370
+    }
+   },
+   "addr": 150999043,
+   "addr_hex": "0x09001003",
+   "chunk": 4096,
+   "faults": {
+    "corrupt": [],
+    "drop": [],
+    "abort": [],
+    "garbage": [],
+    "duplicate": []
+   },
+   "open_glitch": 0,
+   "chunks": 51,
+   "acked": 51,
+   "attempts": 51,
+   "retransmits": {},
+   "late_replies": 0,
+   "identical": true,
+   "bytes_the_load_changes": 0,
+   "read_before_s": 18.032349,
+   "margins": {
+    "bytes_each_side": 64,
+    "below": [
+     150998979,
+     64
+    ],
+    "above": [
+     151203867,
+     64
+    ],
+    "complete": true,
+    "unchanged": true,
+    "below_sha256": "079e296fbe686c446bec20ce37c63a284e3ddac6be2e940976d4c71c29933797",
+    "above_sha256": "e0c7ad4540ad00ec36093b3a75cc901775675599a8c65b4ac88d0cc12cb6011d",
+    "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+   },
+   "load_s": 18.003998,
+   "load_payload_Bps": 11376.6,
+   "readback_s": 18.033832,
+   "readback_payload_Bps": 11357.8,
+   "ideal_payload_Bps": 11480.8,
+   "latency_s": {
+    "n": 51,
+    "min": 0.007838,
+    "p50": 0.359727,
+    "p90": 0.35979,
+    "p99": 0.3598615,
+    "max": 0.359894,
+    "mean": 0.35282250980392155,
+    "sd": 0.049273682221799724
+   },
+   "turnaround_s": {
+    "n": 50,
+    "min": 0.002817166666666704,
+    "p50": 0.0029596666666666938,
+    "p90": 0.003019566666666684,
+    "p99": 0.0030913166666666856,
+    "max": 0.003123166666666677,
+    "mean": 0.002951366666666687,
+    "sd": 6.222736454293148e-05
+   },
+   "gap_s": {
+    "n": 50,
+    "min": 0.000113,
+    "p50": 0.000207,
+    "p90": 0.00024000000000000003,
+    "p99": 0.0003128799999999998,
+    "max": 0.000356,
+    "mean": 0.0001964,
+    "sd": 4.783560282842878e-05
+   },
+   "queued_s": {
+    "n": 50,
+    "min": 0.00011699999999947863,
+    "p50": 0.00022449999999984982,
+    "p90": 0.0002924999999986966,
+    "p99": 0.00037075000000076126,
+    "max": 0.0003830000000029088,
+    "mean": 0.00022698000000005437,
+    "sd": 6.264883991653667e-05
+   },
+   "calib_polls": [],
+   "status_before": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 495,
+    "frames_duplicate": 1,
+    "bytes_committed": 2007160,
+    "readbacks": 1010,
+    "nak_crc": 2,
+    "nak_timeout": 3,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 64,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 125941,
+    "wb_reads": 251002,
+    "wb_read_hits": 3764598,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 389874,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "status_after": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 546,
+    "frames_duplicate": 1,
+    "bytes_committed": 2211984,
+    "readbacks": 1116,
+    "nak_crc": 2,
+    "nak_timeout": 3,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 64,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 138793,
+    "wb_reads": 276626,
+    "wb_read_hits": 4148878,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 429669,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "duplicate_replies": [],
+   "rx_raw": {
+    "file": "run6-recheck-rows-baseline2.json.rx.bin.gz",
+    "bytes": 413888,
+    "sha256_uncompressed": "1f4c38f45c7aad15f7d8ad4598300670877999e42a36c3aa4685cf9d0659e8d6",
+    "tx_bytes": 207050
+   }
+  },
+  {
+   "record": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run7-recheck-qproj-dense5-high.json",
+   "label": "run7-recheck-qproj-dense5-high",
+   "started_utc": "2026-09-24T20:22:37.856+00:00",
+   "ended_utc": "2026-09-24T20:28:25.260+00:00",
+   "pass": true,
+   "checks": {
+    "all_chunks_acked": true,
+    "read_back_identical": true,
+    "status_read": true,
+    "margins_unchanged": true,
+    "calibration_held": true
+   },
+   "stopped": null,
+   "bitstream": null,
+   "hello": null,
+   "idcode": "0x3636093",
+   "dna": "0x00389c0c2d85e85c",
+   "die_c_before_after": [
+    48.6266,
+    49.2995
+   ],
+   "vccint_before_after": [
+    0.993896,
+    0.993164
+   ],
+   "payload": {
+    "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+    "codec": "dense5",
+    "source": "build/fpga/loader-payload/qproj-all.trits",
+    "bytes": 1310744,
+    "sha256": "174a1a0417301daad0347881a8edaa525447a4702da983f98b0cebe2bad582f5",
+    "trits": 6553600,
+    "counts": {
+     "+1": 1652240,
+     "0": 3251715,
+     "-1": 1649645
+    }
+   },
+   "addr": 448581639,
+   "addr_hex": "0x1abcd007",
+   "chunk": 4096,
+   "faults": {
+    "corrupt": [],
+    "drop": [],
+    "abort": [],
+    "garbage": [],
+    "duplicate": []
+   },
+   "open_glitch": 0,
+   "chunks": 321,
+   "acked": 321,
+   "attempts": 321,
+   "retransmits": {},
+   "late_replies": 0,
+   "identical": true,
+   "bytes_the_load_changes": 0,
+   "read_before_s": 115.376311,
+   "margins": {
+    "bytes_each_side": 64,
+    "below": [
+     448581575,
+     64
+    ],
+    "above": [
+     449892383,
+     64
+    ],
+    "complete": true,
+    "unchanged": true,
+    "below_sha256": "ab0b7c7622d66ba70eba77d4d4070b912844af1dbde679778a7fa942ac6d6aaa",
+    "above_sha256": "84667e4b3e714e303f61e9291eb48c3ef77a62a5d231751919b25115f0d199ae",
+    "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+   },
+   "load_s": 115.19304,
+   "load_payload_Bps": 11378.7,
+   "readback_s": 115.35187,
+   "readback_payload_Bps": 11363.0,
+   "ideal_payload_Bps": 11480.8,
+   "latency_s": {
+    "n": 321,
+    "min": 0.007735,
+    "p50": 0.359758,
+    "p90": 0.35984,
+    "p99": 0.3599054,
+    "max": 0.361744,
+    "mean": 0.35864380996884737,
+    "sd": 0.019647633297630286
+   },
+   "turnaround_s": {
+    "n": 320,
+    "min": 0.002661166666666659,
+    "p50": 0.002987666666666694,
+    "p90": 0.003069566666666679,
+    "p99": 0.0031348466666666712,
+    "max": 0.004973166666666695,
+    "mean": 0.0029695666666666853,
+    "sd": 0.00015477890794558555
+   },
+   "gap_s": {
+    "n": 320,
+    "min": 5.3e-05,
+    "p50": 0.000234,
+    "p90": 0.000266,
+    "p99": 0.00030329,
+    "max": 0.001134,
+    "mean": 0.00021305625000000002,
+    "sd": 8.164064133862386e-05
+   },
+   "queued_s": {
+    "n": 320,
+    "min": 4.3000000005122274e-05,
+    "p50": 0.0002389999999934389,
+    "p90": 0.0002939999999966858,
+    "p99": 0.0003894900000005919,
+    "max": 0.011083999999982552,
+    "mean": 0.00025745312500058404,
+    "sd": 0.0006106965581988377
+   },
+   "calib_polls": [],
+   "status_before": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 546,
+    "frames_duplicate": 1,
+    "bytes_committed": 2211984,
+    "readbacks": 1116,
+    "nak_crc": 2,
+    "nak_timeout": 3,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 64,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 138793,
+    "wb_reads": 276626,
+    "wb_read_hits": 4148878,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 429669,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "status_after": {
+    "calib": 18290432,
+    "calib_clocks": 432977330,
+    "calib_lost_clocks": 0,
+    "frames_committed": 867,
+    "frames_duplicate": 1,
+    "bytes_committed": 3522728,
+    "readbacks": 1762,
+    "nak_crc": 2,
+    "nak_timeout": 3,
+    "nak_not_ready": 0,
+    "nak_port": 0,
+    "ignored_bytes": 64,
+    "rx_framing_errors": 0,
+    "rx_false_starts": 0,
+    "wb_writes": 221035,
+    "wb_reads": 440490,
+    "wb_read_hits": 6606758,
+    "wb_acks_dropped": 0,
+    "wb_acks_stray": 0,
+    "wb_max_outstanding": 2,
+    "wb_read_latency_max": 47,
+    "wb_cmd_stalls": 683825,
+    "arb_switches": 0,
+    "arb_stray": 0,
+    "build_id": 2846188865,
+    "config": 51125514,
+    "calib_decoded": {
+     "calib_complete": 1,
+     "state": 23,
+     "highest": 23,
+     "returns_to_idle": 0
+    }
+   },
+   "duplicate_replies": [],
+   "rx_raw": {
+    "file": "run7-recheck-qproj-dense5-high.json.rx.bin.gz",
+    "bytes": 2638688,
+    "sha256_uncompressed": "3cf66967794b099a2f730112e881b6cf206e575d0dd663bc43c24b305dc83753",
+    "tx_bytes": 1324310
+   }
+  }
+ ],
+ "all_pass": true,
+ "calib_clocks_seen": [
+  432977330
+ ],
+ "calibration_note": "calib_clocks is the device's clock count at the first calib_complete since reset; it is the same after every reset, so one value alone does not show one calibration; frames_committed (zeroed by a reset) and the H lines do: see each run's checks; calib_lost_clocks counts every clock since the calibration with calib_complete low or a state other than 23"
+}
