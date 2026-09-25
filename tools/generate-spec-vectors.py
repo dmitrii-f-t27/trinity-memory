@@ -403,10 +403,12 @@ def fpga_vectors():
              backend=fpga_backend()),
         dict(rpc("fpga_chip_info_checks_the_device", "trinity_chipInfo",
                  result=dict(ids, anchor=18368, backend="fpga", hardware=True, identity_kind="synthetic-public-16-byte",
-                             status="memory device (fpga)", evidence=dict(FPGA_EVIDENCE, capture_bytes=460)),
+                             status="memory device (fpga)", evidence=dict(FPGA_EVIDENCE)),
                  result_format=evidence_format,
-                 description="The identity asks the device for its 23 status lines (460 bytes) first; the IDs stay the public "
-                             "synthetic constants and the evidence block identifies the device"),
+                 result_at_least={"evidence.capture_bytes": 460},
+                 description="The identity asks the device for its 23 status lines (460 bytes; more if a stalled host "
+                             "process asked again) first; the IDs stay the public synthetic constants and the evidence "
+                             "block identifies the device"),
              backend=fpga_backend()),
         dict(rpc("fpga_chip_info_refuses_another_build", "chip_info", error_code=-32000,
                  error_message_contains="build id",

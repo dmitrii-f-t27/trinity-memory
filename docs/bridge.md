@@ -254,8 +254,10 @@ What changes with `backend="fpga"`:
   an I/O error). While a `BridgeServer(backend="fpga")` runs, no other process should use the
   port: the board lock of the capture procedure must cover the server's whole lifetime. On Linux a
   second open fails with EBUSY (seen in this pass on a pseudo-terminal in a Linux container, uid
-  1000, and a new open works after TIOCNXCL and close; `tests/test_bridge_link.py` asserts it on
-  Linux, which here only CI runs);
+  1000, and a new open works after TIOCNXCL and close), except for a process with CAP_SYS_ADMIN,
+  which the kernel lets open the port again (root in a container usually has it):
+  `tests/test_bridge_link.py` asserts either case on Linux, so TIOCEXCL does not keep a root tool
+  off the port;
   macOS pseudo-terminals ignore TIOCEXCL (a second open succeeded in this pass's probe); the review
   of this change probed another IOSerialFamily device on this Mac (`/dev/cu.Bluetooth-Incoming-Port`),
   where a third open after TIOCEXCL failed with "Resource busy". The CP2102N's driver is untried.
@@ -266,7 +268,9 @@ What changes with `backend="fpga"`:
   before.
 - **Identity** (`chip_info`, `trinity_chipInfo`): the Bridge first asks the device for its 23
   status lines and checks the protocol of its config word (at least `min_protocol`) and its build
-  id against the configuration. Every refusal is error `-32000`, told apart by its message: `device
+  id against the configuration. The DDR3 loader answers with 37 lines, which this host does not
+  accept yet ("Not yet on the board"): against it the exchange ends in `device did not acknowledge
+  a frame`, so the protocol refusal below is shown with the device double at 23 lines. Every refusal is error `-32000`, told apart by its message: `device
   protocol is below the configured minimum`, `device build id does not match the configured
   evidence`, `cannot open the device serial port` (missing, busy, not a terminal, or settings
   refused), `device serial I/O failed`, `device did not acknowledge a frame`. The 16-byte IDs stay
@@ -341,14 +345,16 @@ default) after the later of the write's start plus its wire time and the write's
 host drains, stays quiet for `quiet` (0.15 s; replies arriving then are counted as late) and
 sends the same frame (same seq, so a load whose ack was lost is answered `duplicate`); at most
 `attempts` (8) times. A run's lines extend its deadline: after each line of the run the host
-waits at least `reply_timeout` more. What a run's end means:
+waits at least `reply_timeout` more, for as many lines as the run can send (its ack, a Y line per
+row, eleven Z lines; a status exchange likewise for 64 lines). Past that count the deadline
+stands, so a device that keeps sending lines cannot hold the call. What a run's end means:
 
 | The run | The host |
 | --- | --- |
 | nakked, nothing of it in time, a line with a bad check byte, a row missing, Z counters that disagree with the request (rows, words per row, words, result checksum) | repeats it with a new seq (up to `attempts` runs; then `-32000` "device matvec result incomplete or inconsistent") |
 | Z status 2 (ended early: the bus words stopped, or abort) or stray words (Z8 > 0) | repeats it with a new seq, as above |
 | Z status 1 (refused) | fails the call at once, `-32000` "device refused the matvec run": the same request would be refused again |
-| accepted, but invalid codes (Z7 > 0) | an image the host built has none (dense5 bytes are at most 242, baseline2 lanes never 11), so the store no longer holds what was uploaded: the upload cache is forgotten, the image uploaded and read back again and the whole dot repeated, once (`store_reloads` 1); a second such run fails with `-32000` "device store does not hold the uploaded image" |
+| accepted, but invalid codes (Z7 > 0) | an image the host built has none (dense5 bytes are at most 242, baseline2 lanes never 11), so the store no longer holds what was uploaded: the upload cache is forgotten, the image uploaded and read back again and the whole dot repeated, once (`store_reloads` 1; `matvec_runs` and the device counters are those of the repeated runs only); a second such run fails with `-32000` "device store does not hold the uploaded image" |
 
 A store changed to other valid codes cannot show in the device's counters; it shows as rows under
 `reference.mismatches`, and the cache is then forgotten for the next dot. The upload cache is also
@@ -371,9 +377,13 @@ frames below are the next wave.
   start while it is busy is ignored. The review showed what the earlier version did (in_ready
   constant high, words before RUN thrown away, no timeout): a reader that started early, or a
   stream one word short, left the module in RUN for good with no Y or Z line. Now a run that takes
-  no word for 65,536 clocks (786 us at 83.33 MHz, arithmetic), or whose `abort` input was high in
-  any clock since `start`, ends with status 2: it takes nothing more, drains its pipeline, sends
-  only its eleven Z lines and is idle again, so the next `start` runs.
+  no word for 65,536 clocks (786 us at 83.33 MHz, arithmetic), or whose `abort` input is high in a
+  clock of SETUP, MASK or RUN, ends with status 2: `in_ready` stays high for the abort clock and the
+  next (the review counted 52 words taken for an abort pulsed at word 50 with words still offered),
+  then it takes nothing more, drains its pipeline, sends only its eleven Z lines and is idle again,
+  so the next `start` runs. `abort` in the clock of `start` or during DRAIN has no effect (status
+  0). A producer should therefore pulse it once, in RUN; held high as a level into the next run's
+  SETUP it ends that run too.
   baseline2 words carry 64 lanes (four 2-bit codes per byte), dense5 words 80 (one base-3 code per
   byte, the dense5 tables of `fpga_ddr3_reader.t27`, no division).
 - **Row layout: row-padded.** Every row starts at a word, `wpr = ceil(cols / lanes)` words per
@@ -414,13 +424,16 @@ frames below are the next wave.
   - 4 cycles (first word taken to last, inclusive) and 5 idle clocks (clocks of that span with no
     word offered: the bus starved the consumer, the memory-bound signal of #65). Every clock of
     that span either takes a word or is idle, so cycles = words + idle clocks by construction: an
-    identity, not a second measurement; idle clocks carry the information.
+    identity, not a second measurement; idle clocks carry the information. For a run that ended
+    early (status 2) the span runs on to the clock it ended: the idle limit adds its 65,537
+    wordless clocks (5 words of a short stream: cycles 65,542).
   - 6 latency: clocks from the start of RUN to the first word taken ("setup" in the RTL comment
     is SETUP and MASK together).
   - 7 invalid codes (dense5 codes 243-255, baseline2 lanes 11, in any byte or lane of the words
     taken).
-  - 8 stray words: clocks with `in_valid` while no run expects words (idle without `start`, after
-    the last word, DRAIN, EMIT).
+  - 8 stray words: clocks with `in_valid` while a run expects no more words (after its last word,
+    DRAIN, EMIT, until its Z line 8 is formed). Words offered while the module is idle are counted
+    too but cleared by the next `start`, so they are never reported.
   - 9 consumer stalls: clocks with `in_valid` while a started run is not ready yet (the clock of
     `start`, SETUP, MASK): the producer was held off by `in_ready`. A measurement now (it was 0 by
     construction while `in_ready` was a constant).
@@ -459,6 +472,14 @@ The record holds every figure of the table (42 runs, 119.5 s of Icarus); 884,736
 and 877,824 = 127 x 6,912 are also the arithmetic the test asserts. The idle-limit run shows
 65,537 idle clocks: the module ends the run in the clock after its counter of wordless clocks
 reached 65,536, and that clock is idle too.
+
+Checked since that record, on the same RTL (the second review of this change; in the test, not in
+the record): the aborted run's idle clocks are few (the review found that a module ignoring
+`abort` passed the earlier test, because the bench stops feeding after the abort and the idle
+limit then gives the same lines) and the short stream's are exactly 65,537; dense5 rows whose last
+word uses 65-79 lanes (70, 79 and 145 columns) with +1 in every padding lane are exact; invalid
+codes in data lanes of both halves of a word (four baseline2 lanes 11, five dense5 bytes 243-255,
+in two words) are each counted.
 
 **Out-of-context estimates (`tools/fpga-matvec-ooc.py`, record in
 `reports/fpga/matvec-ooc-2026-09-24-39f9a2d6/`, RTL of commit 39f9a2d).** Synthesis as the DDR3
@@ -521,7 +542,15 @@ Rules for the device side (next wave), which the module alone cannot enforce:
   host retransmits them after its quiet time.
 - **The reader** starts over the region after the module's `in_ready` rose, or holds its words
   until it does; it must deliver exactly rows x wpr words. A reader that gives up (its watchdog)
-  should also raise the module's `abort`, so the run ends at once rather than after the idle limit.
+  should also pulse the module's `abort` once, while the run is in RUN, so the run ends at once
+  rather than after the idle limit (a level held into the next run's SETUP would end that run too).
+- **The line emitter is shared.** The loader's A and N lines and the module's Y and Z lines go
+  through the one `fpga_line_emitter.t27`, and neither side checks that its line was taken: each
+  raises `line_go` one clock after it saw `line_idle`. A plain multiplexer loses a line when both
+  go in the same clock (the review simulated a pending `not_ready` N line against a Y line: one of
+  the two is lost). The device side needs an arbiter that grants the emitter to one of them and
+  makes the other wait (for example the module's E_WAIT and the loader's P_RESP waiting for the
+  grant as well as for `line_idle`).
 - **Protocol**: the config word of `H` and status line 19 reports 4 for a build with the
   extension; the host requires at least 4 (`min_protocol`). 4 is one above the DDR3 loader's
   protocol 3 (#63 part 2), which a matvec build carries underneath; a loader without the extension
@@ -543,7 +572,7 @@ here:
    7 invariants and 4 test blocks), line 2 unchanged. The result's sha256 is `27ea45d6…`
    (computed here from that file; `spec_hash` of the new seal).
 2. `conformance/tmem_bridge.json`: this repository's new `conformance/memory_bridge.json`
-   (`tools/generate-spec-vectors.py`, sha256 `631b47eb…`): the 55 vectors unchanged, 8 fpga
+   (`tools/generate-spec-vectors.py`, sha256 `bc5de7ca…`): the 55 vectors unchanged, 8 fpga
    vectors (63 in all), `constants.fpga`, `sdk_adapter.fpga_chip_info_requires`, 6 more
    invariants (15 in all), and the replay keys `replay.backend`, `replay.result_format`,
    `replay.result_at_least` (lower bounds for counters a stalled process can raise but not

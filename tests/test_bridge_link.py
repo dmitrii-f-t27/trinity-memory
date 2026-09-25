@@ -218,7 +218,6 @@ def write_port(fd: int, data: bytes, timeout_ms: int) -> int:
     return n.call("tm_os_serial_write", I64, [I32, n.U8, n.SZ, U32], fd, n.octets(data), len(data), timeout_ms)
 
 
-@unittest.skipUnless(n, "native library required (tools/build-t27.sh)")
 def has_cap_sys_admin() -> bool:
     """Whether this process holds CAP_SYS_ADMIN (bit 21 of CapEff in /proc/self/status, Linux)."""
     try:
@@ -230,6 +229,7 @@ def has_cap_sys_admin() -> bool:
     return False
 
 
+@unittest.skipUnless(n, "native library required (tools/build-t27.sh)")
 class SerialHooks(unittest.TestCase):
     def test_refusals(self):
         self.assertEqual(open_port("/nonexistent/tty"), -1)

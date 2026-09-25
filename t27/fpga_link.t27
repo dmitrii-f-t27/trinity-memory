@@ -33,6 +33,7 @@ const TL_MAX_WPR: u32 = 1024;
 const TL_STATUS_COUNT: u32 = 23;
 const TL_Z_COUNT: u32 = 11;
 const TL_Z_ALL: u32 = 2047;
+const TL_STATUS_WAIT_LINES: u32 = 64;  // status lines that may each extend an exchange's deadline
 // The matvec extension's protocol number: 4, one above the DDR3 loader's 3 (#63 part 2: its
 // not_ready nak and 14 more status lines), which the matvec build sits on.
 const TL_PROTO_MATVEC: u32 = 4;
@@ -93,6 +94,7 @@ struct TMLink {
     status: []u32, status_mask: u32,
     z: []u32, z_mask: u32,
     loaded: bool, loaded_digest: []u8, loaded_size: usize, loaded_region: u32, loaded_committed: u32,
+    committed: u32,
     image_digest: []u8,
     device_config: u32, device_build: u32, store_bytes: u64,
     frames: u32, retransmits: u32, naks: u32, timeouts: u32, bad_lines: u32,
@@ -467,16 +469,20 @@ fn tl_exchange(l: *TMLink, cmd: u32, addr: u32, payload: []u8, plen: usize, len:
         if (queued > done_at) { done_at = queued; }
         var deadline: u64 = done_at + tl_wire_ms(l, reply_bytes) + (l.reply_ms as u64);
         var outcome: i32 = TL_GOT_NONE;
+        var extended: u32 = 0;
         var ev: TLEvent;
         while (outcome == TL_GOT_NONE) {
             var got: i32 = tl_event(l, deadline, &ev);
             if (got < 0) { return got; }
             if (got == 0) { outcome = -1; }
             else {
-                // Status lines of this exchange keep coming: wait reply_ms after each one, at least.
-                if (expect == 3 && ev.kind == TL_EV_LINE && tl_resp_seq(ev.a) == seq) {
+                // Status lines of this exchange keep coming: wait reply_ms after each one, at least,
+                // for as many lines as a status can have (a device that never stops cannot hold the
+                // call: past that count the deadline stands).
+                if (expect == 3 && ev.kind == TL_EV_LINE && tl_resp_seq(ev.a) == seq && extended < TL_STATUS_WAIT_LINES) {
                     var progress: u64 = tl_now_ms() + (l.reply_ms as u64);
                     if (progress > deadline) { deadline = progress; }
+                    extended = extended + 1;
                 }
                 outcome = tl_match(l, &ev, expect, seq, index, addr, len);
                 if (outcome == TL_GOT_OK && expect == 2 && check) {
@@ -510,6 +516,7 @@ fn tl_handshake(l: *TMLink) -> i32 {
     // Loads are the only frames counted in bytes_committed (status 14): if it moved since our last
     // upload, someone else loaded or the device was reset; either way upload again.
     if (l.loaded && l.status[14] != l.loaded_committed) { l.loaded = false; }
+    l.committed = l.status[14];
     return TL_OK;
 }
 
@@ -538,6 +545,7 @@ fn tl_upload(l: *TMLink, size: usize) -> i32 {
         if (n > 4096) { n = 4096; }
         var status: i32 = tl_exchange(l, TL_CMD_LOAD, l.region + (offset as u32), &l.image[offset], n, n as u32, 1, TL_IX_LOAD, false, none);
         if (status != 0) { return status; }
+        l.committed = l.committed + (n as u32);  // the device's bytes_committed after this chunk
         offset = offset + n;
     }
     offset = 0;
@@ -551,7 +559,7 @@ fn tl_upload(l: *TMLink, size: usize) -> i32 {
     var j: usize = 0;
     while (j < 32) { l.loaded_digest[j] = l.image_digest[j]; j = j + 1; }
     l.loaded = true; l.loaded_size = size; l.loaded_region = l.region; l.uploaded = true;
-    l.loaded_committed = l.status[14] + (size as u32);
+    l.loaded_committed = l.committed;         // every upload of this call counted, a reload's too
     return TL_OK;
 }
 
@@ -610,6 +618,7 @@ fn tl_matvec_run(l: *TMLink, addr: u32, rows: u32, cols: u32, fmt: u32, first: u
         var first_deadline: u64 = done_at + tl_wire_ms(l, 20) + (l.reply_ms as u64);
         var deadline: u64 = first_deadline + 2 * tl_wire_ms(l, ((rows as u64) + 12) * 20);
         var heard: bool = false; var bad: bool = false; var nak: bool = false; var finished: bool = false;
+        var extended: u32 = 0;
         var ev: TLEvent;
         while (!finished) {
             var limit: u64 = deadline;
@@ -619,9 +628,14 @@ fn tl_matvec_run(l: *TMLink, addr: u32, rows: u32, cols: u32, fmt: u32, first: u
             if (got == 0) { finished = true; }
             else {
                 if (ev.kind == TL_EV_LINE && tl_resp_seq(ev.a) == seq) {
-                    // Lines of this run keep coming: wait reply_ms after each one, at least.
-                    var progress: u64 = tl_now_ms() + (l.reply_ms as u64);
-                    if (progress > deadline) { deadline = progress; }
+                    // Lines of this run keep coming: wait reply_ms after each one, at least, for as many
+                    // lines as the run can send (its ack, a Y line per row, the Z lines); past that
+                    // count the deadline stands, so a device that never stops cannot hold the call.
+                    if (extended <= rows + TL_Z_COUNT) {
+                        var progress: u64 = tl_now_ms() + (l.reply_ms as u64);
+                        if (progress > deadline) { deadline = progress; }
+                        extended = extended + 1;
+                    }
                     if (!ev.check_ok) { l.bad_lines = l.bad_lines + 1; bad = true; heard = true; }
                     else {
                         if (ev.tag == 78) { l.naks = l.naks + 1; nak = true; finished = true; }
@@ -707,6 +721,9 @@ fn tl_dot(l: *TMLink, values: []i32, offset: usize, rows: usize, cols: usize, fm
     status = tl_dot_pass(l, size as usize, rows, cols, fmt, wpr);
     if (status == TL_ERR_STORE) {
         l.store_reloads = l.store_reloads + 1;
+        // Every run is repeated: the runs of the first pass do not count.
+        l.runs = 0; l.words = 0; l.cycles = 0; l.idle_clocks = 0; l.latency = 0;
+        l.invalid = 0; l.stray = 0; l.stalls = 0;
         status = tl_dot_pass(l, size as usize, rows, cols, fmt, wpr);
     }
     if (status != 0) { return status; }
