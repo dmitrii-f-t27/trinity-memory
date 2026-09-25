@@ -283,7 +283,7 @@ class Scenario:
         self.skew = skew
         self.unpredictable_reads: set[int] = set()       # seqs of read-backs whose data are not predicted
         self.masked_status = set(MASKED)
-        self.load_markers: dict[int, int] = {}
+        self.load_markers: dict[int, tuple[int, int]] = {}   # marker -> (payload length, divisor at the load)
         self.marker_id = 0
         self.set_rate(baud_div)
         self.wait()
@@ -328,7 +328,7 @@ class Scenario:
 
     def load(self, seq, addr, payload, wait=True):
         self.send(proto.load_frame(seq, addr, payload))
-        self.load_markers[self.marker()] = len(payload)
+        self.load_markers[self.marker()] = (len(payload), self.div)
         if wait:
             self.wait()
 
@@ -796,12 +796,12 @@ class LoaderSimulation(unittest.TestCase):
     def latencies(cls, name):
         s, r = cls.scenarios[name], cls.results[name]
         out = []
-        for marker, length in s.load_markers.items():
+        for marker, (length, div) in s.load_markers.items():
             t0 = r["markers"].get(marker)
             later = [t for t, _v, _f in r["received"] if t0 is not None and t > t0]
             if later:
                 reply_clocks = (later[0] - t0) / CLK_PS
-                out.append({"payload": length, "turnaround_clocks": round(reply_clocks - 9.5 * s.div)})
+                out.append({"payload": length, "turnaround_clocks": round(reply_clocks - 9.5 * div)})
         return out
 
     @classmethod
