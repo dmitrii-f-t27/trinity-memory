@@ -496,16 +496,21 @@ build is the first on the board to rely on the data mask (checked below). The ma
 requests taken minus acks (UberDDR3 acknowledges in order); `wr_idle` is high only with no
 byte buffered, nothing presented and nothing outstanding, and part 1's loader acknowledges
 a chunk only after `wr_idle`: **an ack means the controller has acknowledged every write
-of the chunk**, not that a buffer holds it. At most 8 requests are outstanding.
+of the chunk**, not that a buffer holds it. At most 8 requests are outstanding (the flush of
+a buffered word waits for that too since the review fixes; before them a ninth could go out
+after seven slow acks).
 
 **Read side.** A read is taken only when the write side is idle, so it never overtakes a
 write. The last word read is kept: the next bytes of that word are answered from it in the
 clock after the request, without a bus request. Any write byte taken for the kept word
 invalidates it, and so does a write of the other arbiter master (`m1_write`). Port
-watchdog (part 1's, one timeout, `port` nak): a read already taken on the bus is still
-outstanding when the loader gives up on it; the loader asks for its next byte only after
-an answer or after giving up, so a request that comes while a read waits for its ack means
-it gave up: that ack is dropped (`wb_acks_dropped`) and the new request is taken after it.
+watchdog (part 1's, one timeout, `port` nak): when the loader gives up on the port during a
+commit or a read-back it raises `port_give_up` for one clock. A read already taken on the bus
+is then still outstanding; it is marked, and its ack is dropped whenever it comes
+(`wb_acks_dropped`), so it cannot answer a later request; the next request is taken after
+it. A request that comes while a read waits marks it too. The bytes of a word not yet
+written are dropped (the chunk was nakked; the host sends it again), so the master lets go
+of the port once nothing is outstanding.
 
 **Arbiter.** Two masters, one owner (a register). The owner's request reaches the
 controller; the other master sees stall high (its request waits unchanged) and no ack.
@@ -552,8 +557,9 @@ background, `not_ready`, the Wishbone master's write and read counts and its kep
 not predicted are the status values that depend on timing (FIFO high water, clocks,
 `calib_clocks`, most outstanding, read latency, command stalls). Bench monitors: every ack
 reaches the master that issued the request and ownership changes only with nothing
-outstanding (`misrouted`), and every read answered from the kept word equals the memory
-model's word at that clock (`TBKEPT`). The summary of the run at a9a56541 is
+outstanding (`misrouted`), every read answered from the kept word equals the memory
+model's word at that clock (`TBKEPT`), and while the loader waits for a frame with nothing
+presented or outstanding it does not hold the port for more than one clock (`TBPORT`). The summary of the run at a9a56541 is
 [`reports/fpga/uart-loader-ddr3-sim-2026-09-24-a9a56541.json`](../reports/fpga/uart-loader-ddr3-sim-2026-09-24-a9a56541.json).
 
 | Scenario | What it shows |
@@ -561,10 +567,11 @@ model's word at that clock (`TBKEPT`). The summary of the run at a9a56541 is
 | `transfer_+0.05`, `transfer_-0.04` | host 5 % slow / 4 % fast: 11 chunks of 1-4096 bytes at unaligned addresses in six regions from 0 to above 256 MiB (1 FF0 0000 region: 511 MiB), each read before (background), loaded and read back; 37 bytes ending at the last byte of the store; three 1,000-byte chunks and one of 13 back to back at an unaligned address (every chunk boundary inside a word); a load of one byte into the word the read side keeps, then read again (the new byte, not the kept one). 27 read-backs each, 28 partial-word writes, 18,423 and 25,767 kept-word hits, 0 mismatches |
 | `faults_-0.04` | part 1's fault set: corrupt, duplicate, dropped byte, host stop, unknown command, lengths 0, 4097 and past 2^29, status with a length, divisor 8, framing error, reset during a frame (UberDDR3 is reset and calibrates again), garbage, stray `A5`, eight glitches, a 0.2-bit glitch inside a frame, reset 200 bytes into a read-back |
 | `not_ready` | calibration after 400,000 clocks: a load and a read before it get `not_ready`, the status shows `calib_complete` 0 and `calib_clocks` 0; after it the same load is acknowledged, `nak_not_ready` 2 |
-| `watchdog` | reset while a commit waits on a port that takes no request; `port` naks for a commit whose request is never taken and one whose acks are withheld, for a read-back whose request is never taken, and for a read taken on the bus whose ack is withheld; the next read's request arrives while that read waits, and its late ack is dropped (`wb_acks_dropped` 1, the bench's `drops` 1) and the next read answers right; every chunk reloaded and identical; a never-written range reads as the background |
-| `pipelined`, `overflow`, `baud` | part 1's: frames back to back, a FIFO overflow (nak, reload), a baud change and its fallback |
+| `watchdog` | reset while a commit waits on a port that takes no request; `port` naks for a commit whose request is never taken and one whose acks are withheld, for a read-back whose request is never taken, and for a read taken on the bus whose ack is withheld; the next read's request arrives while that read waits; the acks of both reads the loader gave up on are dropped (`wb_acks_dropped` 2, the bench's `drops` 2; before the review fixes the first reached the idle loader as an unused answer) and the next read answers right; every chunk reloaded and identical; a never-written range reads as the background |
+| `pipelined`, `overflow`, `baud` | part 1's: frames back to back, a FIFO overflow (nak, reload), a baud change and its fallback; then a second change after the fallback, which holds (`baud_reverts` stays 1) |
 | `board_rate_+5.0%`, `board_rate_-4.5%` | the board's divisor 723 and 50 ms timeout, host 5 % slow / 4.5 % fast, 64 bytes at the top of the store |
-| `arbitration` | the #62 reader as master 1 (1,237 trits, bursts 0-19, runs until stopped) while the loader loads six chunks elsewhere and reads 40 bytes of the reader's region after each (their data are not predicted; the kept-word monitor checks them): 10,768 reader and 1,417 loader requests, 385 owner changes, 0 misrouted acks; the reader's report lines (4,186) decode to 298 complete runs, every one equal to `tools/ddr3_read_model.py`, 0 stray acks (the decoder of `tools/fpga-ddr3-capture.py`) |
+| `arbitration` | the #62 reader as master 1 (1,237 trits, bursts 0-19, runs until stopped) while the loader loads six chunks elsewhere and reads 40 bytes of the reader's region after each (their data are not predicted; the kept-word monitor checks them): 10,768 reader and 1,417 loader requests, 385 owner changes, 0 misrouted acks; the reader's report lines (4,186) decode to complete runs (the test asks for at least 100), every one equal to `tools/ddr3_read_model.py`, 0 stray acks (the decoder of `tools/fpga-ddr3-capture.py`) |
+| `late_ack` | the ack of a read the loader gave up on reaches the master in the clock the next read-back asks for its first data byte (the bench releases it then, `+race_late_ack=1`): it is dropped (`drops` 1) and both read-backs after it are right |
 
 Also in the file: the source diff test (every hunk in which `fpga_ddr3_loader.t27`
 differs from `fpga_uart_loader.t27` carries a `[ddr3]` mark), the generated C of the new
@@ -626,6 +633,9 @@ record) ([`ddr3-loader-netlist-identity-2026-09-24.json`](../reports/fpga/ddr3-l
 
 ### Board results (2026-09-24, build a9a56541 seed 3)
 
+These runs are of build a9a56541, the RTL before the review fixes below ("Review fixes after
+the board runs"), which have run in Icarus only.
+
 ALINX AX7203, IDCODE `0x3636093`, DNA `0x00389c0c2d85e85c`, SRAM load only, CP2102N at
 `/dev/cu.usbserial-110`, 115200 baud, macOS, pyserial. Seven `tools/fpga-uart-loader.py`
 records (`trinity.uart-loader-capture.v2`) under
@@ -633,14 +643,13 @@ records (`trinity.uart-loader-capture.v2`) under
 each with IDCODE, DNA and XADC before and XADC after, the device's 37 status lines before
 and after, the range read before the load (`store_before.bytes_the_load_changes`), 64 bytes
 on each side read before the load and after the read-back (`margins`), every attempt with
-its times and reply, and the received bytes (`*.rx.bin.gz`; those of runs 3 and 7, 1.19 and
-2.34 MB compressed, are not committed: their sha256 are in the records, the files were kept
-outside the repository at `/private/tmp/claude-501/wave3/63b/keep/`, which is not
-permanent). The figures below are in
+its times and reply, and the received bytes (`*.rx.bin.gz`; those of runs 3 and 7 are not
+committed: their sha256 are in the records, the files were kept outside the repository at
+`/private/tmp/claude-501/wave3/63b/keep/`, which is not permanent). The figures below are in
 [`reports/fpga/uart-loader-ddr3-summary-2026-09-24-a9a56541.json`](../reports/fpga/uart-loader-ddr3-summary-2026-09-24-a9a56541.json)
 (`tools/uart-loader-summary.py`, copied from the records). Run 1 loaded the bitstream
-(checked against the build report first, `tools/ddr3-flash-check.py`: whole-file sha256
-match) and received the `H` line: build a9a56541, config `0x030C1D0A`. The whole session
+(its whole-file sha256 in run 1's record, `07036242…`, is the build report's) and received
+the `H` line: build a9a56541, config `0x030C1D0A`. The whole session
 was one SRAM load, 20:12:20-20:28:25 UTC; no reset in between.
 
 **Payloads** (real weights, `tools/extract-bram-trits.py`: the pinned packed BitNet b1.58
@@ -663,15 +672,20 @@ chunks).
 
 "Bytes the load changed" counts the payload bytes that differed from what the range held
 before the load (read first), so an identical read-back shows at least that many bytes
-landed; the others matched already. In runs 1-4 almost every byte differed (below 128 MiB,
-runs 1 and 4, the ranges held what UberDDR3's self-test wrote there by #61's model of it; above
-it, runs 2 and 3, whatever the chips held; neither was checked apart). Runs 5-7
+landed; the others matched already. In runs 1-4 almost every byte differed. By #61's model of
+UberDDR3's self-test (`docs/hardware.md`, "Coverage"), which writes three quarters of U6 during
+the calibration, the ranges of runs 1, 3 and 4 and the bank 2-5 half of run 2's held its data,
+and the rest of run 2's range, where it never writes, whatever the chips held. The bytes read
+before the load agree: every whole burst of runs 1 and 4 and the 6,655 bank 2-5 bursts of run 2
+equal the self-test's data for their address, and none of run 2's other 6,145 bursts does (run
+3's received bytes are not committed). Runs 5-7
 read their ranges before loading and found every byte of runs 1-3 still there: 0 bytes
 changed. Runs 5, 6 and 7 started 7 min 34 s, 7 min 23 s and 2 min 31 s after runs 1, 2 and 3
 ended (record times), with other runs' loads and reads in between. That is retention within one load of the bitstream for minutes,
 not a soak.
 
-**Addresses and byte selects.** Every start address is unaligned (7, 3, 11 and 7 mod 16), so
+**Addresses and byte selects.** Every start address is unaligned (7, 3, 7 and 11 mod 16 in runs
+1-4), so
 every 4096-byte chunk starts and ends inside a 16-byte word and the next chunk writes the
 rest of that word with its own byte selects: an identical read-back needs the data mask to
 keep the first chunk's bytes. In run 1 the device counted 10,282 Wishbone writes: the 10,242
@@ -686,12 +700,12 @@ of the 25 set.
 (`--wait-calib`): states 17, 17, 18, 19, 19, 20, 20, 21, 21, then `calib_complete` 1 at state
 23 (the poll 5.8 s after the `H` line arrived; the device's own count below puts it 5.196 s
 after reset). In all 14 status reads (before and
-after each run, 20:12:39 to 20:28:25 UTC) the calibration word was `calib_complete` 1, state
+after each run, 20:12:39 to 20:28:24 UTC) the calibration word was `calib_complete` 1, state
 23, highest state 23, 0 returns to IDLE, `calib_clocks` 432,977,330 (the same calibration: 5.196
 s after reset at the nominal 83.333 MHz, arithmetic) and `calib_lost_clocks` 0: the device
 counted no clock since the calibration with `calib_complete` low or a state other than 23
-(a 32-bit count; with the state read as 23 at every status, a wrap of exactly 2^32 lost
-clocks is the only way it could hide a loss). With `BIST_MODE 1` state 23 and no return to
+(a 32-bit count that wraps; with the state read as 23 at every status, only a multiple of
+2^32 lost clocks, 51.5 s each at 83.33 MHz, could hide a loss). With `BIST_MODE 1` state 23 and no return to
 IDLE also means UberDDR3's one self-test pass inside the calibration had no wrong read (the
 #61 check, re-run here with the loader in the build). `nak_not_ready` stayed 0: no frame
 was sent before the calibration on the board; the `not_ready` path is shown in simulation
@@ -715,8 +729,8 @@ time is 356.8 ms, and the rest (`turnaround_s`, per full chunk sent once) has a 
 2.68-2.99 ms (min 2.57 ms): the commit (3 clocks per byte, 0.15 ms at 83.33 MHz), the Wishbone
 drain, the 20-byte ack line (1.74 ms) and USB and host (arithmetic). The device's own
 counters: at most 2 Wishbone requests outstanding, a read answered at most 47 controller
-clocks after it was presented (0.56 µs), 6,606,758 of 7,047,248 read-back bytes answered from
-the kept word (every read of the session, from run 7's status).
+clocks after it was presented (0.56 µs), 6,606,758 of the 7,047,248 bytes read answered from
+the kept word (every read of the session, read-befores included, from run 7's status).
 
 **Die temperature** (XADC): 38.0 °C before run 1, rising to 49.3 °C after run 7; VCCINT
 0.993-0.995 V.
@@ -728,24 +742,68 @@ reads back byte-identical, injected corruption is detected and retransmitted, an
 capture reports payload throughput, retransmits and the latency distribution; (2) DDR3: the
 same into DDR3, and DONE_CALIBRATE still holds with the loader added. (1) is met by part 1
 (build 1d474000, "Board results"). (2) is met by the runs above: real q_proj weights in
-DDR3 read back byte-identical in three formats and sizes (runs 1-3, and again in runs 5-7),
+DDR3 read back byte-identical, three payloads in two formats (runs 1-3, and again in runs 5-7),
 corruption, dropped bytes and an abort detected and retransmitted (run 4), throughput,
 retransmits and latency distributions in every record, and state 23 with no return to IDLE
 and no clock off it from the calibration to the last status. **Both parts of the done-when
-are met, for x16 on this board**, with the limits below (x32 not built; `not_ready`, the
-Wishbone-side watchdog and the arbiter's second master shown in simulation only).
+are met, for x16 on this board, by build a9a56541**, with the limits below (x32 not built;
+`not_ready`, the Wishbone-side watchdog and the arbiter's second master shown in simulation
+only; the review fixes after the board runs have run in Icarus only).
+
+### Review fixes after the board runs (simulation only)
+
+Three independent reviews of the branch after the board runs found four defects in the RTL,
+none on the path the board runs used (loads and read-backs at 115200 with the port answering).
+Each fix has a scenario above that fails on build a9a56541's RTL and passes after it, in Icarus;
+none has run on the board.
+
+- **A second baud change after a fallback was undone one clock after it took effect.** The
+  registered probation compare (`prob_over_q`) still held the ended probation's result in the
+  first clock of the new one, because `prob_count` was not cleared when a probation ended.
+  It is now 0 outside a probation. Part 1 compares the live count and never had this. Scenario
+  `baud`.
+- **A late ack could answer the next read-back's first byte.** The ack of a read the loader had
+  given up on was dropped only if the loader was already asking for another byte; arriving in
+  the clock the next read-back raised its request, it came back as that request's answer, in a
+  frame with a good CRC. The loader now says when it gives up (`port_give_up`), and the master
+  drops that read's ack whenever it comes. Scenario `late_ack`.
+- **After a `port` nak in the middle of a chunk the loader kept the port.** The master still
+  held the unfinished word's bytes, so `wb_cyc` stayed high and the arbiter could not give the
+  port to master 1 until the loader's next command (and that command then wrote the stale
+  bytes). `port_give_up` now drops them. The `TBPORT` monitor, in every scenario (`watchdog`
+  showed 349 clocks before the fix).
+- **Status line `clocks` was one status line old**, not one clock as its comment said: a copy
+  taken in the clock the line was sampled reached it on the next line. The line now carries
+  the counter itself.
+- Minor: the flush of a buffered word did not wait for fewer than 8 outstanding requests
+  ("Write side").
+
+Three host-side findings are fixed in `tools/fpga-uart-loader.py` (the board records above
+were written before them and pass the new checks, recomputed from their fields):
+`calibration_held` took an equal `calib_clocks` to mean no reset, but the calibration takes the
+same number of clocks after every reset; it now also requires no `H` line after the first
+status read and `frames_committed` to grow by exactly the run's chunks (0, 41, 92, 413, 454,
+495, 546, 867 across runs 1-7: no reset in the session). A baud trial now fails when its
+margins changed, and the calibration is checked in every trial's status too. The margins stop
+at the end of the store, and under `--wait-calib` the first status read stays in the record.
 
 ### Limits and open points (part 2)
 
+- The review fixes above have run in Icarus only; the next DDR3 build carries them to the
+  board (#64 builds the device matvec on this loader).
 - x16 only (U6, 512 MiB); x32 not built. One placement (seed 3) of one netlist was loaded,
   once, for 16 minutes; the placement sensitivity of #61/#62 applies (the seed was chosen by
   the CK - DQS rule, which is a correlation). No soak, no second board.
 - `not_ready`, the port watchdog on the Wishbone side, the late-ack drop and the arbiter with
   a second master are shown in simulation only; on the board master 1 is idle and no frame
   came before the calibration.
-- A reset (button or PLL) resets UberDDR3, which calibrates again and runs its self-test,
-  which writes bursts [0, 2^23), the first 128 MiB (#61's model of `BIST_MODE 1`): data loaded
-  there do not survive a reset. Not measured here; load above 128 MiB what must survive one.
+- A reset (button or PLL) resets UberDDR3, which calibrates again and runs its self-test. By
+  #61's model of `BIST_MODE 1` (`docs/hardware.md`, "Coverage") that writes three quarters of
+  U6: bursts [0, 2^23) (the first 128 MiB), banks 2-5 of every row, and bursts [3·2^23, 2^25)
+  (384-512 MiB, run 3's range included), so data loaded there do not survive a reset. It never
+  writes rows 8192-24575 of banks 0, 1, 6 and 7: bytes 128-384 MiB whose bank bits
+  `(address >> 11) & 7` are 0, 1, 6 or 7. The bytes read before runs 1, 2 and 4 agree with the
+  model ("Board results"); whether data survive a reset there was not measured.
 - The kept read word is coherent with the loader's own writes and with the other master's
   writes through the arbiter's `m1_write`; a writer that bypasses the arbiter would not be
   seen (none exists).
@@ -754,8 +812,9 @@ Wishbone-side watchdog and the arbiter's second master shown in simulation only)
   the PLL stub runs everything at 200 MHz there.
 - The DDR3 loader is a copy of part 1's with marked changes: a fix to one must be carried to
   the other by hand (the source diff test only checks that the differences are marked).
-- 2 of the 12 seeds miss 83.33 MHz; the remaining critical paths are the loader's state
-  decode and the status line selection (session logs).
+- 2 of the 12 seeds miss 83.33 MHz (5 and 8: 81.01 and 81.41 MHz); in the sweep record the
+  critical path of seed 5 ends in UberDDR3's scheduler (`stage1_do_pre_d`) and that of seed 8
+  starts at the Wishbone master's outstanding count (`master.outst`).
 - The registered checks of the DDR3 loader are assigned at the end of `on_clock` from values
   that branches above may have written in the same tick: the Verilog (nonblocking) reads the
   previous clock's values, which the settle clocks rely on, while the generated C of

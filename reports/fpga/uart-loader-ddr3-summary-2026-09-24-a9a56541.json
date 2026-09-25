@@ -1,6 +1,6 @@
 {
  "schema": "trinity.uart-loader-summary.v1",
- "written_at": "2026-09-24T20:28:33+00:00",
+ "written_at": "2026-09-25T00:22:10+00:00",
  "directory": "reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3",
  "runs": [
   {
@@ -1520,5 +1520,5 @@
  "calib_clocks_seen": [
   432977330
  ],
- "calibration_note": "calib_clocks is the device's clock count at the first calib_complete since reset; one value in every status of every run means one calibration (no reset) held the whole session; calib_lost_clocks counts every clock since then with calib_complete low or a state other than 23"
+ "calibration_note": "calib_clocks is the device's clock count at the first calib_complete since reset; it is the same after every reset, so one value alone does not show one calibration; frames_committed (zeroed by a reset) and the H lines do: see each run's checks; calib_lost_clocks counts every clock since the calibration with calib_complete low or a state other than 23"
 }

@@ -84,17 +84,18 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     records = sorted((p for p in args.directory.glob("run*.json")), key=lambda p: int(p.name[3:p.name.index("-")]))
     runs = [run_summary(p) for p in records]
-    calib = sorted({(r["status_before"] or {}).get("calib_clocks") for r in runs}
-                   | {(r["status_after"] or {}).get("calib_clocks") for r in runs})
+    calib = sorted(v for v in {(r["status_before"] or {}).get("calib_clocks") for r in runs}
+                   | {(r["status_after"] or {}).get("calib_clocks") for r in runs} if v is not None)
     out = {"schema": "trinity.uart-loader-summary.v1",
            "written_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
            "directory": rel(args.directory), "runs": runs,
            "all_pass": all(r["pass"] for r in runs),
            "calib_clocks_seen": calib,
            "calibration_note": "calib_clocks is the device's clock count at the first calib_complete since reset; "
-                               "one value in every status of every run means one calibration (no reset) held the "
-                               "whole session; calib_lost_clocks counts every clock since then with calib_complete "
-                               "low or a state other than 23"}
+                               "it is the same after every reset, so one value alone does not show one calibration; "
+                               "frames_committed (zeroed by a reset) and the H lines do: see each run's checks; "
+                               "calib_lost_clocks counts every clock since the calibration with calib_complete low "
+                               "or a state other than 23"}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(out, indent=1) + "\n")
     print(json.dumps({"runs": len(runs), "all_pass": out["all_pass"], "calib_clocks_seen": calib}))
