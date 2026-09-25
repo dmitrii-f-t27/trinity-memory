@@ -17,6 +17,13 @@
 //   memory model's word at that clock (hits, mismatches: must be 0), so the kept word is shown
 //   to be coherent with every write, the other master's included.
 // - MODEL: the memory model's writes, partial writes (fewer than 16 selects), reads, acks.
+// - TBPORT: the longest run of clocks in which the loader waited for a frame (P_HUNT) with
+//   nothing presented or outstanding on its master and still held the port (m0_cyc), so the
+//   arbiter could not give it to master 1 (must be at most 1: wb_cyc is registered).
+// - TBRACE (+race_late_ack=1): after a read-back the loader gave up on while its read waits
+//   for an ack the bench withholds (`h 2`), the bench releases that ack so that it reaches the
+//   master in the clock the next read-back asks for its first data byte (P_RB_SEND at rb_k 9,
+//   then P_RB_NEXT); state 2 when it did. The ack must be dropped, not answer that request.
 // With `define DDR3_LOADER_READER the #62 reader is master 1; its report lines (uart_tx2)
 // are decoded into +capture2= as "<time in ns>\t<line>", for tools/fpga-ddr3-capture.py.
 `timescale 1ps/1ps
@@ -130,7 +137,34 @@ module tb_ddr3_loader;
             end
         end
     end
+    // The loader must not keep the port while it waits for a frame with nothing to do there.
+    localparam integer P_HUNT = 1, P_RB_SEND = 18;
+    integer idle_held = 0, idle_held_max = 0;
+    always @(posedge mclk) begin
+        if (dut.loader.pstate == P_HUNT && dut.m0_cyc && !dut.master.wb_stb && dut.master.outst == 0
+            && !dut.master.rd_wait)
+            idle_held = idle_held + 1;
+        else
+            idle_held = 0;
+        if (idle_held > idle_held_max) idle_held_max = idle_held;
+    end
+    // +race_late_ack=1: release the withheld ack of an abandoned read on the falling edge before the
+    // loader moves from P_RB_SEND (rb_k 9) to P_RB_NEXT, which asks for the first data byte.
+    integer race = 0, race_state = 0;
+    initial if (!$value$plusargs("race_late_ack=%d", race)) race = 0;
+    always @(negedge mclk) begin
+        if (race != 0) begin
+            if (race_state == 0 && dut.loader.rb_fail && dut.master.rd_wait) race_state = 1;
+            if (race_state == 1 && !dut.loader.rb_fail && dut.loader.pstate == P_RB_SEND && dut.loader.rb_k == 9
+                && !dut.tx_busy && dut.line_idle && dut.master.rd_wait) begin
+                dut.ddr3.bench_hold = 1'b0;
+                race_state = 2;
+            end
+        end
+    end
     final begin
+        $display("TBPORT idle_held_max=%0d", idle_held_max);
+        $display("TBRACE state=%0d", race_state);
         $display("TBWB taken0=%0d acks0=%0d taken1=%0d acks1=%0d misrouted=%0d owner_changes=%0d max_outstanding=%0d drops=%0d",
                  taken0, acks0, taken1, acks1, misrouted, owner_changes, max_out, drops);
         $display("TBKEPT hits=%0d mismatches=%0d", kept_hits, kept_bad);

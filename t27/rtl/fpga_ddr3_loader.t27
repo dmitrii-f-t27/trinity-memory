@@ -1,7 +1,7 @@
 module TrinityFpgaDdr3LoaderT27;
 
 // The UART loader of issue #63 on the DDR3 build (part 2, docs/uart-loader.md,
-// "DDR3"): t27/rtl/fpga_uart_loader.t27 (part 1, block RAM) with three changes, and
+// "DDR3"): t27/rtl/fpga_uart_loader.t27 (part 1, block RAM) with four changes, and
 // otherwise the same frame parser, CRC, staging buffer, commit, read-back, responses,
 // baud change and port watchdog, line for line (tests/test_ddr3_loader.py compares the
 // two files and allows only the marked differences). It runs on UberDDR3's controller
@@ -23,6 +23,11 @@ module TrinityFpgaDdr3LoaderT27;
 //   the arbiter's counters (inputs, docs/uart-loader.md).
 // [ddr3] 3. The block-RAM store is not in this module in either part; here the ports
 //   lead to the Wishbone master instead (wiring only).
+// [ddr3] 4. `port_give_up` (an output, one clock) says the port watchdog gave up during a
+//   commit or a read-back: the Wishbone master then drops the bytes of a word it has not
+//   written yet and the ack of a read still outstanding, whenever it comes, and gives the
+//   port back once nothing is outstanding (a block-RAM store never stalls, so part 1 has
+//   no use for it).
 //
 // Part 1's description of the protocol follows unchanged.
 // Host-to-board UART loader with per-chunk acknowledgement (issue #63). The frame
@@ -250,7 +255,8 @@ var crc_good_q: bool = false;
 var dup_q: bool = false;
 // [ddr3] More registered conditions, each read at least one clock after what it depends on last
 // changed: the timeouts (one clock later than part 1's, of 4 166 666), the last payload and
-// commit byte, the read-back frame's lengths and the response line's check byte.
+// commit byte, the read-back frame's lengths and the response line's check byte. prob_count
+// is 0 outside a probation, so prob_over_q reads false in the first clock of a new one.
 var quiet_over_q: bool = false;
 var port_over_q: bool = false;
 var prob_over_q: bool = false;
@@ -260,7 +266,6 @@ var rb_data_end_q: u32 = 0;
 var rb_end_q: u32 = 0;
 var resp_bits_q: u64 = 0;
 var status_q: u32 = 0;               // the status line of st_i (P_STATUS settles one clock)
-var clocks_at: u32 = 0;              // the clock count for the status line, taken when P_STATUS settles
 // The response line's check byte, one byte of CRC per clock: lc0 after the tag, lc1-lc4 after a,
 // lc5-lc8 after v; resp_bits_q is right RESP_SETTLE clocks after resp_* last changed.
 var lc0: u32 = 0;
@@ -286,6 +291,7 @@ var wr_data: u32 = 0;
 var wr_last: bool = false;
 var rd_req: bool = false;
 var rd_addr: u32 = 0;
+var port_give_up: bool = false;       // [ddr3] one clock: the loader gave up on the port (t27/rtl/fpga_loader_wb.t27)
 
 fn crc_byte(c: u32, b: u32) -> u32 {
     var x: u32 = c ^ (b & 255);
@@ -580,7 +586,7 @@ lcn8 = crc_byte_par(lc7, line_value >> 24);
 status_next = status_all(st_i, rx_bytes, rx_ferrs, rx_false, fifo_overflows, fifo_hwm, ignored,   // [ddr3]
                          frames_ok, frames_dup, nak_crc, nak_length, nak_timeout, nak_framing, nak_command,
                          nak_overflow, bytes_committed, readbacks, div_now, baud_reverts, last_word,
-                         config_word, clocks_at, build_id, nak_port, nak_not_ready,
+                         config_word, clocks, build_id, nak_port, nak_not_ready,
                          cal_word(calib, cal_now, cal_top, cal_recals), cal_at, cal_lost, wb_writes, wb_reads,
                          wb_hits, wb_dropped, wb_stray, wb_max_outst, wb_rd_lat_max, wb_cmd_stalls, arb_switches,
                          arb_stray);
@@ -604,6 +610,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
     if (cal_seen && (!calib || cal_now != DONE_CALIBRATE)) { cal_lost = cal_lost + 1; }
     line_go = false;
     tx_start = false;
+    port_give_up = false;                                // [ddr3]
     clocks = clocks + 1;
 
     // Receive FIFO, write side.
@@ -629,6 +636,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
         if (prob_over_q && pstate == P_HUNT && !fetched) {   // [ddr3] prob_count >= probation_clocks, registered
             baud_sel = false;
             probation = false;
+            prob_count = 0;                              // [ddr3] 0 outside a probation: prob_over_q reads it
             baud_reverts = baud_reverts + 1;
         } else {
             prob_count = prob_count + 1;
@@ -721,7 +729,6 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
         }
     } else if (((pstate == P_HDR_CHECK || pstate == P_CHECK || pstate == P_STATUS) && settle_n == 0) || (pstate == P_RESP && settle_n < RESP_SETTLE)) {
         settle_n = settle_n + 1;                         // [ddr3] the registered checks settle
-        clocks_at = clocks;                              // [ddr3] (status line `clocks`: one clock earlier)
     } else if (pstate == P_HDR_CHECK) {
         settle_n = 0;                                    // [ddr3]
         if (!cmd_known_q) {                              // [ddr3] cmd_index(h_cmd) == 0
@@ -746,10 +753,12 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
         } else if (needs_calib) {
             // [ddr3] Loads and reads wait for the calibration.
             probation = false;
+            prob_count = 0;                              // [ddr3] 0 outside a probation (see the revert)
             nak_reason = R_NOT_READY;
             pstate = P_NAK;
         } else {
             probation = false;
+            prob_count = 0;                              // [ddr3] 0 outside a probation (see the revert)
             if (h_cmd == CMD_LOAD) {
                 if (dup_q) {                             // [ddr3] is_dup, registered
                     frames_dup = frames_dup + 1;
@@ -824,11 +833,13 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             }
         } else if (port_expired) {
             wr_valid = false;
+            port_give_up = true;                         // [ddr3] the master drops the unfinished word
             nak_reason = R_PORT;
             pstate = P_NAK;
         }
     } else if (pstate == P_COMMIT_DRAIN) {
         if (!wr_idle && port_expired) {
+            port_give_up = true;                         // [ddr3] the master drops the unfinished word
             nak_reason = R_PORT;
             pstate = P_NAK;
         } else if (wr_idle) {
@@ -879,6 +890,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             pstate = P_RB_RESP;
         } else if (port_expired) {
             rd_req = false;
+            port_give_up = true;                         // [ddr3] nothing taken now; an earlier read stays dropped
             rb_fail = true;
             rb_byte = 0;
             pstate = P_RB_SEND;
@@ -888,6 +900,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             rb_byte = rd_data & 255;
             pstate = P_RB_SEND;
         } else if (port_expired) {
+            port_give_up = true;                         // [ddr3] the read still waits: its ack is dropped
             rb_fail = true;
             rb_byte = 0;
             pstate = P_RB_SEND;
