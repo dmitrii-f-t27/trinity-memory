@@ -6,6 +6,10 @@
 // bounded error model, storage limits and exact integer arithmetic. The
 // executable implementation is t27/bridge.t27, t27/http.t27 and t27/client.t27;
 // the reference functions here restate the rules for differential tests.
+// Stage two (issue #64) adds the device backend fpga beside the emulator, which
+// stays the default: transport uart (t27/fpga_link.t27), a device evidence block,
+// the device matvec's limits and the matvec extension of the UART loader's wire
+// protocol (section 10; docs/bridge.md).
 // phi^2 + 1/phi^2 = 3 | TRINITY
 module TrinityMemoryBridgeSpec {
     // 1. Protocol identity reported by trinity.capabilities.
@@ -29,6 +33,12 @@ module TrinityMemoryBridgeSpec {
     pub enum BridgeBackend {
         emulator = 0,
         fpga = 1,
+    }
+
+    // The emulator computes in process; fpga reaches the device over the AX7203's UART.
+    pub enum BridgeTransport {
+        in_process = 0,
+        uart = 1,
     }
 
     // 2. JSON-RPC 2.0 envelope: an object with jsonrpc, id, method and an
@@ -133,6 +143,54 @@ module TrinityMemoryBridgeSpec {
     //    for phi, euler and gamma; a software anchor constant; never a device.
     pub const TMS_BRIDGE_IDENTITY_BYTES: u32 = 16;
     pub const TMS_BRIDGE_IDENTITY_ANCHOR: u32 = 18368;
+
+    // 10. Device backend. The evidence block names five fields; the SDK adapter accepts an
+    //     fpga identity only with all five present and well formed, and hardware is true
+    //     exactly for fpga. The device matvec takes rows padded to 16-byte words of 64
+    //     (baseline2) or 80 (dense5) lanes, at most 1024 rows per run and 1024 words per
+    //     row, 32-bit signed accumulators. Wire extension of the loader (protocol 4: the DDR3
+    //     loader's protocol 3 of #63 part 2 plus these):
+    //     frames 'X' activations (addr = first 80-byte block, len = bytes, a multiple of 8,
+    //     at most 51 blocks) and 'M' matvec (addr = region, a multiple of 16; len 12:
+    //     rows, cols, format as u32), acknowledged with command indices 5 and 6; the device
+    //     answers a run with one Y line per row (a = seq << 24 | row, v = y) and eleven Z
+    //     lines (a = seq << 24 | 11 << 16 | index); Z line 0 is the run status: 0 ran, 1 refused
+    //     (only the Z lines: a configuration outside the limits, or a region past the store),
+    //     2 ended early (only the Z lines: the bus words stopped coming, or the run was aborted).
+    pub const TMS_BRIDGE_EVIDENCE_BITSTREAM: u32 = 1;
+    pub const TMS_BRIDGE_EVIDENCE_CAPTURE: u32 = 2;
+    pub const TMS_BRIDGE_EVIDENCE_IDCODE: u32 = 4;
+    pub const TMS_BRIDGE_EVIDENCE_DNA: u32 = 8;
+    pub const TMS_BRIDGE_EVIDENCE_BUILD_ID: u32 = 16;
+    pub const TMS_BRIDGE_EVIDENCE_COMPLETE: u32 = 31;
+    pub const TMS_BRIDGE_SHA256_HEX_CHARS: u32 = 64;
+    pub const TMS_BRIDGE_IDCODE_HEX_DIGITS: u32 = 8;
+    pub const TMS_BRIDGE_DNA_HEX_DIGITS: u32 = 16;
+    pub const TMS_BRIDGE_BUILD_ID_HEX_DIGITS: u32 = 8;
+    pub const TMS_DEVICE_WORD_BYTES: u32 = 16;
+    pub const TMS_DEVICE_LANES_BASELINE2: u32 = 64;
+    pub const TMS_DEVICE_LANES_DENSE5: u32 = 80;
+    pub const TMS_DEVICE_MAX_ROWS_PER_RUN: u32 = 1024;
+    pub const TMS_DEVICE_MAX_WORDS_PER_ROW: u32 = 1024;
+    pub const TMS_DEVICE_ACCUMULATOR_BITS: u32 = 32;
+    pub const TMS_DEVICE_ACT_BLOCK_BYTES: u32 = 80;
+    pub const TMS_DEVICE_ACT_FRAME_BLOCKS: u32 = 51;
+    pub const TMS_DEVICE_CHUNK_BYTES: u32 = 4096;
+    pub const TMS_DEVICE_MATVEC_PAYLOAD_BYTES: u32 = 12;
+    pub const TMS_DEVICE_Z_COUNT: u32 = 11;
+    pub const TMS_DEVICE_PROTOCOL_MATVEC: u32 = 4;
+    // Z line 0: 1 the run was refused (named REJECTED: the spec gate reserves the word REFUSED).
+    pub const TMS_DEVICE_RUN_REJECTED: u32 = 1;
+    pub const TMS_DEVICE_RUN_SHORT: u32 = 2;
+    pub const TMS_WIRE_CMD_ACTIVATIONS: u32 = 88;
+    pub const TMS_WIRE_CMD_MATVEC: u32 = 77;
+    pub const TMS_WIRE_INDEX_ACTIVATIONS: u32 = 5;
+    pub const TMS_WIRE_INDEX_MATVEC: u32 = 6;
+    pub const TMS_WIRE_TAG_Y: u32 = 89;
+    pub const TMS_WIRE_TAG_Z: u32 = 90;
+    pub const TMS_DEVICE_DOWN_PROJ_COLUMNS: u64 = 6912;
+    pub const TMS_DEVICE_CHUNK_ROWS: u64 = 320;
+    pub const TMS_DEVICE_CHUNK_COLUMNS: u64 = 2560;
 
     // Reference functions.
     pub fn tms_bridge_request_status(size: u64, max_request: u64, json_valid: bool) -> i32 {
@@ -260,6 +318,92 @@ module TrinityMemoryBridgeSpec {
             + max_trits * TMS_BRIDGE_RESPONSE_BYTES_PER_TRIT;
     }
 
+    pub fn tms_bridge_backend_hardware(backend: u32) -> bool {
+        return backend == 1;
+    }
+
+    pub fn tms_bridge_backend_transport(backend: u32) -> u32 {
+        if (backend == 1) { return 1; }
+        return 0;
+    }
+
+    pub fn tms_bridge_evidence_complete(found: u32) -> bool {
+        return (found & TMS_BRIDGE_EVIDENCE_COMPLETE) == TMS_BRIDGE_EVIDENCE_COMPLETE;
+    }
+
+    // What SDKMemoryBackend accepts: the emulator without hardware, or fpga with hardware
+    // and a complete evidence block (every field present and well formed).
+    pub fn tms_bridge_sdk_accepts(backend: u32, hardware: bool, evidence: u32) -> bool {
+        if (backend == 0) { return !hardware; }
+        if (backend == 1) { return hardware && tms_bridge_evidence_complete(evidence); }
+        return false;
+    }
+
+    // Lanes of one 16-byte device word: codec 0 baseline2, codec 1 dense5, 0 otherwise.
+    pub fn tms_device_lanes(codec: u32) -> u64 {
+        if (codec == 0) { return TMS_DEVICE_LANES_BASELINE2 as u64; }
+        if (codec == 1) { return TMS_DEVICE_LANES_DENSE5 as u64; }
+        return 0;
+    }
+
+    pub fn tms_device_words_per_row(cols: u64, codec: u32) -> u64 {
+        var lanes: u64 = tms_device_lanes(codec);
+        if (lanes == 0) { return 0; }
+        return (cols + lanes - 1) / lanes;
+    }
+
+    // Bytes of the row-padded image: every row starts at a 16-byte word.
+    pub fn tms_device_image_bytes(rows: u64, cols: u64, codec: u32) -> u64 {
+        return rows * tms_device_words_per_row(cols, codec) * (TMS_DEVICE_WORD_BYTES as u64);
+    }
+
+    // One matvec run: 1 .. 1024 rows, at least one column, at most 1024 words per row.
+    pub fn tms_device_run_valid(rows: u64, cols: u64, codec: u32) -> bool {
+        if (rows < 1 || rows > (TMS_DEVICE_MAX_ROWS_PER_RUN as u64) || cols < 1) { return false; }
+        var words: u64 = tms_device_words_per_row(cols, codec);
+        return words >= 1 && words <= (TMS_DEVICE_MAX_WORDS_PER_ROW as u64);
+    }
+
+    // Runs a tensor of `rows` rows takes: ceil(rows / 1024).
+    pub fn tms_device_runs(rows: u64) -> u64 {
+        return (rows + (TMS_DEVICE_MAX_ROWS_PER_RUN as u64) - 1) / (TMS_DEVICE_MAX_ROWS_PER_RUN as u64);
+    }
+
+    pub fn tms_device_act_frame_valid(block: u64, len: u64) -> bool {
+        if (len < 8 || len % 8 != 0) { return false; }
+        if (len > (TMS_DEVICE_ACT_FRAME_BLOCKS as u64) * (TMS_DEVICE_ACT_BLOCK_BYTES as u64)) { return false; }
+        var blocks: u64 = (len + (TMS_DEVICE_ACT_BLOCK_BYTES as u64) - 1) / (TMS_DEVICE_ACT_BLOCK_BYTES as u64);
+        return block + blocks <= (TMS_DEVICE_MAX_WORDS_PER_ROW as u64);
+    }
+
+    pub fn tms_device_matvec_frame_valid(addr: u64, len: u64, store_bytes: u64) -> bool {
+        return len == (TMS_DEVICE_MATVEC_PAYLOAD_BYTES as u64) && addr % (TMS_DEVICE_WORD_BYTES as u64) == 0 && addr < store_bytes;
+    }
+
+    // The run's region addr .. addr + image bytes lies in the store; otherwise the device refuses
+    // the run (status 1). The M handler checks it: the header check bounds only the start address.
+    pub fn tms_device_region_fits(addr: u64, rows: u64, cols: u64, codec: u32, store_bytes: u64) -> bool {
+        return addr <= store_bytes && tms_device_image_bytes(rows, cols, codec) <= store_bytes - addr;
+    }
+
+    pub fn tms_device_y_word(seq: u32, row: u32) -> u32 {
+        return ((seq & 255) << 24) | (row & 16777215);
+    }
+
+    pub fn tms_device_z_word(seq: u32, index: u32) -> u32 {
+        return ((seq & 255) << 24) | (TMS_DEVICE_Z_COUNT << 16) | (index & 65535);
+    }
+
+    // One step of the Z line 10 checksum: rotl1(c) xor y (32 bits).
+    pub fn tms_device_checksum_step(c: u32, y: u32) -> u32 {
+        return ((c << 1) | (c >> 31)) ^ y;
+    }
+
+    // |y| <= cols * 128 fits the device's signed 32-bit accumulator.
+    pub fn tms_device_accumulator_fits(cols: u64) -> bool {
+        return cols * (TMS_BRIDGE_ACTIVATION_MAGNITUDE) <= 2147483647;
+    }
+
     // Invariants: constant expressions, compiled as static assertions.
     invariant error_codes_are_distinct_and_negative {
         assert TMS_RPC_ERR_PARSE < TMS_RPC_ERR_INTERNAL && TMS_RPC_ERR_INTERNAL < TMS_RPC_ERR_INVALID_PARAMS
@@ -312,6 +456,37 @@ module TrinityMemoryBridgeSpec {
     invariant http_statuses_are_the_standard_codes {
         assert TMS_HTTP_OK == 200 && TMS_HTTP_BAD_REQUEST == 400 && TMS_HTTP_FORBIDDEN == 403 && TMS_HTTP_METHOD_NOT_ALLOWED == 405
             && TMS_HTTP_PAYLOAD_TOO_LARGE == 413 && TMS_HTTP_UNSUPPORTED_MEDIA_TYPE == 415 && TMS_HTTP_HEADERS_TOO_LARGE == 431;
+    }
+
+    invariant evidence_mask_names_five_fields {
+        assert TMS_BRIDGE_EVIDENCE_COMPLETE == (TMS_BRIDGE_EVIDENCE_BITSTREAM | TMS_BRIDGE_EVIDENCE_CAPTURE | TMS_BRIDGE_EVIDENCE_IDCODE
+            | TMS_BRIDGE_EVIDENCE_DNA | TMS_BRIDGE_EVIDENCE_BUILD_ID) && TMS_BRIDGE_SHA256_HEX_CHARS == 64;
+    }
+    invariant a_device_word_holds_64_baseline2_or_80_dense5_lanes {
+        assert TMS_DEVICE_LANES_BASELINE2 * 2 == TMS_DEVICE_WORD_BYTES * 8 && TMS_DEVICE_LANES_DENSE5 == TMS_DEVICE_WORD_BYTES * 5
+            && TMS_DEVICE_ACT_BLOCK_BYTES == TMS_DEVICE_LANES_DENSE5;
+    }
+    invariant an_activation_frame_fits_a_loader_chunk {
+        assert TMS_DEVICE_ACT_FRAME_BLOCKS * TMS_DEVICE_ACT_BLOCK_BYTES <= TMS_DEVICE_CHUNK_BYTES
+            && (TMS_DEVICE_ACT_FRAME_BLOCKS + 1) * TMS_DEVICE_ACT_BLOCK_BYTES > TMS_DEVICE_CHUNK_BYTES;
+    }
+    invariant device_accumulators_hold_the_widest_row {
+        assert TMS_DEVICE_MAX_WORDS_PER_ROW * TMS_DEVICE_LANES_DENSE5 * TMS_BRIDGE_ACTIVATION_MAGNITUDE <= 2147483647
+            && TMS_DEVICE_ACCUMULATOR_BITS == 32;
+    }
+    invariant down_proj_needs_21_signed_bits {
+        assert TMS_DEVICE_DOWN_PROJ_COLUMNS * TMS_BRIDGE_ACTIVATION_MAGNITUDE > 524288
+            && TMS_DEVICE_DOWN_PROJ_COLUMNS * TMS_BRIDGE_ACTIVATION_MAGNITUDE < 1048576;
+    }
+    invariant the_stage_one_chunk_fits_the_default_trit_limit {
+        assert TMS_DEVICE_CHUNK_ROWS * TMS_DEVICE_CHUNK_COLUMNS == 819200
+            && TMS_DEVICE_CHUNK_ROWS * TMS_DEVICE_CHUNK_COLUMNS <= TMS_BRIDGE_DEFAULT_MAX_TRITS
+            && TMS_DEVICE_CHUNK_ROWS <= 1024;
+    }
+    invariant wire_extension_codes_are_new {
+        assert TMS_WIRE_CMD_ACTIVATIONS == 88 && TMS_WIRE_CMD_MATVEC == 77 && TMS_WIRE_TAG_Y == 89 && TMS_WIRE_TAG_Z == 90
+            && TMS_WIRE_INDEX_ACTIVATIONS == 5 && TMS_WIRE_INDEX_MATVEC == 6 && TMS_DEVICE_PROTOCOL_MATVEC == 4
+            && TMS_DEVICE_RUN_REJECTED == 1 && TMS_DEVICE_RUN_SHORT == 2;
     }
 
     // Tests execute in the generated C test runner.
@@ -407,6 +582,41 @@ module TrinityMemoryBridgeSpec {
         assert !tms_bridge_storage_accepts(0, 1, 0, 27, 26);
         assert !tms_bridge_storage_accepts(0, 1, 1, 26, 26);
         assert tms_bridge_tmem_trit_limit_exceeded(3, 2) && !tms_bridge_tmem_trit_limit_exceeded(2, 2);
+    }
+    test "hardware and transport follow the backend, and the sdk needs complete evidence for fpga" {
+        assert !tms_bridge_backend_hardware(0) && tms_bridge_backend_hardware(1) && !tms_bridge_backend_hardware(2);
+        assert tms_bridge_backend_transport(0) == 0 && tms_bridge_backend_transport(1) == 1;
+        assert tms_bridge_evidence_complete(31) && !tms_bridge_evidence_complete(30) && !tms_bridge_evidence_complete(15);
+        assert tms_bridge_sdk_accepts(0, false, 0) && !tms_bridge_sdk_accepts(0, true, 31);
+        assert tms_bridge_sdk_accepts(1, true, 31) && !tms_bridge_sdk_accepts(1, true, 29) && !tms_bridge_sdk_accepts(1, false, 31);
+        assert !tms_bridge_sdk_accepts(2, true, 31);
+    }
+    test "device rows are padded to words" {
+        assert tms_device_words_per_row(2560, 0) == 40 && tms_device_words_per_row(2560, 1) == 32;
+        assert tms_device_words_per_row(6912, 0) == 108 && tms_device_words_per_row(6912, 1) == 87;
+        assert tms_device_words_per_row(1, 1) == 1 && tms_device_words_per_row(81, 1) == 2 && tms_device_words_per_row(64, 0) == 1;
+        assert tms_device_words_per_row(10, 2) == 0 && tms_device_lanes(5) == 0;
+        assert tms_device_image_bytes(320, 2560, 1) == 163840 && tms_device_image_bytes(320, 2560, 0) == 204800;
+        assert tms_device_image_bytes(2, 6912, 1) == 2784;
+    }
+    test "a device run is bounded by rows and words per row" {
+        assert tms_device_run_valid(320, 2560, 1) && tms_device_run_valid(1024, 81920, 1) && !tms_device_run_valid(1024, 81921, 1);
+        assert !tms_device_run_valid(0, 2560, 1) && !tms_device_run_valid(1025, 2560, 1) && !tms_device_run_valid(1, 0, 0);
+        assert tms_device_run_valid(1, 65536, 0) && !tms_device_run_valid(1, 65537, 0) && !tms_device_run_valid(1, 10, 2);
+        assert tms_device_runs(320) == 1 && tms_device_runs(1024) == 1 && tms_device_runs(1025) == 2;
+    }
+    test "extension frames and lines" {
+        assert tms_device_act_frame_valid(0, 2560) && tms_device_act_frame_valid(0, 4080) && !tms_device_act_frame_valid(0, 4088);
+        assert !tms_device_act_frame_valid(0, 0) && !tms_device_act_frame_valid(0, 12) && tms_device_act_frame_valid(1023, 80);
+        assert !tms_device_act_frame_valid(1023, 88);
+        assert tms_device_matvec_frame_valid(0, 12, 536870912) && !tms_device_matvec_frame_valid(8, 12, 536870912);
+        assert !tms_device_matvec_frame_valid(0, 0, 536870912) && !tms_device_matvec_frame_valid(536870912, 12, 536870912);
+        assert tms_device_matvec_frame_valid(4080, 12, 4096) && !tms_device_region_fits(4080, 1, 2560, 0, 4096);
+        assert tms_device_region_fits(3456, 1, 2560, 0, 4096) && !tms_device_region_fits(3472, 1, 2560, 0, 4096);
+        assert tms_device_region_fits(0, 320, 2560, 1, 163840) && !tms_device_region_fits(16, 320, 2560, 1, 163840);
+        assert tms_device_y_word(64, 319) == 1073742143 && tms_device_z_word(64, 10) == 1074462730;
+        assert tms_device_checksum_step(0, 5) == 5 && tms_device_checksum_step(2147483648, 0) == 1;
+        assert tms_device_accumulator_fits(6912) && tms_device_accumulator_fits(81920) && !tms_device_accumulator_fits(16777216);
     }
     test "runtime buffer capacities follow the configured limits" {
         assert tms_bridge_request_capacity(2097152) == 2162688;
