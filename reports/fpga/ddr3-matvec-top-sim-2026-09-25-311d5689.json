@@ -1,0 +1,1199 @@
+{
+ "schema": "trinity.ddr3-matvec-top-sim.v1",
+ "clock_hz": 200000000.0,
+ "note": "Icarus runs of tests/test_ddr3_matvec_top.py: the DDR3 loader top with `define DDR3_MATVEC (loader at protocol 4, device matvec, its feed on master 1, line arbiter) and the behavioural Wishbone memory tests/sim_ddr3_loader_model.v, not UberDDR3; runs: the Y and Z lines of every M the device answered, by seq",
+ "scenarios": {
+  "real_chunk": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {},
+   "preloaded_words": 23040,
+   "bytes_received": 14080,
+   "events": 704,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 23040,
+     "acks1": 23040,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 14,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 23040,
+     "acks": 23040
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 42,
+     "lines1": 662,
+     "feed_runs": 2,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 2,
+     "preloaded": 23040
+    }
+   },
+   "runs": {
+    "2": {
+     "rows": 320,
+     "z": {
+      "status": 0,
+      "rows": 320,
+      "words_per_row": 32,
+      "words": 10240,
+      "cycles": 13331,
+      "idle_clocks": 3091,
+      "latency": 11,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 2569321800
+     },
+     "y_sha256_le": "a2366b57f222f9222b091d4b552375941396f30757e4081561a4a8dfecbd52db",
+     "y_first8": [
+      -2561,
+      2660,
+      -52,
+      -2385,
+      1269,
+      3446,
+      3451,
+      -2365
+     ]
+    },
+    "4": {
+     "rows": 320,
+     "z": {
+      "status": 0,
+      "rows": 320,
+      "words_per_row": 40,
+      "words": 12800,
+      "cycles": 16613,
+      "idle_clocks": 3813,
+      "latency": 14,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 2569321800
+     },
+     "y_sha256_le": "a2366b57f222f9222b091d4b552375941396f30757e4081561a4a8dfecbd52db",
+     "y_first8": [
+      -2561,
+      2660,
+      -52,
+      -2385,
+      1269,
+      3446,
+      3451,
+      -2365
+     ]
+    }
+   }
+  },
+  "runs": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {},
+   "preloaded_words": 0,
+   "bytes_received": 2160,
+   "events": 108,
+   "monitors": {
+    "TBWB": {
+     "taken0": 41,
+     "acks0": 41,
+     "taken1": 47,
+     "acks1": 47,
+     "misrouted": 0,
+     "owner_changes": 5,
+     "max_outstanding": 13,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 41,
+     "partial": 0,
+     "reads": 47,
+     "acks": 88
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 48,
+     "lines1": 60,
+     "feed_runs": 4,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 4,
+     "preloaded": 0
+    }
+   },
+   "runs": {
+    "3": {
+     "rows": 5,
+     "z": {
+      "status": 0,
+      "rows": 5,
+      "words_per_row": 4,
+      "words": 20,
+      "cycles": 27,
+      "idle_clocks": 7,
+      "latency": 13,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 4294938201
+     },
+     "y_sha256_le": "920c3143f21a9eaca4cd9733479ecc38df573b1cfbf3560daae0d27036d26207",
+     "y_first8": [
+      -770,
+      -2099,
+      -434,
+      -108,
+      -1589
+     ]
+    },
+    "6": {
+     "rows": 5,
+     "z": {
+      "status": 0,
+      "rows": 5,
+      "words_per_row": 3,
+      "words": 15,
+      "cycles": 15,
+      "idle_clocks": 0,
+      "latency": 16,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 4294964201
+     },
+     "y_sha256_le": "c716ac5eaafd4d46eeea81c5cc194192c2490d8826c3dcd447878f60589c7b86",
+     "y_first8": [
+      -493,
+      -948,
+      961,
+      306,
+      -559
+     ]
+    },
+    "9": {
+     "rows": 3,
+     "z": {
+      "status": 0,
+      "rows": 3,
+      "words_per_row": 2,
+      "words": 6,
+      "cycles": 7,
+      "idle_clocks": 1,
+      "latency": 17,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 1707
+     },
+     "y_sha256_le": "a17d1d86fc14eba717c16b3d86a54118c9cbebb7a85f76d38835f9b8ae94180a",
+     "y_first8": [
+      -196,
+      866,
+      -868
+     ]
+    },
+    "10": {
+     "rows": 3,
+     "z": {
+      "status": 0,
+      "rows": 3,
+      "words_per_row": 2,
+      "words": 6,
+      "cycles": 10,
+      "idle_clocks": 4,
+      "latency": 9,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 1707
+     },
+     "y_sha256_le": "a17d1d86fc14eba717c16b3d86a54118c9cbebb7a85f76d38835f9b8ae94180a",
+     "y_first8": [
+      -196,
+      866,
+      -868
+     ]
+    }
+   }
+  },
+  "refusals": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {},
+   "preloaded_words": 1,
+   "bytes_received": 2640,
+   "events": 132,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 1,
+     "acks1": 1,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 1,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 1,
+     "acks": 1
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 54,
+     "lines1": 78,
+     "feed_runs": 1,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 7,
+     "preloaded": 1
+    }
+   },
+   "runs": {
+    "8": {
+     "rows": 0,
+     "z": {
+      "status": 1,
+      "rows": 0,
+      "words_per_row": 0,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 0,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "9": {
+     "rows": 0,
+     "z": {
+      "status": 1,
+      "rows": 0,
+      "words_per_row": 0,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 0,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "10": {
+     "rows": 0,
+     "z": {
+      "status": 1,
+      "rows": 0,
+      "words_per_row": 0,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 0,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "11": {
+     "rows": 0,
+     "z": {
+      "status": 1,
+      "rows": 0,
+      "words_per_row": 0,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 0,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "12": {
+     "rows": 0,
+     "z": {
+      "status": 1,
+      "rows": 0,
+      "words_per_row": 0,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 0,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "13": {
+     "rows": 0,
+     "z": {
+      "status": 1,
+      "rows": 0,
+      "words_per_row": 0,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 0,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "15": {
+     "rows": 1,
+     "z": {
+      "status": 0,
+      "rows": 1,
+      "words_per_row": 1,
+      "words": 1,
+      "cycles": 1,
+      "idle_clocks": 0,
+      "latency": 10,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 4294966951
+     },
+     "y_sha256_le": "d83aec013fa8cfafa7e3482c302b3c6d9564e3d16dbae0f98363e21e802c0718",
+     "y_first8": [
+      -345
+     ]
+    }
+   }
+  },
+  "busy": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {},
+   "preloaded_words": 160,
+   "bytes_received": 2920,
+   "events": 146,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 320,
+     "acks1": 320,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 14,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 320,
+     "acks": 320
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 44,
+     "lines1": 102,
+     "feed_runs": 2,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 2,
+     "preloaded": 160
+    }
+   },
+   "runs": {
+    "2": {
+     "rows": 40,
+     "z": {
+      "status": 0,
+      "rows": 40,
+      "words_per_row": 4,
+      "words": 160,
+      "cycles": 222,
+      "idle_clocks": 62,
+      "latency": 15,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 3188337972
+     },
+     "y_sha256_le": "9166556e1f57a290543291bc3d7afb95c37ad69ed397d420ed8ef21e385bdd37",
+     "y_first8": [
+      245,
+      -1785,
+      170,
+      670,
+      -452,
+      1299,
+      -1345,
+      39
+     ]
+    },
+    "6": {
+     "rows": 40,
+     "z": {
+      "status": 0,
+      "rows": 40,
+      "words_per_row": 4,
+      "words": 160,
+      "cycles": 199,
+      "idle_clocks": 39,
+      "latency": 33,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 47787853
+     },
+     "y_sha256_le": "8726e7719335eb89a43b87cd103537da133c2cb6eb82ec2d7f09ede8eb7fbf0a",
+     "y_first8": [
+      574,
+      84,
+      1219,
+      -1217,
+      -78,
+      -1807,
+      567,
+      -69
+     ]
+    }
+   }
+  },
+  "not_ready": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {
+    "calib_clocks": 400000
+   },
+   "preloaded_words": 4,
+   "bytes_received": 1080,
+   "events": 54,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 4,
+     "acks1": 4,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 4,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 4,
+     "acks": 4
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 41,
+     "lines1": 13,
+     "feed_runs": 1,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 1,
+     "preloaded": 4
+    }
+   },
+   "runs": {
+    "4": {
+     "rows": 2,
+     "z": {
+      "status": 0,
+      "rows": 2,
+      "words_per_row": 2,
+      "words": 4,
+      "cycles": 4,
+      "idle_clocks": 0,
+      "latency": 17,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 4294966817
+     },
+     "y_sha256_le": "833ab585c10a2b17b4b56bbe4493f4820e99c4889f7409f1fe1d3771db2eb861",
+     "y_first8": [
+      413,
+      -741
+     ]
+    }
+   }
+  },
+  "abort": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 2000
+   },
+   "plusargs": {},
+   "preloaded_words": 16,
+   "bytes_received": 1420,
+   "events": 71,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 32,
+     "acks1": 32,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 16,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 32,
+     "acks": 32
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 41,
+     "lines1": 30,
+     "feed_runs": 1,
+     "feed_timeouts": 1,
+     "feed_dropped": 16,
+     "feed_stray": 0,
+     "mv_runs": 2,
+     "preloaded": 16
+    }
+   },
+   "runs": {
+    "2": {
+     "rows": 0,
+     "z": {
+      "status": 2,
+      "rows": 0,
+      "words_per_row": 2,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 2027,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "3": {
+     "rows": 8,
+     "z": {
+      "status": 0,
+      "rows": 8,
+      "words_per_row": 2,
+      "words": 16,
+      "cycles": 23,
+      "idle_clocks": 7,
+      "latency": 15,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 4294846396
+     },
+     "y_sha256_le": "ca4b0af010ca0a71c3f9c1d0586a3afc25784be6f805521a352dac89641e5418",
+     "y_first8": [
+      646,
+      698,
+      597,
+      -1716,
+      -519,
+      -348,
+      43,
+      345
+     ]
+    }
+   }
+  },
+  "arbitration": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 200000,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {
+    "stall_pct": 90
+   },
+   "preloaded_words": 1000,
+   "bytes_received": 2070,
+   "events": 103,
+   "monitors": {
+    "TBWB": {
+     "taken0": 4,
+     "acks0": 4,
+     "taken1": 1000,
+     "acks1": 1000,
+     "misrouted": 0,
+     "owner_changes": 2,
+     "max_outstanding": 14,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 14,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 2,
+     "partial": 2,
+     "reads": 1002,
+     "acks": 1004
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 41,
+     "lines1": 61,
+     "feed_runs": 1,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 1,
+     "preloaded": 1000
+    }
+   },
+   "runs": {
+    "2": {
+     "rows": 50,
+     "z": {
+      "status": 0,
+      "rows": 50,
+      "words_per_row": 20,
+      "words": 1000,
+      "cycles": 11051,
+      "idle_clocks": 10051,
+      "latency": 17,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 3903281853
+     },
+     "y_sha256_le": "977a12e9130789cdf64da70cda24b28aaad7d67bb7adf23bbde3f26131b0acde",
+     "y_first8": [
+      -158,
+      3510,
+      -491,
+      273,
+      -1246,
+      1733,
+      -3903,
+      3394
+     ]
+    }
+   }
+  },
+  "abort_long": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 2000
+   },
+   "plusargs": {},
+   "preloaded_words": 80,
+   "bytes_received": 2060,
+   "events": 103,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 143,
+     "acks1": 143,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 62,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 143,
+     "acks": 143
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 41,
+     "lines1": 62,
+     "feed_runs": 1,
+     "feed_timeouts": 1,
+     "feed_dropped": 63,
+     "feed_stray": 0,
+     "mv_runs": 2,
+     "preloaded": 80
+    }
+   },
+   "runs": {
+    "2": {
+     "rows": 0,
+     "z": {
+      "status": 2,
+      "rows": 0,
+      "words_per_row": 2,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 2084,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "3": {
+     "rows": 40,
+     "z": {
+      "status": 0,
+      "rows": 40,
+      "words_per_row": 2,
+      "words": 80,
+      "cycles": 111,
+      "idle_clocks": 31,
+      "latency": 14,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 301457988
+     },
+     "y_sha256_le": "8aa5caa8167fa3fb4200868f6fec9046eef0b4a3ef04cb4b5e45e3a3c8245fef",
+     "y_first8": [
+      34,
+      980,
+      -609,
+      415,
+      -537,
+      -973,
+      894,
+      -574
+     ]
+    }
+   }
+  },
+  "drain_busy": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 2000
+   },
+   "plusargs": {},
+   "preloaded_words": 16,
+   "bytes_received": 720,
+   "events": 36,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 32,
+     "acks1": 32,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 16,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 32,
+     "acks": 32
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 0,
+     "age_min": -1,
+     "age_max": 0
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 6,
+     "lines1": 30,
+     "feed_runs": 1,
+     "feed_timeouts": 1,
+     "feed_dropped": 16,
+     "feed_stray": 0,
+     "mv_runs": 2,
+     "preloaded": 16
+    }
+   },
+   "runs": {
+    "2": {
+     "rows": 0,
+     "z": {
+      "status": 2,
+      "rows": 0,
+      "words_per_row": 2,
+      "words": 0,
+      "cycles": 0,
+      "idle_clocks": 0,
+      "latency": 2027,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 0
+     },
+     "y_sha256_le": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+     "y_first8": []
+    },
+    "5": {
+     "rows": 8,
+     "z": {
+      "status": 0,
+      "rows": 8,
+      "words_per_row": 2,
+      "words": 16,
+      "cycles": 25,
+      "idle_clocks": 9,
+      "latency": 10,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 4294895662
+     },
+     "y_sha256_le": "fdc0b4a2323291bd0736414c2b39c8e00f996447e5d4852e34978c642d2bfb64",
+     "y_first8": [
+      -876,
+      897,
+      977,
+      -801,
+      6,
+      837,
+      685,
+      -592
+     ]
+    }
+   }
+  },
+  "act_blocks": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {},
+   "preloaded_words": 35,
+   "bytes_received": 800,
+   "events": 40,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 35,
+     "acks1": 35,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 11,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 35,
+     "acks": 35
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 0,
+     "age_min": -1,
+     "age_max": 0
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 11,
+     "lines1": 29,
+     "feed_runs": 2,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 2,
+     "preloaded": 35
+    }
+   },
+   "runs": {
+    "5": {
+     "rows": 4,
+     "z": {
+      "status": 0,
+      "rows": 4,
+      "words_per_row": 5,
+      "words": 20,
+      "cycles": 27,
+      "idle_clocks": 7,
+      "latency": 19,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 4294961640
+     },
+     "y_sha256_le": "0e553af765e1d29def70884bd7d935bafc3ab1dccf1d7ea86bbbc32d837bdabf",
+     "y_first8": [
+      896,
+      -113,
+      1919,
+      1321
+     ]
+    },
+    "10": {
+     "rows": 3,
+     "z": {
+      "status": 0,
+      "rows": 3,
+      "words_per_row": 5,
+      "words": 15,
+      "cycles": 20,
+      "idle_clocks": 5,
+      "latency": 11,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 505
+     },
+     "y_sha256_le": "276fcf77406f64afcd194fab5d70583de24237ab85c817769cc5d90e4d2d9edc",
+     "y_first8": [
+      -431,
+      1017,
+      -180
+     ]
+    }
+   }
+  },
+  "baud_busy": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "FEED_WATCHDOG": 32768
+   },
+   "plusargs": {},
+   "preloaded_words": 160,
+   "bytes_received": 1860,
+   "events": 93,
+   "monitors": {
+    "TBWB": {
+     "taken0": 0,
+     "acks0": 0,
+     "taken1": 160,
+     "acks1": 160,
+     "misrouted": 0,
+     "owner_changes": 1,
+     "max_outstanding": 14,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 0,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 0,
+     "partial": 0,
+     "reads": 160,
+     "acks": 160
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    },
+    "TBMV": {
+     "collisions": 0,
+     "lines0": 42,
+     "lines1": 51,
+     "feed_runs": 1,
+     "feed_timeouts": 0,
+     "feed_dropped": 0,
+     "feed_stray": 0,
+     "mv_runs": 1,
+     "preloaded": 160
+    }
+   },
+   "runs": {
+    "2": {
+     "rows": 40,
+     "z": {
+      "status": 0,
+      "rows": 40,
+      "words_per_row": 4,
+      "words": 160,
+      "cycles": 222,
+      "idle_clocks": 62,
+      "latency": 15,
+      "invalid_codes": 0,
+      "stray_words": 0,
+      "consumer_stalls": 0,
+      "checksum": 2255151514
+     },
+     "y_sha256_le": "a59ec818358d83c9e8db982c1c7f3a013fa3dc638a1b4aae508df96ed4892ba9",
+     "y_first8": [
+      -735,
+      -725,
+      -399,
+      -477,
+      -347,
+      312,
+      -783,
+      625
+     ]
+    }
+   }
+  }
+ }
+}
