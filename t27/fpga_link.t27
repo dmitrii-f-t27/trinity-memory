@@ -30,7 +30,8 @@ const TL_ACT_FRAME_BLOCKS: u32 = 51;
 const TL_MATVEC_PAYLOAD: u32 = 12;
 const TL_MAX_ROWS: u32 = 1024;
 const TL_MAX_WPR: u32 = 1024;
-const TL_STATUS_COUNT: u32 = 23;
+const TL_STATUS_COUNT: u32 = 23;       // part 1's status lines (protocol 2)
+const TL_STATUS_DDR3: u32 = 37;        // the DDR3 loader's (protocol 3, and 4 with the matvec)
 const TL_Z_COUNT: u32 = 11;
 const TL_Z_ALL: u32 = 2047;
 const TL_STATUS_WAIT_LINES: u32 = 64;  // status lines that may each extend an exchange's deadline
@@ -91,7 +92,7 @@ struct TMLink {
     act: []u8, act_capacity: usize,
     acc: []i64, acc_capacity: usize,
     seen: []u8,
-    status: []u32, status_mask: u32,
+    status: []u32, status_mask: u64, status_n: u32,
     z: []u32, z_mask: u32,
     loaded: bool, loaded_digest: []u8, loaded_size: usize, loaded_region: u32, loaded_committed: u32,
     committed: u32,
@@ -434,10 +435,21 @@ fn tl_match(l: *TMLink, ev: *TLEvent, expect: u32, seq: u32, index: u32, addr: u
         if (ev.seq != seq || ev.addr != addr || ev.data_size != len as usize) { return TL_GOT_NONE; }
         return TL_GOT_OK;
     }
-    if (ev.kind == TL_EV_LINE && ev.tag == 67 && tl_resp_seq(ev.a) == seq && ((ev.a >> 16) & 255) == TL_STATUS_COUNT) {
-        var index2: u32 = ev.a & 65535;
-        if (index2 < TL_STATUS_COUNT) { l.status[index2] = ev.v; l.status_mask = l.status_mask | (1 << index2); }
-        if (l.status_mask == 8388607) { return TL_GOT_OK; }
+    if (ev.kind == TL_EV_LINE && ev.tag == 67 && tl_resp_seq(ev.a) == seq) {
+        // The count every line announces: 23 (part 1) or 37 (the DDR3 loader, the matvec build);
+        // the first line of the exchange fixes it, and the reply is whole when every index below
+        // it has come. Lines 0-22 mean the same in both.
+        var count: u32 = (ev.a >> 16) & 255;
+        if (count == TL_STATUS_COUNT || count == TL_STATUS_DDR3) {
+            if (l.status_mask == 0) { l.status_n = count; }
+            var index2: u32 = ev.a & 65535;
+            if (count == l.status_n && index2 < count) {
+                var one: u64 = 1;
+                l.status[index2] = ev.v;
+                l.status_mask = l.status_mask | (one << (index2 as u64));
+                if (l.status_mask == (one << (count as u64)) - one) { return TL_GOT_OK; }
+            }
+        }
     }
     return TL_GOT_NONE;
 }
@@ -452,7 +464,7 @@ fn tl_exchange(l: *TMLink, cmd: u32, addr: u32, payload: []u8, plen: usize, len:
     if (size < 0) { return TL_ERR_LIMIT; }
     var reply_bytes: u64 = 20;
     if (expect == 2) { reply_bytes = (len as u64) + 14; }
-    if (expect == 3) { reply_bytes = 460; }
+    if (expect == 3) { reply_bytes = (TL_STATUS_DDR3 * TL_LINE_BYTES) as u64; }
     var attempt: u32 = 0;
     while (attempt < l.max_attempts) {
         if (attempt > 0) {
@@ -500,7 +512,7 @@ fn tl_exchange(l: *TMLink, cmd: u32, addr: u32, payload: []u8, plen: usize, len:
     return TL_ERR_NO_REPLY;
 }
 
-// Status exchange: the 23 counters; checks the protocol of the config word (TL_ERR_PROTOCOL)
+// Status exchange: the 23 or 37 counters; checks the protocol of the config word (TL_ERR_PROTOCOL)
 // and the build id (TL_ERR_IDENTITY).
 fn tl_handshake(l: *TMLink) -> i32 {
     var none: [1]u8 = [0];

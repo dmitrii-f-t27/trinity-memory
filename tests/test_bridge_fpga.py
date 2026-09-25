@@ -77,6 +77,7 @@ class FpgaBackend(unittest.TestCase):
         from trinity_memory.bridge import BridgeClient, BridgeServer
         server = BridgeServer(backend="fpga", device=device(fake.path, **extra)).start()
         self.addCleanup(server.close)
+        self.server = server
         return BridgeClient(server.url, timeout=120)
 
     def fake(self, **options):
@@ -107,8 +108,10 @@ class FpgaBackend(unittest.TestCase):
             self.assertEqual(info["identity_kind"], "synthetic-public-16-byte")
             evidence = info["evidence"]
             self.assertTrue(evidence_complete(evidence))
-            self.assertEqual(evidence["capture_bytes"], 23 * 20)
+            self.assertEqual(evidence["capture_bytes"], 37 * 20)            # the DDR3 loader's 37 status lines
             self.assertEqual(evidence["capture_sha256"], hashlib.sha256(bytes(fake.tx_log[start:])).hexdigest())
+            # The capture itself, for a board run's record: the bytes the evidence hashes.
+            self.assertEqual(self.server.last_capture(), bytes(fake.tx_log[start:]))
         self.assertGreater(len(fake.tx_log), before)
         self.assertIs(check_identity(client.call("trinity_chipInfo"))["hardware"], True)
         good = client.call("trinity_chipInfo")
@@ -476,6 +479,41 @@ class FpgaBackend(unittest.TestCase):
                 self.assertEqual(result["accumulators"][:8], chunk["first8"])
                 self.assertEqual(result["reference"]["mismatches"], 0)
                 self.assertEqual(result["transfer"]["image_bytes"], 163840 if codec == "dense5" else 204800)
+
+    def test_board_run_tool_against_the_fake_device(self):
+        """tools/fpga-bridge-dot.py, the board run of #64, end to end against the device double."""
+        import gzip
+        import importlib.util
+        import json
+        import stage1_chunk
+        import tempfile
+        try:
+            stage1_chunk.chunk()
+        except Exception as error:  # noqa: BLE001 - fixtures.CacheMiss or a missing cache directory
+            if REQUIRE_CACHED:
+                self.fail(f"TRINITY_REQUIRE_CACHED=1: {error}")
+            self.skipTest(f"fixture cache: {error}")
+        spec = importlib.util.spec_from_file_location("fpga_bridge_dot", ROOT / "tools/fpga-bridge-dot.py")
+        tool = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(tool)
+        fake = self.fake()
+        with tempfile.TemporaryDirectory() as out:
+            code = tool.main(["--port", fake.path, "--bitstream-sha256", EVIDENCE["bitstream_sha256"],
+                              "--build-id", EVIDENCE["build_id"], "--idcode", EVIDENCE["idcode"], "--dna", EVIDENCE["dna"],
+                              "--region", "0", "--reply-timeout", "1.0", "--quiet", "0.08", "--output", out])
+            self.assertEqual(code, 0)
+            record = json.loads((Path(out) / "record.json").read_text())
+            self.assertTrue(record["all_equal"])
+            calls = record["calls"]
+            self.assertEqual([c["call"] for c in calls], ["chip_info"] + ["dot-dense5"] * 2 + ["dot-baseline2"] * 2)
+            for call in calls:
+                capture = gzip.decompress((Path(out) / call["capture"]["file"]).read_bytes())
+                self.assertEqual(hashlib.sha256(capture).hexdigest(), call["capture"]["sha256"])
+                self.assertTrue(call["capture"]["equals_evidence"], call["call"])
+            dots = calls[1:]
+            self.assertTrue(all(c["accumulators_equal_reference"] and c["accumulators_equal_emulator"] for c in dots))
+            # The repeat of each codec uses the upload cache: no image upload in the second call.
+            self.assertEqual([c["result"]["transfer"]["uploaded"] for c in dots], [True, False, True, False])
 
 
 if __name__ == "__main__":
