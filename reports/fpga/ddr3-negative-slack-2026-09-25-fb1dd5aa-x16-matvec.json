@@ -1,0 +1,506 @@
+{
+ "schema": "trinity.fpga-negative-slack.v1",
+ "written_at": "2026-09-25T07:11:24+00:00",
+ "what": "every endpoint with negative slack in the routed timing analysis (after the router) of the seeds of the fb1dd5aa DDR3 matvec sweep that miss 83.33 MHz; an analysis, not a build",
+ "sweep": "reports/fpga/ddr3-seed-sweep-2026-09-25-fb1dd5aa-x16-matvec.json",
+ "netlist_sha256": "519f08021380e79ec2abed8c8555e5e2baac5856c3a254ce0d635ebb994b1e65",
+ "chipdb_sha256": "5c88a26d973bff2fc33582f3937cc07d30bfc397ebae16d69a18fe49a14786a7",
+ "tool": "nextpnr-xilinx 0.9.7 (0eae9fbb) with the local logging patch below, run as the sweep's command line with NEXTPNR_PRINT_NEG_SLACK=1; the patch only logs, and each run's FASM sha256 equals the sweep's for the same seed (fasm_equals_sweep), so the placements and routes are the sweep's",
+ "patch": "--- a/common/timing.cc\n+++ b/common/timing.cc\n@@ #include \"timing.h\"\n+#include <cstdlib>\n@@ (the slack histogram of the final analysis)\n                             if (slack_histogram) {\n                                 int slack_ps = ctx->getDelayNS(path_budget) * 1000;\n                                 (*slack_histogram)[slack_ps]++;\n+                                // Local analysis patch (not upstream): every endpoint with negative slack.\n+                                if (slack_ps < 0 && getenv(\"NEXTPNR_PRINT_NEG_SLACK\"))\n+                                    log_info(\"NEGSLACK %d %s %s %s\\n\", slack_ps, usr.cell->name.c_str(ctx),\n+                                             usr.port.c_str(ctx), net->name.c_str(ctx));\n                             }\n",
+ "source": "the cell's src attribute in the netlist (first file:line); part: UberDDR3 controller (ddr3_controller.v), loader (fpga_ddr3_loader.v, the t27 loader's on_clock block or a function), device matvec (fpga_ddr3_matvec.v)",
+ "seeds": [
+  {
+   "seed": 3,
+   "fmax_mhz": 76.08,
+   "fasm_sha256": "e2101ac2ad312a8ca09084bf66eb446102fd2b1049a262679cb84719e73a37d5",
+   "fasm_equals_sweep": true,
+   "log_sha256": "08055cd3717431867d3a977763a8aaa4ec5ed8dd607871266bcc353cb6b75014",
+   "by_part": {
+    "UberDDR3 controller": {
+     "endpoints": 38,
+     "worst_ps": -1144
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -1144,
+     "cell": "$auto$ff.cc:337:slice$182442",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[18]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -923,
+     "cell": "$auto$ff.cc:337:slice$182453",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[29]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -918,
+     "cell": "$auto$ff.cc:337:slice$182480",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[56]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -904,
+     "cell": "$auto$ff.cc:337:slice$182474",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[50]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -874,
+     "cell": "$auto$ff.cc:337:slice$182441",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[17]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -814,
+     "cell": "$auto$ff.cc:337:slice$182448",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[24]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -784,
+     "cell": "$auto$ff.cc:337:slice$182457",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[33]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -753,
+     "cell": "$auto$ff.cc:337:slice$182458",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[34]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -694,
+     "cell": "$auto$ff.cc:337:slice$182425",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[1]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -649,
+     "cell": "$auto$ff.cc:337:slice$182485",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[61]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -583,
+     "cell": "$auto$ff.cc:337:slice$182432",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[8]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -473,
+     "cell": "$auto$ff.cc:337:slice$182429",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[5]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -469,
+     "cell": "$auto$ff.cc:337:slice$182426",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[2]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -325,
+     "cell": "$auto$ff.cc:337:slice$182454",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[30]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -301,
+     "cell": "$auto$ff.cc:337:slice$182461",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[37]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -291,
+     "cell": "$auto$ff.cc:337:slice$182469",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[45]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -289,
+     "cell": "$auto$ff.cc:337:slice$182430",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[6]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -289,
+     "cell": "$auto$ff.cc:337:slice$182462",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[38]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -287,
+     "cell": "$auto$ff.cc:337:slice$182687",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_pre_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -266,
+     "cell": "$auto$ff.cc:337:slice$182466",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[42]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -264,
+     "cell": "$auto$ff.cc:337:slice$182473",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[49]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -257,
+     "cell": "$auto$ff.cc:337:slice$177522",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_wr_or_rd_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -244,
+     "cell": "$auto$ff.cc:337:slice$182438",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[14]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -223,
+     "cell": "$auto$ff.cc:337:slice$182464",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[40]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -215,
+     "cell": "$auto$ff.cc:337:slice$182449",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[25]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -201,
+     "cell": "$auto$ff.cc:337:slice$182437",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[13]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -189,
+     "cell": "$auto$ff.cc:337:slice$182470",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[46]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -188,
+     "cell": "$auto$ff.cc:337:slice$182445",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[21]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -176,
+     "cell": "$auto$ff.cc:337:slice$182434",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[10]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -158,
+     "cell": "$auto$ff.cc:337:slice$182472",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[48]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -143,
+     "cell": "$auto$ff.cc:337:slice$182456",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[32]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -138,
+     "cell": "$auto$ff.cc:337:slice$182451",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[27]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -133,
+     "cell": "$auto$ff.cc:337:slice$182435",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[11]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -128,
+     "cell": "$auto$ff.cc:337:slice$182450",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[26]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -115,
+     "cell": "$auto$ff.cc:337:slice$182475",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[51]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -25,
+     "cell": "$auto$ff.cc:337:slice$182433",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[9]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -14,
+     "cell": "$auto$ff.cc:337:slice$182483",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[59]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -12,
+     "cell": "$auto$ff.cc:337:slice$182443",
+     "port": "D",
+     "net": "$flatten\\ddr3.\\ddr3_controller_inst.$shiftx$build/uberddr3/rtl/ddr3_controller.v:3388$34361.Y[19]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "fmax_mhz": 82.4,
+   "fasm_sha256": "440f80cc4e16250489f33a474d1e884df429768cf128836df432578ef497f7fa",
+   "fasm_equals_sweep": true,
+   "log_sha256": "73c19d5727b726a456460f3fe8e4604db716730c0c3166afdec04f3c2997fc9b",
+   "by_part": {
+    "UberDDR3 controller": {
+     "endpoints": 1,
+     "worst_ps": -136
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -136,
+     "cell": "$auto$ff.cc:337:slice$182952",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.o_wb_stall_int_d",
+     "source": "ddr3_controller.v:965",
+     "part": "UberDDR3 controller"
+    }
+   ]
+  },
+  {
+   "seed": 6,
+   "fmax_mhz": 77.55,
+   "fasm_sha256": "c806a18b36de4ccdbffcc9e73cd5a14701b6f675a380fef395c0560180c7a34f",
+   "fasm_equals_sweep": true,
+   "log_sha256": "8cbb937c445e600adb30244bd644584794b5ab8c89caa5f61d6641388f3d015f",
+   "by_part": {
+    "UberDDR3 controller": {
+     "endpoints": 2,
+     "worst_ps": -895
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -895,
+     "cell": "$auto$ff.cc:337:slice$182687",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_pre_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -895,
+     "cell": "$auto$ff.cc:337:slice$177522",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_wr_or_rd_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    }
+   ]
+  },
+  {
+   "seed": 8,
+   "fmax_mhz": 78.77,
+   "fasm_sha256": "e44b8c0871d99cf8dba1668ec66f6e7b05a25293e18d44c7d1f898bc50882419",
+   "fasm_equals_sweep": true,
+   "log_sha256": "bdea998d17f8bc00a636c7bbefa74abd4dd8e9847d89b6c32422438a313940d7",
+   "by_part": {
+    "UberDDR3 controller": {
+     "endpoints": 2,
+     "worst_ps": -695
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -695,
+     "cell": "$auto$ff.cc:337:slice$182687",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_pre_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -695,
+     "cell": "$auto$ff.cc:337:slice$177522",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_wr_or_rd_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    }
+   ]
+  },
+  {
+   "seed": 9,
+   "fmax_mhz": 81.63,
+   "fasm_sha256": "7592a0bc4e7a0887c6be90a8ae5e042a581ce8a8d055f22c521f3b8b80f4e254",
+   "fasm_equals_sweep": true,
+   "log_sha256": "9213a8734fa75fae3033ee424d178ae53d75479786ebd2731a75d0101a0774cc",
+   "by_part": {
+    "loader (t27/rtl/fpga_ddr3_loader.t27)": {
+     "endpoints": 1,
+     "worst_ps": -250
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -250,
+     "cell": "$auto$ff.cc:337:slice$166444",
+     "port": "CE",
+     "net": "$abc$731877$auto$simple.cc:210:make_patterns_logic$164312",
+     "source": "fpga_ddr3_loader.v:1786",
+     "part": "loader (t27/rtl/fpga_ddr3_loader.t27)"
+    }
+   ]
+  },
+  {
+   "seed": 10,
+   "fmax_mhz": 71.89,
+   "fasm_sha256": "bc528e03ca50b6995b0592092ce5bddc9399983fc50c5a5c3170f6914b79c571",
+   "fasm_equals_sweep": true,
+   "log_sha256": "f3da6457a88581b2de00d81f0d68b9681f0defba6d7f6b9b449d08ff96054651",
+   "by_part": {
+    "loader (t27/rtl/fpga_ddr3_loader.t27)": {
+     "endpoints": 1,
+     "worst_ps": -1911
+    },
+    "UberDDR3 controller": {
+     "endpoints": 2,
+     "worst_ps": -565
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -1911,
+     "cell": "$auto$ff.cc:337:slice$190992",
+     "port": "D",
+     "net": "$techmap298046$auto$ff.cc:337:slice$190992.D",
+     "source": "fpga_ddr3_loader.v:1786",
+     "part": "loader (t27/rtl/fpga_ddr3_loader.t27)"
+    },
+    {
+     "slack_ps": -565,
+     "cell": "$auto$ff.cc:337:slice$182687",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_pre_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -565,
+     "cell": "$auto$ff.cc:337:slice$177522",
+     "port": "D",
+     "net": "ddr3.ddr3_controller_inst.stage2_do_wr_or_rd_d",
+     "source": "ddr3_controller.v:1455",
+     "part": "UberDDR3 controller"
+    }
+   ]
+  },
+  {
+   "seed": 11,
+   "fmax_mhz": 83.28,
+   "fasm_sha256": "6f2ca6b6d6c8b864af912b4db988a844cf22359b7e73a6b09b929a45a30816ac",
+   "fasm_equals_sweep": true,
+   "log_sha256": "afd04de0945cea3e1649e3778c1a37c33b87afd9fe51ef249e9828978fecbb4b",
+   "by_part": {
+    "device matvec (t27/rtl/fpga_ddr3_matvec.t27)": {
+     "endpoints": 1,
+     "worst_ps": -7
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -7,
+     "cell": "$auto$ff.cc:337:slice$211921",
+     "port": "D",
+     "net": "$techmap296379$auto$ff.cc:337:slice$211921.D",
+     "source": "fpga_ddr3_matvec.v:1950",
+     "part": "device matvec (t27/rtl/fpga_ddr3_matvec.t27)"
+    }
+   ]
+  }
+ ]
+}

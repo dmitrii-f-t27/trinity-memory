@@ -631,7 +631,7 @@ the parts below.
   `tools/fpga-bridge-dot.py` runs the board part of #64 with it (below).
 
 **Simulation (Icarus, `tests/test_ddr3_matvec_top.py`; summary
-[`reports/fpga/ddr3-matvec-top-sim-2026-09-25-b7b86e6c.json`](../reports/fpga/ddr3-matvec-top-sim-2026-09-25-b7b86e6c.json), 11 tests OK in 1,424 s with the fixture cache).**
+[`reports/fpga/ddr3-matvec-top-sim-2026-09-25-fb1dd5aa.json`](../reports/fpga/ddr3-matvec-top-sim-2026-09-25-fb1dd5aa.json), 15 tests OK with the fixture cache).**
 The whole top with `tests/sim_ddr3_loader_model.v` in place of UberDDR3 (our Wishbone memory with
 stalls and late acks, not UberDDR3), the bit-level host of `tests/tb_uart_loader.v` at 12.5 Mbaud
 (divisor 16 of the 200 MHz the PLL stub runs everything at). Every byte the device sent is compared
@@ -649,22 +649,49 @@ compared in order each.
 | `busy` | an X and an M sent while a 40 x 200 baseline2 run's lines go out | both nakked `not_ready`, their N lines between the run's first Y line and its last Z line; the X after the run taken and the next run exact; `nak_not_ready` 2 |
 | `not_ready` | an M before the calibration (400,000 clocks), an X, then the M again after it | the first M nakked `not_ready`, the X taken, the second M exact |
 | `abort` | every ack of an 8 x 160 dense5 run withheld (the memory model's queue frozen), released after the run's lines; then the run again | the feed's watchdog (2,000 clocks in this scenario) aborts the run: status 2, only the Z lines, 0 words; the feed drops the 16 late acks; the second run exact |
+| `abort_long` | the same with a 40 x 160 dense5 run (80 words), so the memory model's queue fills and a request is presented and stalled when the watchdog fires | status 2, only the Z lines, 0 words, the Z line's latency 2,084 clocks (the feed's abort; the matvec's own idle limit is 65,536 clocks); the stalled request stays presented until it is taken, and the feed drops 63 late acks (62 outstanding and that one: 143 requests taken in all, 63 + the second run's 80); the second run exact |
+| `drain_busy` | an M and an X sent while the feed still waits for the late acks of an aborted 8 x 160 dense5 run (the matvec is idle again, the feed is not) | both nakked `not_ready`; after the acks are released, the next run exact |
+| `act_blocks` | activations in X frames at block 0 (88 bytes: block 0 and part of block 1), block 1 (320: blocks 1-4), block 2 (72) and block 4 (40), the last two overwriting parts of blocks, for a 4 x 400 dense5 and a 3 x 320 baseline2 run | both runs exact against sums over the activations as the frames left them |
+| `baud_busy` | a B frame while a 40 x 200 baseline2 run's lines go out, a B after the run | the first nakked `not_ready` (command 4) and every line of the run at the old rate, the run exact; the second acknowledged, and the status after it says divisor 20 |
 | `arbitration` | a load of 16 bytes and a read-back of them sent right after the M of a 50 x 1,280 baseline2 run (1,000 words) while the memory stalls 90 % of the clocks | the load's commit waits for the feed's port (2 owner changes) and is acknowledged; the read-back frame arrives whole among the run's lines; the run exact |
 | `real_chunk` | q_proj rows 0-319 in dense5, then baseline2: the images put into the memory model (10,240 and 12,800 words), the activations with X frames of 2,560 and 3,200 bytes | 320 of 320 accumulators equal t27/matvec.t27's in both formats (sha256 `a2366b57…`, first eight -2561, 2660, -52, -2385, 1269, 3446, 3451, -2365); 0 invalid codes; dense5 10,240 words in 13,331 cycles, baseline2 12,800 in 16,613 (the idle clocks, 3,091 and 3,813, are our memory model's stalls) |
 
 In every scenario: 0 line collisions at the arbiter, 0 acks to the feed while it was idle, 0
 misrouted acks, 0 kept-word mismatches, and every status line `clocks` 2 clocks behind the counter.
+The seven scenarios of the first summary
+([`ddr3-matvec-top-sim-2026-09-25-b7b86e6c.json`](../reports/fpga/ddr3-matvec-top-sim-2026-09-25-b7b86e6c.json),
+before the reviews and the timing work below) give the same bytes, bench counts and Z lines here.
 The memory model's stalls and ack delays are ours (`docs/uart-loader.md`, "Simulation"), so the
 idle clocks and latencies of these runs say nothing about UberDDR3; the synthesis of the build
-(yosys 0.69, the YoWASP build of the native flow's version; not placed or routed) counts 12,796
-LUTs, 9,442 flip-flops, 1,262 CARRY4, 0 DSP48E1 and 23 RAMB36E1: the loader of a9a56541 (7,541
+(yosys 0.69, the YoWASP build of the native flow's version) counts 12,784
+LUTs, 9,632 flip-flops, 1,205 CARRY4, 0 DSP48E1 and 23 RAMB36E1: the loader of a9a56541 (7,541
 LUTs, 5,465 flip-flops, 2 RAMB36E1) plus the matvec's 21 block RAMs, the matvec, the feed and the
-arbiter ([`ddr3-matvec-synth-2026-09-25-b7b86e6c/`](../reports/fpga/ddr3-matvec-synth-2026-09-25-b7b86e6c/synth.json);
-32 warnings of conflicting drivers, all inside UberDDR3's controller).
+arbiter ([`ddr3-matvec-synth-2026-09-25-fb1dd5aa/`](../reports/fpga/ddr3-matvec-synth-2026-09-25-fb1dd5aa/synth.json),
+netlist sha256 `519f0802…`; 32 warnings of conflicting drivers, all inside UberDDR3's
+controller; b7b86e6c's netlist, before the timing work, had 12,796 LUTs, 9,442 flip-flops and
+1,262 CARRY4).
 
-Still open for the build: no bitstream of it exists; its placement and timing at 83.33 MHz are
-not known (the matvec alone estimated 96-107 MHz out of context, above); the feed's rate from UberDDR3
-(words per clock, the idle clocks of Z line 5) is what the board run measures.
+**Timing.** The first netlist of this build (b7b86e6c's RTL) met 83.33 MHz on none of 7 seeds
+(routed 67.4-78.4 MHz; session logs, not committed); what changed is in `docs/uart-loader.md`,
+"Timing". fb1dd5a's netlist, placed and routed with heap seeds 1-12 by the Makefile's
+`ddr3-sweep` command line (nextpnr-xilinx 0.9.7 built from 0eae9fbb in a Linux container, the
+loader sweep's chip database `5c88a26d…`), meets it on 5 of 12: seeds 1, 2, 5, 7 and 12 at
+86.94-95.21 MHz; the other 7 route at 71.89-83.28 MHz
+([`ddr3-seed-sweep-2026-09-25-fb1dd5aa-x16-matvec.json`](../reports/fpga/ddr3-seed-sweep-2026-09-25-fb1dd5aa-x16-matvec.json)).
+A build of the same nextpnr with a logging patch (routes unchanged: each FASM equals the
+sweep's) lists every endpoint with negative slack of the seven
+([`ddr3-negative-slack-2026-09-25-fb1dd5aa-x16-matvec.json`](../reports/fpga/ddr3-negative-slack-2026-09-25-fb1dd5aa-x16-matvec.json)):
+in seeds 3, 4, 6 and 8 all are inside UberDDR3's controller (1-38 endpoints, worst -136 to
+-1,144 ps); seed 9 misses at one clock enable in the loader's byte handling (-250 ps), seed 10 at
+the X header rule's compare (-1,911 ps) and at two endpoints in UberDDR3 (-565 ps), seed 11 at one
+endpoint of the matvec on the path from UberDDR3's read acknowledge through the arbiter and the
+feed (-7 ps). The loader alone (a9a56541) met the clock on 10 of 12 seeds, the UberDDR3 pattern
+build (f07e91cd x16) on 6 of 8. The seed choice by the #61/#62 rule, written before any load of
+this netlist: seed 5 (91.99 MHz; CK - DQS -222 / -217 ps in nextpnr's model), then 12, 2, 1, 7
+([`ddr3-seed-choice-2026-09-25-fb1dd5aa-x16-matvec.json`](../reports/fpga/ddr3-seed-choice-2026-09-25-fb1dd5aa-x16-matvec.json)).
+
+Still open for the build: no bitstream of it exists; the feed's rate from UberDDR3 (words per
+clock, the idle clocks of Z line 5) is what the board run measures.
 
 **The board run (#64's board part), in this order on the host with the board:**
 
@@ -684,6 +711,14 @@ python3 tools/fpga-bridge-dot.py --port /dev/cu.usbserial-110 --identity \
   --bit build/fpga/ddr3-x16-matvec-<id>-seed<seed>/tms_ddr3_loader_ax7203.bit --build-report <its build.json> \
   --idcode 0x13636093 --dna 0x00389c0c2d85e85c --output reports/fpga/bridge-dot-<date>-<id>
 ```
+
+For fb1dd5a's netlist (`BUILD_ID=fb1dd5aa`) step 1 has been run here ("Timing" above): when the
+host's `make ddr3-synth DDR3_APP=matvec BUILD_ID=fb1dd5aa` gives the same netlist sha256
+(`519f0802…`; this one is from YoWASP's yosys, the host's native yosys may give another), the
+sweep and the choice above hold for it and step 2 starts with seed 5. The host's route of seed 5 is
+its own evidence: its `ddr3-report` records the routed Fmax, and its FASM sha256 is the sweep's
+(`a01114d0…`) only if the route is the same. A different netlist, or a route that misses
+83.33 MHz, means running step 1 there.
 
 With `--bit` the tool hashes the loaded file itself (whole and from the sync word on) and, with
 `--build-report`, requires it to match the report as `make ddr3-flash` does; with `--identity` it
@@ -755,8 +790,9 @@ here:
 ## Not yet on the board
 
 - No bitstream contains the device matvec or the `X`/`M` handler yet: the DDR3 matvec build above
-  is RTL checked in Icarus (with our memory model, not UberDDR3), C checks of its functions, and the
-  matvec's own out-of-context estimates. Its build, seed choice and board run are the steps listed
+  is RTL checked in Icarus (with our memory model, not UberDDR3), C checks of its functions, the
+  matvec's own out-of-context estimates, and a synthesis and routing sweep of the whole build
+  (5 of 12 seeds meet 83.33 MHz; seed 5 chosen). Its bitstream and board run are the steps listed
   under "The board run".
 - The host link has run only against the fake device on a pseudo-terminal and the OS hooks only on
   ptys (macOS here; Linux in CI). The paced fake (`FakeDevice(pace_baud=...)`, bytes at 10 / baud
