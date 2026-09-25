@@ -27,7 +27,9 @@ fpga_wb_arbiter.t27 in the top fpga/ax7203/ddr3/tms_ddr3_loader_ax7203.v, before
   arbitration with the #62 burst reader as the second master (its runs equal its host model
   while the loader loads and reads, including words of the reader's region). Monitors in the
   bench: every ack reaches the master that issued the request, ownership changes only with
-  nothing outstanding, and every read answered from the kept word equals the memory model.
+  nothing outstanding, every read answered from the kept word equals the memory model, the
+  loader does not hold the port while it waits for a frame (TBPORT), and the status line
+  `clocks` is the count of the clock before its line was sampled (TBCLK).
 Runs with T27_ROOT set and Icarus installed (tools/test-t27.sh); skipped otherwise.
 """
 from __future__ import annotations
@@ -778,7 +780,7 @@ class LoaderSimulation(unittest.TestCase):
                     t_ns, text = raw.split("\t", 1)
                     lines.append({"t_s": int(t_ns) / 1e9, "line": text})
             monitors = {}
-            for tag in ("TBWB", "TBKEPT", "MODEL", "TBPORT", "TBRACE"):
+            for tag in ("TBWB", "TBKEPT", "MODEL", "TBPORT", "TBRACE", "TBCLK"):
                 m = re.search(rf"^{tag} (.*)$", proc.stdout, re.M)
                 if m:
                     monitors[tag] = {k: int(v) for k, v in (kv.split("=") for kv in m.group(1).split())}
@@ -832,6 +834,11 @@ class LoaderSimulation(unittest.TestCase):
         # Waiting for a frame, the loader does not hold the port (a nak in the middle of a chunk
         # once left an unfinished word buffered and wb_cyc high until the next command).
         self.assertLessEqual(mon["TBPORT"]["idle_held_max"], 1, mon)
+        # The status line `clocks` is the count of the clock before its line was sampled: 2 behind the
+        # counter in the first clock of the line's P_RESP (it once carried the previous line's copy, a
+        # whole line older).
+        if mon["TBCLK"]["lines"]:
+            self.assertEqual((mon["TBCLK"]["age_min"], mon["TBCLK"]["age_max"]), (2, 2), mon)
         return r
 
     def assert_as_predicted(self, name):
@@ -1009,6 +1016,16 @@ class LoaderSimulation(unittest.TestCase):
         self.assertEqual(len(lat), 18)
         for item in lat:
             self.assertGreaterEqual(item["turnaround_clocks"], 3 * item["payload"] - 16)
+
+    def test_status_line_clocks_is_checked(self):
+        """The bench's TBCLK monitor saw every status line `clocks` the host received (its age,
+        2 clocks in every line, is checked with every scenario in `completed`)."""
+        seen = 0
+        for name, r in self.results.items():
+            received = sum(1 for e in r["events"] if e.kind == "line" and e.tag == "C" and e.a & 0xFFFF == 20)
+            self.assertGreaterEqual(r["monitors"]["TBCLK"]["lines"], received, name)
+            seen += received
+        self.assertGreater(seen, 0)
 
 
 class HostToolDdr3(unittest.TestCase):

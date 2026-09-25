@@ -24,6 +24,11 @@
 //   for an ack the bench withholds (`h 2`), the bench releases that ack so that it reaches the
 //   master in the clock the next read-back asks for its first data byte (P_RB_SEND at rb_k 9,
 //   then P_RB_NEXT); state 2 when it did. The ack must be dropped, not answer that request.
+// - TBCLK: the status line `clocks` (line 20) against the loader's clock counter in the first
+//   clock of that line's P_RESP: the counter minus the line's value must be 2 in every such
+//   line (the line carries the count of its P_STATUS settle clock, the clock before P_STATUS
+//   sampled it, and P_RESP begins one clock after that; build a9a56541 sent the previous line's
+//   copy, a whole line older).
 // With `define DDR3_LOADER_READER the #62 reader is master 1; its report lines (uart_tx2)
 // are decoded into +capture2= as "<time in ns>\t<line>", for tools/fpga-ddr3-capture.py.
 `timescale 1ps/1ps
@@ -162,7 +167,21 @@ module tb_ddr3_loader;
             end
         end
     end
+    // The status line `clocks`: its age in the first clock of its P_RESP (settle_n is 0 only there).
+    localparam integer P_RESP = 9, TAG_C = 67, ST_CLOCKS = 20;
+    integer clk_lines = 0, clk_age_max = 0, clk_age_min = -1;
+    reg [31:0] clk_age;
+    always @(negedge mclk) begin
+        if (dut.loader.pstate == P_RESP && dut.loader.settle_n == 0 && dut.loader.resp_tag == TAG_C
+            && dut.loader.resp_a[15:0] == ST_CLOCKS) begin
+            clk_age = dut.loader.clocks - dut.loader.resp_v;
+            clk_lines = clk_lines + 1;
+            if (clk_age > clk_age_max) clk_age_max = clk_age;
+            if (clk_age_min < 0 || clk_age < clk_age_min) clk_age_min = clk_age;
+        end
+    end
     final begin
+        $display("TBCLK lines=%0d age_min=%0d age_max=%0d", clk_lines, clk_age_min, clk_age_max);
         $display("TBPORT idle_held_max=%0d", idle_held_max);
         $display("TBRACE state=%0d", race_state);
         $display("TBWB taken0=%0d acks0=%0d taken1=%0d acks1=%0d misrouted=%0d owner_changes=%0d max_outstanding=%0d drops=%0d",
