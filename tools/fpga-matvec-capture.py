@@ -22,12 +22,15 @@ Definitions (#65): weights per second of a run = rows x cols (logical trits, pad
 excluded) x f_ctrl / cycles, where f_ctrl is the controller clock derived from the board's 200 MHz
 oscillator (--design-hz, 250/3 MHz = 83.33 MHz for PLL MULT 5 and DDR_DIV 3: arithmetic, not an
 instrument measurement). Memory-bound: the consumer never held the bus off (consumer stalls 0 in
-every run of both formats); the matvec takes a word in every clock of RUN, so every idle clock of
-the span is the bus's. The arithmetic ceiling of the ratio dense5 / baseline2 is 80 / 64 = 1.25
-(payload only; the row padding counts against it, and there is none at 2,560 columns). Statistic
+every run of both formats); in this build that count is 0 by construction (the feed asks for the
+first word only after in_ready rose, which stays high until the run's last word), so the verdict
+states the design, and the matvec takes a word in every clock of RUN, so every idle clock of the
+span is the bus's (or the feed's cap, which the board does not report). The arithmetic ceiling of
+the ratio dense5 / baseline2 is 80 / 64 = 1.25 (payload only; the row padding counts against it,
+and there is none at 2,560 columns). Statistic
 per format: min / median / max and mean +- sample s.d. over the runs that ran (status 0) with every
-accumulator equal to the reference; runs after which the calibration had dropped (the status read
-after each format) are reported and excluded with the reason.
+accumulator equal to the reference; runs after which the calibration had dropped, or was not shown
+to hold (the status read after each format), are reported and excluded with the reason.
 
 The record (trinity.fpga-ddr-capture.v1, --output) holds the tool's argv and revision, the
 bitstream's sha256 and BUILD_ID from its build record, IDCODE, DNA and the die temperature before
@@ -203,7 +206,8 @@ def main(argv=None) -> int:
                   "weights_per_s": "rows x cols x design_hz / cycles (Z line 4); design_hz from the 200 MHz oscillator "
                                    "and the PLL settings, not measured",
                   "memory_bound": "consumer stalls (Z line 9) 0 in every run of both formats: the matvec never held "
-                                  "the bus off, so the idle clocks (Z line 5) are the bus's",
+                                  "the bus off, so the idle clocks (Z line 5) are the bus's; 0 by construction in "
+                                  "this build (the feed asks only after in_ready rose)",
                   "ceiling": "dense5 / baseline2 at most 80 / 64 = 1.25 (arithmetic)"},
               "t0_note": "host times are seconds after the start on one monotonic clock"}
     if args.build_report:
@@ -274,9 +278,11 @@ def main(argv=None) -> int:
                 entry["status_after"] = after
                 entry["calib_held"] = UL.calib_ok(after)
                 good = [r for r in runs if r["status"] == blink.Z_RAN and r["equal_reference"] and r["checksum_ok"]]
-                entry["excluded"] = ([] if entry["calib_held"] is not False else
-                                     [{"runs": "all", "reason": "the calibration had dropped by the status after them"}])
-                usable = good if entry["calib_held"] is not False else []
+                # Runs count only when the status after them shows the calibration held (not read: excluded too).
+                entry["excluded"] = ([] if entry["calib_held"] else
+                                     [{"runs": "all", "reason": "the calibration had dropped by the status after them"
+                                       if entry["calib_held"] is False else "no status after them showed the calibration"}])
+                usable = good if entry["calib_held"] else []
                 entry["weights_per_s"] = spread([r["weights_per_s"] for r in usable])
                 entry["words_per_clock"] = spread([r["words_per_clock"] for r in usable])
                 entry["idle_fraction"] = spread([r["idle_fraction"] for r in usable])
