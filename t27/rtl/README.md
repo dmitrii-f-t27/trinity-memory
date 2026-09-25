@@ -160,7 +160,8 @@ with original commit and byte hashes recorded in
   Wishbone master takes each byte into an input register, the outstanding counts are narrow,
   the line emitter shifts its digits out, the matvec registers its Z value a clock early, the X
   header rule's bound is registered a clock ahead of the rule, and the feed hands on each word
-  from a register. See `docs/bridge.md`, "The DDR3 matvec build" and its "Timing".
+  from a register (311d568's netlist meets the clock on 11 of 12 seeds). See `docs/bridge.md`,
+  "The DDR3 matvec build" and its "Timing".
 
 ## Current compiler boundaries
 

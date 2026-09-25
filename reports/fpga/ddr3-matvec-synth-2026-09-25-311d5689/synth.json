@@ -1,0 +1,70 @@
+{
+ "schema": "trinity.fpga-synth.v1",
+ "what": "yosys synthesis of the DDR3 matvec build (make -C fpga/ax7203 ddr3-synth DDR3_APP=matvec, issue #64 wave 4) with the X rule's bound and the feed's word registered: not placed, not routed, not a bitstream; the netlist of the seed sweep ddr3-seed-sweep-2026-09-25-311d5689-x16-matvec.json",
+ "build_id": "311d5689",
+ "source": "claude/wizardly-wright-fv0rsw at 311d568 (source_tree.txt: no tracked change)",
+ "command": "make -C fpga/ax7203 ddr3-synth DDR3_APP=matvec BUILD_ID=311d5689 YOSYS='cd $(ROOT) && yowasp-yosys' DDR3_BUILD=<dir>",
+ "yosys": "Yosys 0.69 (git sha1 9f75ca1f9, Release, Clang /workspace/YoWASP/yosys/wasi-sdk-33.0-x86_64-linux/share/cmake/../..//bin/clang++ 22.1.0) (the YoWASP build of the native flow's yosys 0.69)",
+ "uberddr3": "79d8fd3e30ebba6acd84eecac2fa57b7f95f4544 (fpga/ax7203/ddr3/uberddr3.lock, verified)",
+ "netlist_sha256": "cea2eb42869956c1bb6cd619284469904d46916142d790c412653a79c239ea55",
+ "cells": {
+  "wires": 23099,
+  "ports": 21,
+  "cells": 24328,
+  "$scopeinfo": 14,
+  "BUFG": 4,
+  "CARRY4": 1205,
+  "FDCE": 7498,
+  "FDPE": 14,
+  "FDRE": 2237,
+  "FDSE": 25,
+  "IBUF": 2,
+  "IBUFDS": 1,
+  "IDELAYCTRL": 1,
+  "IDELAYE2": 18,
+  "INV": 469,
+  "IOBUF": 16,
+  "IOBUFDS": 2,
+  "ISERDESE2": 18,
+  "LUT2": 2595,
+  "LUT3": 2022,
+  "LUT4": 2006,
+  "LUT5": 4166,
+  "LUT6": 1865,
+  "MUXF7": 48,
+  "OBUF": 32,
+  "OBUFDS": 1,
+  "OSERDESE2": 45,
+  "PLLE2_ADV": 1,
+  "RAMB36E1": 23
+ },
+ "luts": 12654,
+ "flip_flops": 9774,
+ "ramb36e1": 23,
+ "carry4": 1205,
+ "dsp48e1": 0,
+ "compared_with": {
+  "ddr3-matvec-synth-2026-09-25-fb1dd5aa": {
+   "luts": 12784,
+   "flip_flops": 9632,
+   "carry4": 1205,
+   "ramb36e1": 23
+  },
+  "ddr3-matvec-synth-2026-09-25-b7b86e6c": {
+   "luts": 12796,
+   "flip_flops": 9442,
+   "carry4": 1262,
+   "ramb36e1": 23
+  },
+  "ddr3-build-2026-09-24-a9a56541-x16-loader-seed3": {
+   "luts": 7541,
+   "flip_flops": 5465,
+   "carry4": 576,
+   "ramb36e1": 2
+  }
+ },
+ "conflicting_driver_warnings": {
+  "count": 32,
+  "where": "UberDDR3 ddr3_controller only (one 32-bit procmux)"
+ }
+}

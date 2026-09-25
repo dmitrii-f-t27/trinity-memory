@@ -557,14 +557,14 @@ at the X header rule (-1.9 ns, and inside UberDDR3) and seed 11 at the matvec, b
 read acknowledge (`docs/bridge.md`, "Timing"). So the X rule's bound, 80 x (1024 - addr), is now
 registered a clock ahead of the rule (`act_room_q`, from `h_addr`, which is complete at least four
 clocks before the rule is taken), and the feed hands the matvec each word from a register, a
-clock after its ack. A
+clock after its ack: 311d568's netlist meets the clock on 11 of 12 seeds. A
 `DDR3_APP=loader` build from this RTL is therefore not a9a56541's netlist (its timing and seed
 records are those of a9a56541); it would need its own seed sweep. In simulation it behaves as
 before: the loader's suite at fb1dd5a
 ([`uart-loader-ddr3-sim-2026-09-25-fb1dd5aa.json`](../reports/fpga/uart-loader-ddr3-sim-2026-09-25-fb1dd5aa.json))
 differs from defd5c0d's summary only in 51 of 61 load turnarounds (-123 to +14 clocks) and in
 how the loader's and the reader's requests interleave in `arbitration` (381 owner changes
-against 385).
+against 385); at 311d568 the suite writes that summary again, byte for byte.
 
 **Block RAM.** The loader's cores are read with `-nomem2reg` and every memory is mapped with
 part 1's 1K x 36 library (`brams_x36.txt`): the receive FIFO and the staging buffer are 2

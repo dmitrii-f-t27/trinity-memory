@@ -1,0 +1,56 @@
+{
+ "schema": "trinity.fpga-negative-slack.v1",
+ "written_at": "2026-09-25T08:11:10+00:00",
+ "what": "every endpoint with negative slack in the routed timing analysis (after the router) of the seeds of the 311d5689 DDR3 matvec sweep that miss 83.33 MHz; an analysis, not a build",
+ "sweep": "reports/fpga/ddr3-seed-sweep-2026-09-25-311d5689-x16-matvec.json",
+ "netlist_sha256": "cea2eb42869956c1bb6cd619284469904d46916142d790c412653a79c239ea55",
+ "chipdb_sha256": "5c88a26d973bff2fc33582f3937cc07d30bfc397ebae16d69a18fe49a14786a7",
+ "tool": "nextpnr-xilinx 0.9.7 (0eae9fbb) with the local logging patch below, run as the sweep's command line with NEXTPNR_PRINT_NEG_SLACK=1; the patch only logs, and each run's FASM sha256 equals the sweep's for the same seed (fasm_equals_sweep), so the placements and routes are the sweep's",
+ "patch": "--- a/common/timing.cc\n+++ b/common/timing.cc\n@@ #include \"timing.h\"\n+#include <cstdlib>\n@@ (the slack histogram of the final analysis)\n                             if (slack_histogram) {\n                                 int slack_ps = ctx->getDelayNS(path_budget) * 1000;\n                                 (*slack_histogram)[slack_ps]++;\n+                                // Local analysis patch (not upstream): every endpoint with negative slack.\n+                                if (slack_ps < 0 && getenv(\"NEXTPNR_PRINT_NEG_SLACK\"))\n+                                    log_info(\"NEGSLACK %d %s %s %s\\n\", slack_ps, usr.cell->name.c_str(ctx),\n+                                             usr.port.c_str(ctx), net->name.c_str(ctx));\n                             }\n",
+ "source": "the cell's src attribute in the netlist (first file:line); part: UberDDR3 controller (ddr3_controller.v), loader (fpga_ddr3_loader.v, the t27 loader's on_clock block or a function), device matvec (fpga_ddr3_matvec.v), feed (fpga_matvec_feed.v)",
+ "seeds": [
+  {
+   "seed": 10,
+   "fmax_mhz": 81.16,
+   "fasm_sha256": "254800dd92fc30110e1c3eb4fdeea34221ced83514d6335894e102b0b49cbc9d",
+   "fasm_equals_sweep": true,
+   "log_sha256": "81b5b4115725e13d0e598f94afc5a1b325b385cb4496cd3e2cc2f43b89525235",
+   "by_part": {
+    "UberDDR3 controller": {
+     "endpoints": 2,
+     "worst_ps": -322
+    },
+    "device matvec (t27/rtl/fpga_ddr3_matvec.t27)": {
+     "endpoints": 1,
+     "worst_ps": -5
+    }
+   },
+   "endpoints": [
+    {
+     "slack_ps": -322,
+     "cell": "$auto$ff.cc:337:slice$176016",
+     "port": "D",
+     "net": "$auto$pmux2shiftx.cc:714:execute$138256.Y[0]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -277,
+     "cell": "$auto$ff.cc:337:slice$176018",
+     "port": "D",
+     "net": "$auto$pmux2shiftx.cc:714:execute$138256.Y[2]",
+     "source": "ddr3_controller.v:2389",
+     "part": "UberDDR3 controller"
+    },
+    {
+     "slack_ps": -5,
+     "cell": "$auto$ff.cc:337:slice$212908",
+     "port": "SR",
+     "net": "$techmap$techmap296035$auto$ff.cc:337:slice$218369.$auto$abc9_ops.cc:411:prep_bypass$295963.PRE",
+     "source": "fpga_ddr3_matvec.v:1950",
+     "part": "device matvec (t27/rtl/fpga_ddr3_matvec.t27)"
+    }
+   ]
+  }
+ ]
+}
