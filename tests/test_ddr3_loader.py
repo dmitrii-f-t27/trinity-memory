@@ -362,7 +362,7 @@ class Scenario:
     def reset_button(self, abandon=False, calib_clocks=3000):
         """The reset button: UberDDR3 (the model) is reset too and calibrates again; the
         model's memory keeps its words (the board's is not claimed to: UberDDR3's self-test
-        rewrites bursts [0, 2^23) at every calibration, docs/uart-loader.md)."""
+        rewrites three quarters of U6 at every calibration, docs/uart-loader.md, "Limits")."""
         if abandon:
             self.model.out.pop()
         self.cmds.append("r 2000000")
@@ -598,6 +598,29 @@ def scenario_watchdog(rng):
     return s
 
 
+def scenario_late_ack(rng):
+    """The ack of a read the loader gave up on reaches the Wishbone master in the clock the next
+    read-back asks for its first data byte (+race_late_ack=1 releases it then). It is dropped and
+    the read-back is right (review of #63 part 2: it once answered that request with the stale byte,
+    in a frame with a good CRC)."""
+    s = Scenario("late_ack", plusargs={"race_late_ack": 1})
+    a, b = rand_bytes(rng, 16), rand_bytes(rng, 16)
+    s.load(1, 0x100, a)
+    s.load(2, 0x2000, b)
+    s.hang(2)                                  # acks withheld: the read is taken and never answered
+    s.send(proto.read_frame(3, 0x100, 16))
+    s.model.port_failed_read(0)
+    s.wait()
+    s.model.kept = None
+    s.read(4, 0x2000, 16)                      # the bench releases the withheld ack at rb_k 9 -> 10
+    s.hang(0)
+    s.read(5, 0x2000, 16)
+    s.status(6)
+    s.masked_status |= {NAMES.index(n) for n in ("wb_writes", "wb_reads", "wb_read_hits", "wb_acks_dropped")}
+    s.extra = {"a": a, "b": b}
+    return s
+
+
 def scenario_pipelined(rng):
     s = Scenario("pipelined")
     burst = b""
@@ -650,6 +673,14 @@ def scenario_baud(rng):
     s.set_rate(32)
     s.status(6)
     s.read(7, 0x1C00_0400, 500)
+    # A second change after a revert holds (the registered probation compare once read the
+    # count of the probation that had ended and undid the new rate one clock after it took effect).
+    s.send(proto.baud_frame(8, 16))
+    s.wait()
+    s.set_rate(16)
+    s.cmds.append(f"w {4 * 32 * CLK_PS}")
+    s.status(9)
+    s.read(10, 0x1C00_0400, 500)
     return s
 
 
@@ -722,7 +753,8 @@ class LoaderSimulation(unittest.TestCase):
         cls.scenarios = {s.name: s for s in [
             scenario_transfer(rng, 0.05), scenario_transfer(rng, -0.04), scenario_faults(rng, -0.04),
             scenario_not_ready(), scenario_watchdog(rng), scenario_pipelined(rng), scenario_overflow(rng),
-            scenario_baud(rng), scenario_board_rate(0.05), scenario_board_rate(-0.045), scenario_arbitration(rng)]}
+            scenario_baud(rng), scenario_board_rate(0.05), scenario_board_rate(-0.045), scenario_arbitration(rng),
+            scenario_late_ack(rng)]}
         vvps = build_benches(work, cls.scenarios.values())
 
         def run(s):
@@ -746,7 +778,7 @@ class LoaderSimulation(unittest.TestCase):
                     t_ns, text = raw.split("\t", 1)
                     lines.append({"t_s": int(t_ns) / 1e9, "line": text})
             monitors = {}
-            for tag in ("TBWB", "TBKEPT", "MODEL"):
+            for tag in ("TBWB", "TBKEPT", "MODEL", "TBPORT", "TBRACE"):
                 m = re.search(rf"^{tag} (.*)$", proc.stdout, re.M)
                 if m:
                     monitors[tag] = {k: int(v) for k, v in (kv.split("=") for kv in m.group(1).split())}
@@ -797,6 +829,9 @@ class LoaderSimulation(unittest.TestCase):
         self.assertEqual(mon["TBWB"]["misrouted"], 0, mon)
         self.assertEqual(mon["TBKEPT"]["mismatches"], 0, mon)
         self.assertEqual(mon["TBWB"]["taken0"] + mon["TBWB"]["taken1"], mon["MODEL"]["writes"] + mon["MODEL"]["reads"])
+        # Waiting for a frame, the loader does not hold the port (a nak in the middle of a chunk
+        # once left an unfinished word buffered and wb_cyc high until the next command).
+        self.assertLessEqual(mon["TBPORT"]["idle_held_max"], 1, mon)
         return r
 
     def assert_as_predicted(self, name):
@@ -889,8 +924,11 @@ class LoaderSimulation(unittest.TestCase):
         naks = [(e.resp()["reason_name"], e.resp()["cmd"]) for e in r["events"] if e.kind == "line" and e.tag == "N"]
         self.assertEqual(naks, [("port", proto.CMD_LOAD)] * 2 + [("port", proto.CMD_READ)] * 2)
         status = proto.decode_status(r["events"][-37:])
-        self.assertEqual(status["wb_acks_dropped"], 1)           # the withheld read's ack, after the loader gave up
-        self.assertEqual(r["monitors"]["TBWB"]["drops"], 1)
+        # The acks of both reads the loader gave up on are dropped: the one presented while the port
+        # took no request (taken after the release) and the one whose ack was withheld. Before
+        # port_give_up the first reached the idle loader as an unused rd_valid.
+        self.assertEqual(status["wb_acks_dropped"], 2)
+        self.assertEqual(r["monitors"]["TBWB"]["drops"], 2)
         self.assertEqual((status["wb_acks_stray"], status["arb_stray"]), (0, 0))
         reads = {e.addr: e.data for e in r["events"] if e.kind == "readback" and e.crc_ok}
         chunks = self.scenarios["watchdog"].extra["chunks"]
@@ -898,6 +936,15 @@ class LoaderSimulation(unittest.TestCase):
             self.assertEqual(reads[addr], chunks[addr], hex(addr))
         # 0x4000 was never loaded: it reads as the memory model's background.
         self.assertEqual(reads[0x4000], b"".join(proto.bg_word(0x400 + k) for k in range(7))[:100])
+
+    def test_late_ack_of_an_abandoned_read(self):
+        r = self.assert_as_predicted("late_ack")
+        self.assertEqual(r["monitors"]["TBRACE"]["state"], 2)            # the ack came in that clock
+        self.assertEqual(r["monitors"]["TBWB"]["drops"], 1)
+        reads = [e for e in r["events"] if e.kind == "readback" and e.crc_ok]
+        self.assertEqual([(e.seq, e.data) for e in reads if e.seq in (4, 5)],
+                         [(4, self.scenarios["late_ack"].extra["b"]), (5, self.scenarios["late_ack"].extra["b"])])
+        self.assertEqual(self.status_of(r["events"], 6)["wb_acks_dropped"], 1)
 
     def test_pipelined_frames(self):
         r = self.assert_as_predicted("pipelined")
@@ -917,6 +964,8 @@ class LoaderSimulation(unittest.TestCase):
     def test_baud_change(self):
         r = self.assert_as_predicted("baud")
         self.assertEqual(self.status_of(r["events"], 6)["baud_reverts"], 1)
+        late = self.status_of(r["events"], 9)                           # after the second change
+        self.assertEqual((late["baud_reverts"], late["baud_div"]), (1, 16))
 
     def test_board_divisor(self):
         for name in ("board_rate_+5.0%", "board_rate_-4.5%"):
@@ -977,15 +1026,27 @@ class HostToolDdr3(unittest.TestCase):
         cls.part1 = part1
         cls.tool = load_tool("fpga_uart_loader_tool_ddr3", "tools/fpga-uart-loader.py")
 
-    def run_main(self, argv_extra, calibrate_after_s):
+    def run_main(self, argv_extra, calibrate_after_s, addr=0x1ABCD007, size=3000, watch=None, probation_s=None):
+        """One run of the tool against the model; `watch(model)` is called under the device's lock
+        every millisecond until it returns True (a reset, a byte changed behind the tool's back)."""
         import contextlib
         import io
         import threading
         model = proto.DeviceModel(store=proto.SparseStore(STORE_LOG2, proto.bg_word), store_log2=STORE_LOG2,
-                                  default_div=self.DIV, proto=proto.PROTO_DDR3, calibrated=False)
+                                  default_div=self.DIV, proto=proto.PROTO_DDR3, calibrated=calibrate_after_s == 0,
+                                  calib_clocks=433_000_000)
         model.out.clear()
-        device = self.part1.FakeDevice(model, self.tool.DESIGN_HZ, self.tool.DEVICE_TIMEOUT_S)
+        extra = {} if probation_s is None else {"probation_s": probation_s}
+        device = self.part1.FakeDevice(model, self.tool.DESIGN_HZ, self.tool.DEVICE_TIMEOUT_S, **extra)
         ports = []
+        stop = threading.Event()
+
+        def watcher():
+            while not stop.is_set():
+                with device.lock:
+                    if watch(model):
+                        return
+                stop.wait(0.001)
 
         def opener(_name, baud):
             if ports:
@@ -997,23 +1058,29 @@ class HostToolDdr3(unittest.TestCase):
             with device.lock:
                 model.calibrated, model.calib_clocks = True, 433_000_000
         timer = threading.Timer(calibrate_after_s, calibrate)
-        saved = self.tool.OPENER
+        saved = self.tool.OPENER, self.tool.PROBATION_S
         self.tool.OPENER = opener
+        if probation_s is not None:
+            self.tool.PROBATION_S = probation_s
         work = tempfile.TemporaryDirectory(prefix="trinity-ddr3-loader-host-")
         try:
-            timer.start()
+            if calibrate_after_s:
+                timer.start()
+            if watch is not None:
+                threading.Thread(target=watcher, daemon=True).start()
             payload = Path(work.name) / "payload.bin"
-            data = bytes(random.Random(12).getrandbits(8) for _ in range(3000))
+            data = bytes(random.Random(12).getrandbits(8) for _ in range(size))
             payload.write_bytes(data)
             out = Path(work.name) / "run.json"
             with contextlib.redirect_stdout(io.StringIO()):
                 code = self.tool.main(["--port", "fake", "--baud", str(self.BAUD), "--payload", str(payload),
                                        "--chunk", "1000", "--ack-timeout", "0.2", "--guard", "0.12",
-                                       "--addr", "0x1abcd007", "--output", str(out), *argv_extra])
+                                       "--addr", hex(addr), "--output", str(out), *argv_extra])
             record = json.loads(out.read_text())
         finally:
+            stop.set()
             timer.cancel()
-            self.tool.OPENER = saved
+            self.tool.OPENER, self.tool.PROBATION_S = saved
             work.cleanup()
         return code, record, model, data
 
@@ -1021,6 +1088,11 @@ class HostToolDdr3(unittest.TestCase):
         code, record, model, data = self.run_main(["--wait-calib", "5", "--read-before", "--margin", "40"], 0.4)
         self.assertEqual(code, 0, record.get("checks"))
         self.assertGreaterEqual(len(record["calib_polls"]), 2)
+        # Every status read before the load is in the record, the first one included.
+        first_ack = min(e["t"] for e in record["device_events"] if e["kind"] == "line" and e["tag"] == "A")
+        answered = [e for e in record["device_events"]
+                    if e["kind"] == "line" and e["tag"] == "C" and int(e["a"], 16) & 0xFFFF == 0 and e["t"] < first_ack]
+        self.assertEqual(len(record["calib_polls"]), len(answered))
         self.assertEqual(proto.decode_calib(record["calib_polls"][0]["status"]["calib"])["calib_complete"], 0)
         self.assertTrue(record["checks"]["calibration_held"])
         self.assertTrue(record["checks"]["margins_unchanged"])
@@ -1028,6 +1100,47 @@ class HostToolDdr3(unittest.TestCase):
         self.assertEqual(model.store[0x1ABCD007:0x1ABCD007 + 3000], data)
         # Read before the load: the model's background words, all but a few bytes differ from the payload.
         self.assertGreater(record["transfer"]["store_before"]["bytes_the_load_changes"], 2950)
+
+    def test_a_reset_between_the_status_reads_fails_the_calibration_check(self):
+        # UberDDR3 calibrates in the same number of clocks after every reset, so calib_clocks alone
+        # cannot show one: the H line and frames_committed (zeroed) do.
+        def reset_after_two_chunks(model):
+            if model.c["frames_committed"] >= 2:
+                model.reset()
+                return True
+            return False
+        code, record, _model, _data = self.run_main(["--read-before"], 0, watch=reset_after_two_chunks)
+        self.assertEqual(record["status_before"]["calib_clocks"], record["status_after"]["calib_clocks"])
+        self.assertTrue(record["checks"]["all_chunks_acked"])
+        self.assertTrue(record["checks"]["read_back_identical"])
+        self.assertFalse(record["checks"]["calibration_held"])
+        self.assertEqual(code, 1)
+
+    def test_margins_stop_at_the_end_of_the_store(self):
+        size = 3000
+        code, record, model, data = self.run_main(["--margin", "40"], 0, addr=(1 << STORE_LOG2) - size, size=size)
+        self.assertEqual(code, 0, record.get("checks"))
+        margins = record["transfer"]["margins"]
+        self.assertEqual((margins["below"][1], margins["above"][1]), (40, 0))
+        self.assertTrue(record["checks"]["margins_unchanged"])
+        self.assertEqual(model.store[(1 << STORE_LOG2) - size:], data)
+
+    def test_a_baud_trial_that_changes_its_margins_fails(self):
+        # A byte next to the trial's range changes while the trial loads (after the 3 main chunks).
+        def change_a_neighbour(model):
+            if model.c["frames_committed"] >= 4:
+                spot = 0x1ABCD007 + 1010
+                model.store[spot:spot + 1] = bytes([model.store[spot:spot + 1][0] ^ 0xFF])
+                return True
+            return False
+        code, record, _model, _data = self.run_main(
+            ["--margin", "40", "--baud-try", "1250000", "--baud-bytes", "1000"], 0, watch=change_a_neighbour,
+            probation_s=0.3)
+        trial = record["baud_trials"][0]
+        self.assertTrue(trial["transfer"]["identical"])
+        self.assertFalse(trial["transfer"]["margins"]["unchanged"])
+        self.assertFalse(record["checks"]["baud_trials_all_ok"])
+        self.assertEqual(code, 1)
 
     def test_not_ready_naks_are_retransmitted(self):
         # The status before the load is read 0.3 s after the port opens; the device calibrates at 0.8 s.

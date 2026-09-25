@@ -191,7 +191,7 @@ module tms_ddr3_loader_ax7203 #(
     );
 
     // ---- the loader's store: Wishbone master 0 ----
-    wire        wr_valid, wr_last, wr_ready, wr_idle, rd_req, rd_ready, rd_valid;
+    wire        wr_valid, wr_last, wr_ready, wr_idle, rd_req, rd_ready, rd_valid, port_give_up;
     wire [31:0] wr_addr, wr_data, rd_addr, rd_byte;
     wire        m0_cyc, m0_stb, m0_we, m0_stall, m0_ack, m1_write;
     wire [31:0] m0_addr, m0_sel;
@@ -201,7 +201,7 @@ module tms_ddr3_loader_ax7203 #(
         .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
         .wr_valid(wr_valid), .wr_addr(wr_addr), .wr_data(wr_data), .wr_last(wr_last),
         .rd_req(rd_req), .rd_addr(rd_addr), .stall(m0_stall), .ack(m0_ack),
-        .rdata_lo(wb_rdata[63:0]), .rdata_hi(wb_rdata[127:64]), .invalidate(m1_write),
+        .rdata_lo(wb_rdata[63:0]), .rdata_hi(wb_rdata[127:64]), .invalidate(m1_write), .give_up(port_give_up),
         .wb_cyc(m0_cyc), .wb_stb(m0_stb), .wb_we(m0_we), .wb_addr(m0_addr), .wb_sel(m0_sel),
         .wb_lo(m0_lo), .wb_hi(m0_hi), .rd_valid(rd_valid), .rdata(rd_byte),
         .writes(w_writes), .reads(w_reads), .hits(w_hits), .dropped(w_dropped), .stray(w_stray),
@@ -277,7 +277,7 @@ module tms_ddr3_loader_ax7203 #(
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
         .tx_start(ld_tx_start), .tx_byte(ld_tx_byte),
         .wr_valid(wr_valid), .wr_addr(wr_addr), .wr_data(wr_data), .wr_last(wr_last),
-        .rd_req(rd_req), .rd_addr(rd_addr),
+        .rd_req(rd_req), .rd_addr(rd_addr), .port_give_up(port_give_up),
         .div_now(div_now), .committed_any(committed_any), .any_nak(any_nak)
     );
 

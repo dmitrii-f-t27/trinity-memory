@@ -28,12 +28,15 @@ module TrinityFpgaLoaderWbT27;
 // byte taken for the kept word invalidates it, and so does `invalidate` (the arbiter,
 // t27/rtl/fpga_wb_arbiter.t27, raises it when another master's write is taken).
 // Watchdog (docs/uart-loader.md, "Port watchdog"): the loader gives up on a port that
-// makes no progress for one timeout; a read already taken on the bus is then still
-// outstanding here. The loader asks for the next byte only after the answer or after
-// giving up, so an rd_req while a read waits for its ack means the loader gave up on
-// it: that read's ack is dropped (counted, no rd_valid), and the next request is taken
-// only after it. Its data still refresh the kept word (no write can happen meanwhile:
-// wr_ready is low while a read waits).
+// makes no progress for one timeout and says so with `give_up` (one clock). A read
+// already taken on the bus is then still outstanding here: it is marked, and its ack,
+// whenever it comes, is dropped (counted, no rd_valid), so a late ack cannot answer a
+// later request; the next request is taken only after it. An rd_req while a read waits
+// marks it too (the loader asks for the next byte only after the answer or after giving
+// up). The dropped data still refresh the kept word (no write can happen meanwhile:
+// wr_ready is low while a read waits). Bytes of a word not yet written are dropped on
+// `give_up` (the loader nakked the chunk, the host sends it again), so wb_cyc falls and
+// the arbiter can give the port away once nothing is outstanding.
 // wb_cyc is high while the loader has work at the port (a byte buffered, a request
 // presented or outstanding, or a request from the loader): the arbiter keeps the port
 // for the loader while it is high, so it grants the port per chunk and per read.
@@ -172,17 +175,17 @@ m_lo = merge_half(base_lo, 0, w_lane, wr_data);
 m_hi = merge_half(base_hi, 1, w_lane, wr_data);
 hit = kept_valid && kept_addr == r_word;
 read_ack = ack && rd_wait && outst != 0;
-flush_now = !wb_stb && buf_valid && (flush || rd_req);
+flush_now = !wb_stb && buf_valid && (flush || rd_req) && outst < CAP && !give_up;
 ack_counted = ack && outst != 0;
 out_inc = outst + 1;
 out_dec = outst - 1;
 out_next = out_sel(taken, ack_counted, outst, out_inc, out_dec);
 ack_byte = byte_of(rdata_lo, rdata_hi, rd_lane);
 kept_byte = byte_of(kept_lo, kept_hi, r_lane);
-drop_now = rd_drop || rd_req;
+drop_now = rd_drop || rd_req || give_up;
 
 fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, wr_last: bool, rd_req: bool, rd_addr: u32,
-            stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64, invalidate: bool) {
+            stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64, invalidate: bool, give_up: bool) {
     rd_valid = false;
     if (wb_stb && stall) { cmd_stalls = cmd_stalls + 1; }
     if (taken) {
@@ -268,7 +271,11 @@ fn on_clock(wr_valid: bool, wr_addr: u32, wr_data: u32, wr_last: bool, rd_req: b
         if (rd_clocks + 1 > rd_lat_max) { rd_lat_max = rd_clocks + 1; }
     } else if (rd_wait) {
         rd_clocks = rd_clocks + 1;
-        if (rd_req) { rd_drop = true; }
+        if (rd_req || give_up) { rd_drop = true; }
+    }
+    if (give_up) {
+        buf_valid = false;
+        flush = false;
     }
     if (invalidate) { kept_valid = false; }
     wb_cyc = !wr_idle || wr_valid || rd_req || rd_wait;
