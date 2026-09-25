@@ -158,8 +158,9 @@ with original commit and byte hashes recorded in
   activations at nonzero blocks and in parts of blocks, a load and a read-back during a run, and
   the real q_proj chunk with the fixture cache). For this build's timing at 83.33 MHz the
   Wishbone master takes each byte into an input register, the outstanding counts are narrow,
-  the line emitter shifts its digits out, and the matvec registers its Z value a clock early.
-  See `docs/bridge.md`, "The DDR3 matvec build".
+  the line emitter shifts its digits out, and the matvec registers its Z value a clock early
+  (fb1dd5a's netlist meets the clock on 5 of 12 seeds). See `docs/bridge.md`, "The DDR3 matvec
+  build" and its "Timing".
 
 ## Current compiler boundaries
 
