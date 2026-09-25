@@ -558,9 +558,16 @@ not predicted are the status values that depend on timing (FIFO high water, cloc
 `calib_clocks`, most outstanding, read latency, command stalls). Bench monitors: every ack
 reaches the master that issued the request and ownership changes only with nothing
 outstanding (`misrouted`), every read answered from the kept word equals the memory
-model's word at that clock (`TBKEPT`), and while the loader waits for a frame with nothing
-presented or outstanding it does not hold the port for more than one clock (`TBPORT`). The summary of the run at a9a56541 is
-[`reports/fpga/uart-loader-ddr3-sim-2026-09-24-a9a56541.json`](../reports/fpga/uart-loader-ddr3-sim-2026-09-24-a9a56541.json).
+model's word at that clock (`TBKEPT`), while the loader waits for a frame with nothing
+presented or outstanding it does not hold the port for more than one clock (`TBPORT`), and the
+status line `clocks` is the count of the clock before its line was sampled (`TBCLK`). The summary of the run at a9a56541 is
+[`reports/fpga/uart-loader-ddr3-sim-2026-09-24-a9a56541.json`](../reports/fpga/uart-loader-ddr3-sim-2026-09-24-a9a56541.json);
+the run after the review fixes, at defd5c0d, is
+[`reports/fpga/uart-loader-ddr3-sim-2026-09-25-defd5c0d.json`](../reports/fpga/uart-loader-ddr3-sim-2026-09-25-defd5c0d.json).
+It differs from the first only where the fixes and the new checks are: the `TBPORT`,
+`TBRACE` and `TBCLK` fields in every scenario, `watchdog` (`drops` 2, and two fewer writes: the word
+dropped after the `port` nak), `baud` (the second change and its read-back, and the
+turnaround below) and the new `late_ack`.
 
 | Scenario | What it shows |
 | --- | --- |
@@ -775,7 +782,9 @@ none has run on the board.
 - **Status line `clocks` was one status line old**, not one clock as its comment said: a copy
   taken in the clock the line was sampled reached it on the next line. The line is now sent from
   that copy, taken in the clock before (the counter itself stays out of the module-level logic,
-  which the generated Verilog would otherwise evaluate again in every clock).
+  which the generated Verilog would otherwise evaluate again in every clock). The `TBCLK`
+  monitor, in every scenario, compares the line with the counter in the first clock of its
+  response (2 clocks behind now; `pipelined` showed 3,230 before the fix).
 - Minor: the flush of a buffered word did not wait for fewer than 8 outstanding requests
   ("Write side").
 
@@ -787,6 +796,15 @@ status read and `frames_committed` to grow by exactly the run's chunks (0, 41, 9
 495, 546, 867 across runs 1-7: no reset in the session). A baud trial now fails when its
 margins changed, and the calibration is checked in every trial's status too. The margins stop
 at the end of the store, and under `--wait-calib` the first status read stays in the record.
+
+The simulation summaries' load turnaround subtracted the reply byte's 9.5 bits at the
+scenario's last rate, not at the rate the load was sent at. Only `baud` changes rate, and its
+one load (divisor 16) was reported with the divisor after the fallback (32): 1,422 clocks in
+a9a56541's summary and 1,353 in part 1's
+[`uart-loader-sim-2026-09-24-1d474000.json`](../reports/fpga/uart-loader-sim-2026-09-24-1d474000.json),
+for replies that give 1,574 and 1,505 (part 1's record also holds the raw
+`end_to_reply_stop_clocks`, 1,657 = 1,505 + 9.5 × 16). Both tests now keep the divisor with each load; no check
+used the `baud` value, and the other scenarios run at one rate.
 
 ### Limits and open points (part 2)
 

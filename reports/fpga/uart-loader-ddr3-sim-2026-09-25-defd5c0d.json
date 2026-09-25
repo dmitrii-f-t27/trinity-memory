@@ -1,0 +1,831 @@
+{
+ "schema": "trinity.ddr3-loader-sim.v1",
+ "clock_hz": 200000000.0,
+ "note": "Icarus runs of tests/test_ddr3_loader.py (the DDR3 loader top with the behavioural Wishbone memory tests/sim_ddr3_loader_model.v, not UberDDR3); turnaround = controller clocks from the end of a load frame's last stop bit to the start bit of its ack",
+ "scenarios": {
+  "transfer_+0.05": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {},
+   "host_bit_skew": 0.05,
+   "second_master": null,
+   "bytes_received": 21174,
+   "events": 83,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 1979,
+     "acks0": 1979,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 2,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 18423,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 726,
+     "partial": 28,
+     "reads": 1253,
+     "acks": 1979
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 2,
+     "turnaround_clocks": 29
+    },
+    {
+     "payload": 1,
+     "turnaround_clocks": 22
+    },
+    {
+     "payload": 17,
+     "turnaround_clocks": 71
+    },
+    {
+     "payload": 4096,
+     "turnaround_clocks": 12438
+    },
+    {
+     "payload": 1070,
+     "turnaround_clocks": 3263
+    },
+    {
+     "payload": 178,
+     "turnaround_clocks": 557
+    },
+    {
+     "payload": 16,
+     "turnaround_clocks": 68
+    },
+    {
+     "payload": 1632,
+     "turnaround_clocks": 4955
+    },
+    {
+     "payload": 255,
+     "turnaround_clocks": 806
+    },
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3118
+    },
+    {
+     "payload": 15,
+     "turnaround_clocks": 63
+    },
+    {
+     "payload": 37,
+     "turnaround_clocks": 126
+    },
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3039
+    },
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3091
+    },
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3072
+    },
+    {
+     "payload": 13,
+     "turnaround_clocks": 60
+    },
+    {
+     "payload": 32,
+     "turnaround_clocks": 118
+    },
+    {
+     "payload": 1,
+     "turnaround_clocks": 20
+    }
+   ]
+  },
+  "transfer_-0.04": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {},
+   "host_bit_skew": -0.04,
+   "second_master": null,
+   "bytes_received": 29008,
+   "events": 83,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 2714,
+     "acks0": 2714,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 1,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 25767,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 971,
+     "partial": 28,
+     "reads": 1743,
+     "acks": 2714
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3081
+    },
+    {
+     "payload": 511,
+     "turnaround_clocks": 1585
+    },
+    {
+     "payload": 255,
+     "turnaround_clocks": 818
+    },
+    {
+     "payload": 4096,
+     "turnaround_clocks": 12510
+    },
+    {
+     "payload": 15,
+     "turnaround_clocks": 79
+    },
+    {
+     "payload": 17,
+     "turnaround_clocks": 94
+    },
+    {
+     "payload": 16,
+     "turnaround_clocks": 77
+    },
+    {
+     "payload": 1,
+     "turnaround_clocks": 33
+    },
+    {
+     "payload": 2392,
+     "turnaround_clocks": 7274
+    },
+    {
+     "payload": 3894,
+     "turnaround_clocks": 11917
+    },
+    {
+     "payload": 2,
+     "turnaround_clocks": 39
+    },
+    {
+     "payload": 37,
+     "turnaround_clocks": 149
+    },
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3063
+    },
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3101
+    },
+    {
+     "payload": 1000,
+     "turnaround_clocks": 3057
+    },
+    {
+     "payload": 13,
+     "turnaround_clocks": 69
+    },
+    {
+     "payload": 32,
+     "turnaround_clocks": 132
+    },
+    {
+     "payload": 1,
+     "turnaround_clocks": 39
+    }
+   ]
+  },
+  "faults_-0.04": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {},
+   "host_bit_skew": -0.04,
+   "second_master": null,
+   "bytes_received": 2316,
+   "events": 39,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 144,
+     "acks0": 144,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 1,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 1020,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 73,
+     "partial": 7,
+     "reads": 71,
+     "acks": 144
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 300,
+     "turnaround_clocks": 939
+    },
+    {
+     "payload": 300,
+     "turnaround_clocks": 21
+    },
+    {
+     "payload": 200,
+     "turnaround_clocks": 632
+    },
+    {
+     "payload": 300,
+     "turnaround_clocks": 934
+    },
+    {
+     "payload": 100,
+     "turnaround_clocks": 333
+    },
+    {
+     "payload": 77,
+     "turnaround_clocks": 271
+    },
+    {
+     "payload": 90,
+     "turnaround_clocks": 317
+    }
+   ]
+  },
+  "not_ready": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {
+    "calib_clocks": 400000
+   },
+   "host_bit_skew": 0.0,
+   "second_master": null,
+   "bytes_received": 1585,
+   "events": 79,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 2,
+     "acks0": 2,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 1,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 10,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 1,
+     "partial": 1,
+     "reads": 1,
+     "acks": 2
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 2,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 11,
+     "turnaround_clocks": 15
+    },
+    {
+     "payload": 11,
+     "turnaround_clocks": 56
+    }
+   ]
+  },
+  "watchdog": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {},
+   "host_bit_skew": 0.0,
+   "second_master": null,
+   "bytes_received": 2292,
+   "events": 57,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 119,
+     "acks0": 119,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 8,
+     "drops": 2
+    },
+    "TBKEPT": {
+     "hits": 831,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 58,
+     "partial": 6,
+     "reads": 61,
+     "acks": 119
+    },
+    "TBPORT": {
+     "idle_held_max": 1
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 300,
+     "turnaround_clocks": 943
+    },
+    {
+     "payload": 100,
+     "turnaround_clocks": 329
+    },
+    {
+     "payload": 200,
+     "turnaround_clocks": 630
+    },
+    {
+     "payload": 150,
+     "turnaround_clocks": 479
+    }
+   ]
+  },
+  "pipelined": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {},
+   "host_bit_skew": 0.0,
+   "second_master": null,
+   "bytes_received": 1738,
+   "events": 84,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 33,
+     "acks0": 33,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 2,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 59,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 28,
+     "partial": 12,
+     "reads": 5,
+     "acks": 33
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 2,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": []
+  },
+  "overflow": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {},
+   "host_bit_skew": 0.0,
+   "second_master": null,
+   "bytes_received": 6944,
+   "events": 43,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 762,
+     "acks0": 762,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 1,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 5715,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 381,
+     "partial": 0,
+     "reads": 381,
+     "acks": 762
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 4096,
+     "turnaround_clocks": 12544
+    }
+   ]
+  },
+  "baud": {
+   "params": {
+    "BAUD_DIV": 32,
+    "TIMEOUT_CLOCKS": 7680,
+    "PROBATION_CLOCKS": 64000
+   },
+   "plusargs": {},
+   "host_bit_skew": 0.0,
+   "second_master": null,
+   "bytes_received": 3862,
+   "events": 119,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 128,
+     "acks0": 128,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 2,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 1404,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 32,
+     "partial": 1,
+     "reads": 96,
+     "acks": 128
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 3,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 500,
+     "turnaround_clocks": 1574
+    }
+   ]
+  },
+  "board_rate_+5.0%": {
+   "params": {
+    "BAUD_DIV": 723,
+    "TIMEOUT_CLOCKS": 4166666,
+    "PROBATION_CLOCKS": 250000000
+   },
+   "plusargs": {},
+   "host_bit_skew": 0.05,
+   "second_master": null,
+   "bytes_received": 118,
+   "events": 3,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 8,
+     "acks0": 8,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 1,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 60,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 4,
+     "partial": 0,
+     "reads": 4,
+     "acks": 8
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 0,
+     "age_min": -1,
+     "age_max": 0
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 64,
+     "turnaround_clocks": -492
+    }
+   ]
+  },
+  "board_rate_-4.5%": {
+   "params": {
+    "BAUD_DIV": 723,
+    "TIMEOUT_CLOCKS": 4166666,
+    "PROBATION_CLOCKS": 250000000
+   },
+   "plusargs": {},
+   "host_bit_skew": -0.045,
+   "second_master": null,
+   "bytes_received": 118,
+   "events": 3,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 8,
+     "acks0": 8,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 1,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 60,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 4,
+     "partial": 0,
+     "reads": 4,
+     "acks": 8
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 0,
+     "age_min": -1,
+     "age_max": 0
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 64,
+     "turnaround_clocks": 191
+    }
+   ]
+  },
+  "arbitration": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000,
+    "READER_TRITS": 1237
+   },
+   "plusargs": {},
+   "host_bit_skew": 0.0,
+   "second_master": "fpga_ddr3_reader",
+   "bytes_received": 11284,
+   "events": 56,
+   "reader_lines": 4186,
+   "monitors": {
+    "TBWB": {
+     "taken0": 1417,
+     "acks0": 1417,
+     "taken1": 10768,
+     "acks1": 10768,
+     "misrouted": 0,
+     "owner_changes": 385,
+     "max_outstanding": 14,
+     "drops": 0
+    },
+    "TBKEPT": {
+     "hits": 9449,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 6014,
+     "partial": 11,
+     "reads": 6171,
+     "acks": 12185
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 0
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 1500,
+     "turnaround_clocks": 4586
+    },
+    {
+     "payload": 700,
+     "turnaround_clocks": 2144
+    },
+    {
+     "payload": 1500,
+     "turnaround_clocks": 4609
+    },
+    {
+     "payload": 1500,
+     "turnaround_clocks": 4569
+    },
+    {
+     "payload": 700,
+     "turnaround_clocks": 2139
+    },
+    {
+     "payload": 4096,
+     "turnaround_clocks": 12524
+    }
+   ]
+  },
+  "late_ack": {
+   "params": {
+    "BAUD_DIV": 16,
+    "TIMEOUT_CLOCKS": 3840,
+    "PROBATION_CLOCKS": 48000
+   },
+   "plusargs": {
+    "race_late_ack": 1
+   },
+   "host_bit_skew": 0.0,
+   "second_master": null,
+   "bytes_received": 910,
+   "events": 45,
+   "reader_lines": 0,
+   "monitors": {
+    "TBWB": {
+     "taken0": 4,
+     "acks0": 4,
+     "taken1": 0,
+     "acks1": 0,
+     "misrouted": 0,
+     "owner_changes": 0,
+     "max_outstanding": 1,
+     "drops": 1
+    },
+    "TBKEPT": {
+     "hits": 31,
+     "mismatches": 0
+    },
+    "MODEL": {
+     "writes": 2,
+     "partial": 0,
+     "reads": 2,
+     "acks": 4
+    },
+    "TBPORT": {
+     "idle_held_max": 0
+    },
+    "TBRACE": {
+     "state": 2
+    },
+    "TBCLK": {
+     "lines": 1,
+     "age_min": 2,
+     "age_max": 2
+    }
+   },
+   "load_turnaround": [
+    {
+     "payload": 16,
+     "turnaround_clocks": 72
+    },
+    {
+     "payload": 16,
+     "turnaround_clocks": 79
+    }
+   ]
+  }
+ }
+}
