@@ -447,7 +447,9 @@ back identical. Narrower RAMB36 configurations in this open flow remain unverifi
 Part 2 puts the loader in front of UberDDR3's memory, x16 (chip U6, 512 MiB):
 `make -C fpga/ax7203 ddr3-bit ddr3-report DDR3_APP=loader`. The frame protocol is part 1's
 with protocol number 3; the store behind the write and read ports is UberDDR3's user
-Wishbone port instead of block RAM.
+Wishbone port instead of block RAM. The same loader with its `matvec` input high is protocol 4,
+the device matvec of issue #64 (`DDR3_APP=matvec`, `[matvec]`-marked changes: activation frames X
+and matvec frames M): `docs/bridge.md`, "The DDR3 matvec build".
 
 | File | Role |
 | --- | --- |

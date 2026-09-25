@@ -1,0 +1,59 @@
+{
+ "schema": "trinity.fpga-synth.v1",
+ "what": "yosys synthesis of the DDR3 matvec build (make -C fpga/ax7203 ddr3-synth DDR3_APP=matvec, issue #64 wave 4): not placed, not routed, not a bitstream",
+ "build_id": "b7b86e6c",
+ "source": "claude/wizardly-wright-fv0rsw at c03023e (the RTL of b7b86e6; tracked changes: docs only)",
+ "command": "make -C fpga/ax7203 ddr3-synth DDR3_APP=matvec BUILD_ID=b7b86e6c YOSYS='cd $(ROOT) && yowasp-yosys' DDR3_BUILD=<dir>",
+ "yosys": "Yosys 0.69 (git sha1 9f75ca1f9, Release, Clang /workspace/YoWASP/yosys/wasi-sdk-33.0-x86_64-linux/share/cmake/../..//bin/clang++ 22.1.0) (the YoWASP build of the native flow's yosys 0.69)",
+ "uberddr3": "79d8fd3e30ebba6acd84eecac2fa57b7f95f4544 (fpga/ax7203/ddr3/uberddr3.lock, verified)",
+ "netlist_sha256": "c7a67e83e74de9c1c02558ea121ec142f498598b7455d3a04d73c29cbf1fc33e",
+ "cells": {
+  "wires": 23574,
+  "ports": 21,
+  "cells": 24243,
+  "$scopeinfo": 14,
+  "BUFG": 4,
+  "CARRY4": 1262,
+  "FDCE": 7168,
+  "FDPE": 12,
+  "FDRE": 2237,
+  "FDSE": 25,
+  "IBUF": 2,
+  "IBUFDS": 1,
+  "IDELAYCTRL": 1,
+  "IDELAYE2": 18,
+  "INV": 511,
+  "IOBUF": 16,
+  "IOBUFDS": 2,
+  "ISERDESE2": 18,
+  "LUT2": 2727,
+  "LUT3": 1962,
+  "LUT4": 1947,
+  "LUT5": 4068,
+  "LUT6": 2092,
+  "MUXF7": 52,
+  "MUXF8": 2,
+  "OBUF": 32,
+  "OBUFDS": 1,
+  "OSERDESE2": 45,
+  "PLLE2_ADV": 1,
+  "RAMB36E1": 23
+ },
+ "luts": 12796,
+ "flip_flops": 9442,
+ "ramb36e1": 23,
+ "carry4": 1262,
+ "dsp48e1": 0,
+ "compared_with": {
+  "ddr3-build-2026-09-24-a9a56541-x16-loader-seed3": {
+   "luts": 7541,
+   "flip_flops": 5465,
+   "carry4": 576,
+   "ramb36e1": 2
+  }
+ },
+ "conflicting_driver_warnings": {
+  "count": 32,
+  "where": "UberDDR3 ddr3_controller only (one 32-bit procmux)"
+ }
+}
