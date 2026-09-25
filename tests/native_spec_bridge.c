@@ -19,6 +19,12 @@ double tm_json_strtod(uint8_t *);
 size_t tm_float_shortest(double, uint8_t *, size_t);
 int32_t tm_os_random(uint8_t *, size_t);
 int32_t tm_os_sha256(uint8_t *, size_t, uint8_t *);
+uint64_t tm_os_monotonic_ns(void);
+int32_t tm_os_serial_open(uint8_t *, size_t, uint32_t);
+int64_t tm_os_serial_read(int32_t, uint8_t *, size_t, uint32_t);
+int64_t tm_os_serial_write(int32_t, uint8_t *, size_t, uint32_t);
+int32_t tm_os_serial_drain(int32_t);
+int32_t tm_os_serial_close(int32_t);
 #include "specs/types.h"
 #include "specs/bridge.h"
 #include "codecs.h"
@@ -27,6 +33,7 @@ int32_t tm_os_sha256(uint8_t *, size_t, uint8_t *);
 #include "json.h"
 #include "json_writer.h"
 #include "tensorpack_json.h"
+#include "fpga_link.h"
 #include "bridge.h"
 #include "client.h"
 
@@ -304,13 +311,55 @@ static void lifecycle_reads_dot_and_limits(void) {
     harness_free(h);
 }
 
+/* Section 10 against t27/fpga_link.t27 (the host link) and t27/bridge.t27 (the backend field). */
+static void device_backend(void) {
+    assert(TL_Z_COUNT == TMS_DEVICE_Z_COUNT && TL_MAX_ROWS == TMS_DEVICE_MAX_ROWS_PER_RUN);
+    assert(TL_MAX_WPR == TMS_DEVICE_MAX_WORDS_PER_ROW && TL_WORD_BYTES == TMS_DEVICE_WORD_BYTES);
+    assert(TL_ACT_BLOCK_BYTES == TMS_DEVICE_ACT_BLOCK_BYTES && TL_ACT_FRAME_BLOCKS == TMS_DEVICE_ACT_FRAME_BLOCKS);
+    assert(TL_MATVEC_PAYLOAD == TMS_DEVICE_MATVEC_PAYLOAD_BYTES && TL_MAX_LEN == TMS_DEVICE_CHUNK_BYTES);
+    assert(TL_CMD_ACT == TMS_WIRE_CMD_ACTIVATIONS && TL_CMD_MATVEC == TMS_WIRE_CMD_MATVEC);
+    assert(TL_IX_ACT == TMS_WIRE_INDEX_ACTIVATIONS && TL_IX_MATVEC == TMS_WIRE_INDEX_MATVEC);
+    assert(TL_PROTO_MATVEC == TMS_DEVICE_PROTOCOL_MATVEC);
+    assert(TL_RUN_REJECTED == TMS_DEVICE_RUN_REJECTED && TL_RUN_SHORT == TMS_DEVICE_RUN_SHORT);
+    assert(tl_lanes(0) == tms_device_lanes(0) && tl_lanes(1) == tms_device_lanes(1));
+    static int32_t trits[3 * 6912];
+    static uint8_t image[8192];
+    for (size_t i = 0; i < sizeof trits / sizeof trits[0]; i++) trits[i] = (int32_t)(i % 3) - 1;
+    const uint64_t shapes[][2] = {{1, 1}, {3, 5}, {2, 64}, {2, 65}, {3, 80}, {2, 81}, {1, 2560}, {3, 6912}};
+    for (size_t k = 0; k < sizeof shapes / sizeof shapes[0]; k++) {
+        for (uint32_t codec = 0; codec < 2; codec++) {
+            uint64_t rows = shapes[k][0], cols = shapes[k][1];
+            assert(tl_words_per_row(cols, codec) == tms_device_words_per_row(cols, codec));
+            int64_t size = tl_image(trits, 0, (size_t)rows, (size_t)cols, codec, image, sizeof image);
+            if (tms_device_image_bytes(rows, cols, codec) <= sizeof image) {
+                assert(size >= 0 && (uint64_t)size == tms_device_image_bytes(rows, cols, codec));
+            } else {
+                assert(size == TL_ERR_LIMIT);
+            }
+        }
+    }
+    int64_t ys[] = {-884736, 884736, 0, -1, 12345};
+    uint32_t c = 0;
+    for (size_t i = 0; i < 5; i++) c = tms_device_checksum_step(c, (uint32_t)ys[i]);
+    assert(c == tl_result_checksum(ys, 5));
+    assert(tl_signed32(tms_device_y_word(0, 0) | 0xFFFFFFFFu) == -1);
+    /* A zeroed state is the emulator: backend 0, transport 0, hardware false. */
+    Harness *h = harness_new(65536, 4096, 8192, 2, 4096);
+    assert(h->state.backend == 0 && tms_bridge_backend_transport(h->state.backend) == h->state.transport);
+    assert(!tms_bridge_backend_hardware(h->state.backend));
+    const char *text = call_text(h, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"trinity.capabilities\"}");
+    assert(strstr(text, "\"backend\":\"emulator\",\"hardware\":false") && !strstr(text, "\"transport\""));
+    harness_free(h);
+}
+
 int main(void) {
     constants_and_base64();
     capabilities_and_identity();
     envelope_ids_and_errors();
     lifecycle_reads_dot_and_limits();
+    device_backend();
     printf("PASS spec/memory/bridge differential harness: client constants, base64 sizes, "
            "capabilities, identity, envelope and id bounds, error codes, handles, read ranges, "
-           "dot, storage and trit limits\n");
+           "dot, storage and trit limits, device backend constants, row images and checksum\n");
     return 0;
 }

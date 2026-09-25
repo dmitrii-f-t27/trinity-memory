@@ -1,0 +1,1019 @@
+module TrinityFpgaDdr3MatvecT27;
+
+// Device matvec of issue #64, consumer (B) of #65: y = W x for a ternary matrix W streamed
+// from DDR3 one 128-bit bus word per controller clock (the word #62's burst reader delivers:
+// bytes 0-7 in `in_lo`, 8-15 in `in_hi`, byte n at bits [8n, 8n+7]) and an int8 vector x
+// held on chip. Not yet wired into a board top: the DDR3 integration is the next wave
+// (docs/bridge.md, "Device matvec"). tests/test_ddr3_matvec.py checks the functions in C and
+// the module in Icarus on the real stage-1 chunk.
+//
+// Row layout (row-padded): every row starts at a bus word. A row of `cols` trits takes
+// wpr = ceil(cols / L) words, L = 64 lanes per word for baseline2 (fmt 0, TMEM codec 0: four
+// 2-bit lane codes per byte, earliest lane lowest) and L = 80 for dense5 (fmt 1: byte n holds
+// lanes 5n .. 5n+4 as one base-3 code, docs/format.md). Lane codes: 00 = 0, 01 = +1, 10 = -1;
+// 11 (baseline2) and dense5 codes 243-255 decode to 0 and count as invalid codes. Lanes at
+// and after `cols` in a row's last word are forced to 0 (masked), so padding content never
+// reaches an accumulator. A 2,560-column row is 40 baseline2 or 32 dense5 words with no
+// padding, so the TMEM payload of whole rows is the row-padded image as it is.
+//
+// Activations: ten banks act0 .. act9 of 1024 u64 words (block RAM). Entry k of bank b holds
+// the activations of columns kL + 8b .. kL + 8b + 7 (byte i = column kL + 8b + i, two's
+// complement), so one read of entry k in all ten banks gives the 80 (dense5) or 64
+// (baseline2, banks 8 and 9 unused) activations of word k of every row: 80 activations per
+// clock, the widest word, so a dense5 word needs no second read and the consumer takes one
+// word in every clock in both formats. A row may therefore have at most 1024 words: 65,536
+// columns in baseline2, 81,920 in dense5. The write port (act_we, act_entry, act_bank,
+// act_data) writes one u64 per clock; the device frame handler that fills it from the host's
+// activation frames is the next wave (docs/bridge.md, "Wire protocol extension").
+//
+// A run: `start` with rows (1 .. 1024), cols (>= 1), fmt and seq, while idle (a start while
+// busy is ignored: the device's M handler must not start a run before `done`). SETUP computes
+// wpr and the lanes of the last word by repeated subtraction (no division; at most 1024
+// clocks, before the first word), MASK the lane mask of the last word (one clock). RUN takes a
+// word in every clock that in_valid is high; in_ready (= st == RUN and not all words taken) is
+// the handshake: a word counts only in a clock where both are high. The producer (#62's reader)
+// must hold its words until in_ready rises: a word offered while in_ready is low is not taken.
+// A run ends early (status 2, only the Z lines) when RUN has taken no word for 65,536 clocks
+// (786 us at 83.33 MHz; the stream stopped, e.g. the reader gave up a phase on its watchdog) or
+// when `abort` was high in any clock since `start`; the module then drains its pipeline and is
+// idle again, so the next start works. The pipeline behind the input register:
+//   S0 word, the flags of its position in the row and the activations of its block (the
+//      banks read at the block index of the word being taken, in the same clock)
+//   S1 decode: 80 (dense5) or 64 (baseline2) lane codes and a flag per invalid code
+//   S2 mask of the last word's padding lanes; per lane a biased term, 8 bits:
+//      +1 -> x xor 0x80 (= x + 128), -1 -> x xor 0x7F (= ~x + 128 = -x - 1 + 128),
+//      0 -> 0x80 (= 0 + 128), and a bit per -1 lane (the +1 that ~x lacks)
+//      (and eight counts of the invalid-code flags, 16 flags each)
+//   S3 twenty sums of four terms; five counts of the -1 lanes (16 lanes each); the word's
+//      invalid codes (added to the run's count in the next clock)
+//   S4 five sums of four; the -1 lanes of the word
+//   S4b the sum of the first four of those, and the fifth plus the -1 lanes
+//   S5 the word's biased sum plus its -1 lanes (at most 80 * 255 + 80 = 20,480, 16 bits)
+//   S6 the word's dot product: that sum - 128 * 80, as 32-bit two's complement
+//   S7 the row's accumulator (32-bit two's complement): first word of a row starts at 0
+//   S8 the row's result written to the result memory (1024 x u32, block RAM) and folded
+//      into the result checksum
+// so |y| <= cols * 128 (884,736 for down_proj's 6,912 columns, above 2^19) never wraps below
+// 2^31: the accumulators are 32 bits, more than the 21 bits down_proj needs.
+// After the last word the run drains the pipeline, then EMIT sends one Y line per row and the
+// eleven Z lines through the line emitter (fpga_line_emitter.t27: tag, a, b = (check << 32)
+// | v, check the low byte of the CRC-32 of tag, a[4], v[4], as fpga_uart_loader.t27):
+//   Y  a = (seq << 24) | row      v = y[row] (32-bit two's complement)
+//   Z  a = (seq << 24) | (11 << 16) | index, v = counter:
+//      0 status (0 ran, 1 refused: rows or cols out of range, fmt not 0 or 1, more than
+//        1024 words per row; 2 ended early: no word for 65,536 clocks in RUN, or aborted)
+//      1 rows done            2 words per row (wpr)     3 words taken
+//      4 cycles: clocks from the first word taken to the last, inclusive; equal to words
+//        taken + idle clocks by construction (every clock of that span adds to one of them)
+//      5 idle clocks: clocks of that span with no word offered (the bus left the consumer
+//        waiting: starvation, the memory-bound signal of #65)
+//      6 latency: clocks from the start of RUN to the first word taken
+//      7 invalid codes (dense5 codes 243-255 in any byte, baseline2 11 lanes in any lane)
+//      8 stray words: clocks with in_valid while no run expects words (idle without start,
+//        after the last word, DRAIN, EMIT)
+//      9 consumer stalls: clocks with in_valid while a started run is not ready yet (the
+//        start clock, SETUP, MASK): in_ready low, the producer held off
+//      10 result checksum: c = rotl1(c) xor y[row] over the rows in order, 32 bits, at the
+//        write into the result memory; the host recomputes it from the Y lines it received,
+//        so a result memory read that differs from its write shows
+// The `a` counters are 32 bits; cycles and idle clocks of one run stay far below 2^32 at
+// 83.33 MHz (1024 rows of 1024 words = 2^20 words).
+// Constant multiplies are shifts and adds; digit arithmetic is table lookups (the dense5
+// tables of fpga_ddr3_reader.t27, checked against bram_trit_codec.t27 in the tests); there is
+// no division. Every statement of on_clock reads a variable before the same tick writes it.
+const ST_IDLE: u32 = 0;
+const ST_SETUP: u32 = 1;
+const ST_MASK: u32 = 2;
+const ST_RUN: u32 = 3;
+const ST_DRAIN: u32 = 4;
+const ST_EMIT: u32 = 5;
+const E_READ: u32 = 0;
+const E_FORM: u32 = 1;
+const E_CHECK: u32 = 5;
+const E_SEND: u32 = 2;
+const E_START: u32 = 3;
+const E_WAIT: u32 = 4;
+const FMT_B2: u32 = 0;
+const FMT_D5: u32 = 1;
+const MAX_ROWS: u32 = 1024;
+const MAX_WPR: u32 = 1024;
+const Z_COUNT: u32 = 11;
+const IDLE_LOG2: u32 = 16;
+const TAG_Y: u32 = 89;
+const TAG_Z: u32 = 90;
+const BIAS80: u32 = 10240;
+const PAIRS: u64 = 6148914691236517205;
+const M32: u64 = 4294967295;
+const ALL_ONES: u32 = 4294967295;
+const CRC_POLY: u32 = 3988292384;
+
+// Activation banks (block RAM), their read registers and the result memory.
+var act0: [1024]u64;
+var act1: [1024]u64;
+var act2: [1024]u64;
+var act3: [1024]u64;
+var act4: [1024]u64;
+var act5: [1024]u64;
+var act6: [1024]u64;
+var act7: [1024]u64;
+var act8: [1024]u64;
+var act9: [1024]u64;
+var ar0: u64;
+var ar1: u64;
+var ar2: u64;
+var ar3: u64;
+var ar4: u64;
+var ar5: u64;
+var ar6: u64;
+var ar7: u64;
+var ar8: u64;
+var ar9: u64;
+var res_mem: [1024]u32;
+var res_rd: u32;
+
+// Run configuration and sequencer.
+var st: u32 = 0;
+var rows: u32 = 0;
+var rows_m1: u32 = 0;
+var cols: u32 = 0;
+var fmt: u32 = 0;
+var seq: u32 = 0;
+var refused: bool = false;
+var su_r: u32 = 0;
+var su_w: u32 = 0;
+var wpr: u32 = 0;
+var wpr_m2: u32 = 0;
+var wpr_is1: bool = false;
+var last_lanes: u32 = 0;
+var lm0: u64 = 0;
+var lm1: u64 = 0;
+var lm2: u64 = 0;
+
+// Input side.
+var k: u32 = 0;
+var is_first: bool = true;
+var is_last: bool = false;
+var rows_in: u32 = 0;
+var input_done: bool = false;
+var seen_first: bool = false;
+var quiet: u32 = 0;
+var aborting: bool = false;
+var short_run: bool = false;
+
+// Counters of a run.
+var words: u32 = 0;
+var cycles: u32 = 0;
+var idle_clocks: u32 = 0;
+var latency: u32 = 0;
+var invalid: u32 = 0;
+var stray: u32 = 0;
+var cons_stalls: u32 = 0;
+var rows_done: u32 = 0;
+var chk: u32 = 0;
+
+// Pipeline.
+var s0_v: bool = false;
+var s0_lo: u64 = 0;
+var s0_hi: u64 = 0;
+var s0_first: bool = false;
+var s0_last: bool = false;
+var s1_v: bool = false;
+var s1_l0: u64 = 0;
+var s1_l1: u64 = 0;
+var s1_l2: u64 = 0;
+var s1_f0: u64 = 0;
+var s1_f1: u64 = 0;
+var s1_first: bool = false;
+var s1_last: bool = false;
+var s1_a0: u64 = 0;
+var s1_a1: u64 = 0;
+var s1_a2: u64 = 0;
+var s1_a3: u64 = 0;
+var s1_a4: u64 = 0;
+var s1_a5: u64 = 0;
+var s1_a6: u64 = 0;
+var s1_a7: u64 = 0;
+var s1_a8: u64 = 0;
+var s1_a9: u64 = 0;
+var s2_v: bool = false;
+var s2_t0: u64 = 0;
+var s2_t1: u64 = 0;
+var s2_t2: u64 = 0;
+var s2_t3: u64 = 0;
+var s2_t4: u64 = 0;
+var s2_t5: u64 = 0;
+var s2_t6: u64 = 0;
+var s2_t7: u64 = 0;
+var s2_t8: u64 = 0;
+var s2_t9: u64 = 0;
+var s2_n0: u64 = 0;
+var s2_n1: u64 = 0;
+var s2_fc: u64 = 0;
+var s2_first: bool = false;
+var s2_last: bool = false;
+var s3_v: bool = false;
+var s3_q0: u64 = 0;
+var s3_q1: u64 = 0;
+var s3_q2: u64 = 0;
+var s3_q3: u64 = 0;
+var s3_q4: u64 = 0;
+var s3_c: u64 = 0;
+var s3_inv: u32 = 0;
+var s3_first: bool = false;
+var s3_last: bool = false;
+var s4_v: bool = false;
+var s4_p: u64 = 0;
+var s4_p4: u64 = 0;
+var s4_neg: u64 = 0;
+var s4_first: bool = false;
+var s4_last: bool = false;
+var s45_v: bool = false;
+var s45_pa: u32 = 0;
+var s45_pb: u32 = 0;
+var s45_first: bool = false;
+var s45_last: bool = false;
+var s5_v: bool = false;
+var s5_sum: u32 = 0;
+var s5_first: bool = false;
+var s5_last: bool = false;
+var s6_v: bool = false;
+var s6_dot: u32 = 0;
+var s6_first: bool = false;
+var s6_last: bool = false;
+var acc: u32 = 0;
+var s7_v: bool = false;
+var s7_row: u32 = 0;
+var s7_val: u32 = 0;
+var row_out: u32 = 0;
+
+// Emission and the line emitter request.
+var e_ph: u32 = 0;
+var e_idx: u32 = 0;
+var e_z: bool = false;
+var line_go: bool = false;
+var line_tag: u32 = 0;
+var line_a: u32 = 0;
+var line_b: u64 = 0;
+var em_v: u32 = 0;
+var busy: bool = false;
+var done: bool = false;
+var runs: u32 = 0;
+
+fn crc_byte(c: u32, b: u32) -> u32 {
+    var x: u32 = c ^ (b & 255);
+    var i: u32 = 0;
+    while (i < 8) {
+        if ((x & 1) != 0) { x = (x >> 1) ^ CRC_POLY; } else { x = x >> 1; }
+        i = i + 1;
+    }
+    return x;
+}
+
+// Check byte of a line: low byte of the CRC-32 of tag, a (4 bytes) and v (4 bytes), as the loader.
+fn line_check(tag: u32, a: u32, v: u32) -> u32 {
+    var c: u32 = crc_byte(ALL_ONES, tag);
+    c = crc_byte(c, a);
+    c = crc_byte(c, a >> 8);
+    c = crc_byte(c, a >> 16);
+    c = crc_byte(c, a >> 24);
+    c = crc_byte(c, v);
+    c = crc_byte(c, v >> 8);
+    c = crc_byte(c, v >> 16);
+    c = crc_byte(c, v >> 24);
+    return (c ^ ALL_ONES) & 255;
+}
+
+fn line_bits(tag: u32, a: u32, v: u32) -> u64 {
+    var hi: u64 = line_check(tag, a, v) as u64;
+    return (hi << 32) | (v as u64);
+}
+
+// Dense5 byte -> its five lane codes in bits 9:0, bit 10 set for an invalid code (243-255,
+// lanes 00). The tables of fpga_ddr3_reader.t27: output bit k of code c is bit c mod 32 of
+// word c / 32 of table k.
+fn d5t0(w: u64) -> u64 {
+    var t: u64 = 613566756;
+    if (w == 1) { t = 1227133513; }
+    if (w == 2) { t = 2454267026; }
+    if (w == 3) { t = 613566756; }
+    if (w == 4) { t = 1227133513; }
+    if (w == 5) { t = 2454267026; }
+    if (w == 6) { t = 613566756; }
+    if (w == 7) { t = 299593; }
+    return t;
+}
+
+fn d5t1(w: u64) -> u64 {
+    var t: u64 = 1227133513;
+    if (w == 1) { t = 2454267026; }
+    if (w == 2) { t = 613566756; }
+    if (w == 3) { t = 1227133513; }
+    if (w == 4) { t = 2454267026; }
+    if (w == 5) { t = 613566756; }
+    if (w == 6) { t = 1227133513; }
+    if (w == 7) { t = 74898; }
+    return t;
+}
+
+fn d5t2(w: u64) -> u64 {
+    var t: u64 = 117670336;
+    if (w == 1) { t = 1882725390; }
+    if (w == 2) { t = 58835168; }
+    if (w == 3) { t = 941362695; }
+    if (w == 4) { t = 2176901232; }
+    if (w == 5) { t = 470681347; }
+    if (w == 6) { t = 3235934264; }
+    if (w == 7) { t = 459649; }
+    return t;
+}
+
+fn d5t3(w: u64) -> u64 {
+    var t: u64 = 941362695;
+    if (w == 1) { t = 2176901232; }
+    if (w == 2) { t = 470681347; }
+    if (w == 3) { t = 3235934264; }
+    if (w == 4) { t = 235340673; }
+    if (w == 5) { t = 3765450780; }
+    if (w == 6) { t = 117670336; }
+    if (w == 7) { t = 7182; }
+    return t;
+}
+
+fn d5t4(w: u64) -> u64 {
+    var t: u64 = 133955584;
+    if (w == 1) { t = 4186112; }
+    if (w == 2) { t = 130816; }
+    if (w == 3) { t = 3221229560; }
+    if (w == 4) { t = 4261412991; }
+    if (w == 5) { t = 535822339; }
+    if (w == 6) { t = 16744448; }
+    if (w == 7) { t = 523264; }
+    return t;
+}
+
+fn d5t5(w: u64) -> u64 {
+    var t: u64 = 4160750079;
+    if (w == 1) { t = 2143289359; }
+    if (w == 2) { t = 66977792; }
+    if (w == 3) { t = 2093056; }
+    if (w == 4) { t = 65408; }
+    if (w == 5) { t = 3758098428; }
+    if (w == 6) { t = 4278190143; }
+    if (w == 7) { t = 1; }
+    return t;
+}
+
+fn d5t6(w: u64) -> u64 {
+    var t: u64 = 0;
+    if (w == 1) { t = 4290772992; }
+    if (w == 2) { t = 131071; }
+    if (w == 3) { t = 0; }
+    if (w == 4) { t = 4294967168; }
+    if (w == 5) { t = 3; }
+    if (w == 6) { t = 4278190080; }
+    if (w == 7) { t = 524287; }
+    return t;
+}
+
+fn d5t7(w: u64) -> u64 {
+    var t: u64 = 134217727;
+    if (w == 1) { t = 0; }
+    if (w == 2) { t = 4294836224; }
+    if (w == 3) { t = 4095; }
+    if (w == 4) { t = 0; }
+    if (w == 5) { t = 536870908; }
+    if (w == 6) { t = 0; }
+    if (w == 7) { t = 0; }
+    return t;
+}
+
+fn d5t8(w: u64) -> u64 {
+    var t: u64 = 0;
+    if (w == 1) { t = 0; }
+    if (w == 2) { t = 0; }
+    if (w == 3) { t = 0; }
+    if (w == 4) { t = 0; }
+    if (w == 5) { t = 4294967292; }
+    if (w == 6) { t = 4294967295; }
+    if (w == 7) { t = 524287; }
+    return t;
+}
+
+fn d5t9(w: u64) -> u64 {
+    var t: u64 = 4294967295;
+    if (w == 1) { t = 4294967295; }
+    if (w == 2) { t = 131071; }
+    if (w == 3) { t = 0; }
+    if (w == 4) { t = 0; }
+    if (w == 5) { t = 0; }
+    if (w == 6) { t = 0; }
+    if (w == 7) { t = 0; }
+    return t;
+}
+
+fn d5t10(w: u64) -> u64 {
+    var t: u64 = 0;
+    if (w == 1) { t = 0; }
+    if (w == 2) { t = 0; }
+    if (w == 3) { t = 0; }
+    if (w == 4) { t = 0; }
+    if (w == 5) { t = 0; }
+    if (w == 6) { t = 0; }
+    if (w == 7) { t = 4294443008; }
+    return t;
+}
+
+fn d5_dec(code: u64) -> u64 {
+    var w: u64 = (code >> 5) & 7;
+    var s: u64 = code & 31;
+    return ((d5t0(w) >> s) & 1)
+         | (((d5t1(w) >> s) & 1) << 1)
+         | (((d5t2(w) >> s) & 1) << 2)
+         | (((d5t3(w) >> s) & 1) << 3)
+         | (((d5t4(w) >> s) & 1) << 4)
+         | (((d5t5(w) >> s) & 1) << 5)
+         | (((d5t6(w) >> s) & 1) << 6)
+         | (((d5t7(w) >> s) & 1) << 7)
+         | (((d5t8(w) >> s) & 1) << 8)
+         | (((d5t9(w) >> s) & 1) << 9)
+         | (((d5t10(w) >> s) & 1) << 10);
+}
+
+// Byte n (0-7) of x, decoded: lanes in bits 9:0, invalid in bit 10.
+fn d5_at(x: u64, n: u32) -> u64 {
+    return d5_dec((x >> (n << 3)) & 255);
+}
+
+// Lane vector (160 bits: lanes 0-31 in l0, 32-63 in l1, 64-79 in the low 32 bits of l2) of a
+// dense5 word from its sixteen decoded bytes (d5_dec each); part selects l0, l1 or l2. Byte n gives
+// lanes 5n .. 5n+4 at bits 10n .. 10n+9. Each byte is decoded once (module-level dd0 .. dd15).
+fn d5_join(part: u32, e0: u64, e1: u64, e2: u64, e3: u64, e4: u64, e5: u64, e6: u64, e7: u64,
+           e8: u64, e9: u64, e10: u64, e11: u64, e12: u64, e13: u64, e14: u64, e15: u64) -> u64 {
+    var d0: u64 = e0 & 1023;
+    var d1: u64 = e1 & 1023;
+    var d2: u64 = e2 & 1023;
+    var d3: u64 = e3 & 1023;
+    var d4: u64 = e4 & 1023;
+    var d5: u64 = e5 & 1023;
+    var d6: u64 = e6 & 1023;
+    var d7: u64 = e7 & 1023;
+    var d8: u64 = e8 & 1023;
+    var d9: u64 = e9 & 1023;
+    var d10: u64 = e10 & 1023;
+    var d11: u64 = e11 & 1023;
+    var d12: u64 = e12 & 1023;
+    var d13: u64 = e13 & 1023;
+    var d14: u64 = e14 & 1023;
+    var d15: u64 = e15 & 1023;
+    var p0: u64 = d0 | (d1 << 10) | (d2 << 20) | (d3 << 30) | (d4 << 40) | (d5 << 50) | (d6 << 60);
+    var p1: u64 = (d6 >> 4) | (d7 << 6) | (d8 << 16) | (d9 << 26) | (d10 << 36) | (d11 << 46) | (d12 << 56);
+    var p2: u64 = (d12 >> 8) | (d13 << 2) | (d14 << 12) | (d15 << 22);
+    var r: u64 = p0;
+    if (part == 1) { r = p1; }
+    if (part == 2) { r = p2; }
+    return r;
+}
+
+// Invalid flags of eight decoded dense5 bytes: bit i = byte i's code is 243-255.
+fn d5_flags(e0: u64, e1: u64, e2: u64, e3: u64, e4: u64, e5: u64, e6: u64, e7: u64) -> u64 {
+    return (e0 >> 10) | ((e1 >> 10) << 1) | ((e2 >> 10) << 2) | ((e3 >> 10) << 3)
+         | ((e4 >> 10) << 4) | ((e5 >> 10) << 5) | ((e6 >> 10) << 6) | ((e7 >> 10) << 7);
+}
+
+// Baseline2: 32 lanes with every 11 lane cleared.
+fn b2_clean(x: u64) -> u64 {
+    var both: u64 = x & (x >> 1) & PAIRS;
+    return x ^ (both | (both << 1));
+}
+
+// Baseline2: invalid flags of 32 lanes, bit 2j set when lane j is 11.
+fn b2_flags(x: u64) -> u64 {
+    return x & (x >> 1) & PAIRS;
+}
+
+// Counts of set bits of f0 and f1 in eight 16-bit slices: count k in bits 8k .. 8k+7.
+fn flag_counts(f0: u64, f1: u64) -> u64 {
+    return pop16(f0) | (pop16(f0 >> 16) << 8) | (pop16(f0 >> 32) << 16) | (pop16(f0 >> 48) << 24)
+         | (pop16(f1) << 32) | (pop16(f1 >> 16) << 40) | (pop16(f1 >> 32) << 48) | (pop16(f1 >> 48) << 56);
+}
+
+// Sum of the eight 8-bit counts of flag_counts (at most 128 flags: 8 bits).
+fn sum8x8(c: u64) -> u32 {
+    return (((((c & 255) + ((c >> 8) & 255)) + (((c >> 16) & 255) + ((c >> 24) & 255)))
+          + ((((c >> 32) & 255) + ((c >> 40) & 255)) + (((c >> 48) & 255) + ((c >> 56) & 255)))) & 255) as u32;
+}
+
+// Lane mask (2 bits per lane) of lanes base .. base+31 that lie below n.
+fn therm(n: u32, base: u32) -> u64 {
+    var m: u64 = 0;
+    var three: u64 = 3;
+    var j: u32 = 0;
+    while (j < 32) {
+        if (base + j < n) { m = m | (three << (j << 1)); }
+        j = j + 1;
+    }
+    return m;
+}
+
+// Eight biased terms (byte i: lane `first + i`) of the lane codes in `lanes` starting at bit
+// 2 * first, against the eight activations of `act` (byte i the activation of that lane):
+// +1 -> x xor 0x80, -1 -> x xor 0x7F, 0 or 11 -> 0x80.
+fn terms8(lanes: u64, first: u32, act: u64) -> u64 {
+    var out: u64 = 0;
+    var i: u32 = 0;
+    while (i < 8) {
+        var code: u64 = (lanes >> ((first + i) << 1)) & 3;
+        var x: u64 = (act >> (i << 3)) & 255;
+        var t: u64 = 128;
+        if (code == 1) { t = x ^ 128; }
+        if (code == 2) { t = x ^ 127; }
+        out = out | (t << (i << 3));
+        i = i + 1;
+    }
+    return out;
+}
+
+// Bit i set when lane `first + i` of `lanes` is -1 (code 10), i = 0 .. 7.
+fn neg8(lanes: u64, first: u32) -> u64 {
+    var out: u64 = 0;
+    var i: u32 = 0;
+    while (i < 8) {
+        var code: u64 = (lanes >> ((first + i) << 1)) & 3;
+        if (code == 2) { out = out | (1 << i); }
+        i = i + 1;
+    }
+    return out;
+}
+
+fn byte_of(t: u64, i: u32) -> u64 {
+    return (t >> (i << 3)) & 255;
+}
+
+// Sums of bytes 0-3 and 4-7 of t, in bits 15:0 and 31:16.
+fn quad2(t: u64) -> u64 {
+    var a: u64 = (byte_of(t, 0) + byte_of(t, 1)) + (byte_of(t, 2) + byte_of(t, 3));
+    var b: u64 = (byte_of(t, 4) + byte_of(t, 5)) + (byte_of(t, 6) + byte_of(t, 7));
+    return a | (b << 16);
+}
+
+fn f16(x: u64, i: u32) -> u64 {
+    return (x >> (i << 4)) & 65535;
+}
+
+// Number of set bits among the low 16 bits of x.
+fn pop16(x: u64) -> u64 {
+    var n: u64 = 0;
+    var j: u32 = 0;
+    while (j < 16) {
+        n = n + ((x >> j) & 1);
+        j = j + 1;
+    }
+    return n;
+}
+
+fn pick64(c: bool, a: u64, b: u64) -> u64 {
+    var r: u64 = b;
+    if (c) { r = a; }
+    return r;
+}
+
+fn pick32(c: bool, a: u32, b: u32) -> u32 {
+    var r: u32 = b;
+    if (c) { r = a; }
+    return r;
+}
+
+fn rotl1_32(x: u32) -> u32 {
+    return (x << 1) | (x >> 31);
+}
+
+fn zval(i: u32, refd: bool, sh: bool, rd: u32, w: u32, wd: u32, cy: u32, idl: u32, lat: u32, inv: u32, sw: u32,
+        cs: u32, c: u32) -> u32 {
+    var v: u32 = c;
+    if (i == 0) { v = 0; if (sh) { v = 2; } if (refd) { v = 1; } }
+    if (i == 1) { v = rd; }
+    if (i == 2) { v = w; }
+    if (i == 3) { v = wd; }
+    if (i == 4) { v = cy; }
+    if (i == 5) { v = idl; }
+    if (i == 6) { v = lat; }
+    if (i == 7) { v = inv; }
+    if (i == 8) { v = sw; }
+    if (i == 9) { v = cs; }
+    return v;
+}
+
+// A run's configuration is refused when rows is outside 1 .. 1024, cols is 0 or fmt is not 0 or 1
+// (a row over 1024 words is refused in SETUP).
+fn config_ok(r: u32, c: u32, f: u32) -> bool {
+    return r >= 1 && r <= MAX_ROWS && c >= 1 && (f == FMT_B2 || f == FMT_D5);
+}
+
+fn lanes_of(f: u32) -> u32 {
+    var n: u32 = 64;
+    if (f == FMT_D5) { n = 80; }
+    return n;
+}
+
+// Module-level (combinational): gen-verilog declares on_clock locals where they appear.
+var lanes_w: u32;
+var su_fits: bool;
+var su_next: u32;
+var taking: bool;
+var in_ready: bool;
+var word_in: bool;
+var pre_run: bool;
+var start_now: bool;
+var start_stall: u32;
+var quiet_hit: bool;
+var pipe_idle: bool;
+var k_plus: u32;
+var last_after: bool;
+var dl0: u64;
+var dl1: u64;
+var dl2: u64;
+var dd0: u64;
+var dd1: u64;
+var dd2: u64;
+var dd3: u64;
+var dd4: u64;
+var dd5: u64;
+var dd6: u64;
+var dd7: u64;
+var dd8: u64;
+var dd9: u64;
+var dd10: u64;
+var dd11: u64;
+var dd12: u64;
+var dd13: u64;
+var dd14: u64;
+var dd15: u64;
+var df0: u64;
+var df1: u64;
+var m0: u64;
+var m1: u64;
+var m2: u64;
+var ml0: u64;
+var ml1: u64;
+var ml2: u64;
+var q0: u64;
+var q1: u64;
+var q2: u64;
+var q3: u64;
+var q4: u64;
+var cq: u64;
+var p4sum: u64;
+var p4tail: u64;
+var negsum: u64;
+var s45_a: u32;
+var s45_b: u32;
+var s5_next: u32;
+var s6_next: u32;
+var acc_base: u32;
+var acc_next: u32;
+var z_a: u32;
+var y_a: u32;
+var e_tag: u32;
+var e_a: u32;
+var e_v: u32;
+var e_bits: u64;
+var z_v: u32;
+lanes_w = lanes_of(fmt);
+su_fits = su_r <= lanes_w;
+su_next = su_r - lanes_w;
+taking = st == ST_RUN && !input_done;
+in_ready = taking;
+word_in = in_valid && taking;
+pre_run = st == ST_SETUP || st == ST_MASK;
+start_now = st == ST_IDLE && start;
+start_stall = pick32(in_valid, 1, 0);
+quiet_hit = (quiet >> IDLE_LOG2) != 0;
+pipe_idle = !s0_v && !s1_v && !s2_v && !s3_v && !s4_v && !s45_v && !s5_v && !s6_v && !s7_v;
+k_plus = (k + 1) & 1023;
+last_after = k == wpr_m2;
+dd0 = d5_at(s0_lo, 0);
+dd1 = d5_at(s0_lo, 1);
+dd2 = d5_at(s0_lo, 2);
+dd3 = d5_at(s0_lo, 3);
+dd4 = d5_at(s0_lo, 4);
+dd5 = d5_at(s0_lo, 5);
+dd6 = d5_at(s0_lo, 6);
+dd7 = d5_at(s0_lo, 7);
+dd8 = d5_at(s0_hi, 0);
+dd9 = d5_at(s0_hi, 1);
+dd10 = d5_at(s0_hi, 2);
+dd11 = d5_at(s0_hi, 3);
+dd12 = d5_at(s0_hi, 4);
+dd13 = d5_at(s0_hi, 5);
+dd14 = d5_at(s0_hi, 6);
+dd15 = d5_at(s0_hi, 7);
+dl0 = pick64(fmt == FMT_D5, d5_join(0, dd0, dd1, dd2, dd3, dd4, dd5, dd6, dd7, dd8, dd9, dd10, dd11, dd12, dd13, dd14, dd15), b2_clean(s0_lo));
+dl1 = pick64(fmt == FMT_D5, d5_join(1, dd0, dd1, dd2, dd3, dd4, dd5, dd6, dd7, dd8, dd9, dd10, dd11, dd12, dd13, dd14, dd15), b2_clean(s0_hi));
+dl2 = pick64(fmt == FMT_D5, d5_join(2, dd0, dd1, dd2, dd3, dd4, dd5, dd6, dd7, dd8, dd9, dd10, dd11, dd12, dd13, dd14, dd15), 0);
+df0 = pick64(fmt == FMT_D5, d5_flags(dd0, dd1, dd2, dd3, dd4, dd5, dd6, dd7) | (d5_flags(dd8, dd9, dd10, dd11, dd12, dd13, dd14, dd15) << 8),
+             b2_flags(s0_lo));
+df1 = pick64(fmt == FMT_D5, 0, b2_flags(s0_hi));
+ml0 = therm(last_lanes, 0);
+ml1 = therm(last_lanes, 32);
+ml2 = therm(last_lanes, 64) & M32;
+m0 = s1_l0 & pick64(s1_last, lm0, 18446744073709551615);
+m1 = s1_l1 & pick64(s1_last, lm1, 18446744073709551615);
+m2 = s1_l2 & pick64(s1_last, lm2, M32);
+q0 = quad2(s2_t0) | (quad2(s2_t1) << 32);
+q1 = quad2(s2_t2) | (quad2(s2_t3) << 32);
+q2 = quad2(s2_t4) | (quad2(s2_t5) << 32);
+q3 = quad2(s2_t6) | (quad2(s2_t7) << 32);
+q4 = quad2(s2_t8) | (quad2(s2_t9) << 32);
+cq = pop16(s2_n0) | (pop16(s2_n0 >> 16) << 8) | (pop16(s2_n0 >> 32) << 16) | (pop16(s2_n0 >> 48) << 24)
+   | (pop16(s2_n1) << 32);
+p4sum = ((f16(s3_q0, 0) + f16(s3_q0, 1)) + (f16(s3_q0, 2) + f16(s3_q0, 3)))
+      | (((f16(s3_q1, 0) + f16(s3_q1, 1)) + (f16(s3_q1, 2) + f16(s3_q1, 3))) << 16)
+      | (((f16(s3_q2, 0) + f16(s3_q2, 1)) + (f16(s3_q2, 2) + f16(s3_q2, 3))) << 32)
+      | (((f16(s3_q3, 0) + f16(s3_q3, 1)) + (f16(s3_q3, 2) + f16(s3_q3, 3))) << 48);
+p4tail = (f16(s3_q4, 0) + f16(s3_q4, 1)) + (f16(s3_q4, 2) + f16(s3_q4, 3));
+negsum = ((((s3_c & 255) + ((s3_c >> 8) & 255)) + (((s3_c >> 16) & 255) + ((s3_c >> 24) & 255)))
+       + ((s3_c >> 32) & 255));
+s45_a = ((((f16(s4_p, 0) + f16(s4_p, 1)) + (f16(s4_p, 2) + f16(s4_p, 3)))) & 65535) as u32;
+s45_b = ((s4_p4 + s4_neg) & 65535) as u32;
+s5_next = (s45_pa + s45_pb) & 65535;
+s6_next = s5_sum - BIAS80;
+acc_base = pick32(s6_first, 0, acc);
+acc_next = acc_base + s6_dot;
+y_a = ((seq & 255) << 24) | (e_idx & 16777215);
+z_a = ((seq & 255) << 24) | (Z_COUNT << 16) | e_idx;
+z_v = zval(e_idx, refused, short_run, rows_done, wpr, words, cycles, idle_clocks, latency, invalid, stray, cons_stalls, chk);
+e_tag = pick32(e_z, TAG_Z, TAG_Y);
+e_a = pick32(e_z, z_a, y_a);
+e_v = pick32(e_z, z_v, res_rd);
+e_bits = line_bits(line_tag, line_a, em_v);
+
+// start with cfg_rows, cfg_cols, cfg_fmt, cfg_seq: a run (taken while idle). in_valid,
+// in_lo, in_hi: a bus word (bytes 0-7, 8-15), taken when in_ready is high. act_we, act_entry,
+// act_bank, act_data: one activation word. line_idle: the line emitter's idle. abort: end the
+// running run early (status 2); a pulse is kept until the run ends.
+fn on_clock(start: bool, cfg_rows: u32, cfg_cols: u32, cfg_fmt: u32, cfg_seq: u32,
+            in_valid: bool, in_lo: u64, in_hi: u64,
+            act_we: bool, act_entry: u32, act_bank: u32, act_data: u64, line_idle: bool, abort: bool) {
+    // Activation writes and the reads of the block being taken.
+    if (act_we && act_bank == 0) { act0[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 1) { act1[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 2) { act2[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 3) { act3[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 4) { act4[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 5) { act5[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 6) { act6[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 7) { act7[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 8) { act8[act_entry & 1023] = act_data; }
+    if (act_we && act_bank == 9) { act9[act_entry & 1023] = act_data; }
+    ar0 = act0[k];
+    ar1 = act1[k];
+    ar2 = act2[k];
+    ar3 = act3[k];
+    ar4 = act4[k];
+    ar5 = act5[k];
+    ar6 = act6[k];
+    ar7 = act7[k];
+    ar8 = act8[k];
+    ar9 = act9[k];
+    res_rd = res_mem[e_idx & 1023];
+    if (s7_v) { res_mem[s7_row & 1023] = s7_val; }
+
+    // Pipeline, last stage first: every value read is the one from before this tick.
+    if (s7_v) {
+        chk = rotl1_32(chk) ^ s7_val;
+        rows_done = rows_done + 1;
+    }
+    s7_v = s6_v && s6_last;
+    s7_row = row_out;
+    s7_val = acc_next;
+    if (s6_v) {
+        acc = acc_next;
+        if (s6_last) { row_out = row_out + 1; }
+    }
+    s6_v = s5_v;
+    s6_dot = s6_next;
+    s6_first = s5_first;
+    s6_last = s5_last;
+    s5_v = s45_v;
+    s5_sum = s5_next;
+    s5_first = s45_first;
+    s5_last = s45_last;
+    s45_v = s4_v;
+    s45_pa = s45_a;
+    s45_pb = s45_b;
+    s45_first = s4_first;
+    s45_last = s4_last;
+    s4_v = s3_v;
+    s4_p = p4sum;
+    s4_p4 = p4tail;
+    s4_neg = negsum;
+    if (s3_v) { invalid = invalid + s3_inv; }
+    s4_first = s3_first;
+    s4_last = s3_last;
+    s3_v = s2_v;
+    s3_q0 = q0;
+    s3_q1 = q1;
+    s3_q2 = q2;
+    s3_q3 = q3;
+    s3_q4 = q4;
+    s3_c = cq;
+    s3_inv = sum8x8(s2_fc);
+    s3_first = s2_first;
+    s3_last = s2_last;
+    s2_v = s1_v;
+    s2_t0 = terms8(m0, 0, s1_a0);
+    s2_t1 = terms8(m0, 8, s1_a1);
+    s2_t2 = terms8(m0, 16, s1_a2);
+    s2_t3 = terms8(m0, 24, s1_a3);
+    s2_t4 = terms8(m1, 0, s1_a4);
+    s2_t5 = terms8(m1, 8, s1_a5);
+    s2_t6 = terms8(m1, 16, s1_a6);
+    s2_t7 = terms8(m1, 24, s1_a7);
+    s2_t8 = terms8(m2, 0, s1_a8);
+    s2_t9 = terms8(m2, 8, s1_a9);
+    s2_n0 = neg8(m0, 0) | (neg8(m0, 8) << 8) | (neg8(m0, 16) << 16) | (neg8(m0, 24) << 24)
+          | (neg8(m1, 0) << 32) | (neg8(m1, 8) << 40) | (neg8(m1, 16) << 48) | (neg8(m1, 24) << 56);
+    s2_n1 = neg8(m2, 0) | (neg8(m2, 8) << 8);
+    s2_fc = flag_counts(s1_f0, s1_f1);
+    s2_first = s1_first;
+    s2_last = s1_last;
+    s1_v = s0_v;
+    s1_l0 = dl0;
+    s1_l1 = dl1;
+    s1_l2 = dl2;
+    s1_f0 = df0;
+    s1_f1 = df1;
+    s1_first = s0_first;
+    s1_last = s0_last;
+    s1_a0 = ar0;
+    s1_a1 = ar1;
+    s1_a2 = ar2;
+    s1_a3 = ar3;
+    s1_a4 = ar4;
+    s1_a5 = ar5;
+    s1_a6 = ar6;
+    s1_a7 = ar7;
+    s1_a8 = ar8;
+    s1_a9 = ar9;
+    s0_v = word_in;
+    s0_lo = in_lo;
+    s0_hi = in_hi;
+    s0_first = is_first;
+    s0_last = is_last;
+
+    // Input side and counters.
+    if (in_valid && !taking && !pre_run && !start_now) { stray = stray + 1; }
+    if (in_valid && pre_run) { cons_stalls = cons_stalls + 1; }
+    if (word_in || !taking) { quiet = 0; } else { quiet = quiet + 1; }
+    if (abort && st != ST_IDLE) { aborting = true; }
+    if (taking) {
+        if (seen_first || in_valid) { cycles = cycles + 1; }
+        if (seen_first && !in_valid) { idle_clocks = idle_clocks + 1; }
+        if (!seen_first && !in_valid) { latency = latency + 1; }
+    }
+    if (word_in) {
+        seen_first = true;
+        words = words + 1;
+        if (is_last) {
+            k = 0;
+            is_first = true;
+            is_last = wpr_is1;
+            rows_in = rows_in + 1;
+            if (rows_in == rows_m1) { input_done = true; }
+        } else {
+            k = k_plus;
+            is_first = false;
+            is_last = last_after;
+        }
+    }
+
+    // Sequencer.
+    done = false;
+    line_go = false;
+    if (st == ST_IDLE) {
+        if (start) {
+            rows = cfg_rows;
+            rows_m1 = cfg_rows - 1;
+            cols = cfg_cols;
+            fmt = cfg_fmt & 1;
+            seq = cfg_seq & 255;
+            refused = !config_ok(cfg_rows, cfg_cols, cfg_fmt);
+            su_r = cfg_cols;
+            su_w = 0;
+            wpr = 0;
+            last_lanes = 0;
+            words = 0;
+            cycles = 0;
+            idle_clocks = 0;
+            latency = 0;
+            invalid = 0;
+            stray = 0;
+            cons_stalls = start_stall;
+            aborting = false;
+            short_run = false;
+            rows_done = 0;
+            chk = 0;
+            row_out = 0;
+            rows_in = 0;
+            seen_first = false;
+            input_done = false;
+            busy = true;
+            st = ST_SETUP;
+        }
+    } else if (st == ST_SETUP) {
+        if (refused) {
+            e_idx = 0;
+            e_z = true;
+            e_ph = E_READ;
+            st = ST_EMIT;
+        } else if (su_fits) {
+            wpr = su_w + 1;
+            last_lanes = su_r;
+            st = ST_MASK;
+        } else if (su_w == MAX_WPR - 1) {
+            refused = true;
+        } else {
+            su_r = su_next;
+            su_w = su_w + 1;
+        }
+    } else if (st == ST_MASK) {
+        lm0 = ml0;
+        lm1 = ml1;
+        lm2 = ml2;
+        wpr_m2 = wpr - 2;
+        wpr_is1 = wpr == 1;
+        is_last = wpr == 1;
+        is_first = true;
+        k = 0;
+        st = ST_RUN;
+    } else if (st == ST_RUN) {
+        if (input_done) {
+            st = ST_DRAIN;
+        } else if (aborting || quiet_hit) {
+            // The words stopped (or abort): end early, take nothing more, drain, send the Z lines.
+            input_done = true;
+            short_run = true;
+            st = ST_DRAIN;
+        }
+    } else if (st == ST_DRAIN) {
+        if (short_run) {
+            if (pipe_idle) {
+                e_idx = 0;
+                e_z = true;
+                e_ph = E_READ;
+                st = ST_EMIT;
+            }
+        } else if (rows_done == rows) {
+            e_idx = 0;
+            e_z = false;
+            e_ph = E_READ;
+            st = ST_EMIT;
+        }
+    } else if (st == ST_EMIT) {
+        if (e_ph == E_READ) {
+            e_ph = E_FORM;
+        } else if (e_ph == E_FORM) {
+            line_tag = e_tag;
+            line_a = e_a;
+            em_v = e_v;
+            e_ph = E_CHECK;
+        } else if (e_ph == E_CHECK) {
+            // The check byte from the registered tag, a and v: its CRC network has a clock of its own.
+            line_b = e_bits;
+            e_ph = E_SEND;
+        } else if (e_ph == E_SEND) {
+            if (line_idle) {
+                line_go = true;
+                e_ph = E_START;
+            }
+        } else if (e_ph == E_START) {
+            e_ph = E_WAIT;
+        } else {
+            if (line_idle) {
+                e_ph = E_READ;
+                if (!e_z && e_idx == rows_m1) {
+                    e_z = true;
+                    e_idx = 0;
+                } else if (e_z && e_idx == Z_COUNT - 1) {
+                    busy = false;
+                    done = true;
+                    runs = runs + 1;
+                    st = ST_IDLE;
+                } else {
+                    e_idx = e_idx + 1;
+                }
+            }
+        }
+    }
+}
+
+test crc_check_of_a_line { assert_eq(line_check(65, 0, 0), line_check(65, 0, 0)); assert_eq(crc_byte(4294967295, 97) ^ 4294967295, 3904355907); }
+test dense5_tables { assert_eq(d5_dec(121), 0); assert_eq(d5_dec(242), 341); assert_eq(d5_dec(0), 682); assert_eq(d5_dec(243), 1024); }
+test dense5_word_lanes { assert_eq(d5_join(0, 341, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 341); assert_eq(d5_flags(1024, 0, 0, 0, 0, 0, 0, 1024), 129); }
+test baseline2_clean_and_invalid { assert_eq(b2_clean(15), 0); assert_eq(b2_flags(15), 5); assert_eq(b2_clean(6), 6); assert_eq(sum8x8(flag_counts(5, 3)), 4); }
+test lane_masks { assert_eq(therm(3, 0), 63); assert_eq(therm(37, 32), 1023); assert_eq(therm(10, 32), 0); }
+test biased_terms { assert_eq(terms8(1, 0, 5), 9259542123273814149); assert_eq(terms8(2, 0, 5), 9259542123273814138); assert_eq(neg8(2, 0), 1); }
+test sums { assert_eq(quad2(72340172838076673), 262148); assert_eq(pop16(65535), 16); }
+test run_status { assert_eq(zval(0, false, false, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 0); assert_eq(zval(0, false, true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 2); assert_eq(zval(0, true, false, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 1); assert_eq(zval(10, false, true, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10), 10); }
+test config { assert_eq(config_ok(320, 2560, 1), true); assert_eq(config_ok(0, 2560, 1), false); assert_eq(config_ok(1025, 2560, 0), false); assert_eq(config_ok(1, 1, 2), false); }
+endmodule

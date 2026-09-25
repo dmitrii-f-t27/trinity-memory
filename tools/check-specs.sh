@@ -130,7 +130,7 @@ done
 # (build/t27/specs/impl) so both can be included from one translation unit.
 impl="$out/impl"
 mkdir -p "$impl/specs"
-for module in codecs container tensorpack json json_writer tensorpack_json bridge client compute formats; do
+for module in codecs container tensorpack json json_writer tensorpack_json fpga_link bridge client compute formats; do
     "$compiler" gen-c "t27/$module.t27" > "$impl/$module.h"
 done
 # The dot pipeline source is generated to C as well, so the harness compares the
