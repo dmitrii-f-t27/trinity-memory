@@ -773,8 +773,9 @@ none has run on the board.
   bytes). `port_give_up` now drops them. The `TBPORT` monitor, in every scenario (`watchdog`
   showed 349 clocks before the fix).
 - **Status line `clocks` was one status line old**, not one clock as its comment said: a copy
-  taken in the clock the line was sampled reached it on the next line. The line now carries
-  the counter itself.
+  taken in the clock the line was sampled reached it on the next line. The line is now sent from
+  that copy, taken in the clock before (the counter itself stays out of the module-level logic,
+  which the generated Verilog would otherwise evaluate again in every clock).
 - Minor: the flush of a buffered word did not wait for fewer than 8 outstanding requests
   ("Write side").
 

@@ -153,6 +153,7 @@ const PTR_MASK: u32 = 2047;
 const MIN_DIV: u32 = 16;
 const MAX_DIV: u32 = 65535;
 const STATUS_LINES: u32 = 37;        // [ddr3] 23 in part 1
+const ST_CLOCKS: u32 = 20;           // [ddr3] the status line `clocks`
 const DONE_CALIBRATE: u32 = 23;      // [ddr3]
 const RESP_SETTLE: u8 = 11;          // [ddr3] clocks P_RESP waits for the check byte pipeline
 const ALL_ONES: u32 = 4294967295;
@@ -266,6 +267,7 @@ var rb_data_end_q: u32 = 0;
 var rb_end_q: u32 = 0;
 var resp_bits_q: u64 = 0;
 var status_q: u32 = 0;               // the status line of st_i (P_STATUS settles one clock)
+var clocks_at: u32 = 0;              // the clock count for the status line, taken when P_STATUS settles
 // The response line's check byte, one byte of CRC per clock: lc0 after the tag, lc1-lc4 after a,
 // lc5-lc8 after v; resp_bits_q is right RESP_SETTLE clocks after resp_* last changed.
 var lc0: u32 = 0;
@@ -586,7 +588,7 @@ lcn8 = crc_byte_par(lc7, line_value >> 24);
 status_next = status_all(st_i, rx_bytes, rx_ferrs, rx_false, fifo_overflows, fifo_hwm, ignored,   // [ddr3]
                          frames_ok, frames_dup, nak_crc, nak_length, nak_timeout, nak_framing, nak_command,
                          nak_overflow, bytes_committed, readbacks, div_now, baud_reverts, last_word,
-                         config_word, clocks, build_id, nak_port, nak_not_ready,
+                         config_word, clocks_at, build_id, nak_port, nak_not_ready,
                          cal_word(calib, cal_now, cal_top, cal_recals), cal_at, cal_lost, wb_writes, wb_reads,
                          wb_hits, wb_dropped, wb_stray, wb_max_outst, wb_rd_lat_max, wb_cmd_stalls, arb_switches,
                          arb_stray);
@@ -729,6 +731,7 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
         }
     } else if (((pstate == P_HDR_CHECK || pstate == P_CHECK || pstate == P_STATUS) && settle_n == 0) || (pstate == P_RESP && settle_n < RESP_SETTLE)) {
         settle_n = settle_n + 1;                         // [ddr3] the registered checks settle
+        clocks_at = clocks;                              // [ddr3] (status line `clocks`, sent from clocks_at)
     } else if (pstate == P_HDR_CHECK) {
         settle_n = 0;                                    // [ddr3]
         if (!cmd_known_q) {                              // [ddr3] cmd_index(h_cmd) == 0
@@ -924,6 +927,9 @@ fn on_clock(rx_valid: bool, rx_data: u32, rx_ferr: bool, rx_bytes: u32, rx_ferrs
             // A multiplexer, not a heavy function; kept out of the module-level block
             // because the clock counter changes every clock.
             resp_v = status_q;                           // [ddr3] status_value / status_ddr3 of st_i, registered
+            // [ddr3] Line `clocks` from clocks_at, taken in the settle clock just before: status_q
+            // sampled it in that same clock, so it held the previous status line's count.
+            if (st_i == ST_CLOCKS) { resp_v = clocks_at; }
             resp_counts = false;
             resp_after = P_STATUS;
             st_i = st_i + 1;
