@@ -473,6 +473,12 @@ class MatvecIcarus(unittest.TestCase):
                 self.assertEqual((z1["status"], z1["words"], z1["rows"], z1["words_per_row"]),
                                  (2, words_done, words_done // wpr, wpr))
                 self.assertEqual(z1["cycles"], z1["words"] + z1["idle_clocks"])       # identity
+                if label == "abort":
+                    # The abort ends the run at once, not at the idle limit (a module that ignored
+                    # abort would reach the same lines after 65,537 idle clocks).
+                    self.assertLess(z1["idle_clocks"], 64)
+                else:
+                    self.assertEqual(z1["idle_clocks"], 65_537)                       # 2^16 wordless clocks + the last
                 self.assertEqual(bench["runs_done"], 2)
                 _, z2 = self.check_run(events, bench, rows=rows, cols=cols, fmt=fmt, seq=31,
                                        want=expected_rows(trits, rows, cols, x))
@@ -535,6 +541,59 @@ class MatvecIcarus(unittest.TestCase):
                                       want=expected_rows(trits, rows, cols, x))
                 self.record(label, rows=rows, cols=cols, fmt=fmt, gap=5, seed=2, z=z, bench=bench, elapsed=elapsed,
                             nbytes=nbytes, exact=True)
+
+    def test_dense5_last_words_of_65_to_79_lanes(self):
+        # The third 32-lane group of a dense5 word partly used (lanes 64-79): +1 in every padding lane
+        # with activation 77 behind it, so an unmasked lane adds 77 to its row.
+        rng = random.Random(70)
+        for rows, cols in ((3, 70), (2, 79), (2, 145)):
+            with self.subTest(cols=cols):
+                trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+                x = [rng.randint(-128, 127) for _ in range(cols)]
+                image = bytearray(link.image(trits, rows, cols, 1))
+                wpr = link.words_per_row(cols, 1)
+                for r in range(rows):
+                    for j in range(cols, wpr * 80):
+                        byte, digit = r * wpr * 16 + j // 5, j % 5
+                        digits = [(image[byte] // 3 ** i) % 3 for i in range(5)]
+                        digits[digit] = 2                                          # trit +1
+                        image[byte] = sum(d * 3 ** i for i, d in enumerate(digits))
+                acts = bytearray(link.act_image(x, cols, 1))
+                for k in range(len(acts) // 80):
+                    for i in range(80):
+                        if k * 80 + i >= cols:
+                            acts[k * 80 + i] = 77
+                events, bench, _elapsed, _nbytes = self.simulate(image=bytes(image), acts=acts_hex(bytes(acts)),
+                                                                 rows=rows, cols=cols, fmt=1, seq=50, gap=0, seed=1)
+                _, z = self.check_run(events, bench, rows=rows, cols=cols, fmt=1, seq=50,
+                                      want=expected_rows(trits, rows, cols, x))
+                self.assertEqual(z["invalid_codes"], 0)
+
+    def test_invalid_codes_in_data_lanes(self):
+        # Codes no host image contains (baseline2 lanes 11, dense5 bytes 243-255) in data lanes of both
+        # halves of a word and in several words: each one is counted (Z7). Their value in y is not
+        # defined (the host reloads the store when Z7 > 0), so only the count and the run are checked.
+        rng = random.Random(71)
+        for fmt, rows, cols, spots in ((0, 2, 128, [(0, 3, 1), (0, 9, 3), (1, 17, 0), (1, 30, 2)]),
+                                       (1, 2, 160, [(0, 0, 0), (0, 7, 0), (0, 8, 0), (1, 15, 0), (1, 20, 0)])):
+            with self.subTest(fmt=fmt):
+                trits = [rng.choice((-1, 0, 1)) for _ in range(rows * cols)]
+                x = [rng.randint(-128, 127) for _ in range(cols)]
+                image = bytearray(link.image(trits, rows, cols, fmt))
+                wpr = link.words_per_row(cols, fmt)
+                for r, byte, lane in spots:                  # byte within the row; lane within the byte
+                    at = r * wpr * 16 + byte
+                    if fmt == 0:
+                        image[at] |= 3 << (2 * lane)
+                    else:
+                        image[at] = 243 + (byte % 13)
+                events, bench, _elapsed, _nbytes = self.simulate(image=bytes(image), acts=acts_hex(link.act_image(x, cols, fmt)),
+                                                                 rows=rows, cols=cols, fmt=fmt, seq=51, gap=0, seed=3)
+                run = [e for e in events if e.kind == "line" and e.a >> 24 == 51]
+                self.assertEqual([e.tag for e in run], ["Y"] * rows + ["Z"] * link.Z_COUNT)
+                z = dict(zip(link.Z_NAMES, (e.v for e in run if e.tag == "Z")))
+                self.assertEqual((z["status"], z["rows"], z["words"], z["invalid_codes"]),
+                                 (0, rows, rows * wpr, len(spots)))
 
     def test_refused_configurations(self):
         for rows, cols, fmt in ((0, 80, 1), (1025, 80, 1), (1, 0, 1), (1, 80, 2), (1, 1024 * 80 + 1, 1)):

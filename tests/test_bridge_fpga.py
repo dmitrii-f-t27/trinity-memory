@@ -305,6 +305,57 @@ class FpgaBackend(unittest.TestCase):
         fixed = client.dot(handle, "w", x)
         self.assertEqual((fixed["accumulators"], fixed["transfer"]["uploaded"]), (want, True))
 
+    def test_a_reload_counts_only_the_repeated_runs_and_keeps_the_cache(self):
+        from trinity_memory.tensorpack import encode_tensors
+        rng = random.Random(3)
+        tensor, _ = matrix(rng, 1100, 100)                   # dense5, 2 words per row: runs of 1024 and 76 rows
+        data = encode_tensors([tensor])
+        x = [rng.randint(-128, 127) for _ in range(100)]
+        want = self.emulator_dot(data, "w", x)["accumulators"]
+        # The second run reports an invalid code: the image is uploaded again and every run repeated.
+        fake = self.fake(run_faults=[{}, {"invalid": 1}])
+        client = self.serve(fake)
+        handle = client.upload(data)
+        result = client.dot(handle, "w", x)
+        self.assertEqual(result["accumulators"], want)
+        transfer = result["transfer"]
+        self.assertEqual((transfer["store_reloads"], transfer["matvec_runs"]), (1, 2))
+        self.assertEqual(transfer["device_counters"]["words"], 1100 * 2)          # the second pass's runs only
+        # The device counted both uploads: the next dot finds the image where it left it.
+        again = client.dot(handle, "w", x)
+        self.assertEqual((again["accumulators"], again["transfer"]["uploaded"]), (want, False))
+
+    def test_a_device_that_never_ends_a_run_cannot_hold_the_call(self):
+        import threading
+        import time
+        import bridge_link_protocol as link
+        from trinity_memory.bridge import BridgeError
+        from trinity_memory.tensorpack import encode_tensors
+        rng = random.Random(3)
+        tensor, _ = matrix(rng, 4, 100)
+        data = encode_tensors([tensor])
+        x = [rng.randint(-128, 127) for _ in range(100)]
+        fake = self.fake()
+        state = {"seq": None, "stop": False}
+        fake.model.run_matvec = lambda seq, addr, rows, cols, fmt: state.update(seq=seq)
+
+        def babble():                                          # one Y line of the run every 0.2 s, no Z line
+            while not state["stop"]:
+                time.sleep(0.2)
+                if state["seq"] is not None:
+                    with fake.lock:
+                        fake.model.out.append(("Y", link.y_word(state["seq"], 0), 7))
+                        fake._flush()
+        threading.Thread(target=babble, daemon=True).start()
+        self.addCleanup(state.update, stop=True)
+        client = self.serve(fake, reply_timeout=0.5, attempts=1)
+        handle = client.upload(data)
+        start = time.monotonic()
+        with self.assertRaises(BridgeError):
+            client.dot(handle, "w", x)
+        # Each line of the run extends the wait only up to the lines a 4-row run can send (16).
+        self.assertLess(time.monotonic() - start, 10.0)
+
     def test_short_stray_and_refused_runs(self):
         import bridge_link_protocol as link
         from trinity_memory.bridge import BridgeError

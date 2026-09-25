@@ -2120,7 +2120,7 @@
         },
         "name": "fpga"
       },
-      "description": "The identity asks the device for its 23 status lines (460 bytes) first; the IDs stay the public synthetic constants and the evidence block identifies the device",
+      "description": "The identity asks the device for its 23 status lines (460 bytes; more if a stalled host process asked again) first; the IDs stay the public synthetic constants and the evidence block identifies the device",
       "expect": {
         "result": {
           "anchor": 18368,
@@ -2129,7 +2129,6 @@
           "evidence": {
             "bitstream_sha256": "bcf6e80400000000000000000000000000000000000000000000000000000000",
             "build_id": "1d474000",
-            "capture_bytes": 460,
             "dna": "0x00389c0c2d85e85c",
             "idcode": "0x13636093"
           },
@@ -2138,6 +2137,9 @@
           "identity_kind": "synthetic-public-16-byte",
           "phi_id": "7f2a2badfec845842e9d0890f06b68ad",
           "status": "memory device (fpga)"
+        },
+        "result_at_least": {
+          "evidence.capture_bytes": 460
         },
         "result_format": {
           "evidence.capture_sha256": "sha256-hex64"
