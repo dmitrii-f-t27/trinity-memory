@@ -1,0 +1,522 @@
+{
+ "bitstream": {
+  "bytes": 9730815,
+  "file": "tms_ddr3_loader_ax7203.bit",
+  "header": {
+   "a": "build/fpga/ddr3-x16-loader-a9a56541-seed3/tms_ddr3_loader_ax7203.frames;Generator=xc7frames2bit",
+   "b": "xc7a200tfbg484-2",
+   "c": "2026/09/24",
+   "d": "20:11:44"
+  },
+  "sha256": "070362429acdda62bb9e77cd661548b07474ad6367af7766ad5079aa90b71c05",
+  "sha256_from_sync": "73d09b8d9a96d1271c16dec597b3ba0fad0d74345e52ab2db317248eb74fb907",
+  "sync_offset": 211
+ },
+ "commit": "a9a56541",
+ "ddr3": {
+  "chipdb": {
+   "bytes": 333207792,
+   "file": "xc7a200tfbg484-2.bin",
+   "inputs": [
+    "nextpnr-xilinx 0eae9fbb19dfb83cdd30d5048d8b0ba744180ad0",
+    "prjxray-db a90f27c1caefee5276f47440f4c730b50519a86f",
+    "nextpnr-xilinx-meta a4af910cac907f2cbd3a545f26f8e26573e860de"
+   ],
+   "sha256": "5c88a26d973bff2fc33582f3937cc07d30bfc397ebae16d69a18fe49a14786a7"
+  },
+  "clocks": [
+   {
+    "fmax_mhz": null,
+    "name": "clk200",
+    "period_ns": 5.0,
+    "target": "clk200_p",
+    "verdict": "not timed: nextpnr reports no register-to-register path in this domain (its loads are PHY primitives, which have no timing class, or fabric LUTs on the clock net)"
+   },
+   {
+    "fmax_mhz": 87.84,
+    "name": "clk_ctrl",
+    "period_ns": 12.0,
+    "scope": "register-to-register paths in the fabric only; controller-clock paths into and out of the PHY primitives (OSERDESE2, ISERDESE2, IDELAYE2, IDELAYCTRL) and the PHY's I/O timing are not analysed, see phy_paths",
+    "target": "clk_ctrl",
+    "verdict": "PASS"
+   },
+   {
+    "fmax_mhz": null,
+    "name": "clk_ddr",
+    "period_ns": 3.0,
+    "target": "clk_ddr",
+    "verdict": "not timed: nextpnr reports no register-to-register path in this domain (its loads are PHY primitives, which have no timing class, or fabric LUTs on the clock net)"
+   },
+   {
+    "fmax_mhz": null,
+    "name": "clk_ref",
+    "period_ns": 5.0,
+    "target": "clk_ref",
+    "verdict": "not timed: nextpnr reports no register-to-register path in this domain (its loads are PHY primitives, which have no timing class, or fabric LUTs on the clock net)"
+   },
+   {
+    "fmax_mhz": null,
+    "name": "clk_ddr_90",
+    "period_ns": 3.0,
+    "target": "clk_ddr_90",
+    "verdict": "not timed: nextpnr reports no register-to-register path in this domain (its loads are PHY primitives, which have no timing class, or fabric LUTs on the clock net)"
+   }
+  ],
+  "fabric_clocks": {
+   "iologic_clock_from_fabric": [
+    "RIOI3_TBYTESRC_X105Y181.IOI_OCLKM_0.IOI_IMUX31_1",
+    "RIOI3_TBYTESRC_X105Y181.IOI_OCLK_0.IOI_IMUX31_1",
+    "RIOI3_TBYTESRC_X105Y193.IOI_OCLKM_0.IOI_IMUX31_1",
+    "RIOI3_TBYTESRC_X105Y193.IOI_OCLK_0.IOI_IMUX31_1"
+   ],
+   "luts_on_clock_nets": [
+    {
+     "bel": "SLICE_X162Y156/A6LUT",
+     "buffer": "clk_ddr_bufg",
+     "buffer_to_leaf_clock_pins_ps": [
+      1116,
+      1151
+     ],
+     "buffer_to_lut_ps": 1218,
+     "clock_net": "clk_ddr",
+     "init": "01",
+     "input": "A1",
+     "loads": {
+      "INVERTER.IN": 1,
+      "IOB33M_OUTBUF.IN": 1,
+      "OSERDESE2_OSERDESE2.CLK": 2
+     },
+     "lut": "$abc$400336$lut$not$aiger400335$1635",
+     "lut_to_load_ps": {
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$INV/IN": 2308,
+      "ddr3.ddr3_phy_inst.genblk4.genblk1.OBUFDS_inst$subcell$P/IN": 2263,
+      "ddr3.ddr3_phy_inst.genblk7[0].genblk1.OSERDESE2_dqs/CLK": 2605,
+      "ddr3.ddr3_phy_inst.genblk7[1].genblk1.OSERDESE2_dqs/CLK": 2004
+     }
+    }
+   ],
+   "ologic_d1_route_through": [
+    "LIOI3_SING_X0Y100.OLOGIC_Y0",
+    "LIOI3_TBYTETERM_X0Y237.OLOGIC_Y0",
+    "LIOI3_TBYTETERM_X0Y237.OLOGIC_Y1",
+    "LIOI3_X0Y233.OLOGIC_Y0",
+    "LIOI3_X0Y233.OLOGIC_Y1",
+    "RIOI3_TBYTESRC_X105Y143.OLOGIC_Y0"
+   ]
+  },
+  "netlist_build_id": "a9a56541",
+  "nextpnr_choice": "heap_seed3 timing met; tried placers 'heap' seeds '3' in this order, stopping at the first that met timing",
+  "phy_paths": {
+   "ff_to_ff_max_lut_levels": 11,
+   "into_phy_max_lut_levels": {
+    "IDELAYCTRL.RST": 0,
+    "IDELAYE2.CNTVALUEIN": 1,
+    "IDELAYE2.LD": 0,
+    "ISERDESE2.BITSLIP": 0,
+    "ISERDESE2.RST": 0,
+    "OSERDESE2.D1": 6,
+    "OSERDESE2.D2": 4,
+    "OSERDESE2.D3": 6,
+    "OSERDESE2.D4": 4,
+    "OSERDESE2.D5": 1,
+    "OSERDESE2.D6": 0,
+    "OSERDESE2.D7": 1,
+    "OSERDESE2.D8": 0,
+    "OSERDESE2.RST": 0,
+    "OSERDESE2.T1": 0
+   },
+   "note": "controller-clock paths into and out of OSERDESE2/ISERDESE2/IDELAYE2/IDELAYCTRL are not timed by nextpnr-xilinx (their ports have no timing class, arch.cc getPortTimingClass -> TMG_IGNORE); LUT levels counted on the yosys netlist, placement and routing not included",
+   "out_of_phy_max_lut_levels": {
+    "FDRE.CE": 4,
+    "FDRE.D": 2
+   }
+  },
+  "pll_check": [
+   {
+    "clkfbout_mult": 5,
+    "clkout_divide": {
+     "CLKOUT0": 12,
+     "CLKOUT1": 3,
+     "CLKOUT2": 5,
+     "CLKOUT3": 3
+    },
+    "clkout_phase_mux": {
+     "CLKOUT0": 0,
+     "CLKOUT1": 0,
+     "CLKOUT2": 0,
+     "CLKOUT3": 6
+    },
+    "divclk_divide": 1,
+    "filtreg1": 8,
+    "lktable": "0x73BE8FA401",
+    "result": "PASS",
+    "table": "0x1EC",
+    "tile": "CMT_TOP_L_UPPER_T_X256Y148",
+    "vivado_lktable": "0x73BE8FA401",
+    "vivado_table": "0x1EC"
+   }
+  ],
+  "source_tree": {
+   "dirty": false,
+   "head": "a9a56541e2383744b007fa7d48e02db60607a924",
+   "tracked_changes": []
+  },
+  "toolchain": {
+   "image": "regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c",
+   "nextpnr_xilinx": [
+    "0.9.7",
+    "0eae9fbb19dfb83cdd30d5048d8b0ba744180ad0",
+    "binary built from 0eae9fbb19dfb83cdd30d5048d8b0ba744180ad0",
+    "\"nextpnr-xilinx\" -- Next Generation Place and Route (Version 0.9.7)"
+   ],
+   "prjxray": "132342f7a27c650a7cbedda663e2f33bc4a582f5",
+   "prjxray_db": "a90f27c1caefee5276f47440f4c730b50519a86f",
+   "yosys": [
+    "Yosys 0.69+post (git sha1 143eb14f9cc55d6f8927e68523b0c9d2166ed02c, Release, AppleClang clang++ 21.0.0.21000101)"
+   ]
+  },
+  "uberddr3": {
+   "commit": "79d8fd3e30ebba6acd84eecac2fa57b7f95f4544",
+   "committed_here": false,
+   "files": {
+    "LICENSE": {
+     "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+     "verified": true
+    },
+    "rtl/ddr3_controller.v": {
+     "sha256": "f138c7cb00a479a645a7a86b43f9860702c71e1ba2a50d141e3c752c6864f246",
+     "verified": true
+    },
+    "rtl/ddr3_phy.v": {
+     "sha256": "f5f2d0b37fba0aead59a5f4bc3af78bab09906baf43034a59e19439d632dc989",
+     "verified": true
+    },
+    "rtl/ddr3_top.v": {
+     "sha256": "eb56493ec8710f1e4e25db8895ade588038064d710d14e52f22a26f5d962dcd8",
+     "verified": true
+    }
+   },
+   "license": "GPL-3.0-or-later",
+   "lock_sha256": "38e08cde79655934a58cc5614ef02ce5550109a642d763a502a4b83ae6f68e34",
+   "repository": "https://github.com/AngeloJacobo/UberDDR3"
+  },
+  "variant": "x16 BYTE_LANES 2, PLL CLKFBOUT_MULT 5, DDR3 clock VCO/3 (3.000 ns), controller 12.000 ns, LOADER (UART 115200 baud, timeout 50 ms, probation 3 s, store 2^29 bytes, arbiter master 1 idle)",
+  "vref": [
+   "HCLK_IOI3_X263Y182.VREF.V_675_MV"
+  ],
+  "xdc_sha256": "da88eb5f7b249a9849ffe89a6b6b5b0460f32cd3b80359efced3326f6cdcc2d1",
+  "yosys_conflicting_driver_warnings": 32
+ },
+ "fasm": {
+  "lines": 232011,
+  "sha256": "9e00576592db666efffcf04b99eb674c2910fb3a0cf8098cb3a7653f8cb9d609"
+ },
+ "files": {
+  "nextpnr.log": "aeafa1cf31b9e4ca9070c3f385bd37da0993de18f98693cbe900c3cba78f6848",
+  "tms_ddr3_loader_ax7203.xdc": "da88eb5f7b249a9849ffe89a6b6b5b0460f32cd3b80359efced3326f6cdcc2d1",
+  "yosys.log": "51d6bb6b89a740afdc9415bcfc932ae77deb3ff6c43e55e53a480f77eddd1ffb",
+  "yosys_stat.txt": "93396d6c27c5db3baf8928f95f9f22c49bbc0e2573d71d8d1fb61a73cd6823d4"
+ },
+ "flow": "yosys synth_xilinx -flatten -abc9 -arch xc7; nextpnr-xilinx 0.9.7 placer/seed search over 'heap' x '3' --router router2 --timing-allow-fail; prjxray fasm2frames + xc7frames2bit (regymm/openxc7@sha256:eced1cdd4727549f2d983328e0cf170fb6f6f67d87f19b2bf24365163368c70c)",
+ "frames": {
+  "lines": 20230,
+  "sha256": "09061e1bb9ee8aebe4056b832099dd1b490c854ce997973d96f44e55826de19f"
+ },
+ "nextpnr": {
+  "clocks": [
+   {
+    "clock": "clk_ctrl",
+    "fmax_mhz": 76.27,
+    "target_mhz": 83.33,
+    "verdict": "FAIL"
+   },
+   {
+    "clock": "clk_ctrl",
+    "fmax_mhz": 87.84,
+    "target_mhz": 83.33,
+    "verdict": "PASS"
+   }
+  ],
+  "clocks_routed": [
+   {
+    "clock": "clk_ctrl",
+    "fmax_mhz": 87.84,
+    "target_mhz": 83.33,
+    "verdict": "PASS"
+   }
+  ],
+  "routed": true,
+  "seed": null,
+  "utilisation": {
+   "BSCAN": {
+    "available": 4,
+    "used": 0
+   },
+   "BUFFER": {
+    "available": 82,
+    "used": 0
+   },
+   "BUFG": {
+    "available": 32,
+    "used": 0
+   },
+   "BUFGCTRL": {
+    "available": 32,
+    "used": 4
+   },
+   "BUFHCE": {
+    "available": 120,
+    "used": 0
+   },
+   "BUFIO": {
+    "available": 40,
+    "used": 0
+   },
+   "BUFR": {
+    "available": 40,
+    "used": 0
+   },
+   "CARRY4": {
+    "available": 33650,
+    "used": 597
+   },
+   "DCIRESET": {
+    "available": 1,
+    "used": 0
+   },
+   "DNA_PORT": {
+    "available": 1,
+    "used": 0
+   },
+   "DSP48E1": {
+    "available": 740,
+    "used": 0
+   },
+   "EFUSE_USR": {
+    "available": 1,
+    "used": 0
+   },
+   "FIFO18E1": {
+    "available": 365,
+    "used": 0
+   },
+   "FRAME_ECC": {
+    "available": 1,
+    "used": 0
+   },
+   "GTPE2_CHANNEL": {
+    "available": 16,
+    "used": 0
+   },
+   "GTPE2_COMMON": {
+    "available": 4,
+    "used": 0
+   },
+   "HARD0": {
+    "available": 3960,
+    "used": 0
+   },
+   "IBUFDS_GTE2": {
+    "available": 8,
+    "used": 0
+   },
+   "ICAP": {
+    "available": 2,
+    "used": 0
+   },
+   "IDELAYCTRL": {
+    "available": 10,
+    "used": 1
+   },
+   "IDELAYE2": {
+    "available": 500,
+    "used": 18
+   },
+   "ILOGICE2_IFF": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE3_IFF": {
+    "available": 500,
+    "used": 0
+   },
+   "ILOGICE3_ZHOLD_DELAY": {
+    "available": 500,
+    "used": 0
+   },
+   "INVERTER": {
+    "available": 240,
+    "used": 3
+   },
+   "IOB33M_INBUF_EN": {
+    "available": 240,
+    "used": 3
+   },
+   "IOB33M_OUTBUF": {
+    "available": 240,
+    "used": 3
+   },
+   "IOB33M_TERM_OVERRIDE": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_INBUF_EN": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33S_OUTBUF": {
+    "available": 240,
+    "used": 3
+   },
+   "IOB33S_TERM_OVERRIDE": {
+    "available": 240,
+    "used": 0
+   },
+   "IOB33_INBUF_EN": {
+    "available": 500,
+    "used": 18
+   },
+   "IOB33_OUTBUF": {
+    "available": 500,
+    "used": 48
+   },
+   "IOB33_TERM_OVERRIDE": {
+    "available": 500,
+    "used": 0
+   },
+   "ISERDESE2": {
+    "available": 500,
+    "used": 18
+   },
+   "MMCME2_ADV": {
+    "available": 10,
+    "used": 0
+   },
+   "OLOGICE2_MISR": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE2_OUTFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE2_TFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_MISR": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_OUTFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OLOGICE3_TFF": {
+    "available": 500,
+    "used": 0
+   },
+   "OSERDESE2": {
+    "available": 500,
+    "used": 45
+   },
+   "PAD": {
+    "available": 1062,
+    "used": 58
+   },
+   "PCIE_2_1": {
+    "available": 1,
+    "used": 0
+   },
+   "PLLE2_ADV": {
+    "available": 10,
+    "used": 1
+   },
+   "PSEUDO_GND": {
+    "available": 69165,
+    "used": 1
+   },
+   "PSEUDO_VCC": {
+    "available": 69165,
+    "used": 1
+   },
+   "PULL_OR_KEEP1": {
+    "available": 980,
+    "used": 0
+   },
+   "RAMB18E1": {
+    "available": 730,
+    "used": 0
+   },
+   "RAMB36E1": {
+    "available": 365,
+    "used": 2
+   },
+   "RAMBFIFO36E1": {
+    "available": 365,
+    "used": 0
+   },
+   "SELMUX2_1": {
+    "available": 102950,
+    "used": 0
+   },
+   "SLICE_FFX": {
+    "available": 269200,
+    "used": 5465
+   },
+   "SLICE_LUTX": {
+    "available": 269200,
+    "used": 12136
+   },
+   "STARTUP": {
+    "available": 1,
+    "used": 0
+   },
+   "USR_ACCESS": {
+    "available": 1,
+    "used": 0
+   }
+  },
+  "version": null
+ },
+ "part": "xc7a200tfbg484-2",
+ "reproducible_identity": {
+  "bitstream_sha256_from_sync": "73d09b8d9a96d1271c16dec597b3ba0fad0d74345e52ab2db317248eb74fb907",
+  "fasm_sha256": "9e00576592db666efffcf04b99eb674c2910fb3a0cf8098cb3a7653f8cb9d609",
+  "frames_sha256": "09061e1bb9ee8aebe4056b832099dd1b490c854ce997973d96f44e55826de19f",
+  "note": "a rebuild with the same inputs and tools reproduces these; bitstream.sha256 covers the .bit header with xc7frames2bit's date and time and identifies only this one file (the one to flash)"
+ },
+ "schema": "trinity.fpga-build.v1",
+ "source": "local",
+ "top": "tms_ddr3_loader_ax7203",
+ "written_at": "2026-09-24T20:11:44+00:00",
+ "yosys": {
+  "by_type": {
+   "BUFG": 4,
+   "CARRY4": 576,
+   "FDCE": 3192,
+   "FDPE": 11,
+   "FDRE": 2237,
+   "FDSE": 25,
+   "IBUF": 2,
+   "IBUFDS": 1,
+   "IDELAYCTRL": 1,
+   "IDELAYE2": 18,
+   "INV": 330,
+   "IOBUF": 16,
+   "IOBUFDS": 2,
+   "ISERDESE2": 18,
+   "LUT2": 1333,
+   "LUT3": 1587,
+   "LUT4": 1158,
+   "LUT5": 2306,
+   "LUT6": 1157,
+   "OBUF": 32,
+   "OBUFDS": 1,
+   "OSERDESE2": 45,
+   "PLLE2_ADV": 1,
+   "RAMB36E1": 2
+  },
+  "total": null
+ }
+}
