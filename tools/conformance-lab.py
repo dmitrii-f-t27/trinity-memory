@@ -231,7 +231,11 @@ class TcpSession:
 
 
 @contextlib.contextmanager
-def tcp_session(limits):
+def tcp_session(limits, device=None):
+    # The lab's TCP replay has no fpga construction path; device vectors are
+    # skipped by the replay and left to the in-process native harness.
+    if device:
+        raise RuntimeError("the TCP replay cannot construct the device backend")
     with BridgeServer(**limits) as server:
         yield TcpSession(server)
 
@@ -239,7 +243,8 @@ def tcp_session(limits):
 def section_bridge(manifest):
     document = load("memory_bridge.json")
     run, steps, skipped = spec_bridge_replay.replay(document, tcp_session, transport=True)
-    if skipped or run != len(document["vectors"]):
+    device_vectors = [vector["id"] for vector in document["vectors"] if vector.get("device")]
+    if skipped != device_vectors or run != len(document["vectors"]) - len(device_vectors):
         raise LabFailure("bridge replay incomplete")
     lab = {}
     data = encode_file([1, -1, 0, 1])
