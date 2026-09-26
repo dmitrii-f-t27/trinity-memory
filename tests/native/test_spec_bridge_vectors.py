@@ -24,15 +24,35 @@ HARNESS_DEFAULTS = {"max_request_bytes": 65536, "max_object_bytes": 65536, "max_
 
 
 class NativeSession:
-    def __init__(self, lib, limits):
+    def __init__(self, lib, limits, device=None):
         config = dict(HARNESS_DEFAULTS, **{k: v for k, v in limits.items() if k != "timeout"})
         self.lib = lib
-        self.handle = lib.bridge_test_new(config["max_request_bytes"], config["max_object_bytes"],
-                                          config["max_storage_bytes"], config["max_objects"], config["max_trits"])
+        if device:
+            bitstream = bytes.fromhex(device["bitstream_sha256"])
+            capture = bytes.fromhex(device["capture_sha256"])
+            if len(bitstream) != 32 or len(capture) != 32:
+                raise RuntimeError("device evidence hashes must be 32 bytes of hex")
+            self.handle = self._new_device(config, device, bitstream, capture)
+        else:
+            self.handle = lib.bridge_test_new(config["max_request_bytes"], config["max_object_bytes"],
+                                              config["max_storage_bytes"], config["max_objects"], config["max_trits"])
         if not self.handle:
             raise RuntimeError(f"harness refused limits {config}")
         self.capacity = 16384 + 2 * config["max_object_bytes"] + 40 * config["max_trits"]
         self.output = C.create_string_buffer(self.capacity)
+
+    def _new_device(self, config, device, bitstream, capture):
+        dna = int(device["dna"], 16)
+        if not 0 <= dna < 1 << 64:
+            raise RuntimeError("device dna must be a 64-bit hex value")
+        self.lib.bridge_test_new_device.argtypes = [C.c_size_t] * 5 + [C.c_uint32, C.c_uint64, C.c_void_p, C.c_void_p]
+        self.lib.bridge_test_new_device.restype = C.c_void_p
+        bitstream_buffer = C.create_string_buffer(bitstream, 32)
+        capture_buffer = C.create_string_buffer(capture, 32)
+        return self.lib.bridge_test_new_device(config["max_request_bytes"], config["max_object_bytes"],
+                                               config["max_storage_bytes"], config["max_objects"], config["max_trits"],
+                                               C.c_uint32(device["idcode"]), C.c_uint64(dna),
+                                               bitstream_buffer, capture_buffer)
 
     def send(self, body, headers=None):
         status = C.c_int32(0)
@@ -59,15 +79,15 @@ def main():
     lib.bridge_test_call.restype = C.c_int64
 
     @contextlib.contextmanager
-    def session(limits):
-        item = NativeSession(lib, limits)
+    def session(limits, device=None):
+        item = NativeSession(lib, limits, device)
         try:
             yield item
         finally:
             item.close()
 
     document = replay.load_document()
-    run, steps, skipped = replay.replay(document, session, transport=False)
+    run, steps, skipped = replay.replay(document, session, transport=False, device=True)
     expected = sum(1 for vector in document["vectors"] if vector["kind"] != "transport")
     if run != expected:
         raise SystemExit(f"replayed {run} of {expected} in-process vectors")

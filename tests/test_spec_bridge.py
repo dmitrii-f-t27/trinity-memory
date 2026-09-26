@@ -49,7 +49,11 @@ class TcpSession:
 
 
 @contextlib.contextmanager
-def tcp_session(limits):
+def tcp_session(limits, device=None):
+    # The native loopback runtime has no fpga construction path; device vectors
+    # are skipped by the replay and left to the in-process native harness.
+    if device:
+        raise RuntimeError("the TCP replay cannot construct the device backend")
     with BridgeServer(**limits) as server:
         yield TcpSession(server)
 
@@ -62,8 +66,9 @@ class SpecBridgeTcpReplay(unittest.TestCase):
 
     def test_every_vector_over_tcp(self):
         run, steps, skipped = replay.replay(DOCUMENT, tcp_session, transport=True)
-        self.assertEqual(skipped, [])
-        self.assertEqual(run, len(DOCUMENT["vectors"]))
+        device_vectors = [vector["id"] for vector in DOCUMENT["vectors"] if vector.get("device")]
+        self.assertEqual(skipped, device_vectors)
+        self.assertEqual(run, len(DOCUMENT["vectors"]) - len(device_vectors))
         self.assertGreaterEqual(steps, 40)
 
     def test_identity_follows_the_documented_derivation(self):
@@ -91,6 +96,39 @@ class SpecBridgeTcpReplay(unittest.TestCase):
             capabilities = backend.client.capabilities()
             for key, value in adapter["chip_info_requires"].items():
                 self.assertEqual(capabilities[key], value)
+
+    def test_sdk_adapter_accepts_a_device_identity_only_with_the_evidence(self):
+        # The Trinity SDK lives outside this repository; a stub ChipInfo is enough
+        # to drive SDKMemoryBackend.get_chip_info through the evidence check.
+        import types as module_types
+        from trinity_memory.bridge import device_evidence
+        stub_package = module_types.ModuleType("trinity")
+        stub_types = module_types.ModuleType("trinity.types")
+        stub_types.ChipInfo = lambda **fields: fields
+        stub_package.types = stub_types
+        sys.modules.setdefault("trinity", stub_package)
+        sys.modules["trinity.types"] = stub_types
+        evidence = next(vector["device"] for vector in DOCUMENT["vectors"] if vector.get("device"))
+        self.assertTrue(device_evidence(evidence))
+        self.assertFalse(device_evidence({**evidence, "idcode": 0}))
+        self.assertFalse(device_evidence({**evidence, "dna": "0x389c0c2d85e85c"}))
+        self.assertFalse(device_evidence({**evidence, "capture_sha256": "ab"}))
+        identity = {"phi_id": "00" * 16, "euler_id": "00" * 16, "gamma_id": "00" * 16, "anchor": 18368,
+                    "backend": "fpga", "hardware": True, "evidence": evidence}
+
+        class Client:
+            def __init__(self, info): self.info = info
+
+            def call(self, method):
+                assert method == "trinity_chipInfo", method
+                return self.info
+
+        self.assertTrue(SDKMemoryBackend(Client(identity)).get_chip_info()["anchor"] == 18368)
+        for broken in ({**identity, "hardware": False},
+                       {**identity, "evidence": {**evidence, "bitstream_sha256": ""}},
+                       {**identity, "backend": "tpu"}):
+            with self.assertRaises(BridgeError):
+                SDKMemoryBackend(Client(broken)).get_chip_info()
 
     def test_client_reports_transport_failures_with_the_spec_code(self):
         errors = DOCUMENT["constants"]["errors"]

@@ -301,15 +301,22 @@ DEFAULT_LIMITS = {"max_request_bytes": 2097152, "max_object_bytes": 524288, "max
                   "max_objects": 16, "max_trits": 1000000}
 METHODS = ["trinity.capabilities", "memory.upload", "memory.read", "memory.info", "memory.delete",
            "compute.dot", "chip_info", "trinity_chipInfo"]
+# Device evidence of the #64 seam: fixed hashes of pinned strings, the AX7203
+# XC7A200T IDCODE and the board's DNA, so the vectors are reproducible.
+DEVICE_EVIDENCE = {"bitstream_sha256": sha256_hex(b"trinity-memory-device-bitstream"),
+                   "capture_sha256": sha256_hex(b"trinity-memory-device-capture"),
+                   "idcode": 56762515, "dna": "00389c0c2d85e85c"}
 
 
-def rpc(identifier, method, params=None, *, request_id=1, limits=None, description="", **expect):
+def rpc(identifier, method, params=None, *, request_id=1, limits=None, device=None, description="", **expect):
     request = {"jsonrpc": "2.0", "id": request_id, "method": method}
     if params is not None:
         request["params"] = params
     vector = {"id": identifier, "kind": "rpc", "request": request, "expect": expect, "description": description}
     if limits:
         vector["limits"] = limits
+    if device:
+        vector["device"] = device
     return vector
 
 
@@ -381,6 +388,20 @@ def build_bridge():
         rpc("trinity_chip_info_is_synthetic", "trinity_chipInfo", request_id="abc", result=sdk_identity,
             description="SDK field names; identities are SHA-256('trinity-memory-emulator-v1:'+part)[0:16]"),
         rpc("chip_info_alias_uses_node_names", "chip_info", result=node_identity),
+        rpc("device_capabilities_report_transport_and_evidence", "trinity.capabilities", device=DEVICE_EVIDENCE,
+            result={"backend": "fpga", "hardware": True, "transport": "uart", "evidence": DEVICE_EVIDENCE},
+            description="Backend fpga reports the UART transport and the build's evidence block; limits unchanged"),
+        rpc("device_trinity_chip_info_is_device_evidence", "trinity_chipInfo", device=DEVICE_EVIDENCE,
+            result={"backend": "fpga", "hardware": True, "transport": "uart", "identity_kind": "device-evidence",
+                    "status": "memory device", "evidence": DEVICE_EVIDENCE},
+            description="The anchors stay the public constants; device provenance is the evidence block"),
+        rpc("device_dot_requires_a_linked_transport", "compute.dot",
+            {"handle": "00112233445566778899aabbccddeeff", "tensor_name": "weights", "activations": [1, 2, 3]},
+            device=DEVICE_EVIDENCE, error_code=-32000,
+            description="compute.dot on the device backend fails with the transport error until a device is linked"),
+        rpc("device_upload_requires_a_linked_transport", "memory.upload", {"data": b64(tmem6)},
+            device=DEVICE_EVIDENCE, error_code=-32000,
+            description="Even a valid upload targets the device store and fails the same way"),
         rpc("method_not_found", "trinity_proveInference", error_code=-32601),
         raw_rpc("batch_rejected", "[]", error_code=-32600, id=None),
         raw_rpc("empty_object_rejected", "{}", error_code=-32600, id=None),
