@@ -195,8 +195,15 @@ var dg1: u64 = 0;
 var dg2: u64 = 0;
 var dinv: u32 = 0;
 
-// Report line arbiter, as in fpga_ddr3_pattern.t27.
+// Report line arbiter, as in fpga_ddr3_pattern.t27, with the loader's line
+// passthrough of the reader's sbuf: a second producer (the loader on the board
+// top) parks its line here while the emitter is busy; s_idle is false from the
+// request clock until the line has left, so a producer never overwrites one.
 var arb: u32 = 0;
+var sbuf_full: bool = false;
+var sb_tag: u32 = 0;
+var sb_a: u32 = 0;
+var sb_b: u64 = 0;
 var line_go: bool = false;
 var line_tag: u32 = 0;
 var line_a: u32 = 0;
@@ -587,6 +594,8 @@ var cons_active: bool;
 var y_fire: bool;
 var drain_done: bool;
 var pfire: bool;
+var sfire: bool;
+var s_idle: bool;
 var ack_seen: bool;
 var ack_stray: bool;
 var rd_phase: bool;
@@ -640,6 +649,8 @@ dg1 = dec_part(fmt, dec0, dec1, dec2, dec3, 1);
 dg2 = dec_part(fmt, dec0, dec1, dec2, dec3, 2);
 dinv = invalid_of(dec0, dec1, dec2, dec3);
 pfire = arb == 0 && line_idle && mstate == M_REPORT && rline <= rep_last(rkind);
+sfire = arb == 0 && sbuf_full && line_idle && !pfire;
+s_idle = !sbuf_full;
 ack_seen = ack && mstate != M_CALIB;
 rd_phase = mstate == M_DOORBELL || mstate == M_ACTS || mstate == M_WEIGHTS;
 ack_stray = ack_seen && !rd_phase;
@@ -660,7 +671,8 @@ rp_b = pick64(rkind == K_HEAD, head_b(lanes_of(fmt), cap, wpr_now, aw_now, poll_
 // clocks. line_idle: the emitter's.
 fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             cols: u32, rows: u32, fmt: u32, waddr: u32, aaddr: u32, daddr: u32, magic: u32,
-            cap: u32, watchdog: u32, poll_div: u32, line_idle: bool) {
+            cap: u32, watchdog: u32, poll_div: u32, line_idle: bool,
+            s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
     if (ack_seen) { all_acks = all_acks + 1; }
     if (ack_stray) { stray_acks = stray_acks + 1; }
 
@@ -910,10 +922,24 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     // keep only the last one.
     fq_count = fq_count + pick32(push_word, 1, 0) - pick32(pop_go, 1, 0);
 
-    // Report line arbiter: a pending Y line first, the phase report otherwise.
+    // Report line arbiter: the loader's parked line first, then a pending Y
+    // line, then the phase report.
     line_go = false;
+    if (s_go) {
+        sbuf_full = true;
+        sb_tag = s_tag;
+        sb_a = s_a;
+        sb_b = s_b;
+    }
     if (arb == 0) {
-        if (line_idle && y_pending) {
+        if (sfire) {
+            line_go = true;
+            line_tag = sb_tag;
+            line_a = sb_a;
+            line_b = sb_b;
+            sbuf_full = false;
+            arb = A_START;
+        } else if (line_idle && y_pending) {
             line_go = true;
             line_tag = TAG_Y;
             line_a = y_row;

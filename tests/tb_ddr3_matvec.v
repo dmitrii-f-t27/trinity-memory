@@ -37,7 +37,8 @@ module tb_ddr3_matvec;
         .cols(COLS), .rows(ROWS), .fmt(FMT), .waddr(WADDR), .aaddr(AADDR), .daddr(DADDR),
         .magic(MAGIC), .cap(CAP), .watchdog(WATCHDOG), .poll_div(POLL_DIV), .line_idle(line_idle),
         .wb_cyc(wb_cyc), .wb_stb(wb_stb), .wb_addr(wb_addr),
-        .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b)
+        .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
+        .s_go(1'b0), .s_tag(32'd0), .s_a(32'd0), .s_b(64'd0)
     );
 
     // Behavioural Wishbone memory on the loader model's discipline
