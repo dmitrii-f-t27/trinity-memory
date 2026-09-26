@@ -197,7 +197,9 @@ class MatvecSimulation(unittest.TestCase):
         self.run_chunk("b2", (), 0xB2B2B2, 2560, 6, model.FMT_B2)
 
     def test_baseline2_wide_columns(self):
-        self.run_chunk("b2_wide", (), 0x6912, 6912, 2, model.FMT_B2)
+        # 432 act words + the first 108-word row at one request at a time cross
+        # the bench's default 6000 quiet clocks before the first Y line.
+        self.run_chunk("b2_wide", (("stop_after", 40000),), 0x6912, 6912, 2, model.FMT_B2)
 
     def test_a_doorbell_without_the_magic_starts_nothing(self):
         # The bench writes the descriptor with the model's magic; this config
