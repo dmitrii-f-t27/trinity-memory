@@ -162,8 +162,10 @@ var timed_acts: bool = false;
 var all_acks: u64 = 0;
 var stray_acks: u32 = 0;
 
-// Act store: 896 u64, 7168 int8 columns, one u64 per activation half word.
-var acts: [896]u64;
+// Act store: 896 u64 halves (7168 int8 columns), kept as two arrays of write
+// and read half words so each maps to one BRAM (see the act store block).
+var acts_lo: [448]u64;
+var acts_hi: [448]u64;
 var act_rd: u64 = 0;
 var aw_stored: u32 = 0;
 
@@ -884,14 +886,20 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     // ahead. aw_stored counts the words stored and is read before this tick
     // writes it — the acks counter cannot serve: the phase block above writes
     // it in the same tick.
+    // Two arrays, one write and one read port each: a single array with two
+    // writes and a dynamic-index read per clock maps to no BRAM, and its
+    // flip-flop fallback was optimised away entirely on the board build
+    // (yosys "Removed 59544 unused cells" — every accumulator read zero;
+    // AX7203, 2026-09-26). Icarus keeps the behavioural array, so only the
+    // synthesis diverged.
     if (phase_ack) {
         if (mstate == M_ACTS) {
-            acts[aw_stored * 2] = rdata_lo;
-            acts[aw_stored * 2 + 1] = rdata_hi;
+            acts_lo[aw_stored] = rdata_lo;
+            acts_hi[aw_stored] = rdata_hi;
             aw_stored = aw_stored + 1;
         }
     }
-    act_rd = acts[act_addr];
+    act_rd = pick64((act_addr & 1) == 0, acts_lo[act_addr >> 1], acts_hi[act_addr >> 1]);
 
     // Consumer (B): pop (stage 0), bubble (1), sub-words (2). The bubble sets
     // the address of sub-word 0; every sub then sets the next sub's address.
