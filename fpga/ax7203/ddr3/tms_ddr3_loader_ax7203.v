@@ -44,6 +44,19 @@ module tms_ddr3_loader_ax7203 #(
     parameter [31:0] READER_WATCHDOG = 32'd16777216,
     parameter integer READER_UART_DIV = 4
 `endif
+`ifdef DDR3_LOADER_MATVEC
+    ,
+    parameter [31:0] MATVEC_COLS = 32'd2560,
+    parameter [31:0] MATVEC_ROWS = 32'd8,
+    parameter [31:0] MATVEC_FMT = 32'd1,
+    parameter [31:0] MATVEC_WADDR = 32'h0000_4000,
+    parameter [31:0] MATVEC_AADDR = 32'h0000_1000,
+    parameter [31:0] MATVEC_DADDR = 32'h0000_0040,
+    parameter [31:0] MATVEC_MAGIC = 32'h7433_7633,
+    parameter [31:0] MATVEC_CAP = 32'd4,
+    parameter [31:0] MATVEC_WATCHDOG = 32'd16777216,
+    parameter [31:0] MATVEC_POLL_DIV = 32'd8192
+`endif
 ) (
     input  wire         clk200_p,
     input  wire         clk200_n,
@@ -213,6 +226,29 @@ module tms_ddr3_loader_ax7203 #(
     wire        m1_cyc, m1_stb, m1_we, m1_stall, m1_ack;
     wire [31:0] m1_addr, m1_sel;
     wire [63:0] m1_lo, m1_hi;
+`ifdef DDR3_LOADER_MATVEC
+    // Master 1: the device matvec of issue #64. Its line arbiter also carries
+    // the loader's lines to the shared emitter (the sbuf passthrough), so the
+    // one UART serves both: the loader's ack/nak/status frames and the matvec's
+    // header, Y and summary lines. The loader sees idle only while its parked
+    // line has left (mv_s_idle); its read-back frames still take the direct
+    // transmitter path below.
+    wire        mv_cyc, mv_stb, mv_line_go, mv_s_go, mv_s_idle;
+    wire [31:0] mv_addr, mv_tag, mv_a, mv_s_tag, mv_s_a;
+    wire [63:0] mv_b, mv_s_b;
+    TrinityFpgaDdr3MatvecT27 matvec (
+        .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
+        .calib(calib_complete), .stall(m1_stall), .ack(m1_ack),
+        .rdata_lo(wb_rdata[63:0]), .rdata_hi(wb_rdata[127:64]),
+        .cols(MATVEC_COLS), .rows(MATVEC_ROWS), .fmt(MATVEC_FMT),
+        .waddr(MATVEC_WADDR), .aaddr(MATVEC_AADDR), .daddr(MATVEC_DADDR), .magic(MATVEC_MAGIC),
+        .cap(MATVEC_CAP), .watchdog(MATVEC_WATCHDOG), .poll_div(MATVEC_POLL_DIV),
+        .line_idle(line_idle),
+        .s_go(mv_s_go), .s_tag(mv_s_tag), .s_a(mv_s_a), .s_b(mv_s_b),
+        .line_go(mv_line_go), .line_tag(mv_tag), .line_a(mv_a), .line_b(mv_b), .s_idle(mv_s_idle),
+        .wb_cyc(mv_cyc), .wb_stb(mv_stb), .wb_addr(mv_addr)
+    );
+`endif
 `ifdef DDR3_LOADER_READER
     wire        r_go, r_idle, r_tx_start, r_tx_busy, r_cyc;
     wire [31:0] r_tag, r_a, r_tx_byte;
@@ -243,10 +279,27 @@ module tms_ddr3_loader_ax7203 #(
         .busy(r_tx_busy), .shift(), .count(), .bits(), .tx(uart_tx2)
     );
 `else
+`ifdef DDR3_LOADER_MATVEC
+    // The matvec holds its wb_cyc high from calibration on, so as the reader it
+    // must hand the arbiter its strobe as the want signal: a wired-ever-high m1
+    // cyc would own the port for ever (the arbiter switches only when the
+    // owner's cyc is low) and starve the loader of every load.
+    assign m1_cyc = mv_stb;
+    assign m1_stb = mv_stb;
+    assign m1_we = 1'b0;                 // the matvec only reads
+    assign m1_addr = mv_addr;
+    assign m1_sel = 32'hFFFFFFFF;        // a read selects nothing
+    assign {m1_hi, m1_lo} = 128'd0;
+    assign line_go = mv_line_go;
+    assign line_tag = mv_tag;
+    assign line_a = mv_a;
+    assign line_b = mv_b;
+`else
     assign {m1_cyc, m1_stb, m1_we} = 3'b000;
     assign m1_addr = 32'd0;
     assign m1_sel = 32'd0;
     assign {m1_hi, m1_lo} = 128'd0;
+`endif
 `endif
 
     // ---- arbiter of the user port ----
@@ -267,14 +320,23 @@ module tms_ddr3_loader_ax7203 #(
         .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
         .rx_valid(rx_valid), .rx_data(rx_data), .rx_ferr(rx_ferr),
         .rx_bytes(rx_bytes), .rx_ferrs(rx_ferrs), .rx_false(rx_false),
-        .line_idle(line_idle), .tx_busy(tx_busy), .wr_ready(wr_ready), .wr_idle(wr_idle),
+`ifdef DDR3_LOADER_MATVEC
+        .line_idle(mv_s_idle),
+`else
+        .line_idle(line_idle),
+`endif
+        .tx_busy(tx_busy), .wr_ready(wr_ready), .wr_idle(wr_idle),
         .rd_ready(rd_ready), .rd_valid(rd_valid), .rd_data(rd_byte),
         .store_log2(STORE_LOG2), .default_div(BAUD_DIV), .timeout_clocks(TIMEOUT),
         .probation_clocks(PROBATION), .build_id(BUILD_ID),
         .calib(calib_complete), .cal_state(debug1), .wb_writes(w_writes), .wb_reads(w_reads), .wb_hits(w_hits),
         .wb_dropped(w_dropped), .wb_stray(w_stray), .wb_max_outst(w_outst), .wb_rd_lat_max(w_lat),
         .wb_cmd_stalls(w_stalls), .arb_switches(a_switches), .arb_stray(a_stray),
+`ifdef DDR3_LOADER_MATVEC
+        .line_go(mv_s_go), .line_tag(mv_s_tag), .line_a(mv_s_a), .line_b(mv_s_b),
+`else
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
+`endif
         .tx_start(ld_tx_start), .tx_byte(ld_tx_byte),
         .wr_valid(wr_valid), .wr_addr(wr_addr), .wr_data(wr_data), .wr_last(wr_last),
         .rd_req(rd_req), .rd_addr(rd_addr), .port_give_up(port_give_up),

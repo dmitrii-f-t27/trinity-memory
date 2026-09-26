@@ -102,8 +102,12 @@ def check(name, status, body, expect, request=None):
     return result
 
 
-def replay(document, session_factory, *, transport=False, only=None):
-    """Run every vector; return (vectors_run, steps_run, skipped_ids)."""
+def replay(document, session_factory, *, transport=False, device=False, only=None):
+    """Run every vector; return (vectors_run, steps_run, skipped_ids).
+
+    Device vectors (a "device" evidence block) need a harness that can construct
+    the fpga backend; the TCP replay has no such server and skips them.
+    """
     run, steps, skipped = 0, 0, []
     for vector in document["vectors"]:
         identifier = vector["id"]
@@ -113,8 +117,11 @@ def replay(document, session_factory, *, transport=False, only=None):
         if kind == "transport" and not transport:
             skipped.append(identifier)
             continue
+        if vector.get("device") and not device:
+            skipped.append(identifier)
+            continue
         limits = dict(vector.get("limits", {}))
-        with session_factory(limits) as session:
+        with session_factory(limits, vector.get("device")) as session:
             if kind == "rpc":
                 request = vector.get("request")
                 body = json.dumps(request).encode() if request is not None else vector["request_text"].encode()
