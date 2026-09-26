@@ -1,7 +1,9 @@
 """Frame protocol of the AX7203 UART loader (issue #63), shared by the host tool
 (tools/fpga-uart-loader.py) and the tests (tests/test_uart_loader.py).
 
-The device side is t27/rtl/fpga_uart_loader.t27; docs/uart-loader.md is the
+The device side is t27/rtl/fpga_uart_loader.t27 (part 1, block RAM, protocol 2) and
+t27/rtl/fpga_ddr3_loader.t27 (part 2, DDR3, protocol 3: reason `not_ready` until the
+DDR3 calibration completes, and 14 more status lines); docs/uart-loader.md is the
 specification. Everything here is a statement of the same rules in Python:
 
 - frame encoders for the four host commands (load, read, status, baud);
@@ -24,10 +26,11 @@ COMMANDS = {CMD_LOAD: "load", CMD_READ: "read", CMD_STATUS: "status", CMD_BAUD: 
 CMD_INDEX = {CMD_LOAD: 1, CMD_READ: 2, CMD_STATUS: 3, CMD_BAUD: 4}
 INDEX_CMD = {v: k for k, v in CMD_INDEX.items()}
 
-REASONS = ["ok", "duplicate", "crc", "length", "timeout", "framing", "command", "overflow", "port"]
-R_OK, R_DUP, R_CRC, R_LENGTH, R_TIMEOUT, R_FRAMING, R_COMMAND, R_OVERFLOW, R_PORT = range(9)
+REASONS = ["ok", "duplicate", "crc", "length", "timeout", "framing", "command", "overflow", "port", "not_ready"]
+R_OK, R_DUP, R_CRC, R_LENGTH, R_TIMEOUT, R_FRAMING, R_COMMAND, R_OVERFLOW, R_PORT, R_NOT_READY = range(10)
 
-PROTO = 2
+PROTO = 2                  # part 1 (block RAM)
+PROTO_DDR3 = 3             # part 2 (DDR3): not_ready and the DDR3 status lines
 MAX_LEN = 4096
 FIFO_DEPTH = 1024
 MIN_DIV, MAX_DIV = 16, 65535
@@ -40,9 +43,74 @@ STATUS_NAMES = [
     "nak_framing", "nak_command", "nak_overflow", "bytes_committed", "readbacks", "baud_div",
     "baud_reverts", "last_seq", "config", "clocks", "build_id", "nak_port",
 ]
+# Protocol 3 (t27/rtl/fpga_ddr3_loader.t27) adds these after the 23 lines of protocol 2.
+STATUS_NAMES_DDR3 = STATUS_NAMES + [
+    "nak_not_ready",
+    "calib",               # calib_complete << 24 | state << 16 | highest state << 8 | returns to IDLE (sat. 255)
+    "calib_clocks",        # controller clocks since reset at the first calib_complete (0: not yet)
+    "calib_lost_clocks",   # clocks since then with calib_complete low or a state other than 23
+    "wb_writes", "wb_reads", "wb_read_hits", "wb_acks_dropped", "wb_acks_stray", "wb_max_outstanding",
+    "wb_read_latency_max", "wb_cmd_stalls", "arb_switches", "arb_stray",
+]
 NAK_COUNTERS = {R_CRC: "nak_crc", R_LENGTH: "nak_length", R_TIMEOUT: "nak_timeout", R_FRAMING: "nak_framing",
-                R_COMMAND: "nak_command", R_OVERFLOW: "nak_overflow", R_PORT: "nak_port"}
+                R_COMMAND: "nak_command", R_OVERFLOW: "nak_overflow", R_PORT: "nak_port",
+                R_NOT_READY: "nak_not_ready"}
 M32 = 0xFFFFFFFF
+DONE_CALIBRATE = 23
+WORD_BYTES = 16            # one Wishbone word of the x16 DDR3 build
+
+
+def status_names(proto: int = PROTO) -> list[str]:
+    return STATUS_NAMES_DDR3 if proto >= PROTO_DDR3 else STATUS_NAMES
+
+
+def calib_word(calib: bool, state: int, highest: int, returns: int) -> int:
+    return (int(calib) << 24) | ((state & 31) << 16) | ((highest & 31) << 8) | (returns & 255)
+
+
+def decode_calib(word: int) -> dict:
+    return {"calib_complete": word >> 24 & 1, "state": word >> 16 & 31, "highest": word >> 8 & 31,
+            "returns_to_idle": word & 255}
+
+
+def bg_word(burst: int) -> bytes:
+    """The background word of burst address `burst` in the DDR3 simulation's memory model
+    (tests/sim_ddr3_loader_model.v): what a never-written word reads as."""
+    h = (burst * 0x9E3779B1) & M32
+    return b"".join(struct.pack("<I", h ^ ((0x5EED0000 + k * 0x01010101) & M32)) for k in range(4))
+
+
+class SparseStore:
+    """A store of 2**log2 bytes held as the 16-byte words that were written; a word never
+    written reads as `background(burst)` (default zeros). Slicing reads and writes bytes."""
+
+    def __init__(self, log2: int, background=None):
+        self.size = 1 << log2
+        self.words: dict[int, bytearray] = {}
+        self.background = background or (lambda burst: bytes(WORD_BYTES))
+
+    def __len__(self):
+        return self.size
+
+    def _word(self, burst: int) -> bytearray:
+        word = self.words.get(burst)
+        if word is None:
+            word = self.words[burst] = bytearray(self.background(burst))
+        return word
+
+    def __getitem__(self, key: slice) -> bytes:
+        start, stop, _ = key.indices(self.size)
+        out = bytearray()
+        for a in range(start, stop):
+            word = self.words.get(a >> 4)
+            out.append(word[a & 15] if word is not None else self.background(a >> 4)[a & 15])
+        return bytes(out)
+
+    def __setitem__(self, key: slice, data: bytes):
+        start, stop, _ = key.indices(self.size)
+        assert stop - start == len(data)
+        for i, a in enumerate(range(start, stop)):
+            self._word(a >> 4)[a & 15] = data[i]
 
 
 def crc32(data: bytes) -> int:
@@ -91,8 +159,8 @@ def decode_resp_word(a: int) -> dict:
             "cmd": INDEX_CMD.get(index), "seq_known": bool((a >> 16) & 1), "len": a & 0xFFFF}
 
 
-def config_word(store_log2: int) -> int:
-    return (PROTO << 24) | (12 << 16) | ((store_log2 & 255) << 8) | 10
+def config_word(store_log2: int, proto: int = PROTO) -> int:
+    return (proto << 24) | (12 << 16) | ((store_log2 & 255) << 8) | 10
 
 
 def format_line(tag: str, a: int, v: int) -> bytes:
@@ -228,6 +296,13 @@ class DeviceModel:
     default_div: int = 217
     store: bytearray = field(default=None)
     out: list = field(default_factory=list)
+    proto: int = PROTO
+    # Protocol 3 (DDR3): whether UberDDR3 has calibrated (loads and reads are refused with
+    # not_ready until then), and the Wishbone master's words (t27/rtl/fpga_loader_wb.t27):
+    # a write per run of bytes in one 16-byte word, a read per read-back byte outside the
+    # kept word; the kept word is forgotten by a write to it and by reset.
+    calibrated: bool = True
+    calib_clocks: int = 0          # what the calib_clocks line says once calibrated (timing: not predicted)
 
     def __post_init__(self):
         if self.store is None:
@@ -235,8 +310,9 @@ class DeviceModel:
         self.reset(first=True)
 
     def reset(self, first=False):
-        self.c = {name: 0 for name in STATUS_NAMES}
-        self.c["config"] = config_word(self.store_log2)
+        self.names = status_names(self.proto)
+        self.c = {name: 0 for name in self.names}
+        self.c["config"] = config_word(self.store_log2, self.proto)
         self.c["build_id"] = self.build_id
         self.state = "hunt"
         self.last = None
@@ -244,7 +320,8 @@ class DeviceModel:
         self.probation = False
         self.frames_ok = 0
         self.naks = 0
-        self.out.append(("H", self.build_id, config_word(self.store_log2)))
+        self.kept = None
+        self.out.append(("H", self.build_id, config_word(self.store_log2, self.proto)))
 
     # counters as the lines carry them
     def counts(self):
@@ -337,6 +414,8 @@ class DeviceModel:
             return self._nak(R_CRC)
         self.state = "hunt"
         self.probation = False          # a good frame confirms the rate
+        if self.proto >= PROTO_DDR3 and self.cmd in (CMD_LOAD, CMD_READ) and not self.calibrated:
+            return self._nak(R_NOT_READY)
         if self.cmd == CMD_LOAD:
             key = (self.seq, self.addr, self.len, got)
             if self.last == key:
@@ -344,6 +423,7 @@ class DeviceModel:
                 self.out.append(("A", resp_word(self.seq, True, R_DUP, self.cmd, self.len), self.counts()))
                 return
             self.store[self.addr:self.addr + self.len] = self.payload
+            self._wishbone_writes(self.addr, self.len)
             self.frames_ok += 1
             self.c["frames_committed"] += 1
             self.c["bytes_committed"] += self.len
@@ -351,18 +431,40 @@ class DeviceModel:
             self.out.append(("A", resp_word(self.seq, True, R_OK, self.cmd, self.len), self.counts()))
         elif self.cmd == CMD_READ:
             self.c["readbacks"] += 1
+            self._wishbone_reads(self.addr, self.len)
             self.out.append(("r", readback_frame(self.seq, self.addr, bytes(self.store[self.addr:self.addr + self.len]))))
         elif self.cmd == CMD_STATUS:
             values = self.status_values()
-            for i, name in enumerate(STATUS_NAMES):
-                self.out.append(("C", ((self.seq & 255) << 24) | (len(STATUS_NAMES) << 16) | i, values[name]))
+            for i, name in enumerate(self.names):
+                self.out.append(("C", ((self.seq & 255) << 24) | (len(self.names) << 16) | i, values[name]))
         else:
             self.out.append(("A", resp_word(self.seq, True, R_OK, self.cmd, self.len), self.counts()))
             self.div = self.addr
             self.probation = self.addr != self.default_div
 
+    def _wishbone_writes(self, addr: int, length: int):
+        if self.proto < PROTO_DDR3:
+            return
+        first, last = addr >> 4, (addr + length - 1) >> 4
+        self.c["wb_writes"] += last - first + 1
+        if self.kept is not None and first <= self.kept <= last:
+            self.kept = None
+
+    def _wishbone_reads(self, addr: int, length: int):
+        if self.proto < PROTO_DDR3:
+            return
+        for a in range(addr, addr + length):
+            if self.kept == a >> 4:
+                self.c["wb_read_hits"] += 1
+            else:
+                self.c["wb_reads"] += 1
+                self.kept = a >> 4
+
     def status_values(self) -> dict:
         values = dict(self.c)
+        if self.proto >= PROTO_DDR3:
+            values["calib"] = calib_word(True, DONE_CALIBRATE, DONE_CALIBRATE, 0) if self.calibrated else 0
+            values["calib_clocks"] = self.calib_clocks if self.calibrated else 0
         values["frames_committed"] = self.frames_ok
         values["baud_div"] = self.div
         values["last_seq"] = (256 | self.last[0]) if self.last else 0
@@ -416,11 +518,13 @@ def expected_bytes(item) -> bytes:
 
 
 def decode_status(events: list[Event]) -> dict:
-    """Counter name -> value from the C lines of one status response."""
+    """Counter name -> value from the C lines of one status response (23 lines: protocol 2,
+    37: protocol 3; each line carries the count in a >> 16)."""
     values = {}
     for event in events:
         if event.kind == "line" and event.tag == "C":
             index = event.a & 0xFFFF
-            if index < len(STATUS_NAMES):
-                values[STATUS_NAMES[index]] = event.v
+            names = STATUS_NAMES_DDR3 if (event.a >> 16) & 0xFF == len(STATUS_NAMES_DDR3) else STATUS_NAMES
+            if index < len(names):
+                values[names[index]] = event.v
     return values

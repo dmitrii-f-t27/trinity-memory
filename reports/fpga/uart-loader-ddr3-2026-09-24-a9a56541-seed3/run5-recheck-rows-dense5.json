@@ -1,0 +1,4542 @@
+{
+ "schema": "trinity.uart-loader-capture.v2",
+ "started_utc": "2026-09-24T20:20:57.136+00:00",
+ "label": "run5-recheck-rows-dense5",
+ "argv": [
+  "tools/fpga-uart-loader.py",
+  "--port",
+  "/dev/cu.usbserial-110",
+  "--identity",
+  "--design-hz",
+  "83333333.33",
+  "--margin",
+  "64",
+  "--max-temp",
+  "80",
+  "--output",
+  "/Users/ssdm4/Documents/Claude/Projects/clodex/trinity-memory/wt/stage2-ddr3loader/reports/fpga/uart-loader-ddr3-2026-09-24-a9a56541-seed3/run5-recheck-rows-dense5.json",
+  "--label",
+  "run5-recheck-rows-dense5",
+  "--payload-tmem-trits",
+  "/Users/ssdm4/Documents/Claude/Projects/clodex/trinity-memory/wt/stage2-ddr3loader/build/fpga/loader-payload/qproj-rows0-319.trits",
+  "--tmem-codec",
+  "dense5",
+  "--addr",
+  "0x01000007",
+  "--read-before"
+ ],
+ "tool_revision": {
+  "head": "a9a56541e2383744b007fa7d48e02db60607a924",
+  "tracked_changes": false
+ },
+ "port": "/dev/cu.usbserial-110",
+ "baud": 115200,
+ "payload": {
+  "kind": "TMEM v1 dense5 container (docs/format.md) of the trits in the source file",
+  "codec": "dense5",
+  "source": "build/fpga/loader-payload/qproj-rows0-319.trits",
+  "source_sha256": "f09fb275aa69773dcf868ebb4c6c512232a9c71a912d39350cc3cc90a11aafce",
+  "trits": 819200,
+  "counts": {
+   "+1": 284129,
+   "0": 251701,
+   "-1": 283370
+  },
+  "tmem_header_hex": "544d454d0101000000800c000000000000800200166dc191",
+  "source_sidecar": {
+   "schema": "trinity.bram-trits.v1",
+   "model": "BitNet b1.58 2B4T",
+   "tensor": "model.layers.0.self_attn.q_proj.weight",
+   "gguf_tensor": "blk.0.attn_q.weight",
+   "shape": [
+    2560,
+    2560
+   ],
+   "rows": [
+    0,
+    320
+   ],
+   "trits": 819200,
+   "order": "row-major rows of the unpacked [rows, cols] matrix (Hugging Face unpack order)",
+   "sources": {
+    "hf_packed": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T",
+     "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127",
+     "file": "model.safetensors"
+    },
+    "I2_S": {
+     "repo": "microsoft/bitnet-b1.58-2B-4T-gguf",
+     "revision": "a1f2f1c765812aa8af3f6eda4a313707064bba15",
+     "file": "ggml-model-i2_s.gguf"
+    }
+   },
+   "i2s_mismatches": 0,
+   "counts": {
+    "+1": 284129,
+    "0": 251701,
+    "-1": 283370
+   },
+   "sha256": "f09fb275aa69773dcf868ebb4c6c512232a9c71a912d39350cc3cc90a11aafce"
+  },
+  "bytes": 163864,
+  "sha256": "6397485188b58c6bc7fb0facb827bed54ba34c312d0fb9c3e0f7b0e51f91f6a6"
+ },
+ "addr": 16777223,
+ "chunk": 4096,
+ "faults": {
+  "corrupt": [],
+  "drop": [],
+  "abort": [],
+  "garbage": [],
+  "duplicate": []
+ },
+ "design_hz": 83333333.33,
+ "t0_note": "every time is host seconds after the start on one monotonic clock; a reply's t is when the reader thread read its last byte",
+ "identity_before": {
+  "idcode": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--detect"
+   ],
+   "start_s": 0.029,
+   "returncode": 0,
+   "output": [
+    "empty",
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "index 0:",
+    "\tidcode 0x3636093",
+    "\tmanufacturer xilinx",
+    "\tfamily artix a7 200t",
+    "\tmodel  xc7a200",
+    "\tirlength 6"
+   ],
+   "value": "0x3636093"
+  },
+  "dna": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-dna"
+   ],
+   "start_s": 0.048,
+   "returncode": 0,
+   "output": [
+    "empty",
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"dna\": \"0x00389c0c2d85e85c\"}"
+   ],
+   "value": "0x00389c0c2d85e85c"
+  },
+  "xadc": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-xadc"
+   ],
+   "start_s": 0.068,
+   "returncode": 0,
+   "output": [
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"temp\": 48.1883, ",
+    "    \"maxtemp\": 48.6785, ",
+    "    \"mintemp\": 37.7125, ",
+    "\"raw\":  {\"0\": 41770, \"1\": 21713, \"2\": 39090, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21727, \"7\": 0},",
+    "\"vccint\": 0.993896, ",
+    "   \"maxvccint\": 0.995361, ",
+    "   \"minvccint\": 0.992432, ",
+    "\"vccaux\": 1.78931, ",
+    "   \"maxvccaux\": 1.7915, ",
+    "   \"minvccaux\": 1.78711, ",
+    "}"
+   ],
+   "value": {
+    "temp": 48.1883,
+    "maxtemp": 48.6785,
+    "mintemp": 37.7125,
+    "raw": {
+     "0": 41770,
+     "1": 21713,
+     "2": 39090,
+     "3": 0,
+     "4": 0,
+     "5": 0,
+     "6": 21727,
+     "7": 0
+    },
+    "vccint": 0.993896,
+    "maxvccint": 0.995361,
+    "minvccint": 0.992432,
+    "vccaux": 1.78931,
+    "maxvccaux": 1.7915,
+    "minvccaux": 1.78711
+   }
+  }
+ },
+ "status_before": {
+  "rx_bytes": 1885521,
+  "rx_framing_errors": 0,
+  "rx_false_starts": 0,
+  "fifo_overflow_bytes": 0,
+  "fifo_high_water": 1,
+  "ignored_bytes": 64,
+  "frames_committed": 454,
+  "frames_duplicate": 1,
+  "nak_crc": 2,
+  "nak_length": 0,
+  "nak_timeout": 3,
+  "nak_framing": 0,
+  "nak_command": 0,
+  "nak_overflow": 0,
+  "bytes_committed": 1843296,
+  "readbacks": 924,
+  "baud_div": 723,
+  "baud_reverts": 0,
+  "last_seq": 341,
+  "config": 51125514,
+  "clocks": 3329219290,
+  "build_id": 2846188865,
+  "nak_port": 0,
+  "nak_not_ready": 0,
+  "calib": 18290432,
+  "calib_clocks": 432977330,
+  "calib_lost_clocks": 0,
+  "wb_writes": 115659,
+  "wb_reads": 230498,
+  "wb_read_hits": 3457118,
+  "wb_acks_dropped": 0,
+  "wb_acks_stray": 0,
+  "wb_max_outstanding": 2,
+  "wb_read_latency_max": 47,
+  "wb_cmd_stalls": 358161,
+  "arb_switches": 0,
+  "arb_stray": 0
+ },
+ "transfer": {
+  "store_before": {
+   "read_s": 14.428935,
+   "bytes_read": 163864,
+   "complete": true,
+   "sha256": "6397485188b58c6bc7fb0facb827bed54ba34c312d0fb9c3e0f7b0e51f91f6a6",
+   "bytes_the_load_changes": 0,
+   "note": "the range read before the load; bytes_the_load_changes counts the payload bytes that differ from it, so a read-back identical to the payload shows that many bytes landed",
+   "reads": [
+    {
+     "addr": 16777223,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 4,
+       "start": 0.581218,
+       "queued": 0.581258,
+       "reply": {
+        "kind": "readback",
+        "t": 0.941603,
+        "seq": 4,
+        "addr": 16777223,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360385
+    },
+    {
+     "addr": 16781319,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 5,
+       "start": 0.941786,
+       "queued": 0.941817,
+       "reply": {
+        "kind": "readback",
+        "t": 1.302209,
+        "seq": 5,
+        "addr": 16781319,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360423
+    },
+    {
+     "addr": 16785415,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 6,
+       "start": 1.302364,
+       "queued": 1.302412,
+       "reply": {
+        "kind": "readback",
+        "t": 1.66278,
+        "seq": 6,
+        "addr": 16785415,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360416
+    },
+    {
+     "addr": 16789511,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 7,
+       "start": 1.662997,
+       "queued": 1.663037,
+       "reply": {
+        "kind": "readback",
+        "t": 2.023348,
+        "seq": 7,
+        "addr": 16789511,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360351
+    },
+    {
+     "addr": 16793607,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 8,
+       "start": 2.0235,
+       "queued": 2.023545,
+       "reply": {
+        "kind": "readback",
+        "t": 2.383833,
+        "seq": 8,
+        "addr": 16793607,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360333
+    },
+    {
+     "addr": 16797703,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 9,
+       "start": 2.383967,
+       "queued": 2.384004,
+       "reply": {
+        "kind": "readback",
+        "t": 2.744375,
+        "seq": 9,
+        "addr": 16797703,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360408
+    },
+    {
+     "addr": 16801799,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 10,
+       "start": 2.744584,
+       "queued": 2.744646,
+       "reply": {
+        "kind": "readback",
+        "t": 3.104976,
+        "seq": 10,
+        "addr": 16801799,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360392
+    },
+    {
+     "addr": 16805895,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 11,
+       "start": 3.10517,
+       "queued": 3.105225,
+       "reply": {
+        "kind": "readback",
+        "t": 3.465588,
+        "seq": 11,
+        "addr": 16805895,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360418
+    },
+    {
+     "addr": 16809991,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 12,
+       "start": 3.465781,
+       "queued": 3.465828,
+       "reply": {
+        "kind": "readback",
+        "t": 3.826188,
+        "seq": 12,
+        "addr": 16809991,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360407
+    },
+    {
+     "addr": 16814087,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 13,
+       "start": 3.82635,
+       "queued": 3.826404,
+       "reply": {
+        "kind": "readback",
+        "t": 4.186829,
+        "seq": 13,
+        "addr": 16814087,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360479
+    },
+    {
+     "addr": 16818183,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 14,
+       "start": 4.187028,
+       "queued": 4.187079,
+       "reply": {
+        "kind": "readback",
+        "t": 4.547366,
+        "seq": 14,
+        "addr": 16818183,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360338
+    },
+    {
+     "addr": 16822279,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 15,
+       "start": 4.547479,
+       "queued": 4.547509,
+       "reply": {
+        "kind": "readback",
+        "t": 4.907739,
+        "seq": 15,
+        "addr": 16822279,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.36026
+    },
+    {
+     "addr": 16826375,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 16,
+       "start": 4.907872,
+       "queued": 4.907908,
+       "reply": {
+        "kind": "readback",
+        "t": 5.268241,
+        "seq": 16,
+        "addr": 16826375,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360369
+    },
+    {
+     "addr": 16830471,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 17,
+       "start": 5.268416,
+       "queued": 5.268485,
+       "reply": {
+        "kind": "readback",
+        "t": 5.628886,
+        "seq": 17,
+        "addr": 16830471,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.36047
+    },
+    {
+     "addr": 16834567,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 18,
+       "start": 5.628991,
+       "queued": 5.629021,
+       "reply": {
+        "kind": "readback",
+        "t": 5.989342,
+        "seq": 18,
+        "addr": 16834567,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360351
+    },
+    {
+     "addr": 16838663,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 19,
+       "start": 5.989541,
+       "queued": 5.989587,
+       "reply": {
+        "kind": "readback",
+        "t": 6.349785,
+        "seq": 19,
+        "addr": 16838663,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360244
+    },
+    {
+     "addr": 16842759,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 20,
+       "start": 6.349873,
+       "queued": 6.349902,
+       "reply": {
+        "kind": "readback",
+        "t": 6.710202,
+        "seq": 20,
+        "addr": 16842759,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360329
+    },
+    {
+     "addr": 16846855,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 21,
+       "start": 6.710323,
+       "queued": 6.710359,
+       "reply": {
+        "kind": "readback",
+        "t": 7.070754,
+        "seq": 21,
+        "addr": 16846855,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360431
+    },
+    {
+     "addr": 16850951,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 22,
+       "start": 7.070894,
+       "queued": 7.070925,
+       "reply": {
+        "kind": "readback",
+        "t": 7.431269,
+        "seq": 22,
+        "addr": 16850951,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360375
+    },
+    {
+     "addr": 16855047,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 23,
+       "start": 7.431412,
+       "queued": 7.431455,
+       "reply": {
+        "kind": "readback",
+        "t": 7.791766,
+        "seq": 23,
+        "addr": 16855047,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360354
+    },
+    {
+     "addr": 16859143,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 24,
+       "start": 7.791924,
+       "queued": 7.791966,
+       "reply": {
+        "kind": "readback",
+        "t": 8.15235,
+        "seq": 24,
+        "addr": 16859143,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360426
+    },
+    {
+     "addr": 16863239,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 25,
+       "start": 8.152476,
+       "queued": 8.152517,
+       "reply": {
+        "kind": "readback",
+        "t": 8.512826,
+        "seq": 25,
+        "addr": 16863239,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.36035
+    },
+    {
+     "addr": 16867335,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 26,
+       "start": 8.512962,
+       "queued": 8.512997,
+       "reply": {
+        "kind": "readback",
+        "t": 8.873224,
+        "seq": 26,
+        "addr": 16867335,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360262
+    },
+    {
+     "addr": 16871431,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 27,
+       "start": 8.873326,
+       "queued": 8.873354,
+       "reply": {
+        "kind": "readback",
+        "t": 9.233631,
+        "seq": 27,
+        "addr": 16871431,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360305
+    },
+    {
+     "addr": 16875527,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 28,
+       "start": 9.233781,
+       "queued": 9.233824,
+       "reply": {
+        "kind": "readback",
+        "t": 9.594142,
+        "seq": 28,
+        "addr": 16875527,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360361
+    },
+    {
+     "addr": 16879623,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 29,
+       "start": 9.594225,
+       "queued": 9.594253,
+       "reply": {
+        "kind": "readback",
+        "t": 9.95506,
+        "seq": 29,
+        "addr": 16879623,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360835
+    },
+    {
+     "addr": 16883719,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 30,
+       "start": 9.955258,
+       "queued": 9.955304,
+       "reply": {
+        "kind": "readback",
+        "t": 10.315615,
+        "seq": 30,
+        "addr": 16883719,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360357
+    },
+    {
+     "addr": 16887815,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 31,
+       "start": 10.315759,
+       "queued": 10.315804,
+       "reply": {
+        "kind": "readback",
+        "t": 10.676262,
+        "seq": 31,
+        "addr": 16887815,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360503
+    },
+    {
+     "addr": 16891911,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 32,
+       "start": 10.676433,
+       "queued": 10.67647,
+       "reply": {
+        "kind": "readback",
+        "t": 11.0368,
+        "seq": 32,
+        "addr": 16891911,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360367
+    },
+    {
+     "addr": 16896007,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 33,
+       "start": 11.036953,
+       "queued": 11.036996,
+       "reply": {
+        "kind": "readback",
+        "t": 11.397398,
+        "seq": 33,
+        "addr": 16896007,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360445
+    },
+    {
+     "addr": 16900103,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 34,
+       "start": 11.39756,
+       "queued": 11.397604,
+       "reply": {
+        "kind": "readback",
+        "t": 11.757917,
+        "seq": 34,
+        "addr": 16900103,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360357
+    },
+    {
+     "addr": 16904199,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 35,
+       "start": 11.758076,
+       "queued": 11.758128,
+       "reply": {
+        "kind": "readback",
+        "t": 12.118502,
+        "seq": 35,
+        "addr": 16904199,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360426
+    },
+    {
+     "addr": 16908295,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 36,
+       "start": 12.118673,
+       "queued": 12.118719,
+       "reply": {
+        "kind": "readback",
+        "t": 12.479005,
+        "seq": 36,
+        "addr": 16908295,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360332
+    },
+    {
+     "addr": 16912391,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 37,
+       "start": 12.47913,
+       "queued": 12.479168,
+       "reply": {
+        "kind": "readback",
+        "t": 12.839423,
+        "seq": 37,
+        "addr": 16912391,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360293
+    },
+    {
+     "addr": 16916487,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 38,
+       "start": 12.839542,
+       "queued": 12.839571,
+       "reply": {
+        "kind": "readback",
+        "t": 13.199867,
+        "seq": 38,
+        "addr": 16916487,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360325
+    },
+    {
+     "addr": 16920583,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 39,
+       "start": 13.200015,
+       "queued": 13.200054,
+       "reply": {
+        "kind": "readback",
+        "t": 13.560376,
+        "seq": 39,
+        "addr": 16920583,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360361
+    },
+    {
+     "addr": 16924679,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 40,
+       "start": 13.560553,
+       "queued": 13.560592,
+       "reply": {
+        "kind": "readback",
+        "t": 13.920879,
+        "seq": 40,
+        "addr": 16924679,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360326
+    },
+    {
+     "addr": 16928775,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 41,
+       "start": 13.921033,
+       "queued": 13.921083,
+       "reply": {
+        "kind": "readback",
+        "t": 14.281475,
+        "seq": 41,
+        "addr": 16928775,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360442
+    },
+    {
+     "addr": 16932871,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 42,
+       "start": 14.281632,
+       "queued": 14.281676,
+       "reply": {
+        "kind": "readback",
+        "t": 14.641982,
+        "seq": 42,
+        "addr": 16932871,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.36035
+    },
+    {
+     "addr": 16936967,
+     "len": 4096,
+     "attempts": [
+      {
+       "seq": 43,
+       "start": 14.642203,
+       "queued": 14.642246,
+       "reply": {
+        "kind": "readback",
+        "t": 15.002616,
+        "seq": 43,
+        "addr": 16936967,
+        "len": 4096,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.360413
+    },
+    {
+     "addr": 16941063,
+     "len": 24,
+     "attempts": [
+      {
+       "seq": 44,
+       "start": 15.002754,
+       "queued": 15.002791,
+       "reply": {
+        "kind": "readback",
+        "t": 15.009959,
+        "seq": 44,
+        "addr": 16941063,
+        "len": 24,
+        "crc_ok": true
+       }
+      }
+     ],
+     "latency_s": 0.007205
+    }
+   ]
+  },
+  "margins": {
+   "bytes_each_side": 64,
+   "below": [
+    16777159,
+    64
+   ],
+   "above": [
+    16941087,
+    64
+   ],
+   "complete": true,
+   "unchanged": true,
+   "below_sha256": "ab0b7c7622d66ba70eba77d4d4070b912844af1dbde679778a7fa942ac6d6aaa",
+   "above_sha256": "84667e4b3e714e303f61e9291eb48c3ef77a62a5d231751919b25115f0d199ae",
+   "note": "the bytes next to the range, read before the load and after the read-back: a write with byte selects must leave the other bytes of its first and last words as they were"
+  },
+  "chunks": 41,
+  "acked": 41,
+  "payload_bytes": 163864,
+  "load_s": 14.405602,
+  "load_payload_Bps": 11375.0,
+  "readback_bytes": 163864,
+  "readback_s": 14.429419,
+  "readback_payload_Bps": 11356.2,
+  "identical": true,
+  "first_mismatch": null,
+  "retransmits": {},
+  "attempts": 41,
+  "late_replies": 0,
+  "latency_s": {
+   "n": 41,
+   "min": 0.007796,
+   "p50": 0.359727,
+   "p90": 0.359818,
+   "p99": 0.3598512,
+   "max": 0.35986,
+   "mean": 0.35114856097560976,
+   "sd": 0.0549632594885205
+  },
+  "latency_note": "per acknowledged chunk: from the start of the host's write of the transmission that was acknowledged to the arrival of the ack line (the reader thread's time stamp); chunk_s also counts the failed attempts before it",
+  "chunk_s": {
+   "n": 41,
+   "min": 0.007796,
+   "p50": 0.359727,
+   "p90": 0.359818,
+   "p99": 0.3598512,
+   "max": 0.35986,
+   "mean": 0.35114856097560976,
+   "sd": 0.0549632594885205
+  },
+  "turnaround_s": {
+   "n": 40,
+   "min": 0.0028431666666666744,
+   "p50": 0.0029576666666666918,
+   "p90": 0.003047566666666707,
+   "p99": 0.00308058666666669,
+   "max": 0.0030891666666666984,
+   "mean": 0.0029615416666666896,
+   "sd": 5.993316255929501e-05
+  },
+  "turnaround_note": "per full-size chunk sent once: ack arrival minus write start minus the frame's wire time at the nominal rate (10 bits per byte): gaps the host left on the line, the device (commit, the 20-byte ack line) and USB and driver latency on the way back",
+  "queued_s": {
+   "n": 40,
+   "min": 0.00010699999999985721,
+   "p50": 0.0002464999999993722,
+   "p90": 0.0003077000000025976,
+   "p99": 0.00039117000000036476,
+   "max": 0.0004290000000004568,
+   "mean": 0.00023169999999983482,
+   "sd": 7.208157771721591e-05
+  },
+  "queued_note": "per full-size chunk sent once: write() call to return (the OS has taken every byte)",
+  "drained_s": null,
+  "drained_note": "with --drain: write() call to the return of tcdrain (flush), for comparison with the ack",
+  "gap_s": {
+   "n": 40,
+   "min": 0.000104,
+   "p50": 0.00020800000000000001,
+   "p90": 0.0002542,
+   "p99": 0.00037189,
+   "max": 0.000391,
+   "mean": 0.00020615,
+   "sd": 5.178483591524869e-05
+  },
+  "gap_note": "ack arrival to the start of the next chunk's write (host loop), chunks without injected faults",
+  "ideal_payload_Bps": 11480.8,
+  "per_chunk": [
+   {
+    "index": 0,
+    "seq": 45,
+    "addr": 16777223,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 15.01976,
+      "queued": 15.01996,
+      "reply": {
+       "kind": "line",
+       "t": 15.379486,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 45,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 455,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359726,
+    "chunk_s": 0.359726,
+    "reason": "ok",
+    "ack_t": 15.379486
+   },
+   {
+    "index": 1,
+    "seq": 46,
+    "addr": 16781319,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 15.379828,
+      "queued": 15.379998,
+      "reply": {
+       "kind": "line",
+       "t": 15.739543,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 46,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 456,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359715,
+    "chunk_s": 0.359715,
+    "reason": "ok",
+    "ack_t": 15.739543
+   },
+   {
+    "index": 2,
+    "seq": 47,
+    "addr": 16785415,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 15.739782,
+      "queued": 15.74007,
+      "reply": {
+       "kind": "line",
+       "t": 16.099505,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 47,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 457,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359723,
+    "chunk_s": 0.359723,
+    "reason": "ok",
+    "ack_t": 16.099505
+   },
+   {
+    "index": 3,
+    "seq": 48,
+    "addr": 16789511,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 16.099749,
+      "queued": 16.100048,
+      "reply": {
+       "kind": "line",
+       "t": 16.459363,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 48,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 458,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359614,
+    "chunk_s": 0.359614,
+    "reason": "ok",
+    "ack_t": 16.459363
+   },
+   {
+    "index": 4,
+    "seq": 49,
+    "addr": 16793607,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 16.459488,
+      "queued": 16.459608,
+      "reply": {
+       "kind": "line",
+       "t": 16.819348,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 49,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 459,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.35986,
+    "chunk_s": 0.35986,
+    "reason": "ok",
+    "ack_t": 16.819348
+   },
+   {
+    "index": 5,
+    "seq": 50,
+    "addr": 16797703,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 16.819584,
+      "queued": 16.819747,
+      "reply": {
+       "kind": "line",
+       "t": 17.179419,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 50,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 460,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359835,
+    "chunk_s": 0.359835,
+    "reason": "ok",
+    "ack_t": 17.179419
+   },
+   {
+    "index": 6,
+    "seq": 51,
+    "addr": 16801799,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 17.179624,
+      "queued": 17.179938,
+      "reply": {
+       "kind": "line",
+       "t": 17.539326,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 51,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 461,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359702,
+    "chunk_s": 0.359702,
+    "reason": "ok",
+    "ack_t": 17.539326
+   },
+   {
+    "index": 7,
+    "seq": 52,
+    "addr": 16805895,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 17.539474,
+      "queued": 17.539651,
+      "reply": {
+       "kind": "line",
+       "t": 17.89914,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 52,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 462,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359666,
+    "chunk_s": 0.359666,
+    "reason": "ok",
+    "ack_t": 17.89914
+   },
+   {
+    "index": 8,
+    "seq": 53,
+    "addr": 16809991,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 17.899314,
+      "queued": 17.899532,
+      "reply": {
+       "kind": "line",
+       "t": 18.259054,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 53,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 463,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.35974,
+    "chunk_s": 0.35974,
+    "reason": "ok",
+    "ack_t": 18.259054
+   },
+   {
+    "index": 9,
+    "seq": 54,
+    "addr": 16814087,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 18.259261,
+      "queued": 18.259491,
+      "reply": {
+       "kind": "line",
+       "t": 18.618957,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 54,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 464,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359696,
+    "chunk_s": 0.359696,
+    "reason": "ok",
+    "ack_t": 18.618957
+   },
+   {
+    "index": 10,
+    "seq": 55,
+    "addr": 16818183,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 18.619116,
+      "queued": 18.619262,
+      "reply": {
+       "kind": "line",
+       "t": 18.978862,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 55,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 465,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359746,
+    "chunk_s": 0.359746,
+    "reason": "ok",
+    "ack_t": 18.978862
+   },
+   {
+    "index": 11,
+    "seq": 56,
+    "addr": 16822279,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 18.979081,
+      "queued": 18.979413,
+      "reply": {
+       "kind": "line",
+       "t": 19.338816,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 56,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 466,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359735,
+    "chunk_s": 0.359735,
+    "reason": "ok",
+    "ack_t": 19.338816
+   },
+   {
+    "index": 12,
+    "seq": 57,
+    "addr": 16826375,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 19.338997,
+      "queued": 19.339148,
+      "reply": {
+       "kind": "line",
+       "t": 19.698691,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 57,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 467,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359694,
+    "chunk_s": 0.359694,
+    "reason": "ok",
+    "ack_t": 19.698691
+   },
+   {
+    "index": 13,
+    "seq": 58,
+    "addr": 16830471,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 19.698862,
+      "queued": 19.69903,
+      "reply": {
+       "kind": "line",
+       "t": 20.058588,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 58,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 468,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359726,
+    "chunk_s": 0.359726,
+    "reason": "ok",
+    "ack_t": 20.058588
+   },
+   {
+    "index": 14,
+    "seq": 59,
+    "addr": 16834567,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 20.058802,
+      "queued": 20.059071,
+      "reply": {
+       "kind": "line",
+       "t": 20.41844,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 59,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 469,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359638,
+    "chunk_s": 0.359638,
+    "reason": "ok",
+    "ack_t": 20.41844
+   },
+   {
+    "index": 15,
+    "seq": 60,
+    "addr": 16838663,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 20.418544,
+      "queued": 20.418725,
+      "reply": {
+       "kind": "line",
+       "t": 20.778299,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 60,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 470,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359755,
+    "chunk_s": 0.359755,
+    "reason": "ok",
+    "ack_t": 20.778299
+   },
+   {
+    "index": 16,
+    "seq": 61,
+    "addr": 16842759,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 20.778505,
+      "queued": 20.778786,
+      "reply": {
+       "kind": "line",
+       "t": 21.138267,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 61,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 471,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359762,
+    "chunk_s": 0.359762,
+    "reason": "ok",
+    "ack_t": 21.138267
+   },
+   {
+    "index": 17,
+    "seq": 62,
+    "addr": 16846855,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 21.138521,
+      "queued": 21.138798,
+      "reply": {
+       "kind": "line",
+       "t": 21.498325,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 62,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 472,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359804,
+    "chunk_s": 0.359804,
+    "reason": "ok",
+    "ack_t": 21.498325
+   },
+   {
+    "index": 18,
+    "seq": 63,
+    "addr": 16850951,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 21.498534,
+      "queued": 21.498813,
+      "reply": {
+       "kind": "line",
+       "t": 21.858319,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 63,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 473,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359785,
+    "chunk_s": 0.359785,
+    "reason": "ok",
+    "ack_t": 21.858319
+   },
+   {
+    "index": 19,
+    "seq": 64,
+    "addr": 16855047,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 21.858542,
+      "queued": 21.858779,
+      "reply": {
+       "kind": "line",
+       "t": 22.218285,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 64,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 474,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359743,
+    "chunk_s": 0.359743,
+    "reason": "ok",
+    "ack_t": 22.218285
+   },
+   {
+    "index": 20,
+    "seq": 65,
+    "addr": 16859143,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 22.218497,
+      "queued": 22.218755,
+      "reply": {
+       "kind": "line",
+       "t": 22.578319,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 65,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 475,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359822,
+    "chunk_s": 0.359822,
+    "reason": "ok",
+    "ack_t": 22.578319
+   },
+   {
+    "index": 21,
+    "seq": 66,
+    "addr": 16863239,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 22.578531,
+      "queued": 22.578761,
+      "reply": {
+       "kind": "line",
+       "t": 22.938175,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 66,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 476,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359644,
+    "chunk_s": 0.359644,
+    "reason": "ok",
+    "ack_t": 22.938175
+   },
+   {
+    "index": 22,
+    "seq": 67,
+    "addr": 16867335,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 22.938332,
+      "queued": 22.938661,
+      "reply": {
+       "kind": "line",
+       "t": 23.298126,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 67,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 477,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359794,
+    "chunk_s": 0.359794,
+    "reason": "ok",
+    "ack_t": 23.298126
+   },
+   {
+    "index": 23,
+    "seq": 68,
+    "addr": 16871431,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 23.298342,
+      "queued": 23.298617,
+      "reply": {
+       "kind": "line",
+       "t": 23.658061,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 68,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 478,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359719,
+    "chunk_s": 0.359719,
+    "reason": "ok",
+    "ack_t": 23.658061
+   },
+   {
+    "index": 24,
+    "seq": 69,
+    "addr": 16875527,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 23.658268,
+      "queued": 23.658526,
+      "reply": {
+       "kind": "line",
+       "t": 24.01805,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 69,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 479,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359782,
+    "chunk_s": 0.359782,
+    "reason": "ok",
+    "ack_t": 24.01805
+   },
+   {
+    "index": 25,
+    "seq": 70,
+    "addr": 16879623,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 24.018249,
+      "queued": 24.018511,
+      "reply": {
+       "kind": "line",
+       "t": 24.378067,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 70,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 480,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359818,
+    "chunk_s": 0.359818,
+    "reason": "ok",
+    "ack_t": 24.378067
+   },
+   {
+    "index": 26,
+    "seq": 71,
+    "addr": 16883719,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 24.378324,
+      "queued": 24.378753,
+      "reply": {
+       "kind": "line",
+       "t": 24.738162,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 71,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 481,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359838,
+    "chunk_s": 0.359838,
+    "reason": "ok",
+    "ack_t": 24.738162
+   },
+   {
+    "index": 27,
+    "seq": 72,
+    "addr": 16887815,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 24.738353,
+      "queued": 24.738473,
+      "reply": {
+       "kind": "line",
+       "t": 25.098031,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 72,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 482,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359678,
+    "chunk_s": 0.359678,
+    "reason": "ok",
+    "ack_t": 25.098031
+   },
+   {
+    "index": 28,
+    "seq": 73,
+    "addr": 16891911,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 25.098287,
+      "queued": 25.098568,
+      "reply": {
+       "kind": "line",
+       "t": 25.457983,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 73,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 483,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359696,
+    "chunk_s": 0.359696,
+    "reason": "ok",
+    "ack_t": 25.457983
+   },
+   {
+    "index": 29,
+    "seq": 74,
+    "addr": 16896007,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 25.458155,
+      "queued": 25.458367,
+      "reply": {
+       "kind": "line",
+       "t": 25.817867,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 74,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 484,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359712,
+    "chunk_s": 0.359712,
+    "reason": "ok",
+    "ack_t": 25.817867
+   },
+   {
+    "index": 30,
+    "seq": 75,
+    "addr": 16900103,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 25.818089,
+      "queued": 25.818352,
+      "reply": {
+       "kind": "line",
+       "t": 26.177769,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 75,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 485,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.35968,
+    "chunk_s": 0.35968,
+    "reason": "ok",
+    "ack_t": 26.177769
+   },
+   {
+    "index": 31,
+    "seq": 76,
+    "addr": 16904199,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 26.177919,
+      "queued": 26.178054,
+      "reply": {
+       "kind": "line",
+       "t": 26.537649,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 76,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 486,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.35973,
+    "chunk_s": 0.35973,
+    "reason": "ok",
+    "ack_t": 26.537649
+   },
+   {
+    "index": 32,
+    "seq": 77,
+    "addr": 16908295,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 26.53804,
+      "queued": 26.538347,
+      "reply": {
+       "kind": "line",
+       "t": 26.89768,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 77,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 487,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.35964,
+    "chunk_s": 0.35964,
+    "reason": "ok",
+    "ack_t": 26.89768
+   },
+   {
+    "index": 33,
+    "seq": 78,
+    "addr": 16912391,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 26.897829,
+      "queued": 26.897954,
+      "reply": {
+       "kind": "line",
+       "t": 27.25759,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 78,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 488,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359761,
+    "chunk_s": 0.359761,
+    "reason": "ok",
+    "ack_t": 27.25759
+   },
+   {
+    "index": 34,
+    "seq": 79,
+    "addr": 16916487,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 27.257809,
+      "queued": 27.258091,
+      "reply": {
+       "kind": "line",
+       "t": 27.617428,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 79,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 489,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359619,
+    "chunk_s": 0.359619,
+    "reason": "ok",
+    "ack_t": 27.617428
+   },
+   {
+    "index": 35,
+    "seq": 80,
+    "addr": 16920583,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 27.617586,
+      "queued": 27.617693,
+      "reply": {
+       "kind": "line",
+       "t": 27.977313,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 80,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 490,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359727,
+    "chunk_s": 0.359727,
+    "reason": "ok",
+    "ack_t": 27.977313
+   },
+   {
+    "index": 36,
+    "seq": 81,
+    "addr": 16924679,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 27.977522,
+      "queued": 27.977791,
+      "reply": {
+       "kind": "line",
+       "t": 28.337264,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 81,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 491,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359742,
+    "chunk_s": 0.359742,
+    "reason": "ok",
+    "ack_t": 28.337264
+   },
+   {
+    "index": 37,
+    "seq": 82,
+    "addr": 16928775,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 28.337493,
+      "queued": 28.337749,
+      "reply": {
+       "kind": "line",
+       "t": 28.697252,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 82,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 492,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359759,
+    "chunk_s": 0.359759,
+    "reason": "ok",
+    "ack_t": 28.697252
+   },
+   {
+    "index": 38,
+    "seq": 83,
+    "addr": 16932871,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 28.697422,
+      "queued": 28.697559,
+      "reply": {
+       "kind": "line",
+       "t": 29.057177,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 83,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 493,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359755,
+    "chunk_s": 0.359755,
+    "reason": "ok",
+    "ack_t": 29.057177
+   },
+   {
+    "index": 39,
+    "seq": 84,
+    "addr": 16936967,
+    "len": 4096,
+    "attempts": [
+     {
+      "start": 29.05739,
+      "queued": 29.057623,
+      "reply": {
+       "kind": "line",
+       "t": 29.417104,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 84,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 4096,
+       "frames_committed": 494,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.359714,
+    "chunk_s": 0.359714,
+    "reason": "ok",
+    "ack_t": 29.417104
+   },
+   {
+    "index": 40,
+    "seq": 85,
+    "addr": 16941063,
+    "len": 24,
+    "attempts": [
+     {
+      "start": 29.417301,
+      "queued": 29.417341,
+      "reply": {
+       "kind": "line",
+       "t": 29.425097,
+       "tag": "A",
+       "check_ok": true,
+       "seq": 85,
+       "reason": 0,
+       "reason_name": "ok",
+       "cmd": 76,
+       "seq_known": true,
+       "len": 24,
+       "frames_committed": 495,
+       "naks": 5
+      }
+     }
+    ],
+    "injected": [],
+    "acked": true,
+    "latency_s": 0.007796,
+    "chunk_s": 0.007796,
+    "reason": "ok",
+    "ack_t": 29.425097
+   }
+  ],
+  "reads": [
+   {
+    "addr": 16777223,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 86,
+      "start": 29.425282,
+      "queued": 29.425322,
+      "reply": {
+       "kind": "readback",
+       "t": 29.785633,
+       "seq": 86,
+       "addr": 16777223,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360351
+   },
+   {
+    "addr": 16781319,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 87,
+      "start": 29.785732,
+      "queued": 29.78576,
+      "reply": {
+       "kind": "readback",
+       "t": 30.14603,
+       "seq": 87,
+       "addr": 16781319,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360298
+   },
+   {
+    "addr": 16785415,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 88,
+      "start": 30.14616,
+      "queued": 30.146195,
+      "reply": {
+       "kind": "readback",
+       "t": 30.506512,
+       "seq": 88,
+       "addr": 16785415,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360352
+   },
+   {
+    "addr": 16789511,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 89,
+      "start": 30.506636,
+      "queued": 30.506667,
+      "reply": {
+       "kind": "readback",
+       "t": 30.867047,
+       "seq": 89,
+       "addr": 16789511,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360411
+   },
+   {
+    "addr": 16793607,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 90,
+      "start": 30.867207,
+      "queued": 30.86725,
+      "reply": {
+       "kind": "readback",
+       "t": 31.227545,
+       "seq": 90,
+       "addr": 16793607,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360338
+   },
+   {
+    "addr": 16797703,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 91,
+      "start": 31.227686,
+      "queued": 31.227727,
+      "reply": {
+       "kind": "readback",
+       "t": 31.588094,
+       "seq": 91,
+       "addr": 16797703,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360408
+   },
+   {
+    "addr": 16801799,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 92,
+      "start": 31.588282,
+      "queued": 31.588333,
+      "reply": {
+       "kind": "readback",
+       "t": 31.948699,
+       "seq": 92,
+       "addr": 16801799,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360417
+   },
+   {
+    "addr": 16805895,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 93,
+      "start": 31.948828,
+      "queued": 31.948855,
+      "reply": {
+       "kind": "readback",
+       "t": 32.309121,
+       "seq": 93,
+       "addr": 16805895,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360293
+   },
+   {
+    "addr": 16809991,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 94,
+      "start": 32.309292,
+      "queued": 32.309336,
+      "reply": {
+       "kind": "readback",
+       "t": 32.669661,
+       "seq": 94,
+       "addr": 16809991,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360369
+   },
+   {
+    "addr": 16814087,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 95,
+      "start": 32.669788,
+      "queued": 32.669823,
+      "reply": {
+       "kind": "readback",
+       "t": 33.030084,
+       "seq": 95,
+       "addr": 16814087,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360296
+   },
+   {
+    "addr": 16818183,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 96,
+      "start": 33.030202,
+      "queued": 33.030242,
+      "reply": {
+       "kind": "readback",
+       "t": 33.39057,
+       "seq": 96,
+       "addr": 16818183,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360368
+   },
+   {
+    "addr": 16822279,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 97,
+      "start": 33.390737,
+      "queued": 33.390776,
+      "reply": {
+       "kind": "readback",
+       "t": 33.751096,
+       "seq": 97,
+       "addr": 16822279,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360359
+   },
+   {
+    "addr": 16826375,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 98,
+      "start": 33.751284,
+      "queued": 33.751327,
+      "reply": {
+       "kind": "readback",
+       "t": 34.111619,
+       "seq": 98,
+       "addr": 16826375,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360335
+   },
+   {
+    "addr": 16830471,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 99,
+      "start": 34.111752,
+      "queued": 34.111796,
+      "reply": {
+       "kind": "readback",
+       "t": 34.472133,
+       "seq": 99,
+       "addr": 16830471,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360381
+   },
+   {
+    "addr": 16834567,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 100,
+      "start": 34.472281,
+      "queued": 34.472327,
+      "reply": {
+       "kind": "readback",
+       "t": 34.833222,
+       "seq": 100,
+       "addr": 16834567,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360941
+   },
+   {
+    "addr": 16838663,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 101,
+      "start": 34.833371,
+      "queued": 34.833417,
+      "reply": {
+       "kind": "readback",
+       "t": 35.193784,
+       "seq": 101,
+       "addr": 16838663,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360413
+   },
+   {
+    "addr": 16842759,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 102,
+      "start": 35.193915,
+      "queued": 35.193948,
+      "reply": {
+       "kind": "readback",
+       "t": 35.554328,
+       "seq": 102,
+       "addr": 16842759,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360413
+   },
+   {
+    "addr": 16846855,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 103,
+      "start": 35.554509,
+      "queued": 35.554567,
+      "reply": {
+       "kind": "readback",
+       "t": 35.91495,
+       "seq": 103,
+       "addr": 16846855,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360441
+   },
+   {
+    "addr": 16850951,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 104,
+      "start": 35.915066,
+      "queued": 35.915101,
+      "reply": {
+       "kind": "readback",
+       "t": 36.275406,
+       "seq": 104,
+       "addr": 16850951,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.36034
+   },
+   {
+    "addr": 16855047,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 105,
+      "start": 36.275554,
+      "queued": 36.275596,
+      "reply": {
+       "kind": "readback",
+       "t": 36.635922,
+       "seq": 105,
+       "addr": 16855047,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360368
+   },
+   {
+    "addr": 16859143,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 106,
+      "start": 36.636041,
+      "queued": 36.636075,
+      "reply": {
+       "kind": "readback",
+       "t": 36.996419,
+       "seq": 106,
+       "addr": 16859143,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360378
+   },
+   {
+    "addr": 16863239,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 107,
+      "start": 36.996568,
+      "queued": 36.996613,
+      "reply": {
+       "kind": "readback",
+       "t": 37.356934,
+       "seq": 107,
+       "addr": 16863239,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360366
+   },
+   {
+    "addr": 16867335,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 108,
+      "start": 37.35711,
+      "queued": 37.357151,
+      "reply": {
+       "kind": "readback",
+       "t": 37.717494,
+       "seq": 108,
+       "addr": 16867335,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360384
+   },
+   {
+    "addr": 16871431,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 109,
+      "start": 37.717689,
+      "queued": 37.717733,
+      "reply": {
+       "kind": "readback",
+       "t": 38.07807,
+       "seq": 109,
+       "addr": 16871431,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360381
+   },
+   {
+    "addr": 16875527,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 110,
+      "start": 38.078213,
+      "queued": 38.078257,
+      "reply": {
+       "kind": "readback",
+       "t": 38.438668,
+       "seq": 110,
+       "addr": 16875527,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360455
+   },
+   {
+    "addr": 16879623,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 111,
+      "start": 38.438819,
+      "queued": 38.438902,
+      "reply": {
+       "kind": "readback",
+       "t": 38.799181,
+       "seq": 111,
+       "addr": 16879623,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360362
+   },
+   {
+    "addr": 16883719,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 112,
+      "start": 38.799328,
+      "queued": 38.79937,
+      "reply": {
+       "kind": "readback",
+       "t": 39.159681,
+       "seq": 112,
+       "addr": 16883719,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360353
+   },
+   {
+    "addr": 16887815,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 113,
+      "start": 39.15981,
+      "queued": 39.159845,
+      "reply": {
+       "kind": "readback",
+       "t": 39.520142,
+       "seq": 113,
+       "addr": 16887815,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360332
+   },
+   {
+    "addr": 16891911,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 114,
+      "start": 39.520299,
+      "queued": 39.520345,
+      "reply": {
+       "kind": "readback",
+       "t": 39.880699,
+       "seq": 114,
+       "addr": 16891911,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.3604
+   },
+   {
+    "addr": 16896007,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 115,
+      "start": 39.880825,
+      "queued": 39.880864,
+      "reply": {
+       "kind": "readback",
+       "t": 40.241182,
+       "seq": 115,
+       "addr": 16896007,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360357
+   },
+   {
+    "addr": 16900103,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 116,
+      "start": 40.242211,
+      "queued": 40.242256,
+      "reply": {
+       "kind": "readback",
+       "t": 40.602678,
+       "seq": 116,
+       "addr": 16900103,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360467
+   },
+   {
+    "addr": 16904199,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 117,
+      "start": 40.602807,
+      "queued": 40.602844,
+      "reply": {
+       "kind": "readback",
+       "t": 40.963166,
+       "seq": 117,
+       "addr": 16904199,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360359
+   },
+   {
+    "addr": 16908295,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 118,
+      "start": 40.963312,
+      "queued": 40.963349,
+      "reply": {
+       "kind": "readback",
+       "t": 41.323675,
+       "seq": 118,
+       "addr": 16908295,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360363
+   },
+   {
+    "addr": 16912391,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 119,
+      "start": 41.323775,
+      "queued": 41.323804,
+      "reply": {
+       "kind": "readback",
+       "t": 41.684086,
+       "seq": 119,
+       "addr": 16912391,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360311
+   },
+   {
+    "addr": 16916487,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 120,
+      "start": 41.684243,
+      "queued": 41.684279,
+      "reply": {
+       "kind": "readback",
+       "t": 42.04461,
+       "seq": 120,
+       "addr": 16916487,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360367
+   },
+   {
+    "addr": 16920583,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 121,
+      "start": 42.044757,
+      "queued": 42.044801,
+      "reply": {
+       "kind": "readback",
+       "t": 42.405263,
+       "seq": 121,
+       "addr": 16920583,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360506
+   },
+   {
+    "addr": 16924679,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 122,
+      "start": 42.405471,
+      "queued": 42.405516,
+      "reply": {
+       "kind": "readback",
+       "t": 42.765774,
+       "seq": 122,
+       "addr": 16924679,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360303
+   },
+   {
+    "addr": 16928775,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 123,
+      "start": 42.765862,
+      "queued": 42.765878,
+      "reply": {
+       "kind": "readback",
+       "t": 43.126207,
+       "seq": 123,
+       "addr": 16928775,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360345
+   },
+   {
+    "addr": 16932871,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 124,
+      "start": 43.12632,
+      "queued": 43.126349,
+      "reply": {
+       "kind": "readback",
+       "t": 43.486666,
+       "seq": 124,
+       "addr": 16932871,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360346
+   },
+   {
+    "addr": 16936967,
+    "len": 4096,
+    "attempts": [
+     {
+      "seq": 125,
+      "start": 43.486848,
+      "queued": 43.486891,
+      "reply": {
+       "kind": "readback",
+       "t": 43.847187,
+       "seq": 125,
+       "addr": 16936967,
+       "len": 4096,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.360339
+   },
+   {
+    "addr": 16941063,
+    "len": 24,
+    "attempts": [
+     {
+      "seq": 126,
+      "start": 43.847324,
+      "queued": 43.847359,
+      "reply": {
+       "kind": "readback",
+       "t": 43.854498,
+       "seq": 126,
+       "addr": 16941063,
+       "len": 24,
+       "crc_ok": true
+      }
+     }
+    ],
+    "latency_s": 0.007174
+   }
+  ]
+ },
+ "status_after": {
+  "rx_bytes": 2051177,
+  "rx_framing_errors": 0,
+  "rx_false_starts": 0,
+  "fifo_overflow_bytes": 0,
+  "fifo_high_water": 1,
+  "ignored_bytes": 64,
+  "frames_committed": 495,
+  "frames_duplicate": 1,
+  "nak_crc": 2,
+  "nak_length": 0,
+  "nak_timeout": 3,
+  "nak_framing": 0,
+  "nak_command": 0,
+  "nak_overflow": 0,
+  "bytes_committed": 2007160,
+  "readbacks": 1010,
+  "baud_div": 723,
+  "baud_reverts": 0,
+  "last_seq": 341,
+  "config": 51125514,
+  "clocks": 2651088795,
+  "build_id": 2846188865,
+  "nak_port": 0,
+  "nak_not_ready": 0,
+  "calib": 18290432,
+  "calib_clocks": 432977330,
+  "calib_lost_clocks": 0,
+  "wb_writes": 125941,
+  "wb_reads": 251002,
+  "wb_read_hits": 3764598,
+  "wb_acks_dropped": 0,
+  "wb_acks_stray": 0,
+  "wb_max_outstanding": 2,
+  "wb_read_latency_max": 47,
+  "wb_cmd_stalls": 389874,
+  "arb_switches": 0,
+  "arb_stray": 0
+ },
+ "identity_after": {
+  "xadc": {
+   "cmd": [
+    "openFPGALoader",
+    "-c",
+    "digilent_hs2",
+    "--read-xadc"
+   ],
+   "start_s": 44.21,
+   "returncode": 0,
+   "output": [
+    "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+    "{\"temp\": 48.344, ",
+    "    \"maxtemp\": 48.7785, ",
+    "    \"mintemp\": 37.7125, ",
+    "\"raw\":  {\"0\": 41810, \"1\": 21723, \"2\": 39093, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21720, \"7\": 0},",
+    "\"vccint\": 0.993164, ",
+    "   \"maxvccint\": 0.995361, ",
+    "   \"minvccint\": 0.992432, ",
+    "\"vccaux\": 1.78931, ",
+    "   \"maxvccaux\": 1.7915, ",
+    "   \"minvccaux\": 1.78711, ",
+    "}"
+   ],
+   "value": {
+    "temp": 48.344,
+    "maxtemp": 48.7785,
+    "mintemp": 37.7125,
+    "raw": {
+     "0": 41810,
+     "1": 21723,
+     "2": 39093,
+     "3": 0,
+     "4": 0,
+     "5": 0,
+     "6": 21720,
+     "7": 0
+    },
+    "vccint": 0.993164,
+    "maxvccint": 0.995361,
+    "minvccint": 0.992432,
+    "vccaux": 1.78931,
+    "maxvccaux": 1.7915,
+    "minvccaux": 1.78711
+   }
+  }
+ },
+ "device_events": [
+  {
+   "kind": "line",
+   "t": 0.499047,
+   "tag": "C",
+   "a": "01250000",
+   "v": 1885521,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.499047,
+   "tag": "C",
+   "a": "01250001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.499047,
+   "tag": "C",
+   "a": "01250002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.504641,
+   "tag": "C",
+   "a": "01250003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.504641,
+   "tag": "C",
+   "a": "01250004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.504641,
+   "tag": "C",
+   "a": "01250005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.509962,
+   "tag": "C",
+   "a": "01250006",
+   "v": 454,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.509962,
+   "tag": "C",
+   "a": "01250007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.509962,
+   "tag": "C",
+   "a": "01250008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.515622,
+   "tag": "C",
+   "a": "01250009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.515622,
+   "tag": "C",
+   "a": "0125000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.515622,
+   "tag": "C",
+   "a": "0125000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.521152,
+   "tag": "C",
+   "a": "0125000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.521152,
+   "tag": "C",
+   "a": "0125000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.521152,
+   "tag": "C",
+   "a": "0125000e",
+   "v": 1843296,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.521152,
+   "tag": "C",
+   "a": "0125000f",
+   "v": 924,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.526547,
+   "tag": "C",
+   "a": "01250010",
+   "v": 723,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.526547,
+   "tag": "C",
+   "a": "01250011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.526547,
+   "tag": "C",
+   "a": "01250012",
+   "v": 341,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.53225,
+   "tag": "C",
+   "a": "01250013",
+   "v": 51125514,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.53225,
+   "tag": "C",
+   "a": "01250014",
+   "v": 3329219290,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.53225,
+   "tag": "C",
+   "a": "01250015",
+   "v": 2846188865,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.537803,
+   "tag": "C",
+   "a": "01250016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.537803,
+   "tag": "C",
+   "a": "01250017",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.537803,
+   "tag": "C",
+   "a": "01250018",
+   "v": 18290432,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.543174,
+   "tag": "C",
+   "a": "01250019",
+   "v": 432977330,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.543174,
+   "tag": "C",
+   "a": "0125001a",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.543174,
+   "tag": "C",
+   "a": "0125001b",
+   "v": 115659,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.54891,
+   "tag": "C",
+   "a": "0125001c",
+   "v": 230498,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.54891,
+   "tag": "C",
+   "a": "0125001d",
+   "v": 3457118,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.54891,
+   "tag": "C",
+   "a": "0125001e",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.54891,
+   "tag": "C",
+   "a": "0125001f",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.554359,
+   "tag": "C",
+   "a": "01250020",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.554359,
+   "tag": "C",
+   "a": "01250021",
+   "v": 47,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.554359,
+   "tag": "C",
+   "a": "01250022",
+   "v": 358161,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.559567,
+   "tag": "C",
+   "a": "01250023",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 0.559567,
+   "tag": "C",
+   "a": "01250024",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 15.379486,
+   "tag": "A",
+   "a": "2d031000",
+   "v": 29818885,
+   "check_ok": true,
+   "seq": 45,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 15.739543,
+   "tag": "A",
+   "a": "2e031000",
+   "v": 29884421,
+   "check_ok": true,
+   "seq": 46,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 16.099505,
+   "tag": "A",
+   "a": "2f031000",
+   "v": 29949957,
+   "check_ok": true,
+   "seq": 47,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 16.459363,
+   "tag": "A",
+   "a": "30031000",
+   "v": 30015493,
+   "check_ok": true,
+   "seq": 48,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 16.819348,
+   "tag": "A",
+   "a": "31031000",
+   "v": 30081029,
+   "check_ok": true,
+   "seq": 49,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 17.179419,
+   "tag": "A",
+   "a": "32031000",
+   "v": 30146565,
+   "check_ok": true,
+   "seq": 50,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 17.539326,
+   "tag": "A",
+   "a": "33031000",
+   "v": 30212101,
+   "check_ok": true,
+   "seq": 51,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 17.89914,
+   "tag": "A",
+   "a": "34031000",
+   "v": 30277637,
+   "check_ok": true,
+   "seq": 52,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 18.259054,
+   "tag": "A",
+   "a": "35031000",
+   "v": 30343173,
+   "check_ok": true,
+   "seq": 53,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 18.618957,
+   "tag": "A",
+   "a": "36031000",
+   "v": 30408709,
+   "check_ok": true,
+   "seq": 54,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 18.978862,
+   "tag": "A",
+   "a": "37031000",
+   "v": 30474245,
+   "check_ok": true,
+   "seq": 55,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 19.338816,
+   "tag": "A",
+   "a": "38031000",
+   "v": 30539781,
+   "check_ok": true,
+   "seq": 56,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 19.698691,
+   "tag": "A",
+   "a": "39031000",
+   "v": 30605317,
+   "check_ok": true,
+   "seq": 57,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 20.058588,
+   "tag": "A",
+   "a": "3a031000",
+   "v": 30670853,
+   "check_ok": true,
+   "seq": 58,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 20.41844,
+   "tag": "A",
+   "a": "3b031000",
+   "v": 30736389,
+   "check_ok": true,
+   "seq": 59,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 20.778299,
+   "tag": "A",
+   "a": "3c031000",
+   "v": 30801925,
+   "check_ok": true,
+   "seq": 60,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 21.138267,
+   "tag": "A",
+   "a": "3d031000",
+   "v": 30867461,
+   "check_ok": true,
+   "seq": 61,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 21.498325,
+   "tag": "A",
+   "a": "3e031000",
+   "v": 30932997,
+   "check_ok": true,
+   "seq": 62,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 21.858319,
+   "tag": "A",
+   "a": "3f031000",
+   "v": 30998533,
+   "check_ok": true,
+   "seq": 63,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 22.218285,
+   "tag": "A",
+   "a": "40031000",
+   "v": 31064069,
+   "check_ok": true,
+   "seq": 64,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 22.578319,
+   "tag": "A",
+   "a": "41031000",
+   "v": 31129605,
+   "check_ok": true,
+   "seq": 65,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 22.938175,
+   "tag": "A",
+   "a": "42031000",
+   "v": 31195141,
+   "check_ok": true,
+   "seq": 66,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 23.298126,
+   "tag": "A",
+   "a": "43031000",
+   "v": 31260677,
+   "check_ok": true,
+   "seq": 67,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 23.658061,
+   "tag": "A",
+   "a": "44031000",
+   "v": 31326213,
+   "check_ok": true,
+   "seq": 68,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 24.01805,
+   "tag": "A",
+   "a": "45031000",
+   "v": 31391749,
+   "check_ok": true,
+   "seq": 69,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 24.378067,
+   "tag": "A",
+   "a": "46031000",
+   "v": 31457285,
+   "check_ok": true,
+   "seq": 70,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 24.738162,
+   "tag": "A",
+   "a": "47031000",
+   "v": 31522821,
+   "check_ok": true,
+   "seq": 71,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 25.098031,
+   "tag": "A",
+   "a": "48031000",
+   "v": 31588357,
+   "check_ok": true,
+   "seq": 72,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 25.457983,
+   "tag": "A",
+   "a": "49031000",
+   "v": 31653893,
+   "check_ok": true,
+   "seq": 73,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 25.817867,
+   "tag": "A",
+   "a": "4a031000",
+   "v": 31719429,
+   "check_ok": true,
+   "seq": 74,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 26.177769,
+   "tag": "A",
+   "a": "4b031000",
+   "v": 31784965,
+   "check_ok": true,
+   "seq": 75,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 26.537649,
+   "tag": "A",
+   "a": "4c031000",
+   "v": 31850501,
+   "check_ok": true,
+   "seq": 76,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 26.89768,
+   "tag": "A",
+   "a": "4d031000",
+   "v": 31916037,
+   "check_ok": true,
+   "seq": 77,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 27.25759,
+   "tag": "A",
+   "a": "4e031000",
+   "v": 31981573,
+   "check_ok": true,
+   "seq": 78,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 27.617428,
+   "tag": "A",
+   "a": "4f031000",
+   "v": 32047109,
+   "check_ok": true,
+   "seq": 79,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 27.977313,
+   "tag": "A",
+   "a": "50031000",
+   "v": 32112645,
+   "check_ok": true,
+   "seq": 80,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 28.337264,
+   "tag": "A",
+   "a": "51031000",
+   "v": 32178181,
+   "check_ok": true,
+   "seq": 81,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 28.697252,
+   "tag": "A",
+   "a": "52031000",
+   "v": 32243717,
+   "check_ok": true,
+   "seq": 82,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 29.057177,
+   "tag": "A",
+   "a": "53031000",
+   "v": 32309253,
+   "check_ok": true,
+   "seq": 83,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 29.417104,
+   "tag": "A",
+   "a": "54031000",
+   "v": 32374789,
+   "check_ok": true,
+   "seq": 84,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 4096
+  },
+  {
+   "kind": "line",
+   "t": 29.425097,
+   "tag": "A",
+   "a": "55030018",
+   "v": 32440325,
+   "check_ok": true,
+   "seq": 85,
+   "reason": 0,
+   "reason_name": "ok",
+   "cmd": 76,
+   "seq_known": true,
+   "len": 24
+  },
+  {
+   "kind": "line",
+   "t": 43.901148,
+   "tag": "C",
+   "a": "81250000",
+   "v": 2051177,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.901148,
+   "tag": "C",
+   "a": "81250001",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.901148,
+   "tag": "C",
+   "a": "81250002",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.90668,
+   "tag": "C",
+   "a": "81250003",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.90668,
+   "tag": "C",
+   "a": "81250004",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.90668,
+   "tag": "C",
+   "a": "81250005",
+   "v": 64,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.912166,
+   "tag": "C",
+   "a": "81250006",
+   "v": 495,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.912166,
+   "tag": "C",
+   "a": "81250007",
+   "v": 1,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.912166,
+   "tag": "C",
+   "a": "81250008",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.917851,
+   "tag": "C",
+   "a": "81250009",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.917851,
+   "tag": "C",
+   "a": "8125000a",
+   "v": 3,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.917851,
+   "tag": "C",
+   "a": "8125000b",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.923449,
+   "tag": "C",
+   "a": "8125000c",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.923449,
+   "tag": "C",
+   "a": "8125000d",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.923449,
+   "tag": "C",
+   "a": "8125000e",
+   "v": 2007160,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.923449,
+   "tag": "C",
+   "a": "8125000f",
+   "v": 1010,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.929053,
+   "tag": "C",
+   "a": "81250010",
+   "v": 723,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.929053,
+   "tag": "C",
+   "a": "81250011",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.929053,
+   "tag": "C",
+   "a": "81250012",
+   "v": 341,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.934591,
+   "tag": "C",
+   "a": "81250013",
+   "v": 51125514,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.934591,
+   "tag": "C",
+   "a": "81250014",
+   "v": 2651088795,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.934591,
+   "tag": "C",
+   "a": "81250015",
+   "v": 2846188865,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.94004,
+   "tag": "C",
+   "a": "81250016",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.94004,
+   "tag": "C",
+   "a": "81250017",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.94004,
+   "tag": "C",
+   "a": "81250018",
+   "v": 18290432,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.945518,
+   "tag": "C",
+   "a": "81250019",
+   "v": 432977330,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.945518,
+   "tag": "C",
+   "a": "8125001a",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.945518,
+   "tag": "C",
+   "a": "8125001b",
+   "v": 125941,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.951184,
+   "tag": "C",
+   "a": "8125001c",
+   "v": 251002,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.951184,
+   "tag": "C",
+   "a": "8125001d",
+   "v": 3764598,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.951184,
+   "tag": "C",
+   "a": "8125001e",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.951184,
+   "tag": "C",
+   "a": "8125001f",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.956671,
+   "tag": "C",
+   "a": "81250020",
+   "v": 2,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.956671,
+   "tag": "C",
+   "a": "81250021",
+   "v": 47,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.956671,
+   "tag": "C",
+   "a": "81250022",
+   "v": 389874,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.961838,
+   "tag": "C",
+   "a": "81250023",
+   "v": 0,
+   "check_ok": true
+  },
+  {
+   "kind": "line",
+   "t": 43.961838,
+   "tag": "C",
+   "a": "81250024",
+   "v": 0,
+   "check_ok": true
+  }
+ ],
+ "device_hello": null,
+ "rx_raw": {
+  "file": "run5-recheck-rows-dense5.json.rx.bin.gz",
+  "bytes": 331488,
+  "sha256_uncompressed": "d870b37c381ff8a65f6f428f6b1308d1f777be8cca319f402295b0a462a2e3ef",
+  "tx_bytes": 165670
+ },
+ "ended_utc": "2026-09-24T20:21:41.491+00:00",
+ "checks": {
+  "all_chunks_acked": true,
+  "read_back_identical": true,
+  "status_read": true,
+  "margins_unchanged": true,
+  "calibration_held": true
+ },
+ "pass": true
+}
