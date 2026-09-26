@@ -193,14 +193,19 @@ var y_pending: bool = false;
 var y_row: u32 = 0;
 var y_acc: u64 = 0;
 
-// Decoders of the FIFO head (the reader's chunk decoders).
-var dec0: u64 = 0;
-var dec1: u64 = 0;
-var dec2: u64 = 0;
-var dec3: u64 = 0;
-var dg0: u64 = 0;
-var dg1: u64 = 0;
-var dg2: u64 = 0;
+// Decoders of the FIFO head (the reader's chunk decoders). No initial values,
+// as dinv: the codegen's initial on a module-level comb variable becomes a
+// second driver, and yosys resolves the conflict by tying bits to constant
+// zero — 224 conflicts here zeroed every decoded lane group, and the board
+// computed y = 0 on all rows while Icarus, without conflict resolution,
+// stayed green (AX7203, 2026-09-26).
+var dec0: u64;
+var dec1: u64;
+var dec2: u64;
+var dec3: u64;
+var dg0: u64;
+var dg1: u64;
+var dg2: u64;
 var dinv: u32;
 
 // Report line arbiter, as in fpga_ddr3_pattern.t27, with the loader's line
