@@ -41,6 +41,7 @@ def to_i64(value: int) -> int:
     return value - (1 << 64) if value >= (1 << 63) else value
 
 
+@unittest.skipUnless(COMPILER.is_file(), "build/compiler at native/compiler.lock with a built t27c required")
 class MatvecFunctions(unittest.TestCase):
     """The module's C functions against the model."""
 
@@ -83,6 +84,7 @@ class MatvecFunctions(unittest.TestCase):
             self.assertEqual(self.functions["act_words_of"](cols, 0), model.act_words_of(cols))
 
 
+@unittest.skipUnless(HAVE_TOOLS, "build/compiler t27c and Icarus required")
 class MatvecSimulation(unittest.TestCase):
     """The whole module in Icarus against the model's line-by-line prediction."""
 
