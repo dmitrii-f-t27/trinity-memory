@@ -661,9 +661,11 @@ $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)app-*.stamp; touch $@
 
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
-# the four PLL outputs by net name.
-$(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_ddr3_x32.xdc $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(if $(DDR3_LOADER),$(DDR3_DIR)/tms_ddr3_loader.xdc)
-	cat $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(if $(filter 32,$(DDR3_WIDTH)),$(DDR3_DIR)/tms_ddr3_x32.xdc)$(if $(DDR3_LOADER), $(DDR3_DIR)/tms_ddr3_loader.xdc) > $@.tmp
+# the four PLL outputs by net name. The loader's uart_rx pin reaches the reader
+# and matvec builds too: they synthesize the loader top with its receive port.
+DDR3_LOADER_XDC := $(if $(filter loader matvec,$(DDR3_APP)),$(DDR3_DIR)/tms_ddr3_loader.xdc)
+$(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_ddr3_x32.xdc $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_LOADER_XDC)
+	cat $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(if $(filter 32,$(DDR3_WIDTH)),$(DDR3_DIR)/tms_ddr3_x32.xdc)$(if $(DDR3_LOADER_XDC), $(DDR3_DIR)/tms_ddr3_loader.xdc) > $@.tmp
 	printf '%s\n' "# PLL outputs (DDR3_PLL_MULT=$(DDR3_PLL_MULT), DDR3_DDR_DIV=$(DDR3_DDR_DIV)), written by fpga/ax7203/Makefile" \
 	  "create_clock -period $(DDR3_CTRL_NS) -name clk_ctrl [get_nets clk_ctrl]" \
 	  "create_clock -period $(DDR3_DDR_NS) -name clk_ddr [get_nets clk_ddr]" \
