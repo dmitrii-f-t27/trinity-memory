@@ -141,7 +141,6 @@ var acks: u32 = 0;
 var issue_done: bool = false;
 var phase_clocks: u64 = 0;
 var quiet: u32 = 0;
-var run_acts: u32 = 0;
 var run_words: u32 = 0;
 var run_cycles: u64 = 0;
 var run_cmd: u64 = 0;
@@ -159,12 +158,13 @@ var stray_acks: u32 = 0;
 
 // Act store: 896 u64, 7168 int8 columns, one u64 per activation half word.
 var acts: [896]u64;
-var act_ra: u32 = 0;
 var act_rd: u64 = 0;
+var aw_stored: u32 = 0;
 
 // Weight FIFO of acknowledged words, four entries.
-var fq_lo: [4]u64;
-var fq_hi: [4]u64;
+var fq_lo: [8]u64;
+var fq_hi: [8]u64;
+var act_addr: u32;
 var fq_count: u32 = 0;
 var fir: u32 = 0;
 var fow: u32 = 0;
@@ -614,10 +614,18 @@ awlast_off = aw_now - 1;
 final_ack = ack && acks == wlast_off;
 final_act_ack = ack && acks == awlast_off;
 timeout = !progress && quiet >= watchdog;
-fq_head_lo = pick64(fir == 0, fq_lo[0], pick64(fir == 1, fq_lo[1], pick64(fir == 2, fq_lo[2], fq_lo[3])));
-fq_head_hi = pick64(fir == 0, fq_hi[0], pick64(fir == 1, fq_hi[1], pick64(fir == 2, fq_hi[2], fq_hi[3])));
+fq_head_lo = pick64(fir == 0, fq_lo[0], pick64(fir == 1, fq_lo[1], pick64(fir == 2, fq_lo[2], pick64(fir == 3, fq_lo[3], pick64(fir == 4, fq_lo[4], pick64(fir == 5, fq_lo[5], pick64(fir == 6, fq_lo[6], fq_lo[7])))))));
+fq_head_hi = pick64(fir == 0, fq_hi[0], pick64(fir == 1, fq_hi[1], pick64(fir == 2, fq_hi[2], pick64(fir == 3, fq_hi[3], pick64(fir == 4, fq_hi[4], pick64(fir == 5, fq_hi[5], pick64(fir == 6, fq_hi[6], fq_hi[7])))))));
 push_word = ack && mstate == M_WEIGHTS;
 pop_word = fq_count != 0 && cstage == 0 && !y_pending;
+// The act store read address of the sub-word the NEXT clock processes (the
+// registered read lands one clock later): the popped word's sub 0 while the
+// pop is taken, sub 0 again through the bubble, sub s + 1 during sub s, and
+// the next word's sub 0 on the last one.
+act_addr = pick32(cstage == 0, c_wir * subs_now,
+             pick32(cstage == 1, c_wir_q * subs_now,
+               pick32(c_sub == subs_now - 1, pick32(c_wir_q == wpr_now - 1, 0, c_wir_q + 1) * subs_now,
+                 (c_wir_q * subs_now) + c_sub + 1)));
 cons_active = cstage != 0;
 y_fire = cstage == 2 && c_sub == subs_now - 1 && c_wir_q == wpr_now - 1;
 drain_done = fq_count == 0 && !cons_active && !y_pending;
@@ -635,7 +643,7 @@ rd_phase = mstate == M_DOORBELL || mstate == M_ACTS || mstate == M_WEIGHTS;
 ack_stray = ack_seen && !rd_phase;
 rp_t = rep_tag(rkind, rline);
 rp_a = pick32(rkind == K_HEAD, head_a(cols, rows, magic, rline),
-              pick32(rkind == K_RUN, run_a(doorbell_run, run_words, run_max, run_hold, bad_words, run_acts, runs_done, rline), acks));
+              pick32(rkind == K_RUN, run_a(doorbell_run, run_words, run_max, run_hold, bad_words, aw_stored, runs_done, rline), acks));
 rp_b = pick64(rkind == K_HEAD, head_b(lanes_of(fmt), cap, wpr_now, aw_now, poll_div, rline),
               pick64(rkind == K_RUN, run_b(polls, run_cycles, run_cmd, run_wait, cons_stalls, stray_acks, total_bad, rline),
                      time_b(timed_acts, fmt, doorbell_run)));
@@ -690,7 +698,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 && (rdata_lo & M32) != (last_run as u64) && wpr_now != 0) {
                 doorbell_run = (rdata_lo & M32) as u32;
                 last_run = doorbell_run;
-                run_acts = 0;
+                aw_stored = 0;
                 bad_words = 0;
                 cons_stalls = 0;
                 wb_addr = aaddr;
@@ -730,7 +738,6 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (progress) { quiet = 0; } else { quiet = quiet + 1; }
         phase_clocks = phase_clocks + 1;
         if (final_act_ack) {
-            run_acts = aw_now;
             // The weight phase starts clean: one request stream, one FIFO.
             issue_done = false;
             outst = 0;
@@ -841,14 +848,17 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
 
     // The act store words: written two per activation ack (the low u64 holds
     // the first eight columns, the high u64 the next eight), read one clock
-    // ahead. acks has already counted this ack.
+    // ahead. aw_stored counts the words stored and is read before this tick
+    // writes it — the acks counter cannot serve: the phase block above writes
+    // it in the same tick.
     if (phase_ack) {
         if (mstate == M_ACTS) {
-            acts[(acks * 2) - 2] = rdata_lo;
-            acts[(acks * 2) - 1] = rdata_hi;
+            acts[aw_stored * 2] = rdata_lo;
+            acts[aw_stored * 2 + 1] = rdata_hi;
+            aw_stored = aw_stored + 1;
         }
     }
-    act_rd = acts[act_ra];
+    act_rd = acts[act_addr];
 
     // Consumer (B): pop (stage 0), bubble (1), sub-words (2). The bubble sets
     // the address of sub-word 0; every sub then sets the next sub's address.
@@ -858,14 +868,15 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         c_dg2 = dg2;
         c_wir_q = c_wir;
         c_acc = 0;
-        act_ra = (c_wir * subs_now) + 0;
         cstage = 1;
         fir = (fir + 1) % FIFO_WORDS;
         fq_count = fq_count - 1;
         if (dinv > 0) { bad_words = bad_words + 1; }
     } else if (cstage == 1) {
+        // The bubble: the address of sub-word 1 goes out now, so the end-of-clock
+        // read loads it while sub-word 0 runs on the pop's address next clock
+        // (every statement reads its variable before the same tick writes it).
         c_sub = 0;
-        act_ra = (c_wir_q * subs_now) + 1;
         cstage = 2;
     } else if (cstage == 2) {
         c_acc = c_acc + dot8(c_dg0, c_dg1, c_dg2, (c_sub << 3), act_rd);
@@ -883,7 +894,6 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             cstage = 0;
         } else {
             c_sub = c_sub + 1;
-            act_ra = (c_wir_q * subs_now) + c_sub + 1;
         }
     }
     if (push_word) {
