@@ -674,12 +674,12 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 # Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
 # and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG).stamp $(if $(DDR3_LOADER),$(CURDIR)/brams_x36.txt)
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG).stamp $(if $(filter loader matvec,$(DDR3_APP)),$(CURDIR)/brams_x36.txt)
 	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
 	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
-ifeq ($(DDR3_LOADER),)
-	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),-DUART_DEBUG_BIST )$(DDR3_READER_DEFINE)$(DDR3_MATVEC_DEFINE)$(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
+ifeq ($(filter loader matvec,$(DDR3_APP)),)
+	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),-DUART_DEBUG_BIST )$(DDR3_READER_DEFINE)$(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) \
 	    -set UBER_UART $(DDR3_UART_DEBUG_BIST) \
@@ -691,9 +691,9 @@ else
 # The loader (#63 part 2): its t27 cores with -nomem2reg (block RAM for the receive FIFO and the
 # staging buffer), every memory in the RAMB36 1K x 36 configuration (brams_x36.txt), as part 1.
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach c,$(DDR3_CORES),$(call REL,$(RTL)/$(c).v)); \
-	  read_verilog $(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
+	  read_verilog $(DDR3_MATVEC_DEFINE)$(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
-	  chparam -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_TOP); \
+	  chparam -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_MATVEC_CHPARAM)$(DDR3_TOP); \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :map_memory; \
 	  memory_libmap -lib +/xilinx/lutrams_xc5v.txt -lib $(call REL,$(CURDIR))/brams_x36.txt; \
 	  techmap -map +/xilinx/lutrams_xc5v_map.v -map +/xilinx/brams_xc6v_map.v; \
