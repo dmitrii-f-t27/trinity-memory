@@ -37,7 +37,7 @@ if ! grep -Eq '^[[:space:]]*0[[:space:]]+TOTAL across 0 spec\(s\)[[:space:]]*$' 
     cat "$out/lexer.log" >&2
     exit 1
 fi
-for module in codecs container compute sparsity json json_writer formats ternary_contract tensorpack tensorpack_json tensorpack_cli http bridge client random matvec matrix rtl_driver experiments reports python_api cli; do
+for module in codecs container compute sparsity json json_writer formats runtimes live ternary_contract tensorpack tensorpack_json tensorpack_cli http bridge client random matvec matrix rtl_driver experiments reports python_api cli; do
     "$compiler" parse-complete --show "t27/$module.t27" > "$out/$module.parse.log" 2>&1
     if ! grep -q 'nothing discarded' "$out/$module.parse.log"; then
         cat "$out/$module.parse.log" >&2

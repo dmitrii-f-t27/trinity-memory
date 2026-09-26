@@ -1,0 +1,432 @@
+{
+ "schema": "trinity.runtime-tables.v1",
+ "runtime": "PrismML llama.cpp fork",
+ "id": 2,
+ "repo": "PrismML-Eng/llama.cpp",
+ "commit": "bdc23b56b4458b9f1655aec5287f3ab56ee8daaa",
+ "files": {
+  "ggml/include/ggml.h": "d875a15ed066e29e3b43415bdba9ea9b59c75a47",
+  "ggml/src/ggml.c": "fa2a9c44f5cfa6b8688f8f70026fa5fedfb4556a",
+  "ggml/src/gguf.cpp": "d97df4a8deea9a028bb215f6d4cfbbe44f54e096",
+  "src/llama-arch.cpp": "eb17e096723695bb975cb0ea0e2e6a53fc7943e5",
+  "src/llama-model-loader.cpp": "835d172d33f7a9f5d13eccbe0e62787602bbb008",
+  "src/llama-model.cpp": "191d025e2810818d05824304ce6868b22dcd29b2",
+  "src/llama.cpp": "1609fec88ddfe3032e677590794bbadd1c93a2f7"
+ },
+ "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the head 0324c665 of branch prism, whose ggml.h and type traits for these ids equal the pin's (ids 142 PQ2_0 and 143 PTQ1_0: ggml.h:435-437); architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp at the pin that the model mapping src/llama-model.cpp:44-342 maps to a model class (unknown names are refused at :361-362, unmapped ones at :341); clip is mapped but refused as a main model after the hyperparameters (and so after the Hadamard key rules), src/llama.cpp:349-350; Hadamard rules src/llama-model.cpp:1196-1335, 1971-2095",
+ "type_count": 144,
+ "hadamard": true,
+ "types": [
+  {
+   "id": 0,
+   "name": "f32",
+   "blck": 1,
+   "bytes": 4,
+   "rule": "blocks"
+  },
+  {
+   "id": 1,
+   "name": "f16",
+   "blck": 1,
+   "bytes": 2,
+   "rule": "blocks"
+  },
+  {
+   "id": 2,
+   "name": "q4_0",
+   "blck": 32,
+   "bytes": 18,
+   "rule": "blocks"
+  },
+  {
+   "id": 3,
+   "name": "q4_1",
+   "blck": 32,
+   "bytes": 20,
+   "rule": "blocks"
+  },
+  {
+   "id": 6,
+   "name": "q5_0",
+   "blck": 32,
+   "bytes": 22,
+   "rule": "blocks"
+  },
+  {
+   "id": 7,
+   "name": "q5_1",
+   "blck": 32,
+   "bytes": 24,
+   "rule": "blocks"
+  },
+  {
+   "id": 8,
+   "name": "q8_0",
+   "blck": 32,
+   "bytes": 34,
+   "rule": "blocks"
+  },
+  {
+   "id": 9,
+   "name": "q8_1",
+   "blck": 32,
+   "bytes": 36,
+   "rule": "blocks"
+  },
+  {
+   "id": 10,
+   "name": "q2_K",
+   "blck": 256,
+   "bytes": 84,
+   "rule": "blocks"
+  },
+  {
+   "id": 11,
+   "name": "q3_K",
+   "blck": 256,
+   "bytes": 110,
+   "rule": "blocks"
+  },
+  {
+   "id": 12,
+   "name": "q4_K",
+   "blck": 256,
+   "bytes": 144,
+   "rule": "blocks"
+  },
+  {
+   "id": 13,
+   "name": "q5_K",
+   "blck": 256,
+   "bytes": 176,
+   "rule": "blocks"
+  },
+  {
+   "id": 14,
+   "name": "q6_K",
+   "blck": 256,
+   "bytes": 210,
+   "rule": "blocks"
+  },
+  {
+   "id": 15,
+   "name": "q8_K",
+   "blck": 256,
+   "bytes": 292,
+   "rule": "blocks"
+  },
+  {
+   "id": 16,
+   "name": "iq2_xxs",
+   "blck": 256,
+   "bytes": 66,
+   "rule": "blocks"
+  },
+  {
+   "id": 17,
+   "name": "iq2_xs",
+   "blck": 256,
+   "bytes": 74,
+   "rule": "blocks"
+  },
+  {
+   "id": 18,
+   "name": "iq3_xxs",
+   "blck": 256,
+   "bytes": 98,
+   "rule": "blocks"
+  },
+  {
+   "id": 19,
+   "name": "iq1_s",
+   "blck": 256,
+   "bytes": 50,
+   "rule": "blocks"
+  },
+  {
+   "id": 20,
+   "name": "iq4_nl",
+   "blck": 32,
+   "bytes": 18,
+   "rule": "blocks"
+  },
+  {
+   "id": 21,
+   "name": "iq3_s",
+   "blck": 256,
+   "bytes": 110,
+   "rule": "blocks"
+  },
+  {
+   "id": 22,
+   "name": "iq2_s",
+   "blck": 256,
+   "bytes": 82,
+   "rule": "blocks"
+  },
+  {
+   "id": 23,
+   "name": "iq4_xs",
+   "blck": 256,
+   "bytes": 136,
+   "rule": "blocks"
+  },
+  {
+   "id": 24,
+   "name": "i8",
+   "blck": 1,
+   "bytes": 1,
+   "rule": "blocks"
+  },
+  {
+   "id": 25,
+   "name": "i16",
+   "blck": 1,
+   "bytes": 2,
+   "rule": "blocks"
+  },
+  {
+   "id": 26,
+   "name": "i32",
+   "blck": 1,
+   "bytes": 4,
+   "rule": "blocks"
+  },
+  {
+   "id": 27,
+   "name": "i64",
+   "blck": 1,
+   "bytes": 8,
+   "rule": "blocks"
+  },
+  {
+   "id": 28,
+   "name": "f64",
+   "blck": 1,
+   "bytes": 8,
+   "rule": "blocks"
+  },
+  {
+   "id": 29,
+   "name": "iq1_m",
+   "blck": 256,
+   "bytes": 56,
+   "rule": "blocks"
+  },
+  {
+   "id": 30,
+   "name": "bf16",
+   "blck": 1,
+   "bytes": 2,
+   "rule": "blocks"
+  },
+  {
+   "id": 34,
+   "name": "tq1_0",
+   "blck": 256,
+   "bytes": 54,
+   "rule": "blocks"
+  },
+  {
+   "id": 35,
+   "name": "tq2_0",
+   "blck": 256,
+   "bytes": 66,
+   "rule": "blocks"
+  },
+  {
+   "id": 39,
+   "name": "mxfp4",
+   "blck": 32,
+   "bytes": 17,
+   "rule": "blocks"
+  },
+  {
+   "id": 40,
+   "name": "nvfp4",
+   "blck": 64,
+   "bytes": 36,
+   "rule": "blocks"
+  },
+  {
+   "id": 41,
+   "name": "q1_0",
+   "blck": 128,
+   "bytes": 18,
+   "rule": "blocks"
+  },
+  {
+   "id": 42,
+   "name": "q2_0",
+   "blck": 64,
+   "bytes": 18,
+   "rule": "blocks"
+  },
+  {
+   "id": 142,
+   "name": "pq2_0",
+   "blck": 128,
+   "bytes": 34,
+   "rule": "blocks"
+  },
+  {
+   "id": 143,
+   "name": "ptq1_0",
+   "blck": 128,
+   "bytes": 28,
+   "rule": "blocks"
+  }
+ ],
+ "archs": [
+  "clip",
+  "llama",
+  "llama4",
+  "deci",
+  "falcon",
+  "grok",
+  "gpt2",
+  "gptneox",
+  "mpt",
+  "baichuan",
+  "starcoder",
+  "refact",
+  "bert",
+  "modern-bert",
+  "nomic-bert",
+  "nomic-bert-moe",
+  "neo-bert",
+  "jina-bert-v2",
+  "jina-bert-v3",
+  "eurobert",
+  "bloom",
+  "stablelm",
+  "qwen",
+  "qwen2",
+  "qwen2moe",
+  "qwen2vl",
+  "qwen3",
+  "qwen3moe",
+  "qwen3next",
+  "qwen3vl",
+  "qwen3vlmoe",
+  "qwen35",
+  "qwen35moe",
+  "dspark",
+  "phi2",
+  "phi3",
+  "phimoe",
+  "plamo",
+  "plamo2",
+  "plamo3",
+  "codeshell",
+  "orion",
+  "internlm2",
+  "minicpm",
+  "minicpm3",
+  "gemma",
+  "gemma2",
+  "gemma3",
+  "gemma3n",
+  "gemma4",
+  "gemma4-assistant",
+  "gemma-embedding",
+  "starcoder2",
+  "mamba",
+  "mamba2",
+  "jamba",
+  "falcon-h1",
+  "xverse",
+  "command-r",
+  "cohere2",
+  "cohere2moe",
+  "dbrx",
+  "olmo",
+  "olmo2",
+  "olmoe",
+  "muse-glimmer",
+  "openelm",
+  "arctic",
+  "deepseek",
+  "deepseek2",
+  "deepseek2-ocr",
+  "deepseek32",
+  "deepseek4",
+  "chatglm",
+  "glm4",
+  "glm4moe",
+  "glm-dsa",
+  "bitnet",
+  "t5",
+  "t5encoder",
+  "jais",
+  "jais2",
+  "nemotron",
+  "nemotron_h",
+  "nemotron_h_moe",
+  "exaone",
+  "exaone4",
+  "exaone-moe",
+  "rwkv6",
+  "rwkv6qwen2",
+  "rwkv7",
+  "arwkv7",
+  "granite",
+  "granitemoe",
+  "granitehybrid",
+  "graniteswitch",
+  "granite_swa",
+  "chameleon",
+  "wavtokenizer-dec",
+  "plm",
+  "bailingmoe",
+  "bailingmoe2",
+  "bailingmoe3",
+  "dots1",
+  "dots3note",
+  "arcee",
+  "afmoe",
+  "laguna",
+  "ernie4_5",
+  "ernie4_5-moe",
+  "hunyuan-moe",
+  "hunyuan-dense",
+  "hunyuan_vl",
+  "hy_v3",
+  "smollm3",
+  "gpt-oss",
+  "lfm2",
+  "lfm2moe",
+  "dream",
+  "smallthinker",
+  "llada",
+  "llada-moe",
+  "seed_oss",
+  "grovemoe",
+  "apertus",
+  "minimax-01",
+  "minimax-m2",
+  "minimax-m3",
+  "cogvlm",
+  "rnd1",
+  "pangu-embedded",
+  "mistral3",
+  "eagle3",
+  "dflash",
+  "mistral4",
+  "paddleocr",
+  "mimo2",
+  "step35",
+  "llama-embed",
+  "maincoder",
+  "kimi-linear",
+  "kimi-k3",
+  "talkie",
+  "mellum",
+  "nanbeige",
+  "qwen3tts",
+  "pockettts"
+ ],
+ "archs_refused_as_main": [
+  "clip"
+ ]
+}
