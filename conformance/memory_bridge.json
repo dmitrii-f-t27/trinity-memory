@@ -347,6 +347,116 @@
       }
     },
     {
+      "description": "Backend fpga reports the UART transport and the build's evidence block; limits unchanged",
+      "device": {
+        "bitstream_sha256": "a2dfc50db33ad1285cef4de69ff87e78d4a03e4af26db05ff194433fc08c276c",
+        "capture_sha256": "893b47edf60a5ad31489885ca03f44bf6a7e7482179b12d817a264b126fa20c8",
+        "dna": "00389c0c2d85e85c",
+        "idcode": 56762515
+      },
+      "expect": {
+        "result": {
+          "backend": "fpga",
+          "evidence": {
+            "bitstream_sha256": "a2dfc50db33ad1285cef4de69ff87e78d4a03e4af26db05ff194433fc08c276c",
+            "capture_sha256": "893b47edf60a5ad31489885ca03f44bf6a7e7482179b12d817a264b126fa20c8",
+            "dna": "00389c0c2d85e85c",
+            "idcode": 56762515
+          },
+          "hardware": true,
+          "transport": "uart"
+        }
+      },
+      "id": "device_capabilities_report_transport_and_evidence",
+      "kind": "rpc",
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "trinity.capabilities"
+      }
+    },
+    {
+      "description": "The anchors stay the public constants; device provenance is the evidence block",
+      "device": {
+        "bitstream_sha256": "a2dfc50db33ad1285cef4de69ff87e78d4a03e4af26db05ff194433fc08c276c",
+        "capture_sha256": "893b47edf60a5ad31489885ca03f44bf6a7e7482179b12d817a264b126fa20c8",
+        "dna": "00389c0c2d85e85c",
+        "idcode": 56762515
+      },
+      "expect": {
+        "result": {
+          "backend": "fpga",
+          "evidence": {
+            "bitstream_sha256": "a2dfc50db33ad1285cef4de69ff87e78d4a03e4af26db05ff194433fc08c276c",
+            "capture_sha256": "893b47edf60a5ad31489885ca03f44bf6a7e7482179b12d817a264b126fa20c8",
+            "dna": "00389c0c2d85e85c",
+            "idcode": 56762515
+          },
+          "hardware": true,
+          "identity_kind": "device-evidence",
+          "status": "memory device",
+          "transport": "uart"
+        }
+      },
+      "id": "device_trinity_chip_info_is_device_evidence",
+      "kind": "rpc",
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "trinity_chipInfo"
+      }
+    },
+    {
+      "description": "compute.dot on the device backend fails with the transport error until a device is linked",
+      "device": {
+        "bitstream_sha256": "a2dfc50db33ad1285cef4de69ff87e78d4a03e4af26db05ff194433fc08c276c",
+        "capture_sha256": "893b47edf60a5ad31489885ca03f44bf6a7e7482179b12d817a264b126fa20c8",
+        "dna": "00389c0c2d85e85c",
+        "idcode": 56762515
+      },
+      "expect": {
+        "error_code": -32000
+      },
+      "id": "device_dot_requires_a_linked_transport",
+      "kind": "rpc",
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "compute.dot",
+        "params": {
+          "activations": [
+            1,
+            2,
+            3
+          ],
+          "handle": "00112233445566778899aabbccddeeff",
+          "tensor_name": "weights"
+        }
+      }
+    },
+    {
+      "description": "Even a valid upload targets the device store and fails the same way",
+      "device": {
+        "bitstream_sha256": "a2dfc50db33ad1285cef4de69ff87e78d4a03e4af26db05ff194433fc08c276c",
+        "capture_sha256": "893b47edf60a5ad31489885ca03f44bf6a7e7482179b12d817a264b126fa20c8",
+        "dna": "00389c0c2d85e85c",
+        "idcode": 56762515
+      },
+      "expect": {
+        "error_code": -32000
+      },
+      "id": "device_upload_requires_a_linked_transport",
+      "kind": "rpc",
+      "request": {
+        "id": 1,
+        "jsonrpc": "2.0",
+        "method": "memory.upload",
+        "params": {
+          "data": "VE1FTQEBAAAGAAAAAAAAAAIAAACTTPpIS3k="
+        }
+      }
+    },
+    {
       "description": "",
       "expect": {
         "error_code": -32601

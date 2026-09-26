@@ -31,6 +31,7 @@ void bridge_test_free(BridgeHarness *h) {
     if (!h) return;
     free(h->state.slots); free(h->state.pool); free(h->state.temporary);
     free(h->state.values); free(h->state.json_tokens); free(h->state.json_arena);
+    free(h->state.ev_bitstream); free(h->state.ev_capture);
     free(h->tensor.tokens); free(h->tensor.arena); free(h->tensor.items);
     free(h->tensor.shapes); free(h->tensor.scales); free(h->tensor.axes); free(h);
 }
@@ -64,6 +65,21 @@ BridgeHarness *bridge_test_new(size_t request, size_t object, size_t storage, si
 int64_t bridge_test_call(BridgeHarness *h, uint8_t *request, size_t length,
                          uint8_t *output, size_t capacity, int32_t *status) {
     return tm_bridge_request(&h->state, request, length, output, capacity, status);
+}
+/* Device backend of issue #64: backend fpga with the UART transport and the whole
+ * evidence block; a zero IDCODE or a missing field is refused by tm_bridge_init. */
+BridgeHarness *bridge_test_new_device(size_t request, size_t object, size_t storage, size_t objects, size_t trits,
+                                      uint32_t idcode, uint64_t dna, const uint8_t *bitstream, const uint8_t *capture) {
+    BridgeHarness *h = bridge_test_new(request, object, storage, objects, trits);
+    if (!h) return NULL;
+    TMBridgeState *s = &h->state;
+    s->backend = 1; s->transport = 1; s->evidence = 15;
+    s->ev_idcode = idcode; s->ev_dna = dna;
+    s->ev_bitstream = malloc(32); s->ev_capture = malloc(32);
+    if (!s->ev_bitstream || !s->ev_capture || tm_bridge_init(s) != 0) { bridge_test_free(h); return NULL; }
+    memcpy(s->ev_bitstream, bitstream, 32);
+    memcpy(s->ev_capture, capture, 32);
+    return h;
 }
 size_t bridge_test_count(BridgeHarness *h) { return h->state.object_count; }
 size_t bridge_test_bytes(BridgeHarness *h) { return h->state.stored_bytes; }
@@ -146,8 +162,39 @@ static void test_transactions(void) {
     assert(bridge_test_count(h) == 0 && bridge_test_bytes(h) == 0);
     bridge_test_free(h);
 }
+static void test_device_backend(void) {
+    uint8_t bitstream[32], capture[32], response[65536]; int32_t status;
+    for (size_t i = 0; i < 32; i++) { bitstream[i] = (uint8_t)(i * 8 + 1); capture[i] = (uint8_t)(255 - i * 7); }
+    BridgeHarness *h = bridge_test_new_device(65536, 4096, 8192, 2, 4096, 56762515, 0x00389c0c2d85e85cULL,
+                                              bitstream, capture); assert(h);
+    char request[] = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"trinity.capabilities\"}";
+    int64_t length = bridge_test_call(h, (uint8_t *)request, strlen(request), response, sizeof response - 1, &status);
+    assert(length > 0 && status == 200); response[length] = 0;
+    assert(strstr((char *)response, "\"backend\":\"fpga\",\"hardware\":true,\"transport\":\"uart\""));
+    assert(strstr((char *)response, "\"idcode\":56762515"));
+    assert(strstr((char *)response, "\"dna\":\"00389c0c2d85e85c\""));
+    char identity[] = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"trinity_chipInfo\"}";
+    length = bridge_test_call(h, (uint8_t *)identity, strlen(identity), response, sizeof response - 1, &status);
+    assert(length > 0 && status == 200); response[length] = 0;
+    assert(strstr((char *)response, "\"identity_kind\":\"device-evidence\",\"status\":\"memory device\""));
+    char dot[] = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"compute.dot\",\"params\":{\"handle\":\"00112233445566778899aabbccddeeff\",\"tensor_name\":\"weights\",\"activations\":[1,2,3]}}";
+    length = bridge_test_call(h, (uint8_t *)dot, strlen(dot), response, sizeof response - 1, &status);
+    assert(length > 0 && status == 200); response[length] = 0;
+    assert(strstr((char *)response, "\"code\":-32000"));
+    assert(strstr((char *)response, "device transport not linked"));
+    bridge_test_free(h);
+    /* A device server without the evidence block is refused at construction. */
+    h = bridge_test_new(65536, 4096, 8192, 2, 4096); assert(h);
+    h->state.backend = 1; h->state.transport = 1; h->state.evidence = 15;
+    assert(tm_bridge_init(&h->state) != 0);
+    h->state.ev_idcode = 56762515;
+    assert(tm_bridge_init(&h->state) == 0);
+    h->state.transport = 0;
+    assert(tm_bridge_init(&h->state) != 0);
+    bridge_test_free(h);
+}
 int main(void) {
-    unsigned encodings = test_base64(); test_protocol(); test_transactions();
-    printf("PASS native Bridge: %u base64 lengths, strict padding, protocol, signed dot, UUIDv4, storage limits and atomic short-output transactions\n", encodings);
+    unsigned encodings = test_base64(); test_protocol(); test_transactions(); test_device_backend();
+    printf("PASS native Bridge: %u base64 lengths, strict padding, protocol, signed dot, UUIDv4, storage limits, atomic short-output transactions and the device backend seam\n", encodings);
     return 0;
 }
