@@ -99,6 +99,11 @@ const A_WAIT: u32 = 2;
 const FMT_B2: u32 = 0;
 const FMT_D5: u32 = 1;
 const DRAIN_CLOCKS: u32 = 12;
+// Idle clocks after every read ack before the next request: UberDDR3's user
+// port returns zeros when read commands follow each other too closely (the
+// doorbell's 8192-clock poll spacing reads correctly, a 2-clock gap did not;
+// AX7203, 2026-09-26). Eight clocks cost nothing against the ack latency.
+const REQ_GAP: u32 = 8;
 const ACT_WORDS: u32 = 896;
 const FIFO_WORDS: u32 = 8;
 const MATVEC_FORMAT: u64 = 1;
@@ -141,6 +146,7 @@ var acks: u32 = 0;
 var issue_done: bool = false;
 var phase_clocks: u64 = 0;
 var quiet: u32 = 0;
+var req_gap: u32 = 0;
 var run_words: u32 = 0;
 var run_cycles: u64 = 0;
 var run_cmd: u64 = 0;
@@ -678,6 +684,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             cols: u32, rows: u32, fmt: u32, waddr: u32, aaddr: u32, daddr: u32, magic: u32,
             cap: u32, watchdog: u32, poll_div: u32, line_idle: bool,
             s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
+    if (req_gap != 0) { req_gap = req_gap - 1; }
     if (ack_seen) { all_acks = all_acks + 1; }
     if (ack_stray) { stray_acks = stray_acks + 1; }
 
@@ -713,6 +720,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             polls = polls + 1;
             wb_stb = false;
             poll_wait = poll_div;
+            req_gap = REQ_GAP;
             if ((rdata_lo >> 32) == (magic as u64) && (rdata_lo & M32) != 0
                 && (rdata_lo & M32) != (last_run as u64) && wpr_now != 0) {
                 doorbell_run = (rdata_lo & M32) as u32;
@@ -721,7 +729,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 bad_words = 0;
                 cons_stalls = 0;
                 wb_addr = aaddr;
-                wb_stb = can_issue;
+                wb_stb = can_issue && req_gap == 0;
                 outst = 0;
                 acks = 0;
                 quiet = 0;
@@ -747,13 +755,13 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 issue_done = true;
             } else {
                 wb_addr = wb_addr + 1;
-                wb_stb = can_issue;
+                wb_stb = false;      // one command at a time, as M_WEIGHTS
             }
         } else if (!wb_stb && !issue_done) {
-            wb_stb = can_issue;
+            wb_stb = can_issue && req_gap == 0;
         }
         outst = out_next;
-        if (ack) { acks = acks + 1; }
+        if (ack) { acks = acks + 1; req_gap = REQ_GAP; }
         if (progress) { quiet = 0; } else { quiet = quiet + 1; }
         phase_clocks = phase_clocks + 1;
         if (final_act_ack) {
@@ -780,7 +788,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             c_acc = 0;
             y_pending = false;
             wb_addr = waddr;
-            wb_stb = can_issue;
+            wb_stb = can_issue && req_gap == 0;
             timed_acts = false;
             mstate = M_WEIGHTS;
         } else if (timeout) {
@@ -802,13 +810,18 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 issue_done = true;
             } else {
                 wb_addr = wb_addr + 1;
-                wb_stb = can_issue;
+                // The strobe drops with every taken request: can_issue was
+                // evaluated with outst still 0, so keeping it high would hand
+                // the controller a second command before the first completes
+                // (the zero-data overlap the board showed). The branch below
+                // re-raises it once outst is 0 again.
+                wb_stb = false;
             }
         } else if (!wb_stb && !issue_done) {
-            wb_stb = can_issue;
+            wb_stb = can_issue && req_gap == 0;
         }
         outst = out_next;
-        if (ack) { acks = acks + 1; }
+        if (ack) { acks = acks + 1; req_gap = REQ_GAP; }
         if (progress) { quiet = 0; } else { quiet = quiet + 1; }
         phase_clocks = phase_clocks + 1;
         run_cycles = phase_clocks;
