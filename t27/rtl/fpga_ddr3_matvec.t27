@@ -813,9 +813,11 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (drain_done) {
             if (drain == DRAIN_CLOCKS) {
                 run_cycles = phase_clocks + 1;
-                // Counted here so the z line of this run's report already
-                // carries it.
+                // Counted here, before the report phase: the z line's value is
+                // read at its tick's start, so an update on the z line's own
+                // clock would reach the line one run late.
                 runs_done = runs_done + 1;
+                total_bad = total_bad + (bad_words as u64);
                 rkind = K_RUN;
                 rline = 0;
                 mstate = M_REPORT;
@@ -832,7 +834,6 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 if (rkind == K_HEAD) {
                     mstate = M_POLL;
                 } else if (rkind == K_RUN) {
-                    total_bad = total_bad + (bad_words as u64);
                     wb_cyc = true;
                     poll_wait = poll_div;
                     mstate = M_POLL;
