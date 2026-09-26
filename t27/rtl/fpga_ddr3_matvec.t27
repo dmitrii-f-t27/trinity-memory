@@ -867,7 +867,6 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         c_dg1 = dg1;
         c_dg2 = dg2;
         c_wir_q = c_wir;
-        c_acc = 0;
         cstage = 1;
         fir = (fir + 1) % FIFO_WORDS;
         fq_count = fq_count - 1;
@@ -887,6 +886,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 y_acc = c_acc;
                 c_row = c_row + 1;
                 c_wir = 0;
+                c_acc = 0;
             } else {
                 c_wir = c_wir_q + 1;
             }
