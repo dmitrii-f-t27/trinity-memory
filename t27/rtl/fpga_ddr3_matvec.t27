@@ -189,6 +189,8 @@ var c_dg0: u64 = 0;
 var c_dg1: u64 = 0;
 var c_dg2: u64 = 0;
 var c_wir_q: u32 = 0;
+var hq_lo: u64;
+var hq_hi: u64;    // the popped word, decoded in the bubble clock
 var y_pending: bool = false;
 var y_row: u32 = 0;
 var y_acc: u64 = 0;
@@ -658,10 +660,10 @@ act_addr = pick32(cstage == 0, c_wir * subs_now,
 cons_active = cstage != 0;
 y_fire = cstage == 2 && c_sub == subs_now - 1 && c_wir_q == wpr_now - 1;
 drain_done = fq_count == 0 && !cons_active && !y_pending;
-dec0 = pick64(fmt == FMT_D5, d5_dec4(fq_head_lo & M32), b2_dec16(fq_head_lo));
-dec1 = pick64(fmt == FMT_D5, d5_dec4(fq_head_lo >> 32), b2_dec16(fq_head_lo >> 32));
-dec2 = pick64(fmt == FMT_D5, d5_dec4(fq_head_hi & M32), b2_dec16(fq_head_hi));
-dec3 = pick64(fmt == FMT_D5, d5_dec4(fq_head_hi >> 32), b2_dec16(fq_head_hi >> 32));
+dec0 = pick64(fmt == FMT_D5, d5_dec4(hq_lo & M32), b2_dec16(hq_lo));
+dec1 = pick64(fmt == FMT_D5, d5_dec4(hq_lo >> 32), b2_dec16(hq_lo >> 32));
+dec2 = pick64(fmt == FMT_D5, d5_dec4(hq_hi & M32), b2_dec16(hq_hi));
+dec3 = pick64(fmt == FMT_D5, d5_dec4(hq_hi >> 32), b2_dec16(hq_hi >> 32));
 dg0 = dec_part(fmt, dec0, dec1, dec2, dec3, 0);
 dg1 = dec_part(fmt, dec0, dec1, dec2, dec3, 1);
 dg2 = dec_part(fmt, dec0, dec1, dec2, dec3, 2);
@@ -909,17 +911,23 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     // Consumer (B): pop (stage 0), bubble (1), sub-words (2). The bubble sets
     // the address of sub-word 0; every sub then sets the next sub's address.
     if (pop_go) {
-        c_dg0 = dg0;
-        c_dg1 = dg1;
-        c_dg2 = dg2;
+        // The popped word is captured raw and decoded in the bubble clock: the
+        // FIFO-head mux and the dense5 decoders in one clock spanned 39 ns
+        // placed (the board build's routed Fmax fell to 25 MHz once the
+        // decoders stopped being conflict-zeroed constants).
+        hq_lo = fq_head_lo;
+        hq_hi = fq_head_hi;
         c_wir_q = c_wir;
         cstage = 1;
         fir = (fir + 1) % FIFO_WORDS;
-        if (dinv > 0) { bad_words = bad_words + 1; }
     } else if (cstage == 1) {
         // The bubble: the address of sub-word 1 goes out now, so the end-of-clock
         // read loads it while sub-word 0 runs on the pop's address next clock
         // (every statement reads its variable before the same tick writes it).
+        c_dg0 = dg0;
+        c_dg1 = dg1;
+        c_dg2 = dg2;
+        if (dinv > 0) { bad_words = bad_words + 1; }
         c_sub = 0;
         cstage = 2;
     } else if (cstage == 2) {
