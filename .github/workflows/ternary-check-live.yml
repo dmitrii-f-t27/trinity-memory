@@ -1,0 +1,134 @@
+name: Ternary Check Live
+# Issues #48-#55: every public ternary GGUF model on the Hugging Face Hub (one
+# file, or the parts of a split model), checked from its headers. Discovery and
+# range reads are anonymous (no token is sent) and throttled; nothing past the
+# first 256 MiB of a file is read, so the weights are not downloaded. Every
+# verdict is made by the t27 library built here (t27/live.t27 over
+# t27/runtimes.t27); then every cached header is fed to the real GGUF readers
+# of the pinned runtimes (tools/live-replay.sh) and each answer is compared with
+# the t27 reader's. The job log and the step summary hold counts only; the
+# report is a short-lived artifact. Publishing is issue #53 and #54. Nothing is
+# posted anywhere.
+on:
+  push:
+    # Temporary: run the first full scan from the pull request's branch. Removed before merge.
+    branches: [feat/ternary-check-live]
+    paths: ['.github/workflows/ternary-check-live.yml']
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+    inputs:
+      min_downloads:
+        description: 'Scan repositories with at least this many downloads over 30 days'
+        default: '100'
+      limit:
+        description: 'Scan only the N most downloaded repositories (0: all)'
+        default: '0'
+permissions:
+  contents: read
+concurrency:
+  group: ternary-check-live
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      CC: clang
+      CXX: clang++
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned compiler and install build tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y clang lld libssl-dev cmake
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-${{ runner.os }}-${{ runner.arch }}-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build the t27 library
+        run: |
+          python3 tools/generate-runtime-tables.py --check
+          sh tools/build-t27.sh
+      # Headers are cached by their file's LFS SHA-256: a file that did not
+      # change since the last run is not read again.
+      - uses: actions/cache@v4
+        with:
+          path: build/live/headers
+          key: live-headers-${{ github.run_id }}
+          restore-keys: live-headers-
+      - name: Build the upstream GGUF readers of the pinned runtimes
+        id: readers
+        continue-on-error: true
+        run: sh tools/live-replay.sh
+      - name: Scan
+        env:
+          MIN_DOWNLOADS: ${{ inputs.min_downloads || '100' }}
+          LIMIT: ${{ inputs.limit || '0' }}
+        run: |
+          set -o pipefail
+          mkdir -p build/live
+          python3 -m trinity_memory.live --min-downloads "$MIN_DOWNLOADS" --limit "$LIMIT" --interval 1 \
+            --out build/live/scan.json 2>&1 | tee build/live/scan.log
+      - name: Replay every header through the upstream readers
+        if: steps.readers.outcome == 'success'
+        run: |
+          set -o pipefail
+          python3 -m trinity_memory.live --out build/live/scan.json --replay build/replay 2>&1 | tee -a build/live/scan.log
+      - name: Summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          if not os.path.exists("build/live/scan.json"):
+              print("No report."); raise SystemExit
+          report = json.load(open("build/live/scan.json"))
+          s = report["summary"]
+          print("## Ternary Check Live\n")
+          print(f"{s['repositories']} repositories ({s['states']}), {s['models']} models in {s['files']} files "
+                f"({s['split_models']} split models; not checked: {s['named_models_not_checked']} ternary-named models past "
+                f"the limit of 12 per repository and {s['other_models_not_checked']} other models of these repositories), "
+                f"{s['downloads_30d_scanned']} downloads over 30 days in the scanned repositories.\n")
+          print("| Model verdict | Models |\n|---|---|")
+          for verdict, count in s["verdicts"].items():
+              print(f"| {verdict} | {count} |")
+          print("\n| Runtime | " + " | ".join(sorted({v for r in s['runtimes'].values() for v in r})) + " |")
+          keys = sorted({v for r in s['runtimes'].values() for v in r})
+          print("|---|" + "---|" * len(keys))
+          for runtime, counts in s["runtimes"].items():
+              print(f"| {runtime} | " + " | ".join(str(counts.get(k, 0)) for k in keys) + " |")
+          replay = report.get("replay")
+          if replay:
+              missing = sorted(set(report["runtimes"]) - set(replay["runtimes"]))
+              if missing:
+                  print(f"\n**Not replayed: {', '.join(missing)}** (the reader did not build; see its build log).")
+              print(f"\nUpstream readers ({', '.join(replay['runtimes'])}) over {replay['files']} files: "
+                    f"{replay['agree']} answers agree with the t27 reader, {replay['disagree']} disagree, "
+                    f"{replay['no_verdict']} without a t27 verdict, {replay['crashes']} crashes, "
+                    f"{replay['timeouts']} timeouts.")
+          else:
+              print("\nNo upstream reader was replayed.")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ternary-check-live
+          retention-days: 7
+          path: |
+            build/live/scan.json
+            build/live/scan.log
+            build/replay/*.log
