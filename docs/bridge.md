@@ -24,8 +24,26 @@ dots; `tests/test_spec_bridge.py` replays them over real TCP against the native
 server, `tests/native/test_spec_bridge_vectors.py` replays them in process
 through the generated bridge module, and `tests/native_spec_bridge.c` ties the
 spec constants and rules to `t27/bridge.t27` and `t27/client.t27`.
-The transport remains loopback-only and unauthenticated; the spec labels the
-backend `emulator` and `hardware: false` until a device backend exists.
+The transport remains loopback-only and unauthenticated; the default backend is
+`emulator` with `hardware: false`, and every emulator response is unchanged by
+the device seam below.
+
+## Device backend seam (issue #64)
+
+The Bridge state gains `backend` and `transport` plus an evidence block
+(`specs/memory/bridge.t27`, section 10): `emulator` stays the default and
+carries no evidence; backend `fpga` requires the UART transport, the whole
+evidence block (bitstream sha256, capture sha256, IDCODE, DNA) and a nonzero
+IDCODE, and a server constructed without them is refused at initialization.
+With backend `fpga`, `trinity.capabilities` and the identity methods report
+`"backend":"fpga","hardware":true,"transport":"uart"` and the evidence block;
+the storage and compute methods (`memory.upload`, `memory.read`, `memory.info`,
+`memory.delete`, `compute.dot`) answer with the transport error (-32000) until a
+device is linked behind them — this process has no serial path, so the device
+answers arrive through the host adapter instead. The SDK adapter
+(`SDKMemoryBackend.get_chip_info`) accepts a device identity only when the whole
+evidence block is present and well formed; the device vectors in
+`conformance/memory_bridge.json` replay this in the native harness.
 
 ## Python client and server
 
