@@ -161,7 +161,7 @@ var acts: [896]u64;
 var act_rd: u64 = 0;
 var aw_stored: u32 = 0;
 
-// Weight FIFO of acknowledged words, four entries.
+// Weight FIFO of acknowledged words, eight entries.
 var fq_lo: [8]u64;
 var fq_hi: [8]u64;
 var act_addr: u32;
@@ -582,6 +582,7 @@ var fq_head_lo: u64;
 var fq_head_hi: u64;
 var push_word: bool;
 var pop_word: bool;
+var pop_go: bool;
 var cons_active: bool;
 var y_fire: bool;
 var drain_done: bool;
@@ -618,6 +619,7 @@ fq_head_lo = pick64(fir == 0, fq_lo[0], pick64(fir == 1, fq_lo[1], pick64(fir ==
 fq_head_hi = pick64(fir == 0, fq_hi[0], pick64(fir == 1, fq_hi[1], pick64(fir == 2, fq_hi[2], pick64(fir == 3, fq_hi[3], pick64(fir == 4, fq_hi[4], pick64(fir == 5, fq_hi[5], pick64(fir == 6, fq_hi[6], fq_hi[7])))))));
 push_word = ack && mstate == M_WEIGHTS;
 pop_word = fq_count != 0 && cstage == 0 && !y_pending;
+pop_go = pop_word && (mstate == M_WEIGHTS || mstate == M_DRAIN);
 // The act store read address of the sub-word the NEXT clock processes (the
 // registered read lands one clock later): the popped word's sub 0 while the
 // pop is taken, sub 0 again through the bubble, sub s + 1 during sub s, and
@@ -862,14 +864,13 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
 
     // Consumer (B): pop (stage 0), bubble (1), sub-words (2). The bubble sets
     // the address of sub-word 0; every sub then sets the next sub's address.
-    if (pop_word && (mstate == M_WEIGHTS || mstate == M_DRAIN)) {
+    if (pop_go) {
         c_dg0 = dg0;
         c_dg1 = dg1;
         c_dg2 = dg2;
         c_wir_q = c_wir;
         cstage = 1;
         fir = (fir + 1) % FIFO_WORDS;
-        fq_count = fq_count - 1;
         if (dinv > 0) { bad_words = bad_words + 1; }
     } else if (cstage == 1) {
         // The bubble: the address of sub-word 1 goes out now, so the end-of-clock
@@ -881,9 +882,11 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         c_acc = c_acc + dot8(c_dg0, c_dg1, c_dg2, (c_sub << 3), act_rd);
         if (c_sub == subs_now - 1) {
             if (y_fire) {
+                // The row total includes this sub-word: c_acc has not taken it
+                // yet in this tick.
                 y_pending = true;
                 y_row = c_row;
-                y_acc = c_acc;
+                y_acc = c_acc + dot8(c_dg0, c_dg1, c_dg2, (c_sub << 3), act_rd);
                 c_row = c_row + 1;
                 c_wir = 0;
                 c_acc = 0;
@@ -900,8 +903,11 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         fq_lo[fow] = rdata_lo;
         fq_hi[fow] = rdata_hi;
         fow = (fow + 1) % FIFO_WORDS;
-        fq_count = fq_count + 1;
     }
+    // The FIFO count has exactly one write per clock: a pop and a push in the
+    // same tick must net zero, and two writes to one register in a tick would
+    // keep only the last one.
+    fq_count = fq_count + pick32(push_word, 1, 0) - pick32(pop_go, 1, 0);
 
     // Report line arbiter: a pending Y line first, the phase report otherwise.
     line_go = false;
