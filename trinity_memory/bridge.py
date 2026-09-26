@@ -118,16 +118,37 @@ class BridgeClient:
     def delete(self,handle): return self.call("memory.delete",{"handle":handle})
 
 class SDKMemoryBackend:
-    """Adapter for the separate Trinity SDK; identity remains explicitly emulated."""
+    """Adapter for the separate Trinity SDK; identity stays labelled and evidenced."""
     def __init__(self,client): self.client=client
     def get_chip_info(self):
         from trinity.types import ChipInfo
         info=self.client.call("trinity_chipInfo")
-        if info.get("backend")!="emulator" or info.get("hardware") is not False:
-            raise BridgeError(-32000,"expected an explicit memory emulator identity")
+        if info.get("backend")=="emulator":
+            if info.get("hardware") is not False:
+                raise BridgeError(-32000,"expected an explicit memory emulator identity")
+        elif info.get("backend")=="fpga":
+            # Issue #64: a device identity is accepted only with the whole evidence
+            # block (bitstream sha256, capture sha256, IDCODE, DNA).
+            if info.get("hardware") is not True or not device_evidence(info.get("evidence")):
+                raise BridgeError(-32000,"a device identity needs the whole evidence block")
+        else:
+            raise BridgeError(-32000,"expected an explicit memory emulator or device identity")
         return ChipInfo(phi_id=bytes.fromhex(info["phi_id"]),euler_id=bytes.fromhex(info["euler_id"]),
                         gamma_id=bytes.fromhex(info["gamma_id"]),anchor=info["anchor"])
     def prove_inference(self,**_):
         raise NotImplementedError("Memory emulator does not run model inference or produce ZK proofs")
     def submit_to_bittensor(self,**_):
         raise NotImplementedError("Memory emulator does not submit to Bittensor")
+
+HEX_DIGITS=set("0123456789abcdef")
+def _hex_word(value,length):
+    return type(value) is str and len(value)==length and set(value)<=HEX_DIGITS
+
+def device_evidence(evidence):
+    """The four evidence fields of a device identity, all present and well formed."""
+    if type(evidence) is not dict: return False
+    if not (_hex_word(evidence.get("bitstream_sha256"),64) and _hex_word(evidence.get("capture_sha256"),64)):
+        return False
+    idcode=evidence.get("idcode")
+    if type(idcode) is not int or idcode<=0: return False
+    return _hex_word(evidence.get("dna"),16)
