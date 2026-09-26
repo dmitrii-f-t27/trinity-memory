@@ -614,7 +614,12 @@ room_down = out_down < cap;
 out_next = pick32(accept && !ack, out_up, pick32(ack && !accept, out_down, outst));
 cap_room = pick_bool(accept && !ack, room_up, pick_bool(ack && !accept, room_down, room_same));
 fifo_room = fq_count + out_next < 5;
-can_issue = cap_room && (mstate != M_WEIGHTS || fifo_room);
+// One request in flight at a time: UberDDR3's user port is not a pipelined
+// slave, and the board (AX7203, m6d4, 2026-09-26) returns zeros for the data
+// of overlapping requests — the doorbell's single-outstanding polls and the
+// loader's max_outstanding 1 both read correctly; the reader's cap-64 and
+// this module's cap-4 phases did not. The cap and FIFO sizing stay as built.
+can_issue = cap_room && outst == 0 && (mstate != M_WEIGHTS || fifo_room);
 wpr_now = words_per_row(cols, fmt);
 subs_now = subs_of(fmt);
 aw_now = act_words_of(cols);
