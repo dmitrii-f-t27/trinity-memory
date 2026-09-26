@@ -280,7 +280,11 @@ module tms_ddr3_loader_ax7203 #(
     );
 `else
 `ifdef DDR3_LOADER_MATVEC
-    assign m1_cyc = mv_cyc;
+    // The matvec holds its wb_cyc high from calibration on, so as the reader it
+    // must hand the arbiter its strobe as the want signal: a wired-ever-high m1
+    // cyc would own the port for ever (the arbiter switches only when the
+    // owner's cyc is low) and starve the loader of every load.
+    assign m1_cyc = mv_stb;
     assign m1_stb = mv_stb;
     assign m1_we = 1'b0;                 // the matvec only reads
     assign m1_addr = mv_addr;

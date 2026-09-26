@@ -104,12 +104,56 @@ def dense5_stream(trits, cols: int, rows: int) -> bytes:
     return bytes(out)
 
 
+def doorbell_and_capture(port: str, baud: int, addr: int, payload: bytes,
+                         timeout_s: float, stop_tag: str = "z"):
+    """One load frame and the whole line stream on a single open port: a second
+    open-close cycle after the doorbell would flush the run's first lines."""
+    import serial
+    import uart_loader_protocol as proto
+    lines, buf = [], b""
+    with serial.Serial(port, baud, timeout=0.2) as com:
+        com.reset_input_buffer()
+        for attempt in range(6):
+            if attempt:
+                time.sleep(0.05)
+            com.write(proto.load_frame(1, addr, payload))
+            com.flush()
+            deadline = time.monotonic() + 0.5
+            while time.monotonic() < deadline:
+                buf += com.read(256)
+                if b"\nA" in buf or b"\nN" in buf:
+                    break
+            if b"\nA" in buf:
+                break
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            buf += com.read(256)
+            while len(buf) >= 20:
+                line, buf = buf[:20], buf[20:]
+                if line[19:20] != b"\n":
+                    nl = buf.find(b"\n")
+                    if nl >= 0:
+                        buf = buf[nl + 1:]
+                    continue
+                tag = chr(line[0])
+                if tag not in LINE_TAGS:
+                    continue
+                lines.append((tag, int(line[1:9], 16), int(line[9:19], 16)))
+                if tag == stop_tag:
+                    return lines
+    return lines
+
+
 def loader_load(port: str, baud: int, path: Path, addr_words: int, output: Path,
-                design_hz: float) -> None:
-    """One payload through the #63 loader at a word address (bytes on the wire)."""
+                design_hz: float, chunk: int) -> None:
+    """One payload through the #63 loader. The L frame's addr is the byte address
+    (the loader's master packs 16 bytes per store word), so a module word
+    address travels as addr * 16. Chunks stay below 4096: the loader accepts a
+    maximum-length frame but its store writes for it never land (seen on the
+    AX7203, m6d4, 2026-09-26; the sim drops the frame outright)."""
     cmd = [sys.executable, str(ROOT / "tools/fpga-uart-loader.py"), "--port", port,
            "--baud", str(baud), "--payload", str(path), "--addr", str(addr_words * WORD),
-           "--design-hz", str(design_hz), "--output", str(output)]
+           "--chunk", str(chunk), "--design-hz", str(design_hz), "--output", str(output)]
     done = subprocess.run(cmd, capture_output=True, text=True)
     if done.returncode != 0:
         raise SystemExit(f"loader failed for {path.name} at word {addr_words}:\n"
@@ -157,6 +201,8 @@ def main() -> int:
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--synthetic", type=int, default=None,
                     help="seeded random chunk instead of the golden fixture data")
+    ap.add_argument("--loader-chunk", type=int, default=2048,
+                    help="loader frame size; 4096-byte frames ack but never store")
     ap.add_argument("--design-hz", type=float, default=83333333.33,
                     help="controller clock of this bitstream (62.5 MHz for DDR3_DDR_DIV=4)")
     ap.add_argument("--work", default=str(ROOT / "build/fpga/matvec-run"))
@@ -181,21 +227,12 @@ def main() -> int:
 
     loads = work / "loads.json"
     print("load: weights ...", flush=True)
-    loader_load(args.port, args.baud, weights, args.waddr, loads.with_suffix(".w.json"), args.design_hz)
+    loader_load(args.port, args.baud, weights, args.waddr, loads.with_suffix(".w.json"), args.design_hz, args.loader_chunk)
     print("load: activations ...", flush=True)
-    loader_load(args.port, args.baud, act_path, args.aaddr, loads.with_suffix(".a.json"), args.design_hz)
-    print("capture: opening the line stream, then the doorbell ...", flush=True)
-    import threading
-    lines = []
-
-    def run_capture():
-        lines.extend(capture(args.port, args.baud, args.timeout))
-
-    reader = threading.Thread(target=run_capture)
-    reader.start()
-    time.sleep(0.5)                 # let the capture settle before the run starts
-    loader_load(args.port, args.baud, doorbell, args.daddr, loads.with_suffix(".d.json"), args.design_hz)
-    reader.join()
+    loader_load(args.port, args.baud, act_path, args.aaddr, loads.with_suffix(".a.json"), args.design_hz, args.loader_chunk)
+    print("doorbell + capture on one port ...", flush=True)
+    lines = doorbell_and_capture(args.port, args.baud, args.daddr * WORD,
+                                 doorbell.read_bytes(), args.timeout)
     print(f"capture: {len(lines)} lines", flush=True)
 
     y = [(a, b) for tag, a, b in lines if tag == "y"]
