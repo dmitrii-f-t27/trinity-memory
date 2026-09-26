@@ -111,7 +111,7 @@ class MatvecSimulation(unittest.TestCase):
 
     def write_region(self, path, base_addr, words64):
         """One $readmemh file: 64-bit words at the folded indices of `base_addr`."""
-        start = ((base_addr >> 2) & 32767) * 2
+        start = (base_addr & 32767) * 2
         with path.open("w") as handle:
             handle.write(f"@{start:x}\n")  # $readmemh addresses parse as hex
             for value in words64:
@@ -210,7 +210,7 @@ class MatvecSimulation(unittest.TestCase):
 
 CONFIG_CAP = {model.FMT_D5: 4, model.FMT_B2: 3}
 POLL_DIV = 8
-DOORBELL_ADDR, ACTS_ADDR, WEIGHTS_ADDR = 0x40, 0x1000, 0x8000
+DOORBELL_ADDR, ACTS_ADDR, WEIGHTS_ADDR = 0x40, 0x1000, 0x4000
 CONFIGS = {
     "d5": {"FMT": 1, "ROWS": 8, "CAP": 4, "POLL_DIV": 8},
     "d5c": {"FMT": 1, "ROWS": 4, "CAP": 4, "POLL_DIV": 8},

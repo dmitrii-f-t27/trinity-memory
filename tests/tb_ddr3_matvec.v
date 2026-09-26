@@ -16,7 +16,7 @@
 module tb_ddr3_matvec;
     parameter integer CLK_PS = 12000;   // 83.33 MHz controller clock
     parameter [31:0] COLS = 2560, ROWS = 8, FMT = 1;
-    parameter [31:0] DADDR = 32'h0000_0040, AADDR = 32'h0000_1000, WADDR = 32'h0000_8000;
+    parameter [31:0] DADDR = 32'h0000_0040, AADDR = 32'h0000_1000, WADDR = 32'h0000_4000;
     parameter [31:0] MAGIC = 32'h74337633, CAP = 4, WATCHDOG = 32'd16777216, POLL_DIV = 64;
 
     reg clk = 1'b0, calib = 1'b0;
@@ -40,20 +40,24 @@ module tb_ddr3_matvec;
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b)
     );
 
-    // Behavioural Wishbone memory: the fold of (addr >> 2) & 32767. A request is
-    // taken on a clock with wb_stb and not stall (the contract the module relies
-    // on: it never withdraws a request, so stall decides before the request's
-    // clock — raised at random while idle, or when the queue is full). Acks come
-    // in order, the word's data valid in the ack's clock, as UberDDR3 drives it.
+    // Behavioural Wishbone memory on the loader model's discipline
+    // (tests/sim_ddr3_loader_model.v): one folded index per burst address (addr & 32767: the module's wb_addr already counts 128-bit words); a taken
+    // request (wb_stb and not stall, cyc held) captures its word at the take,
+    // and the ack comes with the data as registered outputs — both NBAs of one
+    // clock — ack_min .. ack_min + ack_span clocks later, in order (a due time
+    // never before the previous entry's + 1). stall is decided ahead: raised
+    // while calibration is pending, when the queue is near full, or a share of
+    // idle clocks at random.
     reg [63:0] mem [0:65535];
-    parameter integer QMAX = 8;
+    parameter integer QDEPTH = 8;
     integer stall_pct = 0, ack_min = 0, ack_span = 4, calib_after = 40;
     integer lfsr = 32'h5eed0062;
     integer clocks = 0, taken = 0, acked = 0;
-    integer q_addr [0:QMAX-1];
-    integer q_wait [0:QMAX-1];
-    integer q_head = 0, q_len = 0;
-    integer idx;
+    reg [63:0] q_lo [0:QDEPTH-1];
+    reg [63:0] q_hi [0:QDEPTH-1];
+    integer q_due [0:QDEPTH-1];
+    integer q_head = 0, q_tail = 0, q_count = 0, last_due = 0;
+    wire take_now = wb_cyc && wb_stb && !stall;
 
     function [31:0] nextrand;
         input dummy;
@@ -66,39 +70,27 @@ module tb_ddr3_matvec;
     always @(posedge clk) begin
         clocks = clocks + 1;
         if (clocks == calib_after) calib <= 1'b1;
-        ack <= 1'b0;
-        if (clocks >= calib_after) begin
-            // The taken request of this clock, if the port is not stalled.
-            if (wb_stb && !stall) begin
-                q_addr[(q_head + q_len) % QMAX] = (wb_addr >> 2) & 32767;
-                q_wait[(q_head + q_len) % QMAX] = ack_min + (nextrand(0) % (ack_span + 1)) + 2;
-                q_len = q_len + 1;
-                taken = taken + 1;
-            end
-            // Decide the stall of the next clock: the queue must never overflow,
-            // and a share of idle clocks raise it at random.
-            stall <= (q_len >= QMAX - 1) || (q_len == 0 && (nextrand(0) % 100) < stall_pct);
-            // In-order acks, the word's data valid one clock before the ack
-            // (registered together they would race the master's same-edge read:
-            // UberDDR3 drives o_wb_data with o_wb_ack, both stable in the ack's
-            // clock).
-            if (q_len > 0) begin
-                q_wait[q_head] = q_wait[q_head] - 1;
-                if (q_wait[q_head] == 1) begin
-                    idx = q_addr[q_head];
-                    rdata_lo <= mem[idx * 2];
-                    rdata_hi <= mem[idx * 2 + 1];
-                end
-                if (q_wait[q_head] == 0) begin
-                    ack <= 1'b1;
-                    q_head = (q_head + 1) % QMAX;
-                    q_len = q_len - 1;
-                    acked = acked + 1;
-                end
-            end
-        end else begin
-            stall <= 1'b0;
+        if (take_now) begin
+            q_lo[q_tail] = mem[(wb_addr & 32767) * 2];
+            q_hi[q_tail] = mem[(wb_addr & 32767) * 2 + 1];
+            q_due[q_tail] = (clocks + ack_min + (nextrand(0) % (ack_span + 1)) > last_due)
+                            ? clocks + ack_min + (nextrand(0) % (ack_span + 1)) : last_due + 1;
+            last_due = q_due[q_tail];
+            q_tail = (q_tail + 1) % QDEPTH;
+            q_count = q_count + 1;
+            taken = taken + 1;
         end
+        ack <= 1'b0;
+        if (q_count > 0 && q_due[q_head] <= clocks) begin
+            ack <= 1'b1;
+            rdata_lo <= q_lo[q_head];
+            rdata_hi <= q_hi[q_head];
+            q_head = (q_head + 1) % QDEPTH;
+            q_count = q_count - 1;
+            acked = acked + 1;
+        end
+        stall <= (clocks < calib_after) || (q_count + (take_now ? 1 : 0) >= QDEPTH - 2) ||
+                 (q_count == 0 && (nextrand(0) % 100) < stall_pct);
     end
 
     // Line emitter stub and capture.
