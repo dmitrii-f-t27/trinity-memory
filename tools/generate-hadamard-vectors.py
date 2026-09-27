@@ -21,50 +21,28 @@ PROG rotate BLOCK SIGNS VALUES OUTPUT, little-endian f64 in, f64 out.
 from __future__ import annotations
 
 import argparse
-import ctypes as C
 import json
 import pathlib
 import random
-import re
 import struct
-import subprocess
 import sys
-import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SPEC = ROOT / "t27/hadamard.t27"
+sys.path.insert(0, str(ROOT))
 OUT = ROOT / "conformance/hadamard_rotate.json"
-COMPILER = ROOT / "build/compiler/target/release/t27c"
 
 
 def load_library():
-    work = pathlib.Path(tempfile.mkdtemp(prefix="hadamard-gen-"))
-    c = work / "hadamard.c"
-    gen = subprocess.run([str(COMPILER), "gen-c", str(SPEC)], capture_output=True,
-                         text=True, check=True).stdout
-    gen = re.sub(r"(\w+\[\d+\]) = 0;", r"\1 = {0};", gen)  # module arrays
-    c.write_text(gen)
-    lib = work / "libhadamard.dylib" if sys.platform == "darwin" else work / "libhadamard.so"
-    subprocess.run(["cc", "-shared", "-fPIC", "-O1", "-Wno-parentheses-equality",
-                    "-Wno-shift-count-overflow", str(c), "-o", str(lib)],
-                   check=True, capture_output=True)
-    return C.CDLL(str(lib))
+    from trinity_memory import hadamard_reference as h
+    return h._load()
 
 
 def make_rotation(lib):
-    lib.sw_entry.restype = C.c_int32
-    lib.sw_entry.argtypes = [C.c_uint32, C.c_uint32]
-    lib.sw_rotate_numerator.restype = C.c_int64
-    ArrayI64 = C.c_int64 * 1024
-    ArrayI32 = C.c_int32 * 1024
-    lib.sw_rotate_numerator.argtypes = [C.c_uint32, C.c_uint32, ArrayI64, ArrayI32]
+    from trinity_memory import hadamard_reference as h
 
     def rotate(block: int, x: list[int], signs: list[int]) -> list[float]:
         """The rotated values: numerator / normalisation, exact in f64."""
-        norm = {16: 4, 64: 8, 256: 16, 1024: 32}[block]
-        ax = ArrayI64(*x)
-        asg = ArrayI32(*signs)
-        return [lib.sw_rotate_numerator(k, block, ax, asg) / norm for k in range(block)]
+        return h.rotate(block, [float(v) for v in x], signs)
 
     return rotate
 
