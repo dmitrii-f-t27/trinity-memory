@@ -1994,3 +1994,44 @@ those runs (none on the path they used) are fixed and shown in Icarus only. Desi
 simulation, build, board results and the fixes: [`docs/uart-loader.md`](uart-loader.md),
 "DDR3 (part 2, built)".
 
+
+### DDR3 weights per second: 1.6 vs 2 bits per weight (#65, consumer B)
+
+Definitions (added by #65):
+
+- **weights/s** = logical trits delivered (padding lanes excluded) × f_ctrl / cycles,
+  where f_ctrl is the controller clock derived from the board's 200 MHz oscillator
+  through the design's PLL (derived, not instrument-measured).
+- **Memory-bound** (per the issue): consumer stalls are 0 in both formats, so the
+  gap to the bus peak belongs to DDR3 (command and wait stalls, refresh). The
+  workload consumer also reports its stall counts unrounded.
+- **Ceiling** (arithmetic, not a result): at most 1.25 weights/s between the
+  formats (`10/8`), reached only when the transfer is payload-bound; x16 at
+  480 MT/s peaks at 6.0 G (dense5) and 4.8 G (baseline2) weights/s.
+
+Measurement (tools/fpga-ddr3-matvec-measure.py, schema
+`trinity.fpga-ddr3-matvec-measure.v1`; both captures and their build records
+under `reports/fpga/`): the golden 320-row q_proj chunk (819,200 weights)
+loaded once per format, 12 doorbell runs each, every run bit-exact.
+
+| Consumer | Format | bits/weight | words | cycles (mean of 12) | weights/s (mean ± s.d.) | ratio d5/b2 | memory-bound |
+|---|---|---|---|---|---|---|---|
+| B (device matvec) | dense5 | 1.6 | 10,240 | 33,240,000 | 1,478,697 ± 65 | **1.0000** | latency-bound (see below) |
+| B (device matvec) | baseline2 | 2.0 | 12,800 | 33,240,000 | 1,478,726 ± 97 | | latency-bound (see below) |
+| A (delivery, #62) | both | 1.6 / 2.0 | — | — | not measurable at bus rate | — | see reason |
+
+**Outcome in one sentence:** at the only read discipline this board's UberDDR3
+user port allows through the arbiter — one outstanding request, an 8-clock gap
+after every ack, overlapping requests return zero data (#75) — the two formats
+deliver the same logical chunk in the same 33.24M cycles and the weights/s
+ratio is exactly 1.0, not 1.25: delivery is latency-bound (≈3,246 cycles per
+128-bit word regardless of its 64- or 80-trit width; wait stalls ≈ 99.98% of
+all cycles, consumer stalls 19 of 33M, sample s.d. < 0.01%), so the 1.6-bit
+format buys nothing at this operating point. Consumer (A) at bus rate is
+unreachable for the same reason — the #62 reader's pipelined phases are the
+zero-data case (its 2026-09-24 captures hold `runs: 0`), while the direct,
+arbiter-free pattern test of #61 streamed 2^25 bursts on the same port, which
+localises the no-overlap behaviour to the arbiter/controller seam, not the
+DRAM itself. The 1.25 ratio remains testable only after the arbiter supports
+pipelined reads; that fix is the follow-up that would unlock both (A) and the
+bandwidth-bound thesis test.
