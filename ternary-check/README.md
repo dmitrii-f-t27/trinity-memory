@@ -22,7 +22,7 @@ go to the job summary and to a JSON report.
 
 ## Usage
 
-The Action is available once v0.4.0 is released:
+The Action is available (v0.4.0 and later):
 
 ```yaml
 jobs:
