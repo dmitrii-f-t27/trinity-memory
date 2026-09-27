@@ -136,7 +136,7 @@ values, scale words, flags and refusals with their error classes; by default
 any mismatch, wrong refusal or silent acceptance fails the step:
 
 ```yaml
-- uses: dmitrii-f-t27/trinity-memory/ternary-check@v0.4.0
+- uses: dmitrii-f-t27/trinity-memory/ternary-check@v0.5.0
   with:
     decoder: ./build/my-decoder   # the contract arguments are appended
     formats: TQ1_0,TQ2_0          # optional: only the formats you implement

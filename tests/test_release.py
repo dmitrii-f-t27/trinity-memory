@@ -1,4 +1,4 @@
-"""Issue #36: the v0.4.0 release files agree with each other and with the reports.
+"""Issues #36/#56: the release files agree with each other and with the reports.
 
 - One version everywhere it names the current release: pyproject.toml,
   trinity_memory/__init__.py, the installed-wheel test, the top entry of
@@ -27,7 +27,7 @@ TABLE_START = "<!-- ternary-check-table: generated from reports/ternary-check.js
 TABLE_END = "<!-- /ternary-check-table -->"
 
 # Pull requests merged after v0.3.0 (git log --merges v0.3.0..HEAD).
-MERGED_SINCE_0_3_0 = {12, 13, 14, 16, 17, 19, 20, 21, 22, 23, 25, 26, 37, 38, 39, 40, 41, 42, 43, 45, 46}
+MERGED_SINCE_0_4_0 = {44, 58, 68, 69, 70, 71, 72, 74, 75, 76, 77, 78, 79, 80, 81, 82}
 
 LABELS = {
     "en": {"header": ("Format", "BitNet `q_proj`", "BitNet `down_proj`", "Bonsai `ffn_down`"),
@@ -86,7 +86,7 @@ def readme_section(path: Path) -> str:
 class VersionTest(unittest.TestCase):
     def test_one_version(self):
         current = version()
-        self.assertEqual(current, "0.4.0")
+        self.assertEqual(current, "0.5.0")
         init = re.search(r'^__version__="([^"]+)"$', read(ROOT / "trinity_memory" / "__init__.py"), re.M)
         self.assertEqual(init.group(1), current)
         self.assertIn(f"tm.__version__=='{current}'", read(ROOT / "tests" / "native" / "test_installed_wheel.py"))
@@ -99,10 +99,10 @@ class VersionTest(unittest.TestCase):
     def test_changelog_top_entry(self):
         text = read(ROOT / "CHANGELOG.md")
         entries = re.findall(r"^## \[([^\]]+)\] - (\d{4}-\d{2}-\d{2})$", text, re.M)
-        self.assertEqual([name for name, _ in entries], [version(), "0.3.0", "0.2.0"])
+        self.assertEqual([name for name, _ in entries], [version(), "0.4.0", "0.3.0", "0.2.0"])
         self.assertEqual(dict(entries)["0.3.0"], "2026-09-10")
         self.assertEqual(dict(entries)["0.2.0"], "2026-09-09")
-        self.assertIn(f"[{version()}]: https://github.com/dmitrii-f-t27/trinity-memory/compare/v0.3.0...v{version()}",
+        self.assertIn(f"[{version()}]: https://github.com/dmitrii-f-t27/trinity-memory/compare/v0.4.0...v{version()}",
                       text)
 
 
@@ -113,7 +113,7 @@ class ChangelogTest(unittest.TestCase):
 
     def test_every_merged_pull_request_is_named(self):
         named = {int(n) for n in re.findall(r"trinity-memory/pull/(\d+)", self.section())}
-        self.assertEqual(named, MERGED_SINCE_0_3_0)
+        self.assertEqual(named, MERGED_SINCE_0_4_0)
 
     @staticmethod
     def has_tag(tag: str) -> bool:
@@ -126,17 +126,17 @@ class ChangelogTest(unittest.TestCase):
         # Once v0.4.0 is tagged the range ends there, so pull requests merged after the
         # release do not count; before tagging it ends at HEAD (the release pull request
         # itself is the one allowed extra).
-        end = "v0.4.0" if self.has_tag("v0.4.0") else "HEAD"
-        log = subprocess.run(["git", "-C", str(ROOT), "log", "--merges", "--format=%s", f"v0.3.0..{end}"],
+        end = "v0.5.0" if self.has_tag("v0.5.0") else "HEAD"
+        log = subprocess.run(["git", "-C", str(ROOT), "log", "--merges", "--format=%s", f"v0.4.0..{end}"],
                              capture_output=True, text=True, check=True).stdout
         merged = {int(n) for n in re.findall(r"^Merge pull request #(\d+) ", log, re.M)}
-        self.assertLessEqual(MERGED_SINCE_0_3_0, merged)
-        self.assertLessEqual(merged, MERGED_SINCE_0_3_0 | {self.release_pull_request(merged)})
+        self.assertLessEqual(MERGED_SINCE_0_4_0, merged)
+        self.assertLessEqual(merged, MERGED_SINCE_0_4_0 | {self.release_pull_request(merged)})
 
     @staticmethod
     def release_pull_request(merged):
         # The release pull request itself merges after this file is written.
-        later = sorted(n for n in merged if n > max(MERGED_SINCE_0_3_0))
+        later = sorted(n for n in merged if n > max(MERGED_SINCE_0_4_0))
         return later[0] if len(later) == 1 else -1
 
 
