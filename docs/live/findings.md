@@ -40,9 +40,11 @@ later status.
 
 ## F-1 — PrismML's own `Q2_0` Bonsai files refuse to load in every reader
 
-- **status**: confirmed (replay 2026-09-27: 110 agree, 0 disagree, 0 crashes
-  over the 55-file scan, both built readers — llama.cpp e6ab7c1a and the
-  PrismML fork bdc23b56 — refuse at the same record with the same numbers)
+- **status**: approved (founders' approval 2026-09-27; the report below is
+  the agreed wording — confirmed by the replay before that: 110 agree,
+  0 disagree, 0 crashes over the 55-file scan, both built readers —
+  llama.cpp e6ab7c1a and the PrismML fork bdc23b56 — refuse at the same
+  record with the same numbers)
 - **where**: `prism-ml/Ternary-Bonsai-27B-gguf` → `Ternary-Bonsai-27B-Q2_0.gguf`
   (header sha256 `e085e126…3a09a`, lfs `868c1171…1757`, 7,165,121,600 bytes),
   `prism-ml/Ternary-Bonsai-8B-gguf` → `Ternary-Bonsai-8B-Q2_0.gguf`
