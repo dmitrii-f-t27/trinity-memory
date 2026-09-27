@@ -63,6 +63,32 @@ def badge_json(scan: dict, repo: str) -> dict | None:
     return {"schemaVersion": 1, "label": label, "message": value, "color": color}
 
 
+def render_drift(d: dict) -> str:
+    """The drift section for the page (tools/live-drift.py output)."""
+    moved = d.get("verdicts_moved") or []
+    adds = d.get("added") or []
+    newrej = d.get("new_rejections") or []
+    rows = "".join(
+        f'<tr><td><a href="https://huggingface.co/{e(m["repo"])}">{e(m["repo"])}</a></td>'
+        f"<td><code>{e(m["file"])}</code></td>"
+        f'<td class="v mid">{e(m["was"])}</td><td class="v bad">{e(m["now"])}</td></tr>'
+        for m in newrej)
+    rows += "".join(
+        f'<tr><td><a href="https://huggingface.co/{e(m["repo"])}">{e(m["repo"])}</a></td>'
+        f"<td><code>{e(m["file"])}</code></td>"
+        f'<td class="v mid">{e(m["was"])}</td><td class="v mid">{e(m["now"])}</td></tr>'
+        for m in moved if m not in newrej)
+    rows += "".join(
+        f'<tr><td><a href="https://huggingface.co/{e(m["repo"])}">{e(m["repo"])}</a></td>'
+        f'<td><code>{e(m["file"])}</code></td><td colspan="2" class="v ok">{e(m["verdict"])}</td></tr>'
+        for m in adds)
+    prev = (d.get("old_started") or "")[:16]
+    return (f'<div class="how"><b>Drift since {e(prev)}.</b> '
+            f"{d.get('files_new', '?')} files now ({d.get('files_old', '?')} before); "
+            f"{len(newrej)} new rejections, {len(moved)} verdicts moved, {len(adds)} new files. "
+            "The findings ledger holds the explanations.</div>")
+
+
 def render(scan: dict) -> str:
     when = scan.get("started", "")[:10] or "unknown date"
     s = scan.get("summary", {})
@@ -199,6 +225,7 @@ def main() -> int:
     page = sub.add_parser("page", help="generate index.html and check.html")
     page.add_argument("scan")
     page.add_argument("--out", default=str(ROOT / "site/live"))
+    page.add_argument("--drift", default="", help="drift JSON (tools/live-drift.py) to embed")
     bd = sub.add_parser("badge", help="the shields.io badge JSON of one repository")
     bd.add_argument("scan")
     bd.add_argument("repo")
@@ -224,7 +251,12 @@ def main() -> int:
         return 1
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "index.html").write_text(render(scan))
+    page = render(scan)
+    if args.drift:
+        import re
+        drift_html = render_drift(json.loads(pathlib.Path(args.drift).read_text()))
+        page = page.replace("<table><thead>", drift_html + "\n<table><thead>", 1)
+    (out / "index.html").write_text(page)
     (out / "check.html").write_text(CHECK_PAGE)
     print(f"wrote {out}/index.html and check.html")
     return 0
