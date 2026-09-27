@@ -236,7 +236,9 @@ def main() -> int:
     print(f"capture: {len(lines)} lines", flush=True)
 
     y = [(a, b) for tag, a, b in lines if tag == "y"]
-    got = [b - (1 << 64) if b >= (1 << 63) else b for _, b in y]  # 40-bit signed in u64 lines
+    # The Y line carries the low 40 bits of the row total: two's complement
+    # sign-extended from bit 39.
+    got = [b - (1 << 40) if b >= (1 << 39) else b for _, b in y]
     mismatch = [i for i in range(min(len(got), len(expected)))
                 if got[i] != expected[i]]
     verdict = {"rows": args.rows, "y_lines": len(y), "expected": len(expected),
