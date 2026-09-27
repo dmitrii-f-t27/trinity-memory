@@ -193,6 +193,8 @@ var c_wir_q: u32 = 0;
 var hq_lo: u64;
 var hq_hi: u64;    // the popped word, decoded in the bubble clock
 var sub_q: u64;             // the current sub-word's lane bits, lifted in their own clock
+var pr0: u32; var pr1: u32; var pr2: u32; var pr3: u32;
+var pr4: u32; var pr5: u32; var pr6: u32; var pr7: u32;   // lane products, their own clock
 var y_pending: bool = false;
 var y_row: u32 = 0;
 var y_acc: u64 = 0;
@@ -501,6 +503,18 @@ fn sub_lane_bits(s: u32, d0: u64, d1: u64, d2: u64) -> u64 {
 // (|sum| <= 8 * 128 = 1024), so the additions run on u32: the 64-bit carry
 // chains of the u64 form were most of the consumer's critical path on the
 // board build.
+// One lane's product: the sign-extended activation byte selected by the
+// lane's magnitude/sign bits of the extracted half word.
+fn dot_one(sw: u64, word: u64, j: u32) -> u32 {
+    var sign: u64 = ((sw >> (j << 1)) & 1) - ((sw >> ((j << 1) + 1)) & 1);
+    var b: u32 = ((word >> ((j & 7) << 3)) & 255) as u32;
+    if (b >= 128) { b = b | 4294967040; }
+    var prod: u32 = 0;
+    if (sign == 1) { prod = b; }
+    if (sign == 18446744073709551615) { prod = 0 - b; }
+    return prod;
+}
+
 fn dot_sub(sw: u64, word: u64) -> u32 {
     var sum: u32 = 0;
     var j: u32 = 0;
@@ -685,10 +699,11 @@ pop_go = pop_word && (mstate == M_WEIGHTS || mstate == M_DRAIN);
 // the next word's sub 0 on the last one.
 act_addr = pick32(cstage <= 1, c_wir * subs_now,
              pick32(cstage == 2, c_wir_q * subs_now,
-               pick32(c_sub == subs_now - 1, pick32(c_wir_q == wpr_now - 1, 0, c_wir_q + 1) * subs_now,
-                 (c_wir_q * subs_now) + c_sub + 1)));
+               pick32(cstage == 4, (c_wir_q * subs_now) + c_sub + 1,
+                 pick32(c_sub == subs_now - 1, pick32(c_wir_q == wpr_now - 1, 0, c_wir_q + 1) * subs_now,
+                   (c_wir_q * subs_now) + c_sub + 1))));
 cons_active = cstage >= 2;
-y_fire = cstage == 3 && c_sub == subs_now - 1 && c_wir_q == wpr_now - 1;
+y_fire = cstage == 4 && c_sub == subs_now - 1 && c_wir_q == wpr_now - 1;
 drain_done = fq_count == 0 && !cons_active && !y_pending;
 dec0 = pick64(fmt == FMT_D5, d5_dec4(hq_lo & M32), b2_dec16(hq_lo));
 dec1 = pick64(fmt == FMT_D5, d5_dec4(hq_lo >> 32), b2_dec16(hq_lo >> 32));
@@ -965,21 +980,32 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         sub_q = sub_lane_bits(0, c_dg0, c_dg1, c_dg2);
         cstage = 3;
     } else if (cstage == 3) {
-        c_acc = c_acc + dot_sub(sub_q, act_rd);
+        // The product clock: eight lane products off the extracted half word,
+        // no carry chains (the products are selection muxes of sign-extended
+        // bytes). The adder tree gets its own clock below.
+        pr0 = dot_one(sub_q, act_rd, 0);
+        pr1 = dot_one(sub_q, act_rd, 1);
+        pr2 = dot_one(sub_q, act_rd, 2);
+        pr3 = dot_one(sub_q, act_rd, 3);
+        pr4 = dot_one(sub_q, act_rd, 4);
+        pr5 = dot_one(sub_q, act_rd, 5);
+        pr6 = dot_one(sub_q, act_rd, 6);
+        pr7 = dot_one(sub_q, act_rd, 7);
+        cstage = 4;
+    } else if (cstage == 4) {
+        // The sum clock: the eight-product adder tree alone.
+        c_acc = c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)));
         sub_q = sub_lane_bits(c_sub + 1, c_dg0, c_dg1, c_dg2);
         if (c_sub == subs_now - 1) {
             if (y_fire) {
-                // The row total includes this sub-word: c_acc has not taken it
-                // yet in this tick. The 21-bit two's-complement row total
-                // (|y| <= cols * 128) sign-extends from bit 20.
                 y_pending = true;
                 y_row = c_row;
-                // One expression of pre-tick reads only: a second statement
-                // reading y_acc would see the previous row's value (t27 reads
-                // a variable before the same tick writes it) and freeze it.
-                y_acc = pick64(((((c_acc + dot_sub(sub_q, act_rd)) & 2097151) >> 20) & 1) == 1,
-                               ((c_acc + dot_sub(sub_q, act_rd)) & 2097151) | 18446744073707454464,
-                               (c_acc + dot_sub(sub_q, act_rd)) & 2097151);
+                // The row total in 21-bit two's complement (|y| <= cols*128),
+                // sign-extended from bit 20, all pre-tick reads in one
+                // expression (t27 reads a variable before its tick writes it).
+                y_acc = pick64((((c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)))) & 2097151) >> 20) == 1,
+                               ((c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)))) & 2097151) | 18446744073707454464,
+                               (c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)))) & 2097151);
                 c_row = c_row + 1;
                 c_wir = 0;
                 c_acc = 0;
@@ -990,6 +1016,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             cstage = 0;
         } else {
             c_sub = c_sub + 1;
+            cstage = 3;
         }
     }
     if (push_word) {
