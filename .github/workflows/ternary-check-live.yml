@@ -123,6 +123,43 @@ jobs:
           else:
               print("\nNo upstream reader was replayed.")
           PY
+      # Publication (#53/#54): the page, the drift against the last published
+      # report, the badges and the fresh report go to the gh-pages branch. A
+      # failed or rate-limited scan never reaches here (the Scan step fails
+      # the job), so the last good page stays.
+      - name: Fetch the last published report (for the drift)
+        if: github.event_name != 'push'
+        run: |
+          mkdir -p reports/live
+          curl -fsSL -o reports/live/scan.json "$GH_PAGES_RAW/scan.json" || echo '{"schema":"trinity.ternary-check-live.v2","repositories":[],"started":"first run"}' > reports/live/scan.json
+        env:
+          GH_PAGES_RAW: ${{ format('https://raw.githubusercontent.com/{0}/gh-pages/latest', github.repository) }}
+        if: github.event_name != 'push'
+        run: |
+          python3 tools/live-drift.py reports/live/scan.json build/live/scan.json > build/live/drift.json || echo '{"verdicts_moved":[]}' > build/live/drift.json
+          python3 tools/live-page.py page build/live/scan.json --out site/live --drift build/live/drift.json
+          mkdir -p site/live/badge
+          python3 - <<'PY' >> /tmp/badges.txt
+          import json, subprocess
+          scan = json.load(open("build/live/scan.json"))
+          for r in scan["repositories"]:
+              out = subprocess.run(["python3", "tools/live-page.py", "badge", "build/live/scan.json", r["repo"]],
+                                   capture_output=True, text=True)
+              if out.returncode == 0:
+                  open(f"site/live/badge/{r['repo'].replace('/', '--')}.json", "w").write(out.stdout)
+          PY
+          cp build/live/scan.json site/live/scan.json
+          cp build/live/drift.json site/live/drift.json
+          cp build/t27/formats.wasm site/live/formats.wasm
+      - name: Deploy to GitHub Pages
+        if: github.event_name != 'push'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: site/live
+          keep_files: false
+          commit_message: "Ternary Check Live: ${{ github.run_id }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -131,4 +168,5 @@ jobs:
           path: |
             build/live/scan.json
             build/live/scan.log
+            build/live/drift.json
             build/replay/*.log
