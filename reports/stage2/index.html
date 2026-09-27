@@ -1,0 +1,51 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>trinity-memory stage 2: DDR3 on the AX7203</title>
+<style>
+body{font-family:ui-monospace,monospace;margin:2rem;max-width:60rem;color:#1a1a1a}
+table{border-collapse:collapse;margin:1rem 0}
+td,th{border:1px solid #999;padding:.3rem .6rem;text-align:right}
+th:first-child,td:first-child{text-align:left}
+h2{border-bottom:2px solid #1a1a1a;padding-bottom:.3rem}
+.ok{color:#046c3c;font-weight:bold}.warn{color:#8a4b00}
+</style></head><body>
+<h1>Stage 2: DDR3 on the AX7203</h1>
+<p>2026-09-27T09:44:37Z &middot; <a href="stage2.json">stage2.json</a> &middot; issue
+<a href="https://github.com/dmitrii-f-t27/trinity-memory/issues/67">#67</a> of epic
+<a href="https://github.com/dmitrii-f-t27/trinity-memory/issues/59">#59</a></p>
+
+<h2>What ran</h2>
+<p>ALINX AX7203 (xc7a200tfbg484-2), IDCODE 0x13636093. DDR3 at 240 MHz, controller 60 MHz
+(PLL 6/5 &mdash; the lowest DDR3 clock UberDDR3 calibrates on this board; 160 MHz
+does not, 300 MHz does). The workload: BitNet b1.58 2B4T layer-0
+<code>q_proj</code> rows 0&ndash;319 (819,200 weights), activations seed 27,
+both formats, read from DDR3 through the UART loader with one outstanding
+request and an 8-clock gap after every ack.</p>
+
+<h2>Bit-exact</h2>
+<p class="ok">__EXACT_D5__ and __EXACT_B2__: every one of the 320 Y lines equals
+the t27/C reference (first rows [0, 1099511625215], [1, 2660], [2, 1099511627724], [3, 1099511625391]).</p>
+
+<h2>Weights per second (consumer B, the device matvec)</h2>
+<table>
+<tr><th>format</th><th>bits/weight</th><th>runs</th><th>weights/s (mean)</th>
+<th>s.d.</th><th>min</th><th>max</th></tr>
+<tr><td>dense5</td><td>1.6</td><td>12</td><td>1,478,697</td><td>&plusmn;65</td><td>1,478,571</td><td>1,478,792</td></tr>
+<tr><td>baseline2</td><td>2.0</td><td>12</td><td>1,478,726</td><td>&plusmn;97</td><td>1,478,542</td><td>1,478,828</td></tr>
+</table>
+<p>Ratio dense5/baseline2 = <b>1.0</b> against the arithmetic ceiling 1.25.
+The point is <b>latency-bound</b>: wait stalls are 99.98% of all cycles,
+consumer stalls 81931 per run, sample s.d. under 0.01%. Under the serialized
+read discipline the port requires, each 128-bit word costs its fixed latency
+whatever it carries (64 or 80 trits) &mdash; the 1.6-bit format buys nothing
+here. The 1.25 test needs pipelined reads through the arbiter; the
+arbiter-free pattern test of #61 streamed the same port, so the seam to fix
+is the arbiter, not the DRAM.</p>
+
+<h2>Not measured</h2>
+<ul><li>power and energy (no instrument on the bench)</li><li>tokens per second and model quality (one layer chunk, not a model)</li><li>x32 DDR3, and DDR3 above 480 MT/s (the 667 MT/s class was never built)</li><li>bus-rate delivery (consumer A): the pipelined reads the port answers with zero data are the open seam (#62, #65)</li></ul>
+
+<h2>Evidence</h2>
+<p>Every number above traces to a committed capture; the JSON carries the
+sha256 of each source. A clean clone rebuilds this page with
+<code>python3 tools/stage2-report.py</code>.</p>
+</body></html>

@@ -211,6 +211,31 @@ The generic Vivado script above has not been run. The open-flow board runs and
 the block-RAM resource comparison are in the next section; no power result or
 inference speedup is claimed by this package.
 
+## Stage 2: DDR3 on the AX7203 (the report of #67)
+
+What ran ([reports/stage2](../reports/stage2/index.html), rebuilt from the
+committed captures by `python3 tools/stage2-report.py`): the ALINX AX7203
+(IDCODE 0x13636093) held BitNet b1.58 2B4T layer-0 `q_proj` rows 0-319
+(819,200 weights) in DDR3 at 240 MHz through UberDDR3 (PLL 6/5, controller
+60 MHz -- the lowest DDR3 clock that calibrates on this board: 160 MHz does
+not, 300 MHz does; 75 MHz controller builds fail the controller's own
+routing once real decode logic exists), read with one outstanding request
+and an 8-clock gap after every ack (overlapping requests answer zero data,
+#75), decoded and dotted on the device -- **320/320 Y lines bit-exact in
+both formats** against the t27/C reference.
+
+| Format | bits/weight | weights/s (mean of 12, +- s.d.) | ratio |
+|---|---|---|---|
+| dense5 | 1.6 | 1,478,697 +- 65 | 1.0000 (ceiling 1.25) |
+| baseline2 | 2.0 | 1,478,726 +- 97 | |
+
+The point is latency-bound, not bus-rate: wait stalls are 99.98% of all
+cycles, consumer stalls 19 per run, sample s.d. under 0.01%. The 1.25
+format ratio is unreachable at this operating point; the arbiter-free
+pattern test of #61 streamed the same port at bus rate, so the seam to fix
+for the bandwidth-bound test is the arbiter (#62, #65). Not measured:
+power, tokens per second, model quality, x32, DDR3 above 480 MT/s.
+
 ## FPGA measurement track (AX7203)
 
 The measurement track of the roadmap (issue #10) runs on one explicitly named
