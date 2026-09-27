@@ -162,10 +162,11 @@ var timed_acts: bool = false;
 var all_acks: u64 = 0;
 var stray_acks: u32 = 0;
 
-// Act store: 896 u64 halves (7168 int8 columns), kept as two arrays of write
-// and read half words so each maps to one BRAM (see the act store block).
+// Act store: 896 u64 halves (7168 int8 columns), two arrays of write and
+// read half words (one write and one read port each, LUTRAM-mapped).
 var acts_lo: [448]u64;
 var acts_hi: [448]u64;
+
 var act_rd: u64 = 0;
 var aw_stored: u32 = 0;
 
@@ -191,6 +192,7 @@ var c_dg2: u64 = 0;
 var c_wir_q: u32 = 0;
 var hq_lo: u64;
 var hq_hi: u64;    // the popped word, decoded in the bubble clock
+var sub_q: u64;             // the current sub-word's lane bits, lifted in their own clock
 var y_pending: bool = false;
 var y_row: u32 = 0;
 var y_acc: u64 = 0;
@@ -474,13 +476,33 @@ fn act_ext(word: u64, j: u32) -> u64 {
     return b | 18446744073709551360;
 }
 
-// Dot of eight decoded lanes (base .. base+7) against eight activation bytes,
-// wrapping u64: exact two's complement, |sum| <= 8 * 128.
-fn dot8(l0: u64, l1: u64, l2: u64, base: u32, word: u64) -> u64 {
+// The sixteen lane bits of the sub-word c_sub addresses, ten static shifts:
+// mutually exclusive picks that synthesise to a flat mux, not a barrel over
+// the 160-bit lane vector (the dynamic-shift lane_bit was the board build's
+// critical path). dg0 holds lanes 0-31, dg1 32-63, dg2 64-79.
+fn sub_lane_bits(s: u32, d0: u64, d1: u64, d2: u64) -> u64 {
+    var r: u64 = 0;
+    if (s == 0) { r = d0 & 65535; }
+    if (s == 1) { r = (d0 >> 16) & 65535; }
+    if (s == 2) { r = (d0 >> 32) & 65535; }
+    if (s == 3) { r = (d0 >> 48) & 65535; }
+    if (s == 4) { r = d1 & 65535; }
+    if (s == 5) { r = (d1 >> 16) & 65535; }
+    if (s == 6) { r = (d1 >> 32) & 65535; }
+    if (s == 7) { r = (d1 >> 48) & 65535; }
+    if (s == 8) { r = d2 & 65535; }
+    if (s == 9) { r = (d2 >> 16) & 65535; }
+    return r;
+}
+
+// Dot of the sub-word's eight lanes against eight activation bytes, wrapping
+// u64: exact two's complement, |sum| <= 8 * 128. Lane j's magnitude is bit 2j
+// and its sign bit 2j + 1 of the extracted half word: value = mag - sign.
+fn dot_sub(sw: u64, word: u64) -> u64 {
     var sum: u64 = 0;
     var j: u32 = 0;
     while (j < 8) {
-        var sign: u64 = lane_bit(l0, l1, l2, base + j, 0) - lane_bit(l0, l1, l2, base + j, 1);
+        var sign: u64 = ((sw >> (j << 1)) & 1) - ((sw >> ((j << 1) + 1)) & 1);
         sum = sum + (act_ext(word, j) * sign);
         j = j + 1;
     }
@@ -653,12 +675,12 @@ pop_go = pop_word && (mstate == M_WEIGHTS || mstate == M_DRAIN);
 // registered read lands one clock later): the popped word's sub 0 while the
 // pop is taken, sub 0 again through the bubble, sub s + 1 during sub s, and
 // the next word's sub 0 on the last one.
-act_addr = pick32(cstage == 0, c_wir * subs_now,
-             pick32(cstage == 1, c_wir_q * subs_now,
+act_addr = pick32(cstage <= 1, c_wir * subs_now,
+             pick32(cstage == 2, c_wir_q * subs_now,
                pick32(c_sub == subs_now - 1, pick32(c_wir_q == wpr_now - 1, 0, c_wir_q + 1) * subs_now,
                  (c_wir_q * subs_now) + c_sub + 1)));
-cons_active = cstage != 0;
-y_fire = cstage == 2 && c_sub == subs_now - 1 && c_wir_q == wpr_now - 1;
+cons_active = cstage >= 2;
+y_fire = cstage == 3 && c_sub == subs_now - 1 && c_wir_q == wpr_now - 1;
 drain_done = fq_count == 0 && !cons_active && !y_pending;
 dec0 = pick64(fmt == FMT_D5, d5_dec4(hq_lo & M32), b2_dec16(hq_lo));
 dec1 = pick64(fmt == FMT_D5, d5_dec4(hq_lo >> 32), b2_dec16(hq_lo >> 32));
@@ -921,9 +943,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         cstage = 1;
         fir = (fir + 1) % FIFO_WORDS;
     } else if (cstage == 1) {
-        // The bubble: the address of sub-word 1 goes out now, so the end-of-clock
-        // read loads it while sub-word 0 runs on the pop's address next clock
-        // (every statement reads its variable before the same tick writes it).
+        // The bubble decodes the popped word into the lane groups.
         c_dg0 = dg0;
         c_dg1 = dg1;
         c_dg2 = dg2;
@@ -931,14 +951,21 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         c_sub = 0;
         cstage = 2;
     } else if (cstage == 2) {
-        c_acc = c_acc + dot8(c_dg0, c_dg1, c_dg2, (c_sub << 3), act_rd);
+        // The extract clock lifts sub-word 0's sixteen lane bits out of the
+        // groups on its own: the selection and the dot in one clock was the
+        // routed critical path.
+        sub_q = sub_lane_bits(0, c_dg0, c_dg1, c_dg2);
+        cstage = 3;
+    } else if (cstage == 3) {
+        c_acc = c_acc + dot_sub(sub_q, act_rd);
+        sub_q = sub_lane_bits(c_sub + 1, c_dg0, c_dg1, c_dg2);
         if (c_sub == subs_now - 1) {
             if (y_fire) {
                 // The row total includes this sub-word: c_acc has not taken it
                 // yet in this tick.
                 y_pending = true;
                 y_row = c_row;
-                y_acc = c_acc + dot8(c_dg0, c_dg1, c_dg2, (c_sub << 3), act_rd);
+                y_acc = c_acc + dot_sub(sub_q, act_rd);
                 c_row = c_row + 1;
                 c_wir = 0;
                 c_acc = 0;
@@ -1022,9 +1049,11 @@ test sign_extension_of_activation_bytes {
     assert_eq(act_ext(127, 0), 127);
     assert_eq(act_ext(32768, 1), 18446744073709551488);
 }
-test dot8_matches_the_reference {
-    // Lanes +1,-1,0,+1,+1,-1,0,+1 (bits 0,3,6,8,11,14) against
-    // 1,-1,-128,127,0,-128,1,-1 -> 1+1+127+128-1 = 256.
-    assert_eq(dot8(18761, 0, 0, 0, 18375108694275849985), 256);
+test dot_sub_matches_the_reference {
+    // Lanes +1,-1,0,+1,+1,-1,0,+1 (bits 0,3,6,8,11,14 -- dg0's low half word)
+    // against 1,-1,-128,127,0,-128,1,-1 -> 1+1+127+128-1 = 256.
+    assert_eq(dot_sub(sub_lane_bits(0, 18761, 0, 0), 18375108694275849985), 256);
+    // The same lanes addressed as sub-word 2: dg0 bits 32..47.
+    assert_eq(dot_sub(sub_lane_bits(2, 18761 << 32, 0, 0), 18375108694275849985), 256);
 }
 endmodule
