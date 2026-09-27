@@ -49,7 +49,9 @@ class RunError(Exception):
 
 
 def default_vectors() -> list[Path]:
-    return sorted((ROOT / "conformance").glob("formats_*.json"))
+    files = sorted((ROOT / "conformance").glob("formats_*.json"))
+    rotation = ROOT / "conformance/hadamard_rotate.json"
+    return files + ([rotation] if rotation.is_file() else [])
 
 
 def _values(hex_text: str) -> bytes:
@@ -97,6 +99,24 @@ def _side_scales(v, fmt: str):
     return words, 4 if v["scale_kind"] == "F32" else 2
 
 
+ROTATE_KINDS = {"rotate": "hadamard"}
+ROTATE_ERRORS = {"hadamard_sign_value": -64, "hadamard_signs_length": -65,
+                 "hadamard_block": -63}
+
+
+def _rotate_case(base, v):
+    """One v1.1 rotate vector: PROG rotate BLOCK SIGNS VALUES OUTPUT."""
+    files = {"values": _values(v["values"]), "signs": _values(v["signs"])}
+    case = {**base, "op": "rotate", "format": ROTATE_KINDS["rotate"],
+            "block": v["block"], "files": files, "options": []}
+    if "expect_status" in v:
+        case["expected"] = ROTATE_ERRORS[v["expect_status"]]
+    else:
+        case["expected"] = 0
+        case["output"] = _values(v["expect_output"])
+    return case
+
+
 def cases_of(document, file_name: str, errors: dict, flag_slots: dict):
     """(cases, not_run) of one formats_*.json document, in vector order."""
     cases, not_run = [], []
@@ -107,6 +127,9 @@ def cases_of(document, file_name: str, errors: dict, flag_slots: dict):
         base = {"file": file_name, "id": v["id"], "class": label}
         if kind in CONTAINER_KINDS:
             not_run.append({**base, "reader": kind, "reason": "container"})
+            continue
+        if kind in ROTATE_KINDS:
+            cases.append(_rotate_case(base, v))
             continue
         if kind in DECODE_KINDS:
             fmt = DECODE_KINDS[kind] or v["format"]
@@ -251,15 +274,16 @@ def listing(command, work: Path, timeout: float, env=None):
         return None, []
     if timed_out or code != 0:
         return None, []
-    declared = {"decode": set(), "encode": set()}
+    declared = {"decode": set(), "encode": set(), "rotate": set()}
     unrecognized = []
     for line in out.decode("utf-8", "replace").splitlines():
         words = line.split()
-        if len(words) == 2 and words[0] in declared and words[1] in tc.FORMATS:
+        if len(words) == 2 and words[0] in declared and (
+                words[1] in tc.FORMATS if words[0] != "rotate" else words[1] == "hadamard"):
             declared[words[0]].add(words[1])
         elif line.strip() and len(unrecognized) < LISTING_LINES:
             unrecognized.append(line.strip())
-    if not declared["decode"] and not declared["encode"]:
+    if not declared["decode"] and not declared["encode"] and not declared["rotate"]:
         return None, unrecognized
     return declared, unrecognized
 
@@ -283,6 +307,9 @@ def execute(case, command, work: Path, timeout: float, env=None):
     if case["op"] == "decode":
         paths["values"], paths["scales"] = str(outputs / "values.out"), str(outputs / "scales.out")
         call = ["decode", case["format"], str(case["count"]), paths["input"], paths["values"], paths["scales"]]
+    elif case["op"] == "rotate":
+        paths["output"] = str(outputs / "output.out")
+        call = ["rotate", str(case["block"]), paths["signs"], paths["values"], paths["output"]]
     else:
         paths["output"] = str(outputs / "output.out")
         call = ["encode", case["format"], str(case["count"]), paths["values"], paths["scales"], paths["output"]]
@@ -295,7 +322,11 @@ def execute(case, command, work: Path, timeout: float, env=None):
     record = {key: case[key] for key in ("file", "id", "class", "op", "format")}
     record["expect"] = "reject:" + tc.error_token(case["expected"]) if case["expected"] else case["op"]
     if not ended and exit_code == 0 and case["expected"] == 0:
-        if case["op"] == "decode":
+        if case["op"] == "rotate":
+            output = _read(paths["output"])
+            value_diff, first = tc.compare_bytes(output, case["output"])
+            record["output"] = _difference(value_diff, first, output, case["output"], signed=False)
+        elif case["op"] == "decode":
             values = _read(paths["values"])
             value_diff, first = tc.compare_bytes(values, case["values"])
             record["values"] = _difference(value_diff, first, values, case["values"], signed=True)
@@ -370,7 +401,9 @@ def load_vectors(paths):
             document = json.loads(data)
         except (OSError, ValueError) as error:
             raise RunError(f"cannot read vectors {path}: {error}") from error
-        if "vectors" not in document or "constants" not in document or "errors" not in document["constants"]:
+        if "vectors" not in document or "constants" not in document:
+            raise RunError(f"{path} is not a conformance file")
+        if "errors" not in document["constants"] and "rotate" not in document.get("schema", ""):
             raise RunError(f"{path} is not a formats_*.json conformance file")
         documents.append((path, hashlib.sha256(data).hexdigest(), document))
     return documents
@@ -397,7 +430,7 @@ def run(decoder: str, vectors=None, formats=None, fail_on="mismatch", timeout=60
     work = Path(tempfile.mkdtemp(prefix="ternary-check-"))
     try:
         declared, unrecognized = listing(command, work, timeout, env)
-        supported = declared or {"decode": set(tc.FORMATS), "encode": set()}
+        supported = declared or {"decode": set(tc.FORMATS), "encode": set(), "rotate": set()}
         cases, not_run, sources = [], [], []
         for path, digest, document in documents:
             constants = document["constants"]
@@ -447,6 +480,7 @@ def run(decoder: str, vectors=None, formats=None, fail_on="mismatch", timeout=60
         "decoder_formats": {"source": "listing" if declared else "assumed",
                             "decode": sorted(supported["decode"], key=tc.FORMATS.index),
                             "encode": sorted(supported["encode"], key=tc.FORMATS.index),
+                            "rotate": sorted(supported["rotate"]),
                             "unrecognized": unrecognized},
         "vectors": sources,
         "summary": {"cases": len(records), "failures": failures,
@@ -573,7 +607,7 @@ def command(argv) -> int:
     """`trinity-memory ternary-check SUBCOMMAND ...`."""
     if argv[:1] == ["run"]:
         return _main_run(argv[1:])
-    if argv[:1] in (["formats"], ["decode"], ["encode"]):
+    if argv[:1] in (["formats"], ["decode"], ["encode"], ["rotate"]):
         return tc.command(argv)
     print(__doc__.split("\n\n")[1], file=sys.stderr)
     return 2

@@ -1,6 +1,9 @@
-# Ternary Check CLI contract, version 1
+# Ternary Check CLI contract, version 1.1
 
-Contract id: `trinity.ternary-check-cli.v1`.
+Contract id: `trinity.ternary-check-cli.v1` (v1.1 adds the `rotate` call and
+the `rotate hadamard` listing line; everything else is unchanged, and a decoder
+that does not list `rotate` simply gets the rotation vectors reported as
+`not_run: unsupported`).
 
 This contract says how the Ternary Check runs a decoder that is not part of
 this repository. The runner is `trinity-memory ternary-check run`, which the
@@ -52,6 +55,7 @@ in. All file arguments are absolute paths.
 | `PROG formats` | no | Print one line `decode NAME` or `encode NAME` per supported operation and format, then exit 0. If this command exits nonzero or prints no such line, the runner assumes `decode` for every format and `encode` for none. Formats and operations the decoder does not list are reported as `not_run: unsupported`. Other lines, such as a misspelled format name, are ignored and listed in the report under `decoder_formats.unrecognized`. |
 | `PROG decode FORMAT COUNT INPUT VALUES SCALES [key=value...]` | yes | Read the stored bytes in INPUT. Write COUNT values to VALUES and the scale words to SCALES. |
 | `PROG encode FORMAT COUNT VALUES SCALES OUTPUT [key=value...]` | no | Read COUNT values and, for the block formats and I2_S, the scale words. Write the stored bytes to OUTPUT. |
+| `PROG rotate BLOCK SIGNS VALUES OUTPUT` | yes (v1.1) | Read BLOCK little-endian f64 values from VALUES and BLOCK little-endian i32 signs (each +1 or -1) from SIGNS. Rotate one block -- the normalized Sylvester-Walsh-Hadamard of BLOCK, every element multiplied by its sign -- and write BLOCK f64 values to OUTPUT. BLOCK is one of 16, 64, 256, 1024 (a power of two whose square root is a power of two); the inputs of the committed vectors are integers, so the expected outputs are exact. Refuse with `hadamard_sign_value` when a sign is neither +1 nor -1, `hadamard_signs_length` when SIGNS does not hold exactly BLOCK signs, `hadamard_block` when BLOCK is not one of the four. |
 
 `COUNT` is the number of weights, in decimal. A decoder must ignore any
 `key=value` argument it does not use. Later minor versions may add keys, but

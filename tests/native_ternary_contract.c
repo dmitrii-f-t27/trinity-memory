@@ -52,7 +52,11 @@ static void tokens(void) {
     }
     assert(tk_error_token(0, out, sizeof out) == 0);
     assert(tk_error_token(-49, out, sizeof out) == 0);
-    assert(tk_error_token(-63, out, sizeof out) == 0);
+    assert(tk_error_token(-66, out, sizeof out) == 0);
+    assert(tk_error_token(-100, out, sizeof out) == 0);
+    /* v1.1: the rotate statuses are named classes now */
+    assert(tk_error_token(-63, out, sizeof out) == (int64_t)strlen("hadamard_block"));
+    assert(memcmp(out, "hadamard_block", strlen("hadamard_block")) == 0);
     assert(tk_error_status((uint8_t *)"", 0) == 0);
     assert(tk_error_status((uint8_t *)"Padding", 7) == 0);
     assert(tk_error_status((uint8_t *)"padding padding", 15) == 0);

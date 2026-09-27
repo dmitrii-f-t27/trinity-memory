@@ -29,14 +29,22 @@ FAMILIES = ("bitnet_cpp", "hf_bitnet", "llama_cpp", "mlx", "onnx", "prismml")
 
 
 def documents():
-    return [json.loads((ROOT / "conformance" / f"formats_{family}.json").read_text(encoding="utf-8"))
-            for family in FAMILIES]
+    files = [ROOT / "conformance" / f"formats_{family}.json" for family in FAMILIES]
+    rotation = ROOT / "conformance/hadamard_rotate.json"
+    if rotation.is_file():
+        files.append(rotation)
+    return [json.loads(path.read_text(encoding="utf-8")) for path in files]
 
 
 def expected_calls():
     """(decode and encode calls, rejections, container vectors) the vectors define."""
     calls = rejections = containers = 0
     for document in documents():
+        if document.get("schema") == "trinity.ternary-check.hadamard-rotate.v1":
+            for v in document["vectors"]:
+                calls += 1
+                rejections += "expect_status" in v
+            continue
         for v in document["vectors"]:
             kind = v["reader"] if v["kind"] == "reject" else v["kind"]
             if kind in ("gguf", "safetensors"):
@@ -98,7 +106,7 @@ class ReferenceDecoder(unittest.TestCase):
         self.assertEqual(s["not_run"], {"container": containers})
         self.assertEqual(self.report["decoder_formats"],
                          {"source": "listing", "decode": list(tc.FORMATS), "encode": list(tc.FORMATS),
-                          "unrecognized": []})
+                          "rotate": ["hadamard"], "unrecognized": []})
         self.assertEqual(s["idle_formats"], [])
         for case in self.report["cases"]:
             self.assertFalse(case["fails"], case)
@@ -112,10 +120,13 @@ class ReferenceDecoder(unittest.TestCase):
     def test_every_vector_is_accounted_for(self):
         seen = {(c["file"], c["id"]) for c in self.report["cases"]} | \
                {(c["file"], c["id"]) for c in self.report["not_run"]}
-        for family, document in zip(FAMILIES, documents()):
+        names = [f"formats_{f}.json" for f in FAMILIES]
+        if (ROOT / "conformance/hadamard_rotate.json").is_file():
+            names.append("hadamard_rotate.json")
+        for name, document in zip(names, documents()):
             for v in document["vectors"]:
-                self.assertIn((f"formats_{family}.json", v["id"]), seen)
-        self.assertEqual([v["file"] for v in self.report["vectors"]], [f"formats_{f}.json" for f in FAMILIES])
+                self.assertIn((name, v["id"]), seen)
+        self.assertEqual([v["file"] for v in self.report["vectors"]], names)
 
     def test_report_is_reproducible(self):
         again, summary = run(OWN, jobs=1)
@@ -169,7 +180,7 @@ class WrongDecoders(unittest.TestCase):
             never, _ = run(decoder, fail_on="never")
         self.assertEqual({c["format"] for c in strict["cases"]}, {"TQ2_0"})
         self.assertEqual(strict["decoder_formats"], {"source": "listing", "decode": ["TQ2_0"], "encode": [],
-                                                     "unrecognized": []})
+                                                     "rotate": [], "unrecognized": []})
         outcomes = {c["outcome"] for c in strict["cases"]}
         self.assertEqual(outcomes, {"mismatch", "silent"})
         self.assertFalse(strict["summary"]["passed"])
@@ -530,7 +541,8 @@ class CommandLine(unittest.TestCase):
         result = self.call("formats")
         self.assertEqual(result.returncode, 0)
         lines = result.stdout.splitlines()
-        self.assertEqual(lines, [f"{op} {name}" for op in ("decode", "encode") for name in tc.FORMATS])
+        self.assertEqual(lines, [f"{op} {name}" for op in ("decode", "encode") for name in tc.FORMATS]
+                         + ["rotate hadamard"])
 
 
 class Tokens(unittest.TestCase):
@@ -540,6 +552,8 @@ class Tokens(unittest.TestCase):
             for token, status in constants["errors"].items():
                 self.assertEqual(tc.error_token(status), token)
                 self.assertEqual(tc.error_status(token.encode() + b"\n"), status)
+            if "format_ids" not in constants:
+                continue  # the rotation file carries statuses only (v1.1)
             self.assertEqual({token: slot for slot, token in enumerate(tc.flag_tokens())}, constants["flags"])
             for name, fid in constants["format_ids"].items():
                 expected = "MLX2" if name == "LINEAR2" else name
