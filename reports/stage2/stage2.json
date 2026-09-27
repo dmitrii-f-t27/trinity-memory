@@ -1,0 +1,134 @@
+{
+ "schema": "trinity.stage2-report.v1",
+ "written_utc": "2026-09-27T09:44:37Z",
+ "issue": "dmitrii-f-t27/trinity-memory#67",
+ "epic": "#59",
+ "what_ran": {
+  "board": {
+   "name": "ALINX AX7203",
+   "part": "xc7a200tfbg484-2",
+   "idcode_full": "0x13636093",
+   "idcode_printed": "0x3636093"
+  },
+  "clock": {
+   "pll": "6/5",
+   "ddr3_mhz": 240.0,
+   "controller_mhz": 60.0,
+   "note": "the lowest DDR3 clock UberDDR3 calibrates on this board (160 fails; 300 works); 75 MHz controller builds fail the controller's own routing once real decode logic exists"
+  },
+  "workload": "BitNet b1.58 2B4T layer-0 self_attn.q_proj rows 0-319 (819,200 weights), activations seed 27, both formats",
+  "read_discipline": "one outstanding request, 8 idle clocks after each ack (overlapping requests answer zero data, #75)"
+ },
+ "bit_exact": {
+  "dense5": {
+   "y_lines": 320,
+   "bit_exact": true,
+   "first": [
+    [
+     0,
+     1099511625215
+    ],
+    [
+     1,
+     2660
+    ],
+    [
+     2,
+     1099511627724
+    ],
+    [
+     3,
+     1099511625391
+    ]
+   ]
+  },
+  "baseline2": {
+   "y_lines": 320,
+   "bit_exact": true,
+   "first": [
+    -2561,
+    2660,
+    -52,
+    -2385
+   ]
+  },
+  "verdict": "320/320 Y lines equal the t27/C reference in both formats"
+ },
+ "measurement": {
+  "consumer": "B (device matvec of #64)",
+  "rows": [
+   {
+    "format": "dense5",
+    "bits_per_weight": 1.6,
+    "runs": 12,
+    "cycles_mean": 33240192.0,
+    "weights_per_s_mean": 1478696.8,
+    "weights_per_s_sd": 65.3,
+    "weights_per_s_min": 1478570.9,
+    "weights_per_s_max": 1478792.1,
+    "consumer_stalls_per_run": 81931,
+    "wait_stalls_per_run": 33221624,
+    "command_stalls_per_run": 8318
+   },
+   {
+    "format": "baseline2",
+    "bits_per_weight": 2.0,
+    "runs": 12,
+    "cycles_mean": 33238194.0,
+    "weights_per_s_mean": 1478726.3,
+    "weights_per_s_sd": 96.7,
+    "weights_per_s_min": 1478541.9,
+    "weights_per_s_max": 1478828.3,
+    "consumer_stalls_per_run": 102428,
+    "wait_stalls_per_run": 33215216,
+    "command_stalls_per_run": 10168
+   }
+  ],
+  "ratio_d5_b2": 1.0,
+  "ratio_ceiling": 1.25,
+  "memory_bound": {
+   "definition": "consumer stalls 0 in both formats",
+   "observed": "consumer stalls 81931 of ~33,240,192 cycles (<0.0001%); wait stalls are 99.98% of all cycles",
+   "verdict": "latency-bound under the serialized read discipline; NOT bus-rate. The 1.25 format ratio is unreachable at this operating point (measured ratio 1.0000); the arbiter-free pattern test of #61 streamed the same port, so the seam to fix is the arbiter, not the DRAM."
+  }
+ },
+ "not_measured": [
+  "power and energy (no instrument on the bench)",
+  "tokens per second and model quality (one layer chunk, not a model)",
+  "x32 DDR3, and DDR3 above 480 MT/s (the 667 MT/s class was never built)",
+  "bus-rate delivery (consumer A): the pipelined reads the port answers with zero data are the open seam (#62, #65)"
+ ],
+ "evidence": {
+  "golden_d5": {
+   "file": "reports/fpga/matvec-capture-2026-09-27-m6d5-golden.json",
+   "sha256": "sha256:185d397f390e9575b14fd16edd1fea3e002b3474f17f92315df12df5ffd1c3d4"
+  },
+  "golden_b2": {
+   "file": "reports/fpga/matvec-capture-2026-09-27-m6d5-golden-b2.json",
+   "sha256": "sha256:886da7ef0657cd05b176ae42263ff722fb11183e76d78bdf49e2093a714f2e41"
+  },
+  "measure_d5": {
+   "file": "reports/fpga/ddr3-matvec-measure-2026-09-27-d5.json",
+   "sha256": "sha256:3243d252d6efbea136edb22ea7325ac777dd733343e86da2248cb338207423f6"
+  },
+  "measure_b2": {
+   "file": "reports/fpga/ddr3-matvec-measure-2026-09-27-b2.json",
+   "sha256": "sha256:2eb8566633aef898c0dee704366d44baf4128767895ba9ef1c9551c6881df004"
+  },
+  "build_d5": {
+   "file": "reports/fpga/ddr3-build-2026-09-27-twoclock-m6d5/build.json",
+   "sha256": "sha256:ebc2018a984e3484ab870d33a824ddb8afe21654386b72f0808866d675b33ddb"
+  },
+  "build_b2": {
+   "file": "reports/fpga/ddr3-build-2026-09-27-twoclock-m6d5-b2/build.json",
+   "sha256": "sha256:4305131ba355ac8da655768bf352f8c0156fe0765e457ae7711f7654e20a4bd7"
+  }
+ },
+ "uberddr3": {
+  "pinned_by": "fpga/ax7203/ddr3/uberddr3.lock",
+  "license": "GPL-3.0 (bitstreams built from it are not shipped as release assets; the founders' decision is open, #60)"
+ },
+ "upstream_state": {
+  "s11_branch": "dmitrii-f-t27/t27 s11-fpga-adapter (fork PR #1); the gHashTag/t27 PR waits on the founders (#66)"
+ }
+}
