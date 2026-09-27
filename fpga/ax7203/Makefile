@@ -697,8 +697,8 @@ else
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_MATVEC_CHPARAM)$(DDR3_TOP); \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :map_memory; \
-	  memory_libmap -lib +/xilinx/lutrams_xc5v.txt -lib $(call REL,$(CURDIR))/brams_x36.txt; \
-	  techmap -map +/xilinx/lutrams_xc5v_map.v -map +/xilinx/brams_xc6v_map.v; \
+	  memory_libmap $(if $(DDR3_NO_LUTRAM),,-lib +/xilinx/lutrams_xc5v.txt) -lib $(call REL,$(CURDIR))/brams_x36.txt; \
+	  techmap $(if $(DDR3_NO_LUTRAM),,-map +/xilinx/lutrams_xc5v_map.v) -map +/xilinx/brams_xc6v_map.v; \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run map_ffram:; \
 	  setundef -zero -params; tee -o $(call REL,$(DDR3_BUILD))/yosys_stat.txt stat; \
 	  write_json $(call REL,$(DDR3_BUILD))/$(DDR3_TOP).json"
