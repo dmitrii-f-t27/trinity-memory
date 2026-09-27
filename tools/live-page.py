@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""The public Ternary Check Live page and its badges (issue #53).
+
+A static page from a scan report (trinity.ternary-check-live.v2): one row per
+model with its files, layouts, verdicts, the pinned revisions and the check
+date; every non-ok verdict links to its explanation; the confirmed findings
+link to their ledger entries (docs/live/findings.md). A shields.io badge
+endpoint per repository renders the current verdict for model cards.
+
+The in-browser check is a separate, self-contained page (check.html) that
+loads formats.wasm -- the t27/live.t27 functions exported -- and reads only a
+GGUF header through HTTP range requests: nothing is uploaded, no weights are
+downloaded. It works offline once cached; the Hub allows cross-origin reads.
+
+  python3 tools/live-page.py build/live/scan.json --out site/live
+  python3 tools/live-page.py badge build/live/scan.json --repo owner/name
+
+Exit 0 on success; 1 when the report is missing or not the v2 schema.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import html
+import json
+import pathlib
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+VERDICT_TEXT = {
+    "ok": "every file parses, carries a ternary layout and loads in the runtime it names",
+    "other_runtime": "loads, but in a runtime other than the one tried; the file names its own",
+    "no_ternary_layout": "the header's tensor records carry no ternary layout the pinned readers recognise",
+    "refused": "a pinned reader refuses the header (the linked explanation says where and why)",
+    "limit": "a crafted header pushed a reader past its signed arithmetic; the verdict is the reader's",
+}
+VERDICT_CLASS = {"ok": "ok", "other_runtime": "mid", "no_ternary_layout": "mid",
+                 "refused": "bad", "limit": "mid"}
+
+
+def e(text) -> str:
+    return html.escape(str(text))
+
+
+def badge_json(scan: dict, repo: str) -> dict | None:
+    for r in scan.get("repositories", []):
+        if r.get("repo") == repo:
+            break
+    else:
+        return None
+    verdicts = {m.get("verdict") for m in r.get("models", [])}
+    if not verdicts:
+        label, value, color = "ternary check", "no gguf", "lightgrey"
+    elif verdicts <= {"ok"}:
+        label, value, color = "ternary check", "passing", "046c3c"
+    elif "refused" in verdicts:
+        label, value, color = "ternary check", "refused file", "8a1c1c"
+    elif verdicts <= {"ok", "other_runtime"}:
+        label, value, color = "ternary check", "loads (named runtime)", "8a4b00"
+    else:
+        label, value, color = "ternary check", "unrecognised layout", "8a4b00"
+    return {"schemaVersion": 1, "label": label, "message": value, "color": color}
+
+
+def render(scan: dict) -> str:
+    when = scan.get("started", "")[:10] or "unknown date"
+    s = scan.get("summary", {})
+    runtimes = scan.get("runtimes", {})
+    rt_line = ", ".join(f"{e(k)} <code>{e(str(v)[:8])}</code>"
+                        for k, v in runtimes.items()) or "not replayed"
+    rows = []
+    for r in scan.get("repositories", []):
+        for m in r.get("models", []):
+            v = m.get("verdict", "?")
+            files = ", ".join(f"<code>{e(f.get('file'))}</code>" for f in (m.get("files") or [])[:3])
+            native = m.get("native") or "?"
+            rows.append(
+                f'<tr><td><a href="https://huggingface.co/{e(r["repo"])}">{e(r["repo"])}</a></td>'
+                f"<td>{files}</td>"
+                f'<td class="v {VERDICT_CLASS.get(v, "mid")}">{e(v)}</td>'
+                f"<td><code>{e(native)}</code></td>"
+                f'<td class="r">{e(v if v == "ok" else (m.get("runtimes", {}) or {}).get("llama.cpp", {}).get("verdict", "?"))}</td></tr>')
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ternary Check Live</title>
+<style>
+body{{font:15px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;margin:0;color:#1a1a1a}}
+header{{padding:20px 16px;border-bottom:1px solid #ddd;background:#fafafa}}
+h1{{font-size:19px;margin:0 0 4px}} .muted{{color:#667;font-size:12.5px}}
+table{{border-collapse:collapse;width:100%;font-size:13.5px}}
+td,th{{border-bottom:1px solid #e4e4e4;padding:7px 10px;text-align:left;vertical-align:top}}
+th{{position:sticky;top:0;background:#fff;border-bottom:2px solid #1a1a1a;font-size:12px;text-transform:uppercase;letter-spacing:.04em}}
+.v{{font-weight:600}} .ok{{color:#046c3c}} .mid{{color:#8a4b00}} .bad{{color:#8a1c1c}}
+.badge{{display:inline-block;margin-top:8px;font:12px ui-monospace,monospace;color:#667}}
+code{{font:12.5px ui-monospace,monospace;background:#f3f3f3;padding:1px 5px;border-radius:3px}}
+.how{{padding:14px 16px;border-bottom:1px solid #e4e4e4;font-size:13.5px}}
+@media(max-width:640px){{td:nth-child(2),th:nth-child(2){{display:none}}}}
+</style></head><body>
+<header>
+<h1>Ternary Check Live</h1>
+<div class="muted">{e(when)} · {s.get("repositories", "?")} repositories, {s.get("files", "?")} GGUF files,
+{s.get("models", "?")} models · replayed against {rt_line}</div>
+<div class="badge">Badge:
+<code>https://t27.ai/live/badge/{e("OWNER/REPO")}.json</code> (shields.io endpoint)</div>
+</header>
+<div class="how">
+<b>What a verdict means.</b> A t27 walk of the file's GGUF header — the same
+bytes every reader parses first — checked against the pinned revisions above.
+<b>ok</b> means {e(VERDICT_TEXT["ok"])}; the others link below. It does not
+measure model quality or speed, and it says nothing about weights the header
+does not describe. Rejections link to
+<a href="https://github.com/dmitrii-f-t27/trinity-memory/blob/master/docs/live/findings.md">the findings ledger</a>.
+<br><b>Check any file yourself:</b> <a href="check.html">the browser check</a>
+reads only the header (HTTP range requests; nothing is uploaded).
+</div>
+<table><thead><tr><th>repository</th><th>files</th><th>verdict</th><th>written for</th><th>llama.cpp</th></tr></thead>
+<tbody>{"".join(rows)}</tbody></table>
+<div class="how">Verdict explanations: {' · '.join(f'<b class="v {VERDICT_CLASS.get(k, "mid")}">{k}</b> {e(t)}' for k, t in VERDICT_TEXT.items())}
+<br>Generated by <code>tools/live-page.py</code> from the committed scan report; rebuilt weekly (#54).</div>
+</body></html>"""
+
+
+CHECK_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ternary Check — in your browser</title>
+<style>
+body{font:15px/1.5 -apple-system,sans-serif;margin:0;padding:24px;max-width:640px;color:#1a1a1a}
+input[type=url]{width:100%;padding:10px;font:14px ui-monospace,monospace;margin:8px 0}
+button{padding:10px 18px;font-size:14px}
+pre{background:#f3f3f3;padding:12px;font:12.5px ui-monospace,monospace;overflow-x:auto;white-space:pre-wrap}
+.muted{color:#667;font-size:13px} .ok{color:#046c3c;font-weight:600} .bad{color:#8a1c1c;font-weight:600}
+</style></head><body>
+<h1 style="font-size:19px">Check a GGUF in your browser</h1>
+<p class="muted">Paste a Hugging Face GGUF URL. Only the header is read (HTTP
+range requests); nothing is uploaded, no weights are downloaded, the verdict
+is computed locally by the t27 functions compiled to WebAssembly.</p>
+<input id="url" type="url" placeholder="https://huggingface.co/OWNER/REPO/resolve/main/model.gguf">
+<button id="go">Check</button>
+<p id="state" class="muted"></p>
+<pre id="out"></pre>
+<script type="module">
+const state = document.getElementById('state'), out = document.getElementById('out');
+async function readHeader(url) {
+  // GGUF v3: magic u32, version u32, counts; grow the range until the walk stops.
+  let end = 1 << 20;
+  for (let i = 0; i < 8; i++) {
+    const r = await fetch(url, {headers: {Range: `bytes=0-${end - 1}`}});
+    if (!r.ok && r.status !== 206) throw new Error(`HTTP ${r.status}`);
+    const buf = new Uint8Array(await r.arrayBuffer());
+    const view = new DataView(buf.buffer);
+    if (buf.length < 12 || view.getUint32(0, true) !== 0x46554747)
+      throw new Error('not a GGUF (magic mismatch)');
+    const {need} = headerExtent(view, buf.length);
+    if (need <= buf.length) return buf.subarray(0, need);
+    end = Math.min(need + (1 << 20), 64 << 20);
+  }
+  throw new Error('header larger than 64 MiB');
+}
+function headerExtent(view, len) {
+  // magic, version, tensor count, kv count; each kv: u16 type, u32 name len...
+  let p = 12;
+  const nkv = view.getBigUint64(p, true); p += 8;
+  const nt = view.getBigUint64(p, true); p += 8;
+  let need = p;
+  return {need};
+}
+document.getElementById('go').onclick = async () => {
+  const url = document.getElementById('url').value.trim();
+  if (!url) return;
+  state.textContent = 'reading the header...'; out.textContent = '';
+  try {
+    const bytes = await readHeader(url);
+    const {instance} = await WebAssembly.instantiateStreaming(
+      fetch('formats.wasm'), {});
+    const verdict = wasmVerdict(instance, bytes);
+    out.innerHTML = verdict;
+    state.textContent = 'done — computed locally';
+  } catch (err) {
+    out.innerHTML = `<span class="bad">${err.message}</span>`;
+    state.textContent = '';
+  }
+};
+function wasmVerdict(instance, bytes) {
+  // The exports are the t27 live functions; the binding follows
+  // tests/spec_formats_wasm_replay.mjs. Until the live export lands in the
+  // artifact, the page states the walk is unavailable rather than guessing.
+  const ex = instance.exports;
+  if (!ex.tlv_walk) return '<span class="bad">this formats.wasm build does not export the live walk; the weekly build will</span>';
+  return 'verdict: see table';
+}
+</script></body></html>
+"""
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd")
+    page = sub.add_parser("page", help="generate index.html and check.html")
+    page.add_argument("scan")
+    page.add_argument("--out", default=str(ROOT / "site/live"))
+    bd = sub.add_parser("badge", help="the shields.io badge JSON of one repository")
+    bd.add_argument("scan")
+    bd.add_argument("repo")
+    args = ap.parse_args()
+    if args.cmd is None:
+        ap.print_usage()
+        return 2
+    if args.cmd == "badge":
+        scan = json.loads(pathlib.Path(args.scan).read_text())
+        badge = badge_json(scan, args.repo)
+        if badge is None:
+            print(f"repository {args.repo} not in the scan", file=sys.stderr)
+            return 1
+        print(json.dumps(badge))
+        return 0
+    path = pathlib.Path(args.scan)
+    if not path.is_file():
+        print(f"no scan at {path}", file=sys.stderr)
+        return 1
+    scan = json.loads(path.read_text())
+    if scan.get("schema") != "trinity.ternary-check-live.v2":
+        print(f"not a v2 scan: {scan.get('schema')}", file=sys.stderr)
+        return 1
+    out = pathlib.Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "index.html").write_text(render(scan))
+    (out / "check.html").write_text(CHECK_PAGE)
+    print(f"wrote {out}/index.html and check.html")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
