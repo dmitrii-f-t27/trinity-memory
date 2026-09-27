@@ -8,7 +8,7 @@ minor version may change interfaces). Most entries name the pull requests
 that made them; 0.2.0 was made by direct commits, and the README and Release
 entries of 0.4.0 come from the release pull request itself.
 
-## [Unreleased]
+## [0.5.0] - 2026-09-27
 
 Ternary Check Live ([epic #57](https://github.com/dmitrii-f-t27/trinity-memory/issues/57)):
 public ternary models on the Hugging Face Hub, checked from their headers.
@@ -261,5 +261,6 @@ demonstrator.
   replay. The memory interfaces are experimental, not an upstream-approved ABI.
 
 [0.4.0]: https://github.com/dmitrii-f-t27/trinity-memory/compare/v0.3.0...v0.4.0
+[0.5.0]: [0.4.0]: https://github.com/dmitrii-f-t27/trinity-memory/compare/v0.3.0...v0.5.0
 [0.3.0]: https://github.com/dmitrii-f-t27/trinity-memory/releases/tag/v0.3.0
 [0.2.0]: https://github.com/dmitrii-f-t27/trinity-memory/releases/tag/v0.2.0
