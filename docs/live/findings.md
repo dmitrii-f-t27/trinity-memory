@@ -40,8 +40,10 @@ later status.
 
 ## F-1 — PrismML's own `Q2_0` Bonsai files refuse to load in every reader
 
-- **status**: approved (founders' approval 2026-09-27; the report below is
-  the agreed wording — confirmed by the replay before that: 110 agree,
+- **status**: reported (HF discussion
+  [prism-ml/Ternary-Bonsai-27B-gguf#65](https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf/discussions/65),
+  filed 2026-09-27 with the approved wording; founders' approval 2026-09-27 —
+  confirmed by the replay before that: 110 agree,
   0 disagree, 0 crashes over the 55-file scan, both built readers —
   llama.cpp e6ab7c1a and the PrismML fork bdc23b56 — refuse at the same
   record with the same numbers)
@@ -67,7 +69,8 @@ later status.
   fork's own reader walk to `output_norm.weight`, expect the extents above
   and refuse — the numbers and the mechanism both check. bitnet.cpp's
   different signed arithmetic (267,523,456) refuses at the same record.
-- **reported**: —
+- **reported**: [prism-ml/Ternary-Bonsai-27B-gguf#65](https://huggingface.co/prism-ml/Ternary-Bonsai-27B-gguf/discussions/65)
+  (2026-09-27, the approved wording verbatim)
 - **answer**: —
 
 ## F-2 — llama.cpp TQ1_0/TQ2_0 garbage output on CPU (upstream #15193)
