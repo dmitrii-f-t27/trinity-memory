@@ -185,7 +185,7 @@ var c_wir: u32 = 0;
 var c_sub: u32 = 0;
 var c_row: u32 = 0;
 var c_words: u32 = 0;
-var c_acc: u64 = 0;
+var c_acc: u32 = 0;
 var c_dg0: u64 = 0;
 var c_dg1: u64 = 0;
 var c_dg2: u64 = 0;
@@ -495,15 +495,23 @@ fn sub_lane_bits(s: u32, d0: u64, d1: u64, d2: u64) -> u64 {
     return r;
 }
 
-// Dot of the sub-word's eight lanes against eight activation bytes, wrapping
-// u64: exact two's complement, |sum| <= 8 * 128. Lane j's magnitude is bit 2j
-// and its sign bit 2j + 1 of the extracted half word: value = mag - sign.
-fn dot_sub(sw: u64, word: u64) -> u64 {
-    var sum: u64 = 0;
+// Dot of the sub-word's eight lanes against eight activation bytes. Lane j's
+// magnitude is bit 2j and its sign bit 2j + 1 of the extracted half word:
+// value = mag - sign. The sum stays inside 16-bit two's complement
+// (|sum| <= 8 * 128 = 1024), so the additions run on u32: the 64-bit carry
+// chains of the u64 form were most of the consumer's critical path on the
+// board build.
+fn dot_sub(sw: u64, word: u64) -> u32 {
+    var sum: u32 = 0;
     var j: u32 = 0;
     while (j < 8) {
         var sign: u64 = ((sw >> (j << 1)) & 1) - ((sw >> ((j << 1) + 1)) & 1);
-        sum = sum + (act_ext(word, j) * sign);
+        var b: u32 = ((word >> ((j & 7) << 3)) & 255) as u32;
+        if (b >= 128) { b = b | 4294967040; }   // sign-extend the byte in u32
+        var prod: u32 = 0;
+        if (sign == 1) { prod = b; }
+        if (sign == 18446744073709551615) { prod = 0 - b; }
+        sum = sum + prod;
         j = j + 1;
     }
     return sum;
@@ -962,10 +970,16 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (c_sub == subs_now - 1) {
             if (y_fire) {
                 // The row total includes this sub-word: c_acc has not taken it
-                // yet in this tick.
+                // yet in this tick. The 21-bit two's-complement row total
+                // (|y| <= cols * 128) sign-extends from bit 20.
                 y_pending = true;
                 y_row = c_row;
-                y_acc = c_acc + dot_sub(sub_q, act_rd);
+                // One expression of pre-tick reads only: a second statement
+                // reading y_acc would see the previous row's value (t27 reads
+                // a variable before the same tick writes it) and freeze it.
+                y_acc = pick64(((((c_acc + dot_sub(sub_q, act_rd)) & 2097151) >> 20) & 1) == 1,
+                               ((c_acc + dot_sub(sub_q, act_rd)) & 2097151) | 18446744073707454464,
+                               (c_acc + dot_sub(sub_q, act_rd)) & 2097151);
                 c_row = c_row + 1;
                 c_wir = 0;
                 c_acc = 0;
