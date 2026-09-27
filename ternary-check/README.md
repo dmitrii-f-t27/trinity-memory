@@ -22,7 +22,7 @@ go to the job summary and to a JSON report.
 
 ## Usage
 
-The Action is available once v0.4.0 is released:
+The Action is available (v0.4.0 and later):
 
 ```yaml
 jobs:
@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: make my-decoder        # build your decoder
-      - uses: dmitrii-f-t27/trinity-memory/ternary-check@v0.4.0
+      - uses: dmitrii-f-t27/trinity-memory/ternary-check@v0.5.0
         with:
           decoder: ./build/my-decoder
           formats: TQ1_0,TQ2_0      # optional: only the formats you implement

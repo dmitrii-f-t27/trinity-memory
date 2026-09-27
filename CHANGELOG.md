@@ -8,10 +8,28 @@ minor version may change interfaces). Most entries name the pull requests
 that made them; 0.2.0 was made by direct commits, and the README and Release
 entries of 0.4.0 come from the release pull request itself.
 
-## [Unreleased]
+## [0.5.0] - 2026-09-27
 
 Ternary Check Live ([epic #57](https://github.com/dmitrii-f-t27/trinity-memory/issues/57)):
 public ternary models on the Hugging Face Hub, checked from their headers.
+
+Shipped by pull requests [#44](https://github.com/dmitrii-f-t27/trinity-memory/pull/44),
+[#58](https://github.com/dmitrii-f-t27/trinity-memory/pull/58),
+[#68](https://github.com/dmitrii-f-t27/trinity-memory/pull/68),
+[#69](https://github.com/dmitrii-f-t27/trinity-memory/pull/69),
+[#70](https://github.com/dmitrii-f-t27/trinity-memory/pull/70),
+[#71](https://github.com/dmitrii-f-t27/trinity-memory/pull/71),
+[#72](https://github.com/dmitrii-f-t27/trinity-memory/pull/72),
+[#74](https://github.com/dmitrii-f-t27/trinity-memory/pull/74),
+[#75](https://github.com/dmitrii-f-t27/trinity-memory/pull/75),
+[#76](https://github.com/dmitrii-f-t27/trinity-memory/pull/76),
+[#77](https://github.com/dmitrii-f-t27/trinity-memory/pull/77),
+[#78](https://github.com/dmitrii-f-t27/trinity-memory/pull/78),
+[#79](https://github.com/dmitrii-f-t27/trinity-memory/pull/79),
+[#80](https://github.com/dmitrii-f-t27/trinity-memory/pull/80),
+[#81](https://github.com/dmitrii-f-t27/trinity-memory/pull/81) and
+[#82](https://github.com/dmitrii-f-t27/trinity-memory/pull/82) (the
+stage-2 hardware PRs #68-#78 are described in their own section below).
 
 ### Ternary Check Live
 
@@ -261,5 +279,6 @@ demonstrator.
   replay. The memory interfaces are experimental, not an upstream-approved ABI.
 
 [0.4.0]: https://github.com/dmitrii-f-t27/trinity-memory/compare/v0.3.0...v0.4.0
+[0.5.0]: https://github.com/dmitrii-f-t27/trinity-memory/compare/v0.4.0...v0.5.0
 [0.3.0]: https://github.com/dmitrii-f-t27/trinity-memory/releases/tag/v0.3.0
 [0.2.0]: https://github.com/dmitrii-f-t27/trinity-memory/releases/tag/v0.2.0
