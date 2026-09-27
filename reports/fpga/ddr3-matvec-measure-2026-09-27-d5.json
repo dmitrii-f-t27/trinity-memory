@@ -1,0 +1,200 @@
+{
+ "schema": "trinity.fpga-ddr3-matvec-measure.v1",
+ "written_utc": "2026-09-27T08:31:09Z",
+ "issue": "dmitrii-f-t27/trinity-memory#65",
+ "consumer": "B (device matvec of #64)",
+ "format": {
+  "name": "dense5",
+  "bits_per_weight": 1.6,
+  "lanes_per_word": 80
+ },
+ "clock": {
+  "ctrl_hz": 60000000.0,
+  "source": "PLL 6/5 from the board's 200 MHz oscillator (derived, not instrument-measured)"
+ },
+ "chunk": {
+  "rows": 320,
+  "cols": 2560,
+  "weights": 819200,
+  "model": "BitNet b1.58 2B4T layer-0 self_attn.q_proj rows 0-319",
+  "activations": "t27 tmv_activations seed 27",
+  "reference": "trinity_memory.matvec from the cached fixtures, sha-tied to reports/ternary-check/matvec-2026-09-23.json"
+ },
+ "bitstream": {
+  "sha256": "074dfd927406f17dae29386b055f04fd6ef65f552bea1c6f3dcbb6c4977414b9",
+  "routed_fmax_mhz": 64.32,
+  "commit": "57627bee"
+ },
+ "board": {
+  "idcode": [
+   "empty",
+   "Jtag frequency : requested 6.00MHz    -> real 6.00MHz",
+   "index 0:",
+   "idcode 0x3636093",
+   "manufacturer xilinx",
+   "family artix a7 200t",
+   "model  xc7a200",
+   "irlength 6"
+  ],
+  "dna": [
+   "empty",
+   "Jtag frequency : requested 6.00MHz    -> real 6.00MHz",
+   "{\"dna\": \"0x00389c0c2d85e85c\"}"
+  ]
+ },
+ "read_discipline": "one outstanding request, 8 idle clocks after each ack (UberDDR3 answers overlapping requests with zero data, #75)",
+ "first_run_verdict": {
+  "y_lines": 320,
+  "bit_exact": true,
+  "first": [
+   -2561,
+   2660,
+   -52,
+   -2385
+  ],
+  "expected": [
+   -2561,
+   2660,
+   -52,
+   -2385
+  ]
+ },
+ "runs": [
+  {
+   "run": 1,
+   "words": 10240,
+   "cycles": 33240192,
+   "weights_per_s": 1478691.8,
+   "command_stalls": 8318,
+   "wait_stalls": 33221624,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 2,
+   "words": 10240,
+   "cycles": 33241582,
+   "weights_per_s": 1478630.0,
+   "command_stalls": 8422,
+   "wait_stalls": 33222910,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 3,
+   "words": 10240,
+   "cycles": 33239818,
+   "weights_per_s": 1478708.5,
+   "command_stalls": 8399,
+   "wait_stalls": 33221169,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 4,
+   "words": 10240,
+   "cycles": 33239283,
+   "weights_per_s": 1478732.3,
+   "command_stalls": 8326,
+   "wait_stalls": 33220707,
+   "consumer_stalls": 81930,
+   "bad_words": 0
+  },
+  {
+   "run": 5,
+   "words": 10240,
+   "cycles": 33237938,
+   "weights_per_s": 1478792.1,
+   "command_stalls": 8388,
+   "wait_stalls": 33219300,
+   "consumer_stalls": 81932,
+   "bad_words": 0
+  },
+  {
+   "run": 6,
+   "words": 10240,
+   "cycles": 33240314,
+   "weights_per_s": 1478686.4,
+   "command_stalls": 8435,
+   "wait_stalls": 33221629,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 7,
+   "words": 10240,
+   "cycles": 33238361,
+   "weights_per_s": 1478773.3,
+   "command_stalls": 8330,
+   "wait_stalls": 33219781,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 8,
+   "words": 10240,
+   "cycles": 33240178,
+   "weights_per_s": 1478692.4,
+   "command_stalls": 8319,
+   "wait_stalls": 33221609,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 9,
+   "words": 10240,
+   "cycles": 33239557,
+   "weights_per_s": 1478720.1,
+   "command_stalls": 8276,
+   "wait_stalls": 33221031,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 10,
+   "words": 10240,
+   "cycles": 33241938,
+   "weights_per_s": 1478614.2,
+   "command_stalls": 8349,
+   "wait_stalls": 33223339,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 11,
+   "words": 10240,
+   "cycles": 33242910,
+   "weights_per_s": 1478570.9,
+   "command_stalls": 8313,
+   "wait_stalls": 33224347,
+   "consumer_stalls": 81931,
+   "bad_words": 0
+  },
+  {
+   "run": 12,
+   "words": 10240,
+   "cycles": 33238896,
+   "weights_per_s": 1478749.5,
+   "command_stalls": 8373,
+   "wait_stalls": 33220272,
+   "consumer_stalls": 81930,
+   "bad_words": 0
+  }
+ ],
+ "statistic": {
+  "runs": 12,
+  "min": 1478570.9,
+  "median": 1478700.45,
+  "max": 1478792.1,
+  "mean": 1478696.8,
+  "sample_sd": 65.3
+ },
+ "memory_bound": {
+  "consumer_stalls_zero": false,
+  "verdict": "NOT memory-bound: the consumer stalled"
+ },
+ "ceiling": {
+  "arithmetic_weights_per_s": 300000000.0,
+  "note": "x16 480 MT/s payload ceiling; the serialized read discipline sits far below it (latency-bound)"
+ }
+}
