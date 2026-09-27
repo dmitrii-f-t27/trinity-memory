@@ -103,6 +103,23 @@ Python.
 
 ## What the outcomes mean
 
+## The Hadamard rotation vectors (v1.1)
+
+`conformance/hadamard_rotate.json` (produced from `t27/hadamard.t27` by
+`tools/generate-hadamard-vectors.py`, checked with `--check`) holds the Prism
+rotation vectors: blocks 16, 64, 256 and 1024, identity and explicit sign
+layouts, integer inputs — so every expected output is a dyadic rational exact
+in f64, bit for bit. Three negative classes each refuse with their own
+status: `hadamard_sign_value` (a sign neither +1 nor −1),
+`hadamard_signs_length` (SIGNS not exactly BLOCK signs) and `hadamard_block`
+(BLOCK not one of the four). The decoder implements the `rotate` call of
+[CONTRACT.md](CONTRACT.md#calls) (`PROG rotate BLOCK SIGNS VALUES OUTPUT`,
+little-endian f64 in and out) and lists `rotate hadamard`; a decoder that
+does not list it gets the rotation vectors reported as
+`not_run: unsupported`. Inversion is proven offline with exact rationals at
+generation time (H·H = block·I; the explicit-signs transform is applied once,
+at export time, and is not an involution).
+
 The full table is in [CONTRACT.md](CONTRACT.md#outcomes). In brief:
 
 - `match`: the decoder reproduced the values, scale words and flags.

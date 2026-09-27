@@ -18,6 +18,7 @@
 #include "runtimes.h"
 #include "live.h"
 #include "ternary_contract.h"
+#include "hadamard.h"
 #include "tensorpack.h"
 #include "tensorpack_json.h"
 #include "tensorpack_cli.h"
