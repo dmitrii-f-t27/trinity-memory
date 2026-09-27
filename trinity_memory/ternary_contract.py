@@ -232,6 +232,7 @@ def _command_formats() -> int:
     for operation in ("decode", "encode"):
         for name in FORMATS:
             print(f"{operation} {name}")
+    print("rotate hadamard")
     return 0
 
 
@@ -293,8 +294,42 @@ def _command_encode(arguments) -> int:
     return 0
 
 
+ROTATE_BLOCKS = (16, 64, 256, 1024)
+
+
+def _command_rotate(args) -> int:
+    """`rotate BLOCK SIGNS VALUES OUTPUT` (contract v1.1): the normalized
+    Sylvester-Walsh-Hadamard of BLOCK with an explicit sign per element, the
+    expected outputs exact for integer inputs. The reference is t27/hadamard.t27
+    through the generated C (the hadamard module is loaded lazily; a wheel
+    without it refuses as unsupported)."""
+    import struct as _s
+    if len(args) != 4:
+        raise UsageError("expected rotate BLOCK SIGNS VALUES OUTPUT")
+    try:
+        block = int(args[0])
+    except ValueError:
+        raise UsageError("BLOCK must be decimal") from None
+    signs_b = Path(args[1]).read_bytes()
+    values_b = Path(args[2]).read_bytes()
+    if block not in ROTATE_BLOCKS:
+        return _reject(-63, f"block {block}")
+    if len(values_b) != block * 8:
+        return _reject(-65, "values length")
+    if len(signs_b) != block * 4:
+        return _reject(-65, "signs length")
+    signs = _s.unpack(f"<{block}i", signs_b)
+    if any(s not in (1, -1) for s in signs):
+        return _reject(-64, "sign value")
+    from . import hadamard_reference as h
+    values = _s.unpack(f"<{block}d", values_b)
+    out = h.rotate(block, list(values), list(signs))
+    Path(args[3]).write_bytes(_s.pack(f"<{block}d", *out))
+    return 0
+
+
 def command(arguments) -> int:
-    """`formats`, `decode` or `encode` of the contract; exit status 0, 1 (refused) or 2 (usage)."""
+    """`formats`, `decode`, `encode` or `rotate` of the contract; exit status 0, 1 (refused) or 2 (usage)."""
     try:
         if arguments[:1] == ["formats"]:
             return _command_formats()
@@ -302,7 +337,9 @@ def command(arguments) -> int:
             return _command_decode(arguments[1:])
         if arguments[:1] == ["encode"]:
             return _command_encode(arguments[1:])
-        raise UsageError("expected formats, decode or encode")
+        if arguments[:1] == ["rotate"]:
+            return _command_rotate(arguments[1:])
+        raise UsageError("expected formats, decode, encode or rotate")
     except (UsageError, OSError) as error:
         print(f"ternary-check: {error}", file=sys.stderr)
         return EXIT_USAGE
