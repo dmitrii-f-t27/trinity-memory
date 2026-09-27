@@ -111,7 +111,7 @@ make ternary-check-verify   # пересчитать и сравнить с за
 расхождение, неверный отказ или молчаливое принятие проваливает шаг:
 
 ```yaml
-- uses: dmitrii-f-t27/trinity-memory/ternary-check@v0.4.0
+- uses: dmitrii-f-t27/trinity-memory/ternary-check@v0.5.0
   with:
     decoder: ./build/my-decoder   # аргументы контракта добавляются в конец
     formats: TQ1_0,TQ2_0          # необязательно: только реализованные форматы
