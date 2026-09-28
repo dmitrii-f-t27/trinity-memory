@@ -104,6 +104,14 @@ def dense5_stream(trits, cols: int, rows: int) -> bytes:
     return bytes(out)
 
 
+def load_acknowledged(data: bytes, seq: int = 1) -> bool:
+    """Accept a CRC-checked load ack even when it is the first UART line."""
+    import uart_loader_protocol as proto
+    return any(e.kind == "line" and e.tag == "A" and e.check_ok
+               and e.resp()["seq"] == seq and e.resp()["cmd"] == proto.CMD_LOAD
+               for e in proto.StreamDecoder().feed(data))
+
+
 def doorbell_and_capture(port: str, baud: int, addr: int, payload: bytes,
                          timeout_s: float, stop_tag: str = "z"):
     """One load frame and the whole line stream on a single open port: a second
@@ -121,9 +129,9 @@ def doorbell_and_capture(port: str, baud: int, addr: int, payload: bytes,
             deadline = time.monotonic() + 0.5
             while time.monotonic() < deadline:
                 buf += com.read(256)
-                if b"\nA" in buf or b"\nN" in buf:
+                if load_acknowledged(buf):
                     break
-            if b"\nA" in buf:
+            if load_acknowledged(buf):
                 break
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:

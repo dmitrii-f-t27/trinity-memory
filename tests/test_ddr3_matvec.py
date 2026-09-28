@@ -276,6 +276,19 @@ class MatvecSimulation(unittest.TestCase):
                 self.assert_run_matches(lines[:3] + lines[3 + size:], words, [0] * cols,
                                         cols, rows, fmt, run_number=2)
 
+    def test_unchanged_doorbell_does_not_repeat_a_completed_run(self):
+        for fmt, config, rows in ((model.FMT_D5, "d5", 8), (model.FMT_D5, "d5_deferred", 2),
+                                  (model.FMT_B2, "b2_deferred", 2)):
+            with self.subTest(format=fmt, mode=config):
+                rng = random.Random(89)
+                acts = [rng.randint(-128, 127) for _ in range(2560)]
+                words = self.chunk_words([rng.choice((-1, 0, 1)) for _ in range(rows * 2560)],
+                                         2560, rows, fmt)
+                lines = self.simulate(config, (("stop_on_summary", 0), ("stop_after", 4000)),
+                                      acts, words, 2560, rows, fmt)
+                self.assertEqual(len(lines), 3 + rows + 7, "unchanged doorbell must execute exactly once")
+                self.assert_run_matches(lines, words, acts, 2560, rows, fmt)
+
     def test_a_doorbell_without_the_magic_starts_nothing(self):
         # The bench writes the descriptor with the model's magic; this config
         # binds a different one, so only the header lines may appear.
