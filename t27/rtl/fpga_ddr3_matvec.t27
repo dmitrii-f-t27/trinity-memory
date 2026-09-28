@@ -37,10 +37,11 @@ module TrinityFpgaDdr3MatvecT27;
 // the presented request is taken, and the FIFO still holds: 4 + 4 = 8). Consumer (B) pops a
 // word, decodes the four 32-bit chunks with the reader's decoders (dg0..dg2,
 // 80 dense5 or 64 baseline2 lanes) and then takes one sub-word of eight lanes
-// every clock: the lanes are dotted against eight sign-extended activation
+// every two clocks in the reference mode (one clock with compute_pipeline):
+// the lanes are dotted against eight sign-extended activation
 // bytes of one act store word, the products accumulated into the row
-// accumulator in wrapping u64 (exact two's complement: |acc| <= cols * 128 <=
-// 917,504, far inside 40 bits), and the last word of a row flushes the
+// accumulator in wrapping u32 (exact two's complement: |acc| <= cols * 128 <=
+// 917,504, inside the signed 21-bit result), and the last word of a row flushes the
 // accumulator as a Y line — in the original mode the consumer holds until the emitter has taken it,
 // which is the matvec's backpressure (a Y line takes about 1.7 ms at 115200
 // baud; a 40-word row takes about 480 clocks). The act store word of a
@@ -169,7 +170,7 @@ var all_acks: u64 = 0;
 var stray_acks: u32 = 0;
 
 // Act store: 896 u64 halves (7168 int8 columns), two arrays of write and
-// read half words (one write and one read port each, LUTRAM-mapped).
+// read half words (one write and one read port each, block-RAM-mapped).
 var acts_lo: [448]u64;
 var acts_hi: [448]u64;
 
@@ -184,9 +185,10 @@ var fq_count: u32 = 0;
 var fir: u32 = 0;
 var fow: u32 = 0;
 
-// Consumer (B): stage 0 idle, 1 bubble, 2 sub-words; wir is the word in row of
-// the word being consumed, sub the sub-word being processed.
+// Consumer: 0 idle/pop, 1 decode, 2 initial extract, 3 products, 4 sum/drain.
+// wir is the word in its row; sub is the subgroup whose products are formed.
 var cstage: u32 = 0;
+var product_valid: bool = false;
 var c_wir: u32 = 0;
 var c_sub: u32 = 0;
 var c_row: u32 = 0;
@@ -679,6 +681,8 @@ var rp_t: u32;
 var rp_a: u32;
 var rp_b: u64;
 var row_result: u32;
+var product_stage: bool;
+product_stage = cstage == 3;
 accept = wb_stb && !stall;
 progress = accept || ack;
 rd_ack = ack && (mstate == M_DOORBELL || mstate == M_ACTS || mstate == M_WEIGHTS);
@@ -751,10 +755,11 @@ rp_b = pick64(rkind == K_HEAD, head_b(lanes_of(fmt), cap, wpr_now, aw_now, poll_
 // serial_reads/read_gap: original workaround true/8, pipelined false/0.
 // defer_results: buffer rows (1..4096) until the timed phase ends. cap is 1..4,
 // cols <= 7168; unsupported shapes do not consume a doorbell.
+// compute_pipeline: overlap eight-lane products with the prior subgroup sum.
 fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             cols: u32, rows: u32, fmt: u32, waddr: u32, aaddr: u32, daddr: u32, magic: u32,
             cap: u32, watchdog: u32, poll_div: u32, line_idle: bool,
-            serial_reads: bool, read_gap: u32, defer_results: bool,
+            serial_reads: bool, read_gap: u32, defer_results: bool, compute_pipeline: bool,
             s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
     if (req_gap != 0) { req_gap = req_gap - 1; }
     if (ack_seen) { all_acks = all_acks + 1; }
@@ -995,8 +1000,15 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     }
     act_rd = pick64((act_addr & 1) == 0, acts_lo[act_addr >> 1], acts_hi[act_addr >> 1]);
 
-    // Consumer (B): pop (stage 0), bubble (1), sub-words (2). The bubble sets
-    // the address of sub-word 0; every sub then sets the next sub's address.
+    // Read-before-write: product_valid describes pr0..pr7 from the preceding
+    // clock. In pipeline mode stage 3 produces the next subgroup while the
+    // prior products enter the accumulator. Stage 4 drains the last subgroup
+    // before publishing the row or popping another word.
+    product_valid = product_stage;
+    if (compute_pipeline && product_valid && product_stage) {
+        c_acc = c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)));
+    }
+    // Stage 0 pop, 1 decode, 2 initial extract, 3 products, 4 sum/drain.
     if (pop_go) {
         // The popped word is captured raw and decoded in the bubble clock: the
         // FIFO-head mux and the dense5 decoders in one clock spanned 39 ns
@@ -1021,7 +1033,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         // routed critical path.
         sub_q = sub_lane_bits(0, c_dg0, c_dg1, c_dg2);
         cstage = 3;
-    } else if (cstage == 3) {
+    } else if (product_stage) {
         // The product clock: eight lane products off the extracted half word,
         // no carry chains (the products are selection muxes of sign-extended
         // bytes). The adder tree gets its own clock below.
@@ -1033,7 +1045,12 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         pr5 = dot_one(sub_q, act_rd, 5);
         pr6 = dot_one(sub_q, act_rd, 6);
         pr7 = dot_one(sub_q, act_rd, 7);
-        cstage = 4;
+        if (compute_pipeline && c_sub != subs_now - 1) {
+            sub_q = sub_lane_bits(c_sub + 1, c_dg0, c_dg1, c_dg2);
+            c_sub = c_sub + 1;
+        } else {
+            cstage = 4;
+        }
     } else if (cstage == 4) {
         // The sum clock: the eight-product adder tree alone.
         c_acc = c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)));

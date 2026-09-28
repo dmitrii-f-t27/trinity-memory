@@ -12,6 +12,7 @@ below.
 | `DDR3_MATVEC_READ_GAP` | 8 | Idle clocks after an ack; must be 0 for pipelined mode |
 | `DDR3_MATVEC_DEFER_RESULTS` | 0 | 1: buffer row results and emit Y lines after timing stops |
 | `DDR3_MATVEC_CAP` | 4 | Outstanding-request limit, 1..4 |
+| `DDR3_MATVEC_COMPUTE_PIPELINE` | 0 | 1: overlap successive eight-lane subgroup products and sums |
 
 Deferred output holds up to 4096 rows in a synchronous-read memory, one signed
 21-bit result per row. Columns must fit the 7168-byte activation store and be
@@ -104,3 +105,30 @@ the retained failure explain the fix instead of hiding the failed experiment.
 The former approximately 1.48 M weights/s result included UART backpressure
 and used a different timer boundary. It cannot establish DDR3 latency or be
 used as the baseline of a claimed 140× compute speedup.
+
+## Compute pipeline (issue #88)
+
+`COMPUTE_PIPELINE=0` retains the deployed consumer for comparison. With
+`COMPUTE_PIPELINE=1`, the registered activation read and static lane extraction
+feed eight products each clock. The previous subgroup's registered products
+are summed into the row accumulator in parallel. A product-valid register
+excludes the initial pipeline fill; a final drain clock includes the last
+subgroup before the row is stored or the next FIFO word is popped.
+
+The word costs 23/19 clocks in the reference dense5/baseline2 consumer and
+14/12 in the pipelined consumer (including pop, decode, initial extract and
+final drain). DDR3/arbiter stalls and row output can increase complete-run
+latency; these cycle counts are not a board throughput measurement. The
+build option is checked as a boolean and included in the configuration stamp,
+netlist parameters and build report. Read policy, timer boundaries and the
+result/doorbell protocol are unchanged.
+
+Regressions compare both consumers on the same signed endpoint vectors and
+require more than 30% fewer timed cycles with deterministic memory latency.
+Both modes are checked for repeated/unchanged doorbells and invariance to
+UART delay. The pipeline also sees malformed weights at word/row boundaries,
+random memory latency, backpressure and a competing arbiter master. The cached
+q_proj and down_proj fixture simulations exercise the new consumer.
+
+Physical speedup, routed timing and resource use must be established by retained
+board captures before treating the new mode as board-validated.

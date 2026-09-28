@@ -20,6 +20,7 @@ module tb_ddr3_matvec;
     parameter [31:0] MAGIC = 32'h74337633, CAP = 4, WATCHDOG = 32'd16777216, POLL_DIV = 64;
     parameter SERIAL_READS = 1'b1, READ_GAP = 32'd8, DEFER_RESULTS = 1'b0;
     parameter USE_ARBITER = 0;
+    parameter COMPUTE_PIPELINE = 1'b0;
 
     reg clk = 1'b0, calib = 1'b0;
     integer clocks = 0;
@@ -77,7 +78,7 @@ module tb_ddr3_matvec;
         .calib(calib), .stall(dut_stall), .ack(dut_ack), .rdata_lo(rdata_lo), .rdata_hi(rdata_hi),
         .cols(COLS), .rows(ROWS), .fmt(FMT), .waddr(WADDR), .aaddr(AADDR), .daddr(DADDR),
         .magic(MAGIC), .cap(CAP), .watchdog(WATCHDOG), .poll_div(POLL_DIV), .line_idle(line_idle),
-        .serial_reads(SERIAL_READS), .read_gap(READ_GAP), .defer_results(DEFER_RESULTS),
+        .serial_reads(SERIAL_READS), .read_gap(READ_GAP), .defer_results(DEFER_RESULTS), .compute_pipeline(COMPUTE_PIPELINE),
         .wb_cyc(mv_cyc), .wb_stb(mv_stb), .wb_addr(mv_addr),
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
         .s_go(1'b0), .s_tag(32'd0), .s_a(32'd0), .s_b(64'd0)
