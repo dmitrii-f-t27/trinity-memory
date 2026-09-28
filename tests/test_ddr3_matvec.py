@@ -165,8 +165,9 @@ class MatvecSimulation(unittest.TestCase):
         self.write_region(weights, WEIGHTS_ADDR, weight_halves)
         plusargs = [f"+capture={capture}", f"+doorbell={doorbell}", f"+acts={acts_mem}",
                     f"+weights={weights}"] + [f"+{k}={v}" for k, v in knobs]
-        subprocess.run(["vvp", str(self.vvp[config]), *plusargs], cwd=work,
-                       capture_output=True, text=True, check=True, timeout=600)
+        process = subprocess.run(["vvp", str(self.vvp[config]), *plusargs], cwd=work,
+                                 capture_output=True, text=True, timeout=600)
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
         lines = []
         for row in capture.read_text().splitlines():
             when, name, a, b = row.split("\t")
@@ -310,6 +311,15 @@ class MatvecSimulation(unittest.TestCase):
                     self.assert_run_matches(lines, words, acts, cols, rows, fmt)
                     cycles.append(model.decode_run_summary(lines[3 + rows:])["cycles"])
                 self.assertLess(cycles[1] * 10, cycles[0] * 7, cycles)
+
+    def test_compute_pipeline_yields_a_continuously_busy_read_port(self):
+        # The faster consumer removes the natural empty-port gaps the old
+        # arbiter relied on. Master 0 must still finish during computation,
+        # and a stalled controller request must never be withdrawn.
+        for fmt, config in ((model.FMT_D5, "d5_shared_fast"), (model.FMT_B2, "b2_shared_fast")):
+            with self.subTest(format=fmt):
+                self.run_chunk(config, (("stall_pct", 35), ("ack_min", 12), ("ack_span", 6),
+                                        ("stop_after", 10000)), 0x88, 2560, 2, fmt)
 
     def test_compute_pipeline_with_invalid_words_and_shared_bus(self):
         for fmt, name in ((model.FMT_D5, "d5_shared_fast"), (model.FMT_B2, "b2_shared_fast")):

@@ -311,6 +311,11 @@ module tms_ddr3_loader_ax7203 #(
     // ---- arbiter of the user port ----
     wire [31:0] a_switches, a_stray;
     TrinityFpgaWbArbiterT27 arbiter (
+`ifdef DDR3_LOADER_MATVEC
+        .preempt_read1(MATVEC_COMPUTE_PIPELINE),
+`else
+        .preempt_read1(1'b0),
+`endif
         .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
         .m0_cyc(m0_cyc), .m0_stb(m0_stb), .m0_we(m0_we), .m0_addr(m0_addr), .m0_sel(m0_sel), .m0_lo(m0_lo), .m0_hi(m0_hi),
         .m1_cyc(m1_cyc), .m1_stb(m1_stb), .m1_we(m1_we), .m1_addr(m1_addr), .m1_sel(m1_sel), .m1_lo(m1_lo), .m1_hi(m1_hi),

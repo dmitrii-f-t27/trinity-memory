@@ -42,6 +42,19 @@ module tb_ddr3_matvec;
         wire [31:0] stray;
         reg m0_cyc = 0, m0_stb = 0;
         integer completed_during_weights = 0;
+        integer m0_wait_clocks = 0;
+        reg stalled_last = 0;
+        reg [31:0] stalled_addr = 0;
+        always @(posedge clk) begin
+            if (stalled_last && (!wb_stb || wb_addr != stalled_addr))
+                $fatal(1, "arbiter withdrew or changed a stalled controller request");
+            stalled_last <= wb_stb && stall;
+            stalled_addr <= wb_addr;
+            if (m0_cyc && !m0_ack) m0_wait_clocks <= m0_wait_clocks + 1;
+            else m0_wait_clocks <= 0;
+            if (COMPUTE_PIPELINE && m0_wait_clocks > 1024)
+                $fatal(1, "read-only matvec starved master 0");
+        end
         always @(posedge clk) begin
             if (!m0_cyc && calib && clocks % 73 == 0) begin
                 m0_cyc <= 1; m0_stb <= 1;
@@ -56,7 +69,7 @@ module tb_ddr3_matvec;
                 $fatal(1, "competing master did not complete during the weight phase");
         end
         TrinityFpgaWbArbiterT27 arbiter (
-            .clk(clk), .rst_n(1'b1), .en(1'b1),
+            .clk(clk), .rst_n(1'b1), .en(1'b1), .preempt_read1(COMPUTE_PIPELINE),
             .m0_cyc(m0_cyc), .m0_stb(m0_stb), .m0_we(1'b0), .m0_addr(AADDR),
             .m0_sel(32'hffff), .m0_lo(64'd0), .m0_hi(64'd0),
             .m1_cyc(mv_stb), .m1_stb(mv_stb), .m1_we(1'b0), .m1_addr(mv_addr),
