@@ -20,6 +20,9 @@ shapes. Row results, Y line ordering and the doorbell protocol are unchanged.
 The result buffer is overwritten each run; activation prefetch starts afresh.
 A repeated-doorbell regression also fixes `issue_done` remaining set after a
 completed run, which prevented the next activation prefetch in RTL simulation.
+An unchanged-doorbell regression fixes a second defect found on the board:
+`last_run = doorbell_run` read the previous tick's value, so a completed command
+ran twice. Both registers now capture the descriptor's run ID directly.
 
 The `c.b` cycle counter now includes the weight phase and the consumer tail,
 including the fixed 12 drain clocks. It excludes activation prefetch. With
@@ -47,6 +50,12 @@ computes the full q_proj reference, checks its committed accumulator hash, then
 simulates 320 rows in both formats through the arbiter and compares every Y.
 The native CI gate now runs the matvec suite; the golden case needs the fixture
 cache and remains separately conditional on it.
+
+`tools/fpga-matvec-boot.py` checks the bitstream hash and routed timing, loads
+SRAM, and saves board identity, temperature and the raw boot stream. Its default
+15-second window accommodates the observed 6.7-second DDR3 calibration. Each
+measurement also keeps every received byte and decoded line before validating
+the run ID, row order and counters, including evidence from failed runs.
 
 This is still a matvec consumer processing eight lanes over multiple clocks.
 A faster matvec is not by itself proof of saturated DDR3 delivery or a 1.25x
