@@ -22,6 +22,7 @@ written; 1 otherwise; 2 when a board tool failed (then nothing is written).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import statistics
@@ -42,10 +43,10 @@ import matvec_device_model as model  # noqa: E402
 SCHEMA = "trinity.fpga-ddr3-matvec-measure.v2"
 
 
-def board_identity() -> dict:
-    out = {}
-    for key, cmd in (("idcode", ["openFPGALoader", "--detect", "--cable", "digilent_hs3"]),
-                     ("dna", ["openFPGALoader", "--read-dna", "--cable", "digilent_hs3"])):
+def board_identity(cable: str) -> dict:
+    out = {"cable": cable}
+    for key, cmd in (("idcode", ["openFPGALoader", "--detect", "--cable", cable]),
+                     ("dna", ["openFPGALoader", "--read-dna", "--cable", cable])):
         try:
             done = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             lines = [l.strip() for l in (done.stdout + done.stderr).splitlines() if l.strip()]
@@ -59,13 +60,19 @@ def signed40(b: int) -> int:
     return b - (1 << 40) if b >= (1 << 39) else b
 
 
-def one_run(port: str, baud: int, counter: int, timeout: float) -> tuple[list, list]:
-    """One doorbell run: -> (y values, summary [(tag, a, b), ...])."""
+def one_run(port: str, baud: int, counter: int, timeout: float,
+            raw: bytearray | None = None) -> list:
+    """One doorbell run: decoded lines, optionally retaining every received byte."""
     import struct
     import uart_loader_protocol as proto
     import serial
     lines, buf = [], b""
     with serial.Serial(port, baud, timeout=0.2) as com:
+        def read(count):
+            data = com.read(count)
+            if raw is not None:
+                raw.extend(data)
+            return data
         com.reset_input_buffer()
         for attempt in range(6):
             if attempt:
@@ -75,14 +82,14 @@ def one_run(port: str, baud: int, counter: int, timeout: float) -> tuple[list, l
             com.flush()
             deadline = time.monotonic() + 0.5
             while time.monotonic() < deadline:
-                buf += com.read(256)
-                if b"\nA" in buf:
+                buf += read(256)
+                if run_tool.load_acknowledged(buf):
                     break
-            if b"\nA" in buf:
+            if run_tool.load_acknowledged(buf):
                 break
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            buf += com.read(512)
+            buf += read(512)
             while len(buf) >= 20:
                 line, buf = buf[:20], buf[20:]
                 if line[19:20] != b"\n":
@@ -103,6 +110,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", default="/dev/cu.usbserial-10")
     ap.add_argument("--baud", type=int, default=115200)
+    ap.add_argument("--cable", default="digilent_hs2")
     ap.add_argument("--fmt", choices=("d5", "b2"), required=True)
     ap.add_argument("--rows", type=int, default=320)
     ap.add_argument("--runs", type=int, default=12)
@@ -140,9 +148,18 @@ def main() -> int:
     run_tool.loader_load(args.port, args.baud, act_path, 0x1000, work / f"{args.fmt}.a.json",
                          int(args.design_hz), 2048)
 
-    runs, first_y = [], None
+    runs, first_y, captures = [], None, []
+    output = Path(args.output)
+    capture_dir = output.with_suffix(".uart")
+    capture_dir.mkdir(parents=True, exist_ok=True)
     for n in range(1, args.runs + 1):
-        lines = one_run(args.port, args.baud, n, 240.0)
+        raw = bytearray()
+        lines = one_run(args.port, args.baud, n, 240.0, raw)
+        raw_path = capture_dir / f"run-{n:02d}.txt"
+        raw_path.write_bytes(raw)
+        raw_path.with_suffix(".json").write_text(json.dumps(lines) + "\n")
+        captures.append({"run": n, "file": f"{capture_dir.name}/{raw_path.name}",
+                         "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()})
         y = [signed40(b) for tag, a, b in lines if tag == "y"]
         try:
             counters = model.decode_run_summary(lines)
@@ -150,10 +167,12 @@ def main() -> int:
             print(f"run {n}: {exc} — stopping", flush=True)
             return 1
         words, cycles = counters["words"], counters["cycles"]
-        if counters["device_run"] != n or words != trits_total // lanes or counters["bad_words"]:
+        if (counters["device_run"] != n or counters["runs_done"] != n
+                or words != trits_total // lanes or counters["bad_words"] or counters["stray_acks"]):
             print(f"run {n}: wrong run, word count or bad words — stopping", flush=True)
             return 1
-        exact = len(y) == args.rows and y == expected
+        exact = (len(y) == args.rows and y == expected
+                 and [a for tag, a, _ in lines if tag == "y"] == list(range(args.rows)))
         if first_y is None:
             first_y = {"y_lines": len(y), "bit_exact": exact,
                        "first": y[:4], "expected": expected[:4]}
@@ -170,6 +189,12 @@ def main() -> int:
             "sample_sd": round(statistics.stdev(vals), 1) if len(vals) > 1 else 0.0}
     consumer_stalls = sum(r["consumer_stalls"] for r in runs)
     memory_bound = consumer_stalls == 0
+    variant = build.get("ddr3", {}).get("variant", "")
+    deferred = "defer_results 1" in variant
+    explicit_timing = "defer_results " in variant
+    timing = ("weight phase through consumer drain, including DRAIN_CLOCKS; activation prefetch excluded; "
+              + ("Y output emitted after timing stops" if deferred else "UART Y output backpressure included")) \
+        if explicit_timing else "legacy weight-phase counter; see source commit for timing boundaries"
     report = {
         "schema": SCHEMA, "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "issue": "dmitrii-f-t27/trinity-memory#65", "consumer": "B (device matvec of #64)",
@@ -186,20 +211,22 @@ def main() -> int:
         "bitstream": {"sha256": build["bitstream"]["sha256"],
                       "routed_fmax_mhz": build["nextpnr"]["clocks_routed"][0]["fmax_mhz"],
                       "commit": build["commit"]},
-        "board": board_identity(),
-        "read_discipline": "one outstanding request, 8 idle clocks after each ack "
-                           "(workaround for the integrated loader/matvec failure, #75; "
-                           "the separate direct reader passed pipelined reads)",
+        "board": board_identity(args.cable),
+        "read_discipline": variant or "read settings not recorded by the build report",
+        "timing_scope": timing,
         "first_run_verdict": first_y,
         "runs": runs,
+        "uart_captures": captures,
         "statistic": stat,
         "memory_bound": {"consumer_stalls_zero": memory_bound,
-                         "verdict": "not established: timed matvec includes UART result backpressure"},
+                         "verdict": ("not established: Y output is deferred, but the matvec consumer and "
+                                     "request policy can still limit throughput" if deferred else
+                                     "not established: result-output isolation is not demonstrated")},
         "ceiling": {"arithmetic_weights_per_s": args.design_hz * lanes,
                     "note": "x16: 128 bits per controller clock, 80 dense5 or 64 baseline2 weights; "
                             "arithmetic only, not measured delivery"},
     }
-    Path(args.output).write_text(json.dumps(report, indent=1))
+    output.write_text(json.dumps(report, indent=1))
     print(json.dumps(stat, indent=1))
     print("memory-bound:", report["memory_bound"]["verdict"])
     return 0

@@ -41,16 +41,22 @@ module TrinityFpgaDdr3MatvecT27;
 // bytes of one act store word, the products accumulated into the row
 // accumulator in wrapping u64 (exact two's complement: |acc| <= cols * 128 <=
 // 917,504, far inside 40 bits), and the last word of a row flushes the
-// accumulator as a Y line — the consumer holds until the emitter has taken it,
+// accumulator as a Y line — in the original mode the consumer holds until the emitter has taken it,
 // which is the matvec's backpressure (a Y line takes about 1.7 ms at 115200
 // baud; a 40-word row takes about 480 clocks). The act store word of a
 // sub-word is read one clock ahead (act_rd), so a popped word spends one
 // bubble clock before its first sub-word. A word with an invalid group
 // (baseline2 lane 11, dense5 code 243-255) counts in bad words; its lanes
 // still enter the dot, as the decoders read them.
+// With defer_results, up to 4096 row results are buffered in block RAM and
+// emitted only after computation drains. This isolates the timed interval
+// from UART Y-line latency. The default board mode remains serial reads with
+// an eight-clock gap and immediate output, for a measured baseline.
 //
 // Counters of a run (the reader's names where the same thing is counted):
-//   cycles        controller clocks of the weight phase, first request presented to last ack
+//   cycles        weight phase through consumer drain, including DRAIN_CLOCKS;
+//                 activation prefetch and deferred Y emission are excluded.
+//                 Older builds stopped at the last ack, before the consumer tail.
 //   words         acks of the weight phase (rows * words_per_row by construction)
 //   command stalls clocks with a request presented and o_wb_stall high
 //   wait stalls   clocks with a request outstanding and no ack
@@ -87,6 +93,7 @@ const M_ACTS: u32 = 3;
 const M_WEIGHTS: u32 = 4;
 const M_DRAIN: u32 = 5;
 const M_REPORT: u32 = 6;
+const M_RESULTS: u32 = 7;
 
 const K_HEAD: u32 = 0;
 const K_RUN: u32 = 1;
@@ -99,11 +106,10 @@ const A_WAIT: u32 = 2;
 const FMT_B2: u32 = 0;
 const FMT_D5: u32 = 1;
 const DRAIN_CLOCKS: u32 = 12;
-// Idle clocks after every read ack before the next request: UberDDR3's user
-// port returns zeros when read commands follow each other too closely (the
-// doorbell's 8192-clock poll spacing reads correctly, a 2-clock gap did not;
-// AX7203, 2026-09-26). Eight clocks cost nothing against the ack latency.
-const REQ_GAP: u32 = 8;
+// serial_reads/read_gap select the existing board workaround (true/8) or
+// the experimental pipelined path (false/0). The separate direct reader has
+// already passed pipelined reads; the integrated board failure needs its own
+// reproduction. Defaults are bound by the board top, not inferred here.
 const ACT_WORDS: u32 = 896;
 const FIFO_WORDS: u32 = 8;
 const MATVEC_FORMAT: u64 = 1;
@@ -198,6 +204,17 @@ var pr4: u32; var pr5: u32; var pr6: u32; var pr7: u32;   // lane products, thei
 var y_pending: bool = false;
 var y_row: u32 = 0;
 var y_acc: u64 = 0;
+// Deferred output holds a chunk's row results until the timed phase ends.
+// One registered read and one write port allow block-RAM inference.
+var results: [4096]u32;
+var result_read: u32 = 0;
+var result_index: u32 = 0;
+var result_stage: u32 = 0;
+
+fn signed_row(value: u32) -> u64 {
+    if ((value & 1048576) != 0) { return (value as u64) | 18446744073707454464; }
+    return value as u64;
+}
 
 // Decoders of the FIFO head (the reader's chunk decoders). No initial values,
 // as dinv: the codegen's initial on a module-level comb variable becomes a
@@ -661,6 +678,7 @@ var rd_phase: bool;
 var rp_t: u32;
 var rp_a: u32;
 var rp_b: u64;
+var row_result: u32;
 accept = wb_stb && !stall;
 progress = accept || ack;
 rd_ack = ack && (mstate == M_DOORBELL || mstate == M_ACTS || mstate == M_WEIGHTS);
@@ -673,12 +691,8 @@ room_down = out_down < cap;
 out_next = pick32(accept && !ack, out_up, pick32(ack && !accept, out_down, outst));
 cap_room = pick_bool(accept && !ack, room_up, pick_bool(ack && !accept, room_down, room_same));
 fifo_room = fq_count + out_next < 5;
-// One request in flight at a time: UberDDR3's user port is not a pipelined
-// slave, and the board (AX7203, m6d4, 2026-09-26) returns zeros for the data
-// of overlapping requests — the doorbell's single-outstanding polls and the
-// loader's max_outstanding 1 both read correctly; the reader's cap-64 and
-// this module's cap-4 phases did not. The cap and FIFO sizing stay as built.
-can_issue = cap_room && outst == 0 && (mstate != M_WEIGHTS || fifo_room);
+can_issue = cap_room && (!serial_reads || outst == 0) && (mstate != M_WEIGHTS || fifo_room);
+row_result = (c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)))) & 2097151;
 wpr_now = words_per_row(cols, fmt);
 subs_now = subs_of(fmt);
 aw_now = act_words_of(cols);
@@ -734,9 +748,13 @@ rp_b = pick64(rkind == K_HEAD, head_b(lanes_of(fmt), cap, wpr_now, aw_now, poll_
 // at most; watchdog >= 1: clocks without a request taken or an ack after which
 // a phase gives up; poll_div >= 1: doorbell polls at most once every poll_div
 // clocks. line_idle: the emitter's.
+// serial_reads/read_gap: original workaround true/8, pipelined false/0.
+// defer_results: buffer rows (1..4096) until the timed phase ends. cap is 1..4,
+// cols <= 7168; unsupported shapes do not consume a doorbell.
 fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             cols: u32, rows: u32, fmt: u32, waddr: u32, aaddr: u32, daddr: u32, magic: u32,
             cap: u32, watchdog: u32, poll_div: u32, line_idle: bool,
+            serial_reads: bool, read_gap: u32, defer_results: bool,
             s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
     if (req_gap != 0) { req_gap = req_gap - 1; }
     if (ack_seen) { all_acks = all_acks + 1; }
@@ -774,11 +792,15 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             polls = polls + 1;
             wb_stb = false;
             poll_wait = poll_div;
-            req_gap = REQ_GAP;
+            req_gap = read_gap;
             if ((rdata_lo >> 32) == (magic as u64) && (rdata_lo & M32) != 0
-                && (rdata_lo & M32) != (last_run as u64) && wpr_now != 0) {
+                && (rdata_lo & M32) != (last_run as u64) && wpr_now != 0
+                && cols <= 7168 && rows != 0 && cap != 0 && cap <= 4
+                && (!defer_results || rows <= 4096)) {
                 doorbell_run = (rdata_lo & M32) as u32;
-                last_run = doorbell_run;
+                // Tick reads see the old register value. Remember the actual
+                // descriptor here, or the same doorbell is accepted twice.
+                last_run = (rdata_lo & M32) as u32;
                 aw_stored = 0;
                 bad_words = 0;
                 cons_stalls = 0;
@@ -786,6 +808,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 wb_stb = can_issue && req_gap == 0;
                 outst = 0;
                 acks = 0;
+                issue_done = false;
                 quiet = 0;
                 phase_clocks = 0;
                 run_cmd = 0;
@@ -809,13 +832,13 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 issue_done = true;
             } else {
                 wb_addr = wb_addr + 1;
-                wb_stb = false;      // one command at a time, as M_WEIGHTS
+                wb_stb = !serial_reads && can_issue && req_gap == 0;
             }
         } else if (!wb_stb && !issue_done) {
             wb_stb = can_issue && req_gap == 0;
         }
         outst = out_next;
-        if (ack) { acks = acks + 1; req_gap = REQ_GAP; }
+        if (ack) { acks = acks + 1; req_gap = read_gap; }
         if (progress) { quiet = 0; } else { quiet = quiet + 1; }
         phase_clocks = phase_clocks + 1;
         if (final_act_ack) {
@@ -841,6 +864,8 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             c_words = 0;
             c_acc = 0;
             y_pending = false;
+            result_index = 0;
+            result_stage = 0;
             wb_addr = waddr;
             wb_stb = can_issue && req_gap == 0;
             timed_acts = false;
@@ -864,18 +889,15 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 issue_done = true;
             } else {
                 wb_addr = wb_addr + 1;
-                // The strobe drops with every taken request: can_issue was
-                // evaluated with outst still 0, so keeping it high would hand
-                // the controller a second command before the first completes
-                // (the zero-data overlap the board showed). The branch below
-                // re-raises it once outst is 0 again.
-                wb_stb = false;
+                // cap_room uses the post-take/post-ack count. A presented
+                // request stays asserted while stalled, including its address.
+                wb_stb = !serial_reads && can_issue && req_gap == 0;
             }
         } else if (!wb_stb && !issue_done) {
             wb_stb = can_issue && req_gap == 0;
         }
         outst = out_next;
-        if (ack) { acks = acks + 1; req_gap = REQ_GAP; }
+        if (ack) { acks = acks + 1; req_gap = read_gap; }
         if (progress) { quiet = 0; } else { quiet = quiet + 1; }
         phase_clocks = phase_clocks + 1;
         run_cycles = phase_clocks;
@@ -894,6 +916,9 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             mstate = M_REPORT;
         }
     } else if (mstate == M_DRAIN) {
+        // Include the consumer's tail, not just the final memory ack. Deferred
+        // Y emission below begins after this counter is frozen.
+        phase_clocks = phase_clocks + 1;
         if (drain_done) {
             if (drain == DRAIN_CLOCKS) {
                 run_cycles = phase_clocks + 1;
@@ -904,12 +929,29 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                 total_bad = total_bad + (bad_words as u64);
                 rkind = K_RUN;
                 rline = 0;
-                mstate = M_REPORT;
+                mstate = pick32(defer_results, M_RESULTS, M_REPORT);
             } else {
                 drain = drain + 1;
             }
         } else {
             drain = 0;
+        }
+    } else if (mstate == M_RESULTS) {
+        if (result_stage == 0) {
+            result_read = results[result_index];
+            result_stage = 1;
+        } else if (result_stage == 1 && !y_pending) {
+            y_pending = true;
+            y_row = result_index;
+            y_acc = signed_row(result_read);
+            result_stage = 2;
+        } else if (result_stage == 2 && !y_pending) {
+            if (result_index == rows - 1) {
+                mstate = M_REPORT;
+            } else {
+                result_index = result_index + 1;
+                result_stage = 0;
+            }
         }
     } else if (mstate == M_REPORT) {
         if (pfire) {
@@ -998,14 +1040,13 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         sub_q = sub_lane_bits(c_sub + 1, c_dg0, c_dg1, c_dg2);
         if (c_sub == subs_now - 1) {
             if (y_fire) {
-                y_pending = true;
-                y_row = c_row;
-                // The row total in 21-bit two's complement (|y| <= cols*128),
-                // sign-extended from bit 20, all pre-tick reads in one
-                // expression (t27 reads a variable before its tick writes it).
-                y_acc = pick64((((c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)))) & 2097151) >> 20) == 1,
-                               ((c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)))) & 2097151) | 18446744073707454464,
-                               (c_acc + (((pr0 + pr1) + (pr2 + pr3)) + ((pr4 + pr5) + (pr6 + pr7)))) & 2097151);
+                if (defer_results) {
+                    results[c_row] = row_result;
+                } else {
+                    y_pending = true;
+                    y_row = c_row;
+                    y_acc = signed_row(row_result);
+                }
                 c_row = c_row + 1;
                 c_wir = 0;
                 c_acc = 0;
