@@ -1,0 +1,93 @@
+{
+ "schema": "trinity.matvec-read-policy-comparison.v1",
+ "source_commit": "669a144d1a681936f2ab742e3feb5c8f3e030e0b",
+ "clock_hz": 60000000,
+ "rows": 320,
+ "cols": 2560,
+ "total_passed_runs": 48,
+ "total_bit_exact_rows": 15360,
+ "cases": [
+  {
+   "policy": "serial",
+   "format": "d5",
+   "report": "ddr3-matvec-measure-2026-09-28-serial-669a144-d5.json",
+   "runs": 12,
+   "bit_exact_rows": 3840,
+   "mean_weights_per_s": 208663978.8,
+   "sample_sd": 6009.3,
+   "cycles": [
+    235552,
+    235567
+   ],
+   "max_outstanding": [
+    1
+   ],
+   "consumer_stalls": [
+    19,
+    34
+   ],
+   "routed_fmax_mhz": 64.93,
+   "bitstream_sha256": "fb1b463cc9e9b292424ef06db4c0fee77d4f681ee776c764b6ea245bd76529da"
+  },
+  {
+   "policy": "serial",
+   "format": "b2",
+   "report": "ddr3-matvec-measure-2026-09-28-serial-669a144-b2.json",
+   "runs": 12,
+   "bit_exact_rows": 3840,
+   "mean_weights_per_s": 192746894.2,
+   "sample_sd": 0.0,
+   "cycles": [
+    255008
+   ],
+   "max_outstanding": [
+    1
+   ],
+   "consumer_stalls": [
+    11795
+   ],
+   "routed_fmax_mhz": 60.49,
+   "bitstream_sha256": "d076f65620f79a2ce2ed3b917c4a2f79dd1cc21b861005fb7c784b4bd5618c16"
+  },
+  {
+   "policy": "pipeline",
+   "format": "d5",
+   "report": "ddr3-matvec-measure-2026-09-28-pipeline-669a144-d5.json",
+   "runs": 12,
+   "bit_exact_rows": 3840,
+   "mean_weights_per_s": 208674387.8,
+   "sample_sd": 0.0,
+   "cycles": [
+    235544
+   ],
+   "max_outstanding": [
+    4
+   ],
+   "consumer_stalls": [
+    11
+   ],
+   "routed_fmax_mhz": 60.05,
+   "bitstream_sha256": "f71defe18eb494ffcb5104513d8372b252a24af8c5d656957cb0bcfe8b534864"
+  },
+  {
+   "policy": "pipeline",
+   "format": "b2",
+   "report": "ddr3-matvec-measure-2026-09-28-pipeline-669a144-b2.json",
+   "runs": 12,
+   "bit_exact_rows": 3840,
+   "mean_weights_per_s": 202085320.5,
+   "sample_sd": 0.0,
+   "cycles": [
+    243224
+   ],
+   "max_outstanding": [
+    4
+   ],
+   "consumer_stalls": [
+    11
+   ],
+   "routed_fmax_mhz": 61.69,
+   "bitstream_sha256": "8a04a14f3d6f47a6952d73fae58a5db739bf5a1fb47dabc0c5d3031eb82c1629"
+  }
+ ]
+}
