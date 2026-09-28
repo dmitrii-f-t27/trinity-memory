@@ -1,0 +1,819 @@
+{
+ "schema": "trinity.fpga-ddr3-matvec-measure.v2",
+ "written_utc": "2026-09-28T02:20:58Z",
+ "issue": "dmitrii-f-t27/trinity-memory#65",
+ "consumer": "B (device matvec of #64)",
+ "format": {
+  "name": "dense5",
+  "bits_per_weight": 1.6,
+  "stored_bits_per_logical_weight": 1.6296296296296295,
+  "lanes_per_word": 80
+ },
+ "clock": {
+  "ctrl_hz": 60000000.0,
+  "source": "PLL 6/5 from the board's 200 MHz oscillator (derived, not instrument-measured)"
+ },
+ "chunk": {
+  "rows": 2560,
+  "cols": 6912,
+  "weights": 17694720,
+  "device_cols": 7040,
+  "zero_padding_cols": 128,
+  "model": "BitNet b1.58 2B4T model.layers.0.mlp.down_proj.weight rows 0-2559",
+  "activations": "t27 tmv_activations seed 27",
+  "reference": "trinity_memory.matvec from the cached fixtures, sha-tied to reports/ternary-check/matvec-2026-09-23.json"
+ },
+ "bitstream": {
+  "sha256": "7711a37e7377d4c23e4cbc7075a10846c595b00d2986ede2e21429d2db30147f",
+  "routed_fmax_mhz": 66.92,
+  "commit": "8d1bdf5f"
+ },
+ "board": {
+  "cable": "digilent_hs2",
+  "idcode": [
+   "empty",
+   "Jtag frequency : requested 6.00MHz    -> real 6.00MHz",
+   "index 0:",
+   "idcode 0x3636093",
+   "manufacturer xilinx",
+   "family artix a7 200t",
+   "model  xc7a200",
+   "irlength 6"
+  ],
+  "dna": [
+   "empty",
+   "Jtag frequency : requested 6.00MHz    -> real 6.00MHz",
+   "{\"dna\": \"0x00389c0c2d85e85c\"}"
+  ]
+ },
+ "read_discipline": "x16 BYTE_LANES 2, PLL CLKFBOUT_MULT 6, DDR3 clock VCO/5 (4.167 ns), controller 16.667 ns, MATVEC (device dot of issue 64, cols 7040, rows 2560, format 1, cap 4, serial_reads 0, read_gap 0, defer_results 1, doorbell 0x00000040, through the loader UART)",
+ "timing_scope": "weight phase through consumer drain, including DRAIN_CLOCKS; activation prefetch excluded; Y output emitted after timing stops",
+ "first_run_verdict": {
+  "y_lines": 2560,
+  "bit_exact": true,
+  "first": [
+   2375,
+   4149,
+   -3986,
+   -11707
+  ],
+  "expected": [
+   2375,
+   4149,
+   -3986,
+   -11707
+  ]
+ },
+ "runs": [
+  {
+   "run": 1,
+   "device_run": 1,
+   "polls": 4947565,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 1,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     1,
+     4947565
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     1,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 2,
+   "device_run": 2,
+   "polls": 4949806,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 2,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     2,
+     4949806
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     2,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 3,
+   "device_run": 3,
+   "polls": 4952068,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249552,
+   "issue_hold_cycles": 4706483,
+   "wait_stalls": 1746985,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 3,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     3,
+     4952068
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249552
+    ],
+    [
+     "w",
+     4706483,
+     1746985
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     3,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 4,
+   "device_run": 4,
+   "polls": 4954344,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 4,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     4,
+     4954344
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     4,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 5,
+   "device_run": 5,
+   "polls": 4956612,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249552,
+   "issue_hold_cycles": 4706483,
+   "wait_stalls": 1746985,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 5,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     5,
+     4956612
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249552
+    ],
+    [
+     "w",
+     4706483,
+     1746985
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     5,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 6,
+   "device_run": 6,
+   "polls": 4958924,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 6,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     6,
+     4958924
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     6,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 7,
+   "device_run": 7,
+   "polls": 4961216,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249552,
+   "issue_hold_cycles": 4706483,
+   "wait_stalls": 1746985,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 7,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     7,
+     4961216
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249552
+    ],
+    [
+     "w",
+     4706483,
+     1746985
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     7,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 8,
+   "device_run": 8,
+   "polls": 4963520,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 8,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     8,
+     4963520
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     8,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 9,
+   "device_run": 9,
+   "polls": 4965764,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249552,
+   "issue_hold_cycles": 4706483,
+   "wait_stalls": 1746985,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 9,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     9,
+     4965764
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249552
+    ],
+    [
+     "w",
+     4706483,
+     1746985
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     9,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 10,
+   "device_run": 10,
+   "polls": 4967992,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 10,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     10,
+     4967992
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     10,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 11,
+   "device_run": 11,
+   "polls": 4970311,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 11,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     11,
+     4970311
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     11,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  },
+  {
+   "run": 12,
+   "device_run": 12,
+   "polls": 4972588,
+   "words": 225280,
+   "cycles": 5181463,
+   "max_outstanding": 4,
+   "command_stalls": 249528,
+   "issue_hold_cycles": 4706494,
+   "wait_stalls": 1746994,
+   "bad_words": 0,
+   "consumer_stalls": 10,
+   "activation_words": 440,
+   "stray_acks": 0,
+   "runs_done": 12,
+   "total_bad": 0,
+   "summary_lines": [
+    [
+     "d",
+     12,
+     4972588
+    ],
+    [
+     "c",
+     225280,
+     5181463
+    ],
+    [
+     "o",
+     4,
+     249528
+    ],
+    [
+     "w",
+     4706494,
+     1746994
+    ],
+    [
+     "n",
+     0,
+     10
+    ],
+    [
+     "u",
+     440,
+     0
+    ],
+    [
+     "z",
+     12,
+     0
+    ]
+   ],
+   "weights_per_s": 204900276.2
+  }
+ ],
+ "uart_captures": [
+  {
+   "run": 1,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-01.txt",
+   "bytes": 51360,
+   "sha256": "e73aad3da5c788a9350ab1f36f91ec9eef47bb61bc84ee0902241f82d6c6679a"
+  },
+  {
+   "run": 2,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-02.txt",
+   "bytes": 51360,
+   "sha256": "42b171c372e634793f989d3a523b051616a03c5efc9ac27a7d917d2dffa0734e"
+  },
+  {
+   "run": 3,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-03.txt",
+   "bytes": 51360,
+   "sha256": "f22639b5eecce14176c3f71e815c38253d6b7e8414fc303c9ecce712ed2bbcf0"
+  },
+  {
+   "run": 4,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-04.txt",
+   "bytes": 51360,
+   "sha256": "a37a63487fc2be559ae9c82ed9e6eb2e02876b47f59d297fb9125108112010ff"
+  },
+  {
+   "run": 5,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-05.txt",
+   "bytes": 51360,
+   "sha256": "ed5dba0a2638e895ced9950dcba60dc8f33845f506238bdab0bdf9d0f26db0ea"
+  },
+  {
+   "run": 6,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-06.txt",
+   "bytes": 51360,
+   "sha256": "86d776a878c12713ca5ffe5cd287da166f371013608c702d3bd3906789c9e905"
+  },
+  {
+   "run": 7,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-07.txt",
+   "bytes": 51360,
+   "sha256": "68d47fe26311504eea4b92211d0d17eb9c3442858787fa3ea77efa930d349573"
+  },
+  {
+   "run": 8,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-08.txt",
+   "bytes": 51360,
+   "sha256": "a44d4f61d672e73a09d58d6d7efcd003275b98d3951fdf5d4667492148a82127"
+  },
+  {
+   "run": 9,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-09.txt",
+   "bytes": 51360,
+   "sha256": "6deedfb5c774f4d1c409e1a5455978f0e4e74ad42abfc4ff9c3b5b11033fdf16"
+  },
+  {
+   "run": 10,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-10.txt",
+   "bytes": 51360,
+   "sha256": "f407c0e9aa381e381d6c4cf57eaef1ea6b10cb199635380bb119993d8f928bba"
+  },
+  {
+   "run": 11,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-11.txt",
+   "bytes": 51360,
+   "sha256": "d27d5a3b5c288db7112c487c13f8decca6b46e44475bb668bde76c1df063ec74"
+  },
+  {
+   "run": 12,
+   "file": "ddr3-matvec-measure-2026-09-28-down-proj-8d1bdf5-d5.uart/run-12.txt",
+   "bytes": 51360,
+   "sha256": "8118d1879d5db7547d79f5be65f2229a5cdf8d32947e74c8f0129c9da563106c"
+  }
+ ],
+ "statistic": {
+  "runs": 12,
+  "min": 204900276.2,
+  "median": 204900276.2,
+  "max": 204900276.2,
+  "mean": 204900276.2,
+  "sample_sd": 0.0
+ },
+ "memory_bound": {
+  "consumer_stalls_zero": false,
+  "verdict": "not established: Y output is deferred, but the matvec consumer and request policy can still limit throughput"
+ },
+ "ceiling": {
+  "arithmetic_weights_per_s": 4712727272.727273,
+  "note": "x16: 128 bits per controller clock, 80 dense5 or 64 baseline2 weights; zero-padding excluded from logical weights/s; arithmetic only, not measured delivery"
+ }
+}

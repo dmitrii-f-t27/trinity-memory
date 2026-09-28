@@ -2,14 +2,14 @@
 """Issue #65, consumer (B): the device matvec's weights per second from DDR3,
 dense5 (1.6 bits/weight) vs baseline2 (2 bits/weight), with error bars.
 
-The chunk is loaded once per format (the golden 320-row q_proj chunk through
-the #63 loader); every run then rings the doorbell with a fresh counter and
+The selected rows of q_proj (default: 320) or down_proj are loaded once per
+format through the #63 loader; every run rings the doorbell with a fresh counter and
 reads the summary lines (d run, c words + cycles, o max outstanding +
 command stalls, w issue-hold cycles + wait stalls, n bad words + consumer stalls, u act words,
 z runs + total bad). Weights/s = logical trits x f_ctrl / cycles, per run;
 the report carries min/median/max and mean +- sample s.d. (at least --runs
 runs), the bitstream sha256 of the flashed build, IDCODE and DNA, and the
-bit-exactness verdict of the first run's 320 Y lines against the reference
+bit-exactness verdict of the first run's Y lines against the reference
 (computed from the cached fixtures, sha-tied to the committed golden report).
 
   python3 tools/fpga-ddr3-matvec-measure.py --port /dev/cu.usbserial-10 \
