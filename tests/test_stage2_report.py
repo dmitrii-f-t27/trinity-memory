@@ -36,9 +36,11 @@ class Stage2ReportTest(unittest.TestCase):
         for row in report["measurement"]["rows"]:
             self.assertEqual(row["runs"], 2)
             self.assertEqual(row["cycles_mean"], 200)
-            self.assertEqual(row["consumer_stalls_per_run"], 20)
-            self.assertEqual(row["consumer_stalls_percent"], 10)
-            self.assertEqual(row["wait_stalls_percent"], 75)
+            self.assertIsNone(row["consumer_stalls_per_run"])
+            self.assertIsNone(row["consumer_stalls_percent"])
+            self.assertEqual(row["wait_stalls_per_run"], 20)
+            self.assertEqual(row["wait_stalls_percent"], 10)
+            self.assertEqual(row["issue_hold_cycles_percent"], 75)
             self.assertEqual(row["command_stalls_percent"], 2)
             self.assertEqual(row["weights_per_s_mean"], 30)
             self.assertEqual(row["weights_per_s_sd"], 14.1)
@@ -52,11 +54,41 @@ class Stage2ReportTest(unittest.TestCase):
         report = tool.build()
         dense, baseline = report["measurement"]["rows"]
         self.assertEqual(dense["runs"], 12)
-        self.assertAlmostEqual(dense["consumer_stalls_percent"], 0.246482, places=5)
-        self.assertAlmostEqual(dense["wait_stalls_percent"], 99.944, places=2)
-        self.assertGreater(baseline["consumer_stalls_percent"], 0.30)
-        self.assertLess(baseline["consumer_stalls_percent"], 0.31)
+        self.assertAlmostEqual(dense["wait_stalls_percent"], 0.246482, places=5)
+        self.assertAlmostEqual(dense["issue_hold_cycles_percent"], 99.944, places=2)
+        self.assertGreater(baseline["wait_stalls_percent"], 0.30)
+        self.assertLess(baseline["wait_stalls_percent"], 0.31)
+        self.assertIsNone(dense["consumer_stalls_percent"])
+        self.assertIsNone(baseline["consumer_stalls_percent"])
+        self.assertEqual(dense["arithmetic_weights_per_s"], 4_800_000_000)
+        self.assertEqual(baseline["arithmetic_weights_per_s"], 3_840_000_000)
         self.assertNotEqual(dense["cycles_mean"], tool.load("measure_d5")["runs"][0]["cycles"])
+
+    def test_golden_uart_lines_recover_actual_consumer_stalls(self):
+        gold = tool.build()["measurement"]["counter_correction"]["golden_runs"]
+        self.assertEqual(gold["dense5"]["consumer_stalls"], 19)
+        self.assertEqual(gold["baseline2"]["consumer_stalls"], 65)
+        self.assertEqual(gold["dense5"]["wait_stalls"], 81932)
+        self.assertEqual(gold["dense5"]["issue_hold_cycles"], 33218427)
+
+    def test_summary_rejects_missing_duplicate_and_invalid_counters(self):
+        lines = tool.load("golden_d5")["summary_lines"]
+        bad_cases = [lines[:-1], lines + [lines[0]],
+                     [line if line[0] != "c" else ["c", 1, 0] for line in lines],
+                     [line if line[0] != "n" else ["n", 0, -1] for line in lines]]
+        for bad in bad_cases:
+            with self.subTest(lines=bad), self.assertRaises(ValueError):
+                tool.decode_run_summary(bad)
+
+    def test_v2_replays_raw_lines_and_v1_does_not_invent_missing_counters(self):
+        lines = tool.load("golden_d5")["summary_lines"]
+        fresh = {"schema": "trinity.fpga-ddr3-matvec-measure.v2",
+                 "runs": [{"summary_lines": lines, "consumer_stalls": 123456}]}
+        self.assertEqual(tool.corrected_runs(fresh)[0]["consumer_stalls"], 19)
+        old = tool.load("measure_d5")
+        corrected = tool.corrected_runs(old)
+        self.assertIsNone(corrected[0]["consumer_stalls"])
+        self.assertEqual(old["runs"][0]["consumer_stalls"], 81931)
 
     def test_check_accepts_published_report(self):
         with contextlib.redirect_stdout(io.StringIO()):

@@ -21,6 +21,10 @@ import hashlib
 import json
 import pathlib
 import statistics
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from matvec_device_model import decode_run_summary
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 R = ROOT / "reports/fpga"
@@ -51,13 +55,25 @@ def fmt(x: float) -> str:
     return f"{x:,.0f}"
 
 
+def corrected_runs(measurement: dict) -> list[dict]:
+    if measurement["schema"] == "trinity.fpga-ddr3-matvec-measure.v1":
+        # Preserve the historical captures byte-for-byte. The v1 writer saved
+        # w.a as wait_stalls and w.b as consumer_stalls, and discarded n.b.
+        return [{**r, "issue_hold_cycles": r["wait_stalls"],
+                 "wait_stalls": r["consumer_stalls"], "consumer_stalls": None}
+                for r in measurement["runs"]]
+    if measurement["schema"] == "trinity.fpga-ddr3-matvec-measure.v2":
+        return [{**r, **decode_run_summary(r["summary_lines"])} for r in measurement["runs"]]
+    raise ValueError(f"unknown measurement schema: {measurement['schema']}")
+
+
 def build() -> dict:
     gd5, gb2 = load("golden_d5"), load("golden_b2")
     md5, mb2 = load("measure_d5"), load("measure_b2")
     bd5, bb2 = load("build_d5"), load("build_b2")
 
     def row(m: dict, fmt_name: str, bits: float) -> dict:
-        runs = m["runs"]
+        runs = corrected_runs(m)
         speeds = [r["weights_per_s"] for r in runs]
         cycles = sum(r["cycles"] for r in runs)
         if len(runs) < 2 or any(r["cycles"] <= 0 for r in runs):
@@ -70,16 +86,19 @@ def build() -> dict:
                 "weights_per_s_sd": round(s["sample_sd"], 1),
                 "weights_per_s_sd_percent": round(100 * s["sample_sd"] / s["mean"], 6),
                 "weights_per_s_min": s["min"], "weights_per_s_max": s["max"],
-                **{f"{kind}_stalls_per_run": round(statistics.mean(r[f"{kind}_stalls"] for r in runs), 3)
-                   for kind in ("consumer", "wait", "command")},
-                **{f"{kind}_stalls_percent": round(100 * sum(r[f"{kind}_stalls"] for r in runs) / cycles, 6)
-                   for kind in ("consumer", "wait", "command")}}
+                **{f"{key}_per_run": (round(statistics.mean(r[key] for r in runs), 3)
+                                      if all(r[key] is not None for r in runs) else None)
+                   for key in ("issue_hold_cycles", "consumer_stalls", "wait_stalls", "command_stalls")},
+                **{f"{key}_percent": (round(100 * sum(r[key] for r in runs) / cycles, 6)
+                                      if all(r[key] is not None for r in runs) else None)
+                   for key in ("issue_hold_cycles", "consumer_stalls", "wait_stalls", "command_stalls")},
+                "arithmetic_weights_per_s": m["clock"]["ctrl_hz"] * m["format"]["lanes_per_word"]}
 
     rows = [row(md5, "dense5", 1.6), row(mb2, "baseline2", 2.0)]
     ratio = rows[0]["weights_per_s_mean"] / rows[1]["weights_per_s_mean"]
 
     report = {
-        "schema": "trinity.stage2-report.v1",
+        "schema": "trinity.stage2-report.v2",
         "written_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "issue": "dmitrii-f-t27/trinity-memory#67", "epic": "#59",
         "what_ran": {
@@ -107,20 +126,29 @@ def build() -> dict:
             "aggregation": "Counter values per run are arithmetic means over all runs; "
                            "stall percentages are 100 * summed counter / summed cycles. "
                            "Stall counters can overlap and are not an additive cycle breakdown.",
+            "counter_correction": {
+                "source_schema": "trinity.fpga-ddr3-matvec-measure.v1",
+                "mapping": "v1 wait_stalls is w.a (issue-hold cycles); v1 consumer_stalls is "
+                           "w.b (request-wait cycles). Actual consumer stalls are n.b, discarded by v1.",
+                "missing": "Consumer stalls for the 12-run series cannot be recovered; null is unknown, not zero.",
+                "golden_runs": {"dense5": decode_run_summary(gd5["summary_lines"]),
+                                "baseline2": decode_run_summary(gb2["summary"])},
+                "golden_scope": "Separate golden runs have 19 (dense5) and 65 (baseline2) consumer stalls; "
+                                "these are not the missing 12-run measurements.",
+            },
             "ratio_d5_b2": round(ratio, 4),
             "ratio_ceiling": 1.25,
             "memory_bound": {
-                "definition": "consumer stalls 0 in both formats",
+                "definition": "Memory-limited delivery requires a test isolated from result-output backpressure.",
                 "observed": "; ".join(
-                    f"{r['format']}: mean consumer stalls {r['consumer_stalls_per_run']:,.3f} "
-                    f"of {r['cycles_mean']:,.3f} cycles ({r['consumer_stalls_percent']:.4f}%); "
-                    f"wait stalls {r['wait_stalls_percent']:.4f}%"
+                    f"{r['format']}: request issue held {r['issue_hold_cycles_percent']:.4f}% of cycles; "
+                    f"request wait {r['wait_stalls_percent']:.4f}%; "
+                    "consumer stalls unavailable in the 12-run capture"
                     for r in rows),
-                "verdict": "latency-bound under the serialized read discipline; NOT "
-                           "bus-rate. The 1.25 format ratio is unreachable at this "
-                           f"operating point (measured ratio {ratio:.4f}); the arbiter-free "
-                           "pattern test of #61 streamed the same port, so the seam to "
-                           "fix is the arbiter, not the DRAM.",
+                "verdict": "DDR3 latency as the bottleneck is not established. The timed matvec includes "
+                           "UART result backpressure: y_pending stops FIFO consumption until the emitter "
+                           "accepts the row. Separate computation from result emission before testing "
+                           f"the bandwidth thesis (measured dense5/baseline2 ratio {ratio:.4f}).",
         },
         },
         "not_measured": [
@@ -179,13 +207,9 @@ the t27/C reference (first rows __FIRST__).</p>
 __ROWS__
 </table>
 <p>Ratio dense5/baseline2 = <b>__RATIO__</b> against the arithmetic ceiling 1.25.
-The point is <b>latency-bound</b>. __STALLS__.
-__AGGREGATION__ Under the serialized
-read discipline the port requires, each 128-bit word costs its fixed latency
-whatever it carries (64 or 80 trits) &mdash; the 1.6-bit format buys nothing
-here. The 1.25 test needs pipelined reads through the arbiter; the
-arbiter-free pattern test of #61 streamed the same port, so the seam to fix
-is the arbiter, not the DRAM.</p>
+__STALLS__. __AGGREGATION__</p>
+<p class="warn">__COUNTER_CORRECTION__ __MISSING_COUNTERS__ __GOLDEN_SCOPE__</p>
+<p class="warn">__VERDICT__</p>
 
 <h2>Not measured</h2>
 <ul>__NOTMEASURED__</ul>
@@ -220,26 +244,27 @@ def render(report: dict) -> str:
         .replace("__RATIO__", f"{report['measurement']['ratio_d5_b2']:.4f}")
         .replace("__STALLS__", report["measurement"]["memory_bound"]["observed"])
         .replace("__AGGREGATION__", report["measurement"]["aggregation"])
+        .replace("__COUNTER_CORRECTION__", report["measurement"]["counter_correction"]["mapping"])
+        .replace("__MISSING_COUNTERS__", report["measurement"]["counter_correction"]["missing"])
+        .replace("__GOLDEN_SCOPE__", report["measurement"]["counter_correction"]["golden_scope"])
+        .replace("__VERDICT__", report["measurement"]["memory_bound"]["verdict"])
         .replace("__NOTMEASURED__", "".join(f"<li>{t}</li>" for t in report["not_measured"])))
 
 
 def measurement_markdown(report: dict) -> str:
     rows = report["measurement"]["rows"]
-    table = ["| Format | bits/weight | weights/s (mean, +- sample s.d.) | runs | consumer stalls/run (mean) | consumer stalls/cycles | wait stalls/cycles |",
+    table = ["| Format | bits/weight | weights/s (mean, +- sample s.d.) | runs | issue-hold/cycles | request-wait/cycles | consumer stalls |",
              "|---|---|---|---|---|---|---|"]
     for r in rows:
         table.append(f"| {r['format']} | {r['bits_per_weight']} | "
                      f"{fmt(r['weights_per_s_mean'])} +- {fmt(r['weights_per_s_sd'])} | {r['runs']} | "
-                     f"{r['consumer_stalls_per_run']:,.3f} | {r['consumer_stalls_percent']:.4f}% | "
-                     f"{r['wait_stalls_percent']:.4f}% |")
+                     f"{r['issue_hold_cycles_percent']:.4f}% | {r['wait_stalls_percent']:.4f}% | unknown |")
     return "\n".join(table) + f"\n\n{report['measurement']['aggregation']}\n\n" + (
         f"The dense5/baseline2 throughput ratio is {report['measurement']['ratio_d5_b2']:.4f} "
-        "(arithmetic ceiling 1.25). The point is latency-bound, not bus-rate. "
-        "The 1.25 format ratio is unreachable at this operating point; the "
-        "arbiter-free pattern test of #61 streamed the same port at bus rate, "
-        "so pipelining through the arbiter/controller seam remains the next "
-        "bandwidth test (#62, #65). Not measured: power, tokens per second, "
-        "model quality, x32, DDR3 above 480 MT/s.\n")
+        "(arithmetic ceiling 1.25). " + report["measurement"]["memory_bound"]["verdict"] + "\n\n" +
+        report["measurement"]["counter_correction"]["mapping"] + " " +
+        report["measurement"]["counter_correction"]["missing"] + " " +
+        report["measurement"]["counter_correction"]["golden_scope"] + "\n")
 
 
 def update_document(text: str, report: dict) -> str:

@@ -148,3 +148,31 @@ def run_lines(run: int, polls: int, words: int, cycles: int, cmd: int, wait: int
 
 def timeout_line(acks: int, acts_phase: bool, fmt: int, run: int) -> tuple[int, int, int]:
     return "t", acks, ((1 << 36) if acts_phase else 0) | (fmt << 32) | run
+
+
+def decode_run_summary(lines) -> dict:
+    """Decode the actual run_a/run_b UART contract; never default a lost line to zero."""
+    by = {}
+    summary = []
+    for tag, a, b in lines:
+        if tag not in "dcownuz":
+            continue
+        if tag in by:
+            raise ValueError(f"duplicate matvec summary tag {tag}")
+        if not isinstance(a, int) or not isinstance(b, int) or not (0 <= a <= M32 and 0 <= b <= B40):
+            raise ValueError(f"invalid matvec summary values for {tag}")
+        by[tag] = (a, b)
+        summary.append([tag, a, b])
+    missing = set("dcownuz") - by.keys()
+    if missing:
+        raise ValueError(f"missing matvec summary tags: {','.join(sorted(missing))}")
+    if not by["c"][1]:
+        raise ValueError("matvec cycle count is zero")
+    return {"device_run": by["d"][0], "polls": by["d"][1],
+            "words": by["c"][0], "cycles": by["c"][1],
+            "max_outstanding": by["o"][0], "command_stalls": by["o"][1],
+            "issue_hold_cycles": by["w"][0], "wait_stalls": by["w"][1],
+            "bad_words": by["n"][0], "consumer_stalls": by["n"][1],
+            "activation_words": by["u"][0], "stray_acks": by["u"][1],
+            "runs_done": by["z"][0], "total_bad": by["z"][1],
+            "summary_lines": summary}

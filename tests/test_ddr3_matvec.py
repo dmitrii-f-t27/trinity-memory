@@ -83,6 +83,23 @@ class MatvecFunctions(unittest.TestCase):
         for cols in (1, 16, 2560, 6912, 7168):
             self.assertEqual(self.functions["act_words_of"](cols, 0), model.act_words_of(cols))
 
+    def test_host_summary_decoder_matches_generated_rtl_contract_functions(self):
+        # Distinct sentinels detect swapped UART halves and shifted tags.
+        run_a, run_b = self.lib.run_a, self.lib.run_b
+        run_a.argtypes, run_a.restype = [C.c_uint32] * 8, C.c_uint32
+        run_b.argtypes = [C.c_uint64] * 5 + [C.c_uint32, C.c_uint64, C.c_uint32]
+        run_b.restype = C.c_uint64
+        lines = [(tag, run_a(3, 10240, 4, 900, 0, 160, 7, i),
+                  run_b(11, 1000, 12, 13, 14, 15, 0, i))
+                 for i, tag in enumerate("dcownuz")]
+        decoded = model.decode_run_summary(lines)
+        self.assertEqual(decoded["cycles"], 1000)
+        self.assertEqual(decoded["issue_hold_cycles"], 900)
+        self.assertEqual(decoded["command_stalls"], 12)
+        self.assertEqual(decoded["wait_stalls"], 13)
+        self.assertEqual(decoded["consumer_stalls"], 14)
+        self.assertEqual(decoded["stray_acks"], 15)
+
 
 @unittest.skipUnless(HAVE_TOOLS, "build/compiler t27c and Icarus required")
 class MatvecSimulation(unittest.TestCase):
