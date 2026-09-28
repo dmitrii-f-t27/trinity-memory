@@ -12,6 +12,8 @@
 double tm_json_strtod(uint8_t *text) { (void)text; __builtin_trap(); }
 #include "json.h"
 #include "formats.h"
+#include "runtimes.h"
+#include "live.h"
 /* The Ternary Check contract (t27/ternary_contract.t27): the strict reader and
  * writer behind the CLI contract, class tokens, comparison and verdicts. */
 #include "ternary_contract.h"
@@ -22,6 +24,51 @@ double tm_json_strtod(uint8_t *text) { (void)text; __builtin_trap(); }
 #include "matvec.h"
 /* The compatibility matrix cells (issue #32): t27/matrix.t27 over formats.h. */
 #include "matrix.h"
+
+/* The live ABI exposes field accessors, so JavaScript never guesses C struct
+ * padding. The header walk deliberately omits the optional per-tensor arrays. */
+uint32_t tlv_wasm_walk_size(void) { return sizeof(TLVWalk); }
+uint32_t tlv_wasm_run_size(void) { return sizeof(TLVRun); }
+int32_t tlv_wasm_walk(uint8_t *data, size_t size, uint64_t file_size,
+                      int32_t runtime, TLVWalk *out) {
+    int32_t status[1], fit[1];
+    uint32_t types[1];
+    uint64_t names[1], lengths[1];
+    return tlv_walk(data, 0, size, file_size, runtime, status, fit, types,
+                    names, lengths, 0, out);
+}
+uint64_t tlv_wasm_walk_field(TLVWalk *out, uint32_t field) {
+    switch (field) {
+    case 0: return (uint64_t)(int64_t)out->status;
+    case 1: return (uint64_t)(int64_t)out->reader;
+    case 2: return out->needed;
+    case 3: return out->version;
+    case 4: return out->keys;
+    case 5: return out->tensors;
+    case 6: return out->data_start;
+    case 7: return out->alignment;
+    case 8: return out->ternary;
+    case 9: return out->ternary_ok;
+    case 10: return out->misfit_ternary;
+    case 11: return out->misfit_other;
+    case 12: return out->read;
+    case 13: return out->record;
+    case 14: return out->expected;
+    case 15: return out->found;
+    default: return UINT64_MAX;
+    }
+}
+uint64_t tlv_wasm_run_field(TLVRun *out, uint32_t field) {
+    switch (field) {
+    case 0: return (uint64_t)(int64_t)out->verdict;
+    case 1: return (uint64_t)(int64_t)out->status;
+    case 2: return out->part;
+    case 3: return out->record;
+    case 4: return out->expected;
+    case 5: return out->found;
+    default: return UINT64_MAX;
+    }
+}
 
 /* Freestanding wasm32 has no compiler runtime. clang turns the u64 overflow
  * test in tf_times (a > max / b, then a * b) into a 128-bit multiply, which
