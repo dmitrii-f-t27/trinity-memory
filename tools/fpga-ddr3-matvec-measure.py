@@ -105,6 +105,7 @@ def main() -> int:
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--cable", default="digilent_hs2")
     ap.add_argument("--fmt", choices=("d5", "b2"), required=True)
+    ap.add_argument("--tensor", choices=tuple(run_tool.TENSORS), default="q_proj")
     ap.add_argument("--rows", type=int, default=320)
     ap.add_argument("--runs", type=int, default=12)
     ap.add_argument("--design-hz", type=float, default=60000000.0)
@@ -116,22 +117,17 @@ def main() -> int:
 
     fmt = model.FMT_D5 if args.fmt == "d5" else model.FMT_B2
     lanes = model.LANES[fmt]
-    cols = 2560
-    trits_total = args.rows * cols
-
     build = json.loads(Path(args.build).read_text())
     print(f"reference: computing from the cached fixtures ({args.fmt}) ...", flush=True)
-    trits, acts, expected, _ = run_tool.chunk_reference(args.rows)
-    import struct
+    trits, acts, expected, cols = run_tool.chunk_reference(args.rows, args.tensor)
+    reference = next(t for t in json.loads(run_tool.GOLDEN.read_text())["tensors"]
+                     if t["tensor"].get("hf") == run_tool.TENSORS[args.tensor])
+    logical_cols = reference["tensor"]["shape"][1]
+    trits_total = args.rows * logical_cols
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
-    stream = bytearray()
-    for r in range(args.rows):
-        for w in range(cols // lanes):
-            lo, hi = model.encode_word(fmt, model.lane_word(trits, r * cols + w * lanes))
-            stream += struct.pack("<QQ", lo, hi)
     weights = work / f"weights.{args.fmt}.bin"
-    weights.write_bytes(stream)
+    weights.write_bytes(run_tool.weight_stream(trits, cols, args.rows, fmt))
     act_path = work / "activations.int8.bin"
     act_path.write_bytes(bytes(v & 255 for v in acts))
 
@@ -151,10 +147,12 @@ def main() -> int:
             print(f"run {n}: {exc} — stopping", flush=True)
             return 1
         words, cycles = counters["words"], counters["cycles"]
-        if counters["device_run"] != n or words != trits_total // lanes or counters["bad_words"]:
+        if (counters["device_run"] != n or words != args.rows * cols // lanes
+                or counters["bad_words"] or counters["stray_acks"]):
             print(f"run {n}: wrong run, word count or bad words — stopping", flush=True)
             return 1
-        exact = len(y) == args.rows and y == expected
+        exact = (len(y) == args.rows and y == expected
+                 and [a for tag, a, _ in lines if tag == "y"] == list(range(args.rows)))
         if first_y is None:
             first_y = {"y_lines": len(y), "bit_exact": exact,
                        "first": y[:4], "expected": expected[:4]}
@@ -182,11 +180,13 @@ def main() -> int:
         "issue": "dmitrii-f-t27/trinity-memory#65", "consumer": "B (device matvec of #64)",
         "format": {"name": "dense5" if fmt == model.FMT_D5 else "baseline2",
                    "bits_per_weight": 1.6 if fmt == model.FMT_D5 else 2.0,
+                   "stored_bits_per_logical_weight": 128 * cols / (lanes * logical_cols),
                    "lanes_per_word": lanes},
         "clock": {"ctrl_hz": args.design_hz,
                   "source": "PLL 6/5 from the board's 200 MHz oscillator (derived, not instrument-measured)"},
-        "chunk": {"rows": args.rows, "cols": cols, "weights": trits_total,
-                  "model": "BitNet b1.58 2B4T layer-0 self_attn.q_proj rows 0-319",
+        "chunk": {"rows": args.rows, "cols": logical_cols, "weights": trits_total,
+                  "device_cols": cols, "zero_padding_cols": cols - logical_cols,
+                  "model": f"BitNet b1.58 2B4T {run_tool.TENSORS[args.tensor]} rows 0-{args.rows - 1}",
                   "activations": "t27 tmv_activations seed 27",
                   "reference": "trinity_memory.matvec from the cached fixtures, sha-tied to "
                                "reports/ternary-check/matvec-2026-09-23.json"},
@@ -203,9 +203,9 @@ def main() -> int:
                          "verdict": ("not established: Y output is deferred, but the matvec consumer and "
                                      "request policy can still limit throughput" if deferred else
                                      "not established: result-output isolation is not demonstrated")},
-        "ceiling": {"arithmetic_weights_per_s": args.design_hz * lanes,
+        "ceiling": {"arithmetic_weights_per_s": args.design_hz * lanes * logical_cols / cols,
                     "note": "x16: 128 bits per controller clock, 80 dense5 or 64 baseline2 weights; "
-                            "arithmetic only, not measured delivery"},
+                            "zero-padding excluded from logical weights/s; arithmetic only, not measured delivery"},
     }
     Path(args.output).write_text(json.dumps(report, indent=1))
     print(json.dumps(stat, indent=1))
