@@ -19,12 +19,15 @@ module TrinityFpgaWbArbiterT27;
 // the controller from the next clock on. So a master keeps the port for a whole
 // chunk or phase, and every ack reaches the master that issued its request. An ack
 // with nothing outstanding is counted as stray and passed to the owner.
+// preempt_read1 optionally drains a continuously busy read-only master 1 when
+// master 0 is waiting; the default board wiring leaves this disabled.
 // cyc to the controller is always high (as the #61/#62 builds drive it): UberDDR3
 // then never drops a request in flight.
 // `m1_write` (to master 0's `invalidate`): master 1 had a write taken, so a word the
 // loader keeps may be stale.
 // Every statement of on_clock reads a variable before the same tick writes it.
 var owner: u32 = 0;
+var draining1: bool = false;
 var outst: u32 = 0;
 var switches: u32 = 0;
 var stray: u32 = 0;
@@ -83,29 +86,29 @@ var out_dec: u32;
 var m1_write: bool;
 own0 = owner == 0;
 cyc = true;
-stb = pickb(own0, m0_stb, m1_stb);
+stb = pickb(own0, m0_stb, m1_stb && !draining1);
 we = pickb(own0, m0_we, m1_we);
 addr = pick(own0, m0_addr, m1_addr);
 sel = pick(own0, m0_sel, m1_sel);
 lo = pick64(own0, m0_lo, m1_lo);
 hi = pick64(own0, m0_hi, m1_hi);
 m0_stall = !own0 || wb_stall;
-m1_stall = own0 || wb_stall;
+m1_stall = own0 || wb_stall || draining1;
 m0_ack = own0 && wb_ack;
 m1_ack = !own0 && wb_ack;
 taken = stb && !wb_stall;
 own_cyc = pickb(own0, m0_cyc, m1_cyc);
 other_cyc = pickb(own0, m1_cyc, m0_cyc);
-handover = !own_cyc && outst == 0 && other_cyc;
+handover = (!own_cyc || draining1) && outst == 0 && other_cyc;
 ack_counted = wb_ack && outst != 0;
 out_inc = outst + 1;
 out_dec = outst - 1;
 out_next = out_sel(taken, ack_counted, outst, out_inc, out_dec);
-m1_write = !own0 && m1_stb && m1_we && !wb_stall;
+m1_write = !own0 && taken && m1_we;
 
 fn on_clock(m0_cyc: bool, m0_stb: bool, m0_we: bool, m0_addr: u32, m0_sel: u32, m0_lo: u64, m0_hi: u64,
             m1_cyc: bool, m1_stb: bool, m1_we: bool, m1_addr: u32, m1_sel: u32, m1_lo: u64, m1_hi: u64,
-            wb_stall: bool, wb_ack: bool) {
+            wb_stall: bool, wb_ack: bool, preempt_read1: bool) {
     if (wb_ack && outst == 0) { stray = stray + 1; }
     if (outst > max_outst) { max_outst = outst; }
     outst = out_next;
@@ -113,7 +116,18 @@ fn on_clock(m0_cyc: bool, m0_stb: bool, m0_we: bool, m0_addr: u32, m0_sel: u32, 
     if (taken && !own0) { taken1 = taken1 + 1; }
     if (m0_stb && !own0) { waits0 = waits0 + 1; }
     if (m1_stb && own0) { waits1 = waits1 + 1; }
+    // A faster read-only consumer can keep requests outstanding continuously.
+    // Give master 0 a turn without withdrawing a request stalled at the DDR3
+    // port: start draining only after an acceptance or a clock with no strobe.
+    // All old acks still go to master 1 until its outstanding count is zero.
+    // This opt-in applies only to read-only master 1; master 0's chunks remain
+    // uninterrupted. The matvec wiring enables it with compute_pipeline.
+    if (preempt_read1 && !own0 && m0_cyc && !m1_we && (!stb || taken)) {
+        draining1 = true;
+    }
+    if (own0 || !m0_cyc) { draining1 = false; }
     if (handover) {
+        draining1 = false;
         owner = pick(own0, 1, 0);
         switches = switches + 1;
     }

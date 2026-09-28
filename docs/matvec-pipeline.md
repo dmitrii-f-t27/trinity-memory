@@ -132,3 +132,16 @@ q_proj and down_proj fixture simulations exercise the new consumer.
 
 Physical speedup, routed timing and resource use must be established by retained
 board captures before treating the new mode as board-validated.
+
+The faster consumer exposed starvation in the original arbiter: it could keep
+reads outstanding throughout a complete golden chunk, preventing the loader
+(master 0) from completing during the weight phase. In the new compute mode,
+`preempt_read1` drains master 1 when master 0 is waiting. The arbiter stops
+presenting new reads only after a request has been accepted or while no strobe
+is presented; all accepted reads are acknowledged to their original owner
+before handover. A controller request held by `stall` is never withdrawn.
+Master 0 still owns its complete chunk, and the reference compute mode retains
+the original arbitration. Shared-port tests require master 0 to make progress
+and monitor request stability while stalled. Simulation failures now include
+the simulator output so an arbitration failure is not hidden by a subprocess
+exception.
