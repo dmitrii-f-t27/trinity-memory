@@ -1,19 +1,29 @@
 name: Ternary Check Live
-# Issues #48-#55: every public ternary GGUF model on the Hugging Face Hub (one
-# file, or the parts of a split model), checked from its headers. Discovery and
-# range reads are anonymous (no token is sent) and throttled; nothing past the
-# first 256 MiB of a file is read, so the weights are not downloaded. Every
-# verdict is made by the t27 library built here (t27/live.t27 over
-# t27/runtimes.t27); then every cached header is fed to the real GGUF readers
-# of the pinned runtimes (tools/live-replay.sh) and each answer is compared with
-# the t27 reader's. The job log and the step summary hold counts only; the
-# report is a short-lived artifact. Publishing is issue #53 and #54. Nothing is
-# posted anywhere.
+# Scheduled/manual runs scan public Hub headers and replay pinned readers.
+# Pushes rebuild the checker and reuse the last published scan when available.
+# Range reads are anonymous and bounded; a prefix may include weight bytes.
 on:
   push:
-    # Temporary: run the first full scan from the pull request's branch. Removed before merge.
-    branches: [feat/ternary-check-live]
-    paths: ['.github/workflows/ternary-check-live.yml']
+    branches: [master]
+    paths:
+      - '.github/workflows/ternary-check-live.yml'
+      - 'site/live/**'
+      - 'native/wasm_formats.c'
+      - 'native/compiler.lock'
+      - 't27/live.t27'
+      - 't27/runtimes.t27'
+      - 'tools/build-t27*.sh'
+      - 'tools/live-page.py'
+      - 'tests/live_formats_wasm.mjs'
+      - 'tests/live_wasm_vectors.py'
+  pull_request:
+    paths:
+      - '.github/workflows/ternary-check-live.yml'
+      - 'site/live/**'
+      - 'native/wasm_formats.c'
+      - 'tools/build-t27-wasm.sh'
+      - 'tests/live_formats_wasm.mjs'
+      - 'tests/live_wasm_vectors.py'
   schedule:
     - cron: '41 5 * * 1'
   workflow_dispatch:
@@ -27,7 +37,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ternary-check-live
+  group: ternary-check-live-${{ github.event_name == 'pull_request' && github.ref || 'pages' }}
   cancel-in-progress: false
 jobs:
   scan:
@@ -41,6 +51,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -67,15 +80,18 @@ jobs:
       # Headers are cached by their file's LFS SHA-256: a file that did not
       # change since the last run is not read again.
       - uses: actions/cache@v4
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         with:
           path: build/live/headers
           key: live-headers-${{ github.run_id }}
           restore-keys: live-headers-
       - name: Build the upstream GGUF readers of the pinned runtimes
         id: readers
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
         run: sh tools/live-replay.sh
       - name: Scan
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           MIN_DOWNLOADS: ${{ inputs.min_downloads || '100' }}
           LIMIT: ${{ inputs.limit || '0' }}
@@ -90,7 +106,7 @@ jobs:
           set -o pipefail
           python3 -m trinity_memory.live --out build/live/scan.json --replay build/replay 2>&1 | tee -a build/live/scan.log
       - name: Summary
-        if: always()
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         run: |
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import json, os
@@ -123,43 +139,48 @@ jobs:
           else:
               print("\nNo upstream reader was replayed.")
           PY
-      # Publication (#53/#54): the page, the drift against the last published
-      # report, the badges and the fresh report go to the gh-pages branch. A
-      # failed or rate-limited scan never reaches here (the Scan step fails
-      # the job), so the last good page stays.
+      - name: Test the browser parser and bounded range requests
+        run: node tests/live_formats_wasm.mjs
       - name: Fetch the last published report (for the drift)
-        if: github.event_name != 'push'
+        id: previous
+        if: github.event_name != 'pull_request'
+        env:
+          PAGES_URL: https://dmitrii-f-t27.github.io/trinity-memory/
         run: |
           mkdir -p reports/live
-          curl -fsSL -o reports/live/scan.json "$GH_PAGES_RAW/scan.json" || echo '{"schema":"trinity.ternary-check-live.v2","repositories":[],"started":"first run"}' > reports/live/scan.json
-        env:
-          GH_PAGES_RAW: ${{ format('https://raw.githubusercontent.com/{0}/gh-pages/latest', github.repository) }}
-        if: github.event_name != 'push'
+          code=$(curl -sSL --retry 3 -w '%{http_code}' -o reports/live/scan.json "$PAGES_URL/scan.json")
+          case "$code" in
+            200) echo 'found=true' >> "$GITHUB_OUTPUT" ;;
+            404) printf '%s\n' '{"schema":"trinity.ternary-check-live.v2","repositories":[],"started":"first run"}' > reports/live/scan.json ;;
+            *) echo "Previous report could not be read: HTTP $code" >&2; exit 1 ;;
+          esac
+      - name: Reuse the last published scan on a code push
+        if: github.event_name == 'push' && steps.previous.outputs.found == 'true'
         run: |
-          python3 tools/live-drift.py reports/live/scan.json build/live/scan.json > build/live/drift.json || echo '{"verdicts_moved":[]}' > build/live/drift.json
+          mkdir -p build/live
+          cp reports/live/scan.json build/live/scan.json
+      - name: Render the scan, drift and badges
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.previous.outputs.found == 'true'
+        run: |
+          python3 tools/live-drift.py reports/live/scan.json build/live/scan.json > build/live/drift.json
           python3 tools/live-page.py page build/live/scan.json --out site/live --drift build/live/drift.json
           mkdir -p site/live/badge
-          python3 - <<'PY' >> /tmp/badges.txt
-          import json, subprocess
+          python3 - <<'PYCODE'
+          import json, pathlib, subprocess
           scan = json.load(open("build/live/scan.json"))
           for r in scan["repositories"]:
-              out = subprocess.run(["python3", "tools/live-page.py", "badge", "build/live/scan.json", r["repo"]],
-                                   capture_output=True, text=True)
-              if out.returncode == 0:
-                  open(f"site/live/badge/{r['repo'].replace('/', '--')}.json", "w").write(out.stdout)
-          PY
+              result = subprocess.run(["python3", "tools/live-page.py", "badge", "build/live/scan.json", r["repo"]],
+                                      capture_output=True, text=True, check=True)
+              pathlib.Path(f"site/live/badge/{r['repo'].replace('/', '--')}.json").write_text(result.stdout)
+          PYCODE
           cp build/live/scan.json site/live/scan.json
           cp build/live/drift.json site/live/drift.json
-          cp build/t27/formats.wasm site/live/formats.wasm
-      - name: Deploy to GitHub Pages
-        if: github.event_name != 'push'
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Add the freshly built browser parser
+        run: cp build/t27/formats.wasm site/live/formats.wasm
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: site/live
-          keep_files: false
-          commit_message: "Ternary Check Live: ${{ github.run_id }}"
+          path: site/live
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -170,3 +191,17 @@ jobs:
             build/live/scan.log
             build/live/drift.json
             build/replay/*.log
+  deploy:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: scan
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
