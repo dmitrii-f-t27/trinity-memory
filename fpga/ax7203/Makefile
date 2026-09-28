@@ -527,12 +527,36 @@ DDR3_MATVEC_AADDR  ?= 00001000
 DDR3_MATVEC_DADDR  ?= 00000040
 DDR3_MATVEC_MAGIC  ?= 74337633
 DDR3_MATVEC_CAP    ?= 4
-DDR3_MATVEC_CHPARAM := $(if $(DDR3_MATVEC),-set MATVEC_COLS $(DDR3_MATVEC_COLS) -set MATVEC_ROWS $(DDR3_MATVEC_ROWS) -set MATVEC_FMT $(DDR3_MATVEC_FMT) -set MATVEC_WADDR 32'h$(DDR3_MATVEC_WADDR) -set MATVEC_AADDR 32'h$(DDR3_MATVEC_AADDR) -set MATVEC_DADDR 32'h$(DDR3_MATVEC_DADDR) -set MATVEC_MAGIC 32'h$(DDR3_MATVEC_MAGIC) -set MATVEC_CAP $(DDR3_MATVEC_CAP) )
+# Keep the deployed serial mode available for paired board measurements.
+DDR3_MATVEC_SERIAL_READS ?= 1
+DDR3_MATVEC_READ_GAP ?= 8
+DDR3_MATVEC_DEFER_RESULTS ?= 0
+DDR3_MATVEC_TAG := $(if $(DDR3_MATVEC),-$(DDR3_MATVEC_COLS)-$(DDR3_MATVEC_ROWS)-$(DDR3_MATVEC_FMT)-$(DDR3_MATVEC_CAP)-$(DDR3_MATVEC_SERIAL_READS)-$(DDR3_MATVEC_READ_GAP)-$(DDR3_MATVEC_DEFER_RESULTS)-$(DDR3_MATVEC_WADDR)-$(DDR3_MATVEC_AADDR)-$(DDR3_MATVEC_DADDR)-$(DDR3_MATVEC_MAGIC))
+ifneq ($(DDR3_MATVEC),)
+ifneq ($(words $(DDR3_MATVEC_SERIAL_READS)) $(filter 0 1,$(DDR3_MATVEC_SERIAL_READS)),1 $(DDR3_MATVEC_SERIAL_READS))
+$(error DDR3_MATVEC_SERIAL_READS must be 0 or 1)
+endif
+ifneq ($(words $(DDR3_MATVEC_DEFER_RESULTS)) $(filter 0 1,$(DDR3_MATVEC_DEFER_RESULTS)),1 $(DDR3_MATVEC_DEFER_RESULTS))
+$(error DDR3_MATVEC_DEFER_RESULTS must be 0 or 1)
+endif
+ifneq ($(shell awk 'BEGIN { c="$(DDR3_MATVEC_COLS)"; r="$(DDR3_MATVEC_ROWS)"; f="$(DDR3_MATVEC_FMT)"; k="$(DDR3_MATVEC_CAP)"; g="$(DDR3_MATVEC_READ_GAP)"; d="$(DDR3_MATVEC_DEFER_RESULTS)"; \
+ print (c ~ /^[0-9]+$$/ && c+0>0 && c+0<=7168 && r ~ /^[0-9]+$$/ && r+0>0 && r+0<2147483648 && \
+ f ~ /^[01]$$/ && c % (f==1 ? 80 : 64)==0 && k ~ /^[0-9]+$$/ && k+0>=1 && k+0<=4 && \
+ g ~ /^[0-9]+$$/ && g+0<4294967296 && (d==0 || r+0<=4096)) ? "ok" : "bad" }'),ok)
+$(error invalid matvec shape/read settings: aligned cols 1..7168, rows >0 (<=4096 if deferred), fmt 0/1, cap 1..4, unsigned 32-bit gap required)
+endif
+ifeq ($(DDR3_MATVEC_SERIAL_READS),0)
+ifneq ($(DDR3_MATVEC_READ_GAP),0)
+$(error pipelined reads require DDR3_MATVEC_READ_GAP=0)
+endif
+endif
+endif
+DDR3_MATVEC_CHPARAM := $(if $(DDR3_MATVEC),-set MATVEC_COLS $(DDR3_MATVEC_COLS) -set MATVEC_ROWS $(DDR3_MATVEC_ROWS) -set MATVEC_FMT $(DDR3_MATVEC_FMT) -set MATVEC_WADDR 32'h$(DDR3_MATVEC_WADDR) -set MATVEC_AADDR 32'h$(DDR3_MATVEC_AADDR) -set MATVEC_DADDR 32'h$(DDR3_MATVEC_DADDR) -set MATVEC_MAGIC 32'h$(DDR3_MATVEC_MAGIC) -set MATVEC_CAP $(DDR3_MATVEC_CAP) -set MATVEC_SERIAL_READS $(DDR3_MATVEC_SERIAL_READS) -set MATVEC_READ_GAP $(DDR3_MATVEC_READ_GAP) -set MATVEC_DEFER_RESULTS $(DDR3_MATVEC_DEFER_RESULTS) )
 DDR3_READER_CHPARAM := $(if $(DDR3_READER),-set READER_TRITS $(DDR3_READER_TRITS) -set READER_SEED $(DDR3_READER_SEED) -set READER_CAP $(DDR3_READER_CAP) -set READER_RUNS $(DDR3_READER_RUNS) )
 DDR3_PATTERN_TAG := $(DDR3_PATTERN)-$(DDR3_PATTERN_BURSTS)-$(DDR3_PATTERN_HOLD)-$(DDR3_PATTERN_ROUNDS)-uart$(DDR3_UART_DEBUG_BIST)
 DDR3_PATTERN_VARIANT := PATTERN_TEST $(DDR3_PATTERN)$(if $(filter 1,$(DDR3_PATTERN)), (bursts $(DDR3_PATTERN_BURSTS)$(comma) hold $(DDR3_PATTERN_HOLD) clocks$(comma) rounds $(DDR3_PATTERN_ROUNDS)))$(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(comma) UART_DEBUG_BIST 1 (ddr3_top uart_tx on N15$(comma) 9600 baud))
 # The reader's variant names READER (tools/fpga-ddr3-capture.py reads it) and no PATTERN_TEST.
-DDR3_APP_VARIANT := $(if $(DDR3_READER),READER (trits $(DDR3_READER_TRITS)$(comma) seed $(DDR3_READER_SEED)$(comma) cap $(DDR3_READER_CAP)$(comma) runs $(DDR3_READER_RUNS)),$(if $(DDR3_MATVEC),MATVEC (device dot of issue 64$(comma) cols $(DDR3_MATVEC_COLS)$(comma) rows $(DDR3_MATVEC_ROWS)$(comma) doorbell 0x$(DDR3_MATVEC_DADDR)$(comma) through the loader UART),$(if $(DDR3_LOADER),LOADER (UART 115200 baud$(comma) timeout 50 ms$(comma) probation 3 s$(comma) store 2^29 bytes$(comma) arbiter master 1 idle),$(DDR3_PATTERN_VARIANT))))
+DDR3_APP_VARIANT := $(if $(DDR3_READER),READER (trits $(DDR3_READER_TRITS)$(comma) seed $(DDR3_READER_SEED)$(comma) cap $(DDR3_READER_CAP)$(comma) runs $(DDR3_READER_RUNS)),$(if $(DDR3_MATVEC),MATVEC (device dot of issue 64$(comma) cols $(DDR3_MATVEC_COLS)$(comma) rows $(DDR3_MATVEC_ROWS)$(comma) format $(DDR3_MATVEC_FMT)$(comma) cap $(DDR3_MATVEC_CAP)$(comma) serial_reads $(DDR3_MATVEC_SERIAL_READS)$(comma) read_gap $(DDR3_MATVEC_READ_GAP)$(comma) defer_results $(DDR3_MATVEC_DEFER_RESULTS)$(comma) doorbell 0x$(DDR3_MATVEC_DADDR)$(comma) through the loader UART),$(if $(DDR3_LOADER),LOADER (UART 115200 baud$(comma) timeout 50 ms$(comma) probation 3 s$(comma) store 2^29 bytes$(comma) arbiter master 1 idle),$(DDR3_PATTERN_VARIANT))))
 DDR3_UBER      := $(DDR3_SRC)/rtl/ddr3_top.v $(DDR3_SRC)/rtl/ddr3_controller.v $(DDR3_SRC)/rtl/ddr3_phy.v
 DDR3_SOURCES   := $(foreach c,$(DDR3_CORES),$(RTL)/$(c).v) $(DDR3_DIR)/$(DDR3_TOP).v \
                   $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),$(DDR3_DIR)/uart_tx_t27.v) \
@@ -657,7 +681,7 @@ $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)build-id-*.stamp; touch $@
 $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)pattern-*.stamp; touch $@
-$(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG).stamp:
+$(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp:
 	mkdir -p $(dir $@); rm -f $(dir $@)app-*.stamp; touch $@
 
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
@@ -676,7 +700,7 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 # Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
 # and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG).stamp $(if $(filter loader matvec,$(DDR3_APP)),$(CURDIR)/brams_x36.txt)
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp $(if $(filter loader matvec,$(DDR3_APP)),$(CURDIR)/brams_x36.txt)
 	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
 	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
