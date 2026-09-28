@@ -323,6 +323,10 @@ CONFIGS = {
                   "SERIAL_READS": 0, "READ_GAP": 0, "DEFER_RESULTS": 1, "USE_ARBITER": 1},
     "b2_golden": {"FMT": 0, "ROWS": 320, "CAP": 3, "POLL_DIV": 8,
                   "SERIAL_READS": 0, "READ_GAP": 0, "DEFER_RESULTS": 1, "USE_ARBITER": 1},
+    "d5_down": {"FMT": 1, "ROWS": 16, "COLS": 7040, "CAP": 4, "POLL_DIV": 8,
+                "SERIAL_READS": 0, "READ_GAP": 0, "DEFER_RESULTS": 1, "USE_ARBITER": 1},
+    "b2_down": {"FMT": 0, "ROWS": 16, "COLS": 7040, "CAP": 3, "POLL_DIV": 8,
+                "SERIAL_READS": 0, "READ_GAP": 0, "DEFER_RESULTS": 1, "USE_ARBITER": 1},
 }
 
 
@@ -353,6 +357,38 @@ class MatvecGoldenChunk(unittest.TestCase):
     """The stage-1 q_proj chunk against the committed golden accumulators."""
 
     GOLDEN = ROOT / "reports/ternary-check/matvec-2026-09-23.json"
+
+    @unittest.skipUnless(HAVE_TOOLS, "built t27c and Icarus required")
+    def test_down_proj_padding_preserves_golden_values_through_arbiter(self):
+        if not any((ROOT / "build/fixtures").rglob("*.bin")):
+            self.skipTest("fixture ranges not cached: python3 tools/fetch-fixtures.py")
+        spec = importlib.util.spec_from_file_location("matvec_down_host", ROOT / "tools/fpga-matvec-run.py")
+        host = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(host)
+        trits, acts, expected, cols = host.chunk_reference(16, "down_proj")
+        self.assertEqual(cols, 7040)
+        self.assertEqual(acts[6912:], [0] * 128)
+        for row in range(16):
+            self.assertEqual(trits[row * cols + 6912:(row + 1) * cols], [0] * 128)
+        # Independent host integer dot verifies that padding kept every row.
+        self.assertEqual([sum(w * x for w, x in zip(trits[r * cols:(r + 1) * cols], acts))
+                          for r in range(16)], expected)
+        MatvecSimulation.setUpClass()
+        try:
+            case = MatvecSimulation()
+            for fmt, config in ((model.FMT_D5, "d5_down"), (model.FMT_B2, "b2_down")):
+                with self.subTest(format=fmt):
+                    stream = host.weight_stream(trits, cols, 16, fmt)
+                    import struct
+                    words = list(struct.iter_unpack("<QQ", stream))
+                    lines = case.simulate(config, (("stop_after", 100000), ("ack_min", 12),
+                                                   ("ack_span", 6), ("stall_pct", 35)),
+                                          acts, words, cols, 16, fmt)
+                    case.assert_run_matches(lines, words, acts, cols, 16, fmt)
+                    self.assertEqual([b for tag, _, b in lines if tag == "y"],
+                                     [v & model.B40 for v in expected])
+        finally:
+            MatvecSimulation.tearDownClass()
 
     @unittest.skipUnless(HAVE_TOOLS, "built t27c and Icarus required")
     def test_actual_golden_chunk_in_both_formats_through_arbiter(self):

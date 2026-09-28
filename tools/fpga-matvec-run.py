@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Board run of the DDR3 device matvec (issue #64 phase C): the stage-1 golden
-chunk of BitNet b1.58 2B4T layer-0 q_proj loaded through the #63 UART loader,
+"""Board run of the DDR3 device matvec: a golden chunk of BitNet b1.58 2B4T
+layer-0 q_proj or down_proj, loaded through the #63 UART loader,
 one doorbell run, every report line captured, the Y accumulators compared
 bit-exact with the t27 reference of reports/ternary-check/matvec-2026-09-23.json.
 
 The payloads follow the module's own layout (t27/rtl/fpga_ddr3_matvec.t27, the
 DDR3_MATVEC_* parameters baked into the bitstream):
-  weights    rows x words_per_row words of dense5 device codes at WADDR,
+  weights    rows x words_per_row words of dense5 or baseline2 codes at WADDR,
              one raw byte stream, not a TMEM container (the loader's
              --payload writes bytes verbatim; --payload-tmem-trits would wrap
              them in a container the module does not expect);
   activations  cols int8 bytes at AADDR, column c at byte c;
   doorbell     16 bytes at DADDR: LE u128, bits 63:32 magic, 31:0 the run.
+
+down_proj's 6912 columns are padded with 128 zero weights and activations to
+7040 columns in both formats. Build with DDR3_MATVEC_COLS=7040 and the selected
+DDR3_MATVEC_ROWS/FMT. This preserves the original integer accumulators.
 
 The reference is computed from the cached fixtures through trinity_memory
 (the reproduce path of the golden JSON) and its full-tensor accumulators are
@@ -38,7 +42,10 @@ sys.path.insert(0, str(ROOT))
 import matvec_device_model as model  # noqa: E402
 
 GOLDEN = ROOT / "reports/ternary-check/matvec-2026-09-23.json"
-HF_NAME = "model.layers.0.self_attn.q_proj.weight"
+TENSORS = {
+    "q_proj": "model.layers.0.self_attn.q_proj.weight",
+    "down_proj": "model.layers.0.mlp.down_proj.weight",
+}
 MAGIC = 0x74337633
 WORD = 16                      # the store and the module both count 16-byte words
 
@@ -65,23 +72,39 @@ def synthetic_chunk(rows: int, cols: int, seed: int):
     return trits, acts, expected, cols
 
 
-def chunk_reference(rows: int):
+def chunk_reference(rows: int, tensor: str = "q_proj"):
     """The golden chunk from the cached fixtures: trits, activations, the
     accumulators of every row, sha-checked against the committed report."""
     from trinity_memory import fixtures as fx, formats as f, ternary_check as tc, matvec as mv
-    info, dtype, packed = fx.safetensors_tensor(tc.BITNET["packed"], HF_NAME)
+    hf_name = TENSORS[tensor]
+    record = next(t for t in json.loads(GOLDEN.read_text())["tensors"]
+                  if t["tensor"].get("hf") == hf_name)
+    full_rows, cols = record["tensor"]["shape"]
+    if not 1 <= rows <= full_rows:
+        raise ValueError(f"rows must be 1..{full_rows} for {tensor}")
+    info, dtype, packed = fx.safetensors_tensor(tc.BITNET["packed"], hf_name)
     if dtype != "U8":
-        raise fx.FixtureError(f"{HF_NAME}: expected packed U8, got {dtype}")
-    full_rows, cols = info.d0 * 4, info.d1
+        raise fx.FixtureError(f"{hf_name}: expected packed U8, got {dtype}")
+    if [info.d0 * 4, info.d1] != [full_rows, cols]:
+        raise fx.FixtureError(f"{hf_name}: shape differs from committed reference")
     values, _ = f.decode_hf_packed(packed, full_rows, cols)
     x = mv.activations(cols)
     _, y = mv.matvec(values, full_rows, cols, x)
-    want = json.loads(GOLDEN.read_text())["tensors"][0]["formats"]["hf_packed"]["accumulators"]
+    want = record["formats"]["hf_packed"]["accumulators"]
     got = hashlib_sha256_le(y, full_rows)
     if got != want["sha256_le"]:
         raise SystemExit(f"reference mismatch: computed {got}, committed {want['sha256_le']}")
-    trits = [values[i] for i in range(rows * cols)]
-    return trits, [v for v in x][:cols], [y[i] for i in range(rows)], cols
+    # A common multiple of 64 and 80 gives both device formats exactly the
+    # same padded matrix. Zero columns leave the verified accumulators intact.
+    device_cols = ((cols + 319) // 320) * 320
+    if device_cols > 7168:
+        raise ValueError("tensor exceeds the device activation store")
+    trits = []
+    for row in range(rows):
+        trits.extend(values[row * cols:(row + 1) * cols])
+        trits.extend([0] * (device_cols - cols))
+    acts = list(x)[:cols] + [0] * (device_cols - cols)
+    return trits, acts, [y[i] for i in range(rows)], device_cols
 
 
 def hashlib_sha256_le(values, count: int) -> str:
@@ -92,16 +115,22 @@ def hashlib_sha256_le(values, count: int) -> str:
     return digest.hexdigest()
 
 
-def dense5_stream(trits, cols: int, rows: int) -> bytes:
-    """The module's weight region: rows x (cols/80) words of dense5 codes."""
+def weight_stream(trits, cols: int, rows: int, fmt: int) -> bytes:
+    """The module's row-major region in either supported device format."""
     out = bytearray()
-    lanes = model.LANES[model.FMT_D5]
+    lanes = model.LANES[fmt]
+    if cols <= 0 or cols % lanes or rows <= 0 or len(trits) != cols * rows:
+        raise ValueError("weight shape is not aligned or does not match the payload")
     for r in range(rows):
         for w in range(cols // lanes):
-            lo, hi = model.encode_word(model.FMT_D5,
+            lo, hi = model.encode_word(fmt,
                                        model.lane_word(trits, r * cols + w * lanes))
             out += struct.pack("<QQ", lo, hi)
     return bytes(out)
+
+
+def dense5_stream(trits, cols: int, rows: int) -> bytes:
+    return weight_stream(trits, cols, rows, model.FMT_D5)
 
 
 def load_acknowledged(data: bytes, seq: int = 1) -> bool:
@@ -201,6 +230,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", default="/dev/cu.usbserial-10")
     ap.add_argument("--baud", type=int, default=115200)
+    ap.add_argument("--tensor", choices=tuple(TENSORS), default="q_proj")
+    ap.add_argument("--fmt", choices=("d5", "b2"), default="d5")
     ap.add_argument("--rows", type=int, default=320, help="chunk rows (the bitstream's DDR3_MATVEC_ROWS)")
     ap.add_argument("--run", type=int, default=1, help="doorbell run counter")
     ap.add_argument("--waddr", type=lambda s: int(s, 0), default=0x4000, help="weights word address")
@@ -216,6 +247,8 @@ def main() -> int:
     ap.add_argument("--work", default=str(ROOT / "build/fpga/matvec-run"))
     ap.add_argument("--output", required=True)
     args = ap.parse_args()
+    if not 1 <= args.run <= 0xFFFFFFFF:
+        ap.error("--run must be a nonzero unsigned 32-bit counter")
 
     work = Path(args.work)
     work.mkdir(parents=True, exist_ok=True)
@@ -224,9 +257,10 @@ def main() -> int:
         trits, acts, expected, cols = synthetic_chunk(args.rows, 2560, args.synthetic)
     else:
         print("reference: computing from the cached fixtures ...", flush=True)
-        trits, acts, expected, cols = chunk_reference(args.rows)
-    weights = work / "weights.dense5.bin"
-    weights.write_bytes(dense5_stream(trits, cols, args.rows))
+        trits, acts, expected, cols = chunk_reference(args.rows, args.tensor)
+    fmt = model.FMT_D5 if args.fmt == "d5" else model.FMT_B2
+    weights = work / f"weights.{args.fmt}.bin"
+    weights.write_bytes(weight_stream(trits, cols, args.rows, fmt))
     act_path = work / "activations.int8.bin"
     act_path.write_bytes(bytes(v & 255 for v in acts))
     doorbell = work / "doorbell.bin"
@@ -249,8 +283,24 @@ def main() -> int:
     got = [b - (1 << 40) if b >= (1 << 39) else b for _, b in y]
     mismatch = [i for i in range(min(len(got), len(expected)))
                 if got[i] != expected[i]]
-    verdict = {"rows": args.rows, "y_lines": len(y), "expected": len(expected),
-               "bit_exact": len(y) == len(expected) and not mismatch,
+    summary, capture_error = {}, None
+    try:
+        summary = model.decode_run_summary(lines)
+    except ValueError as exc:
+        capture_error = str(exc)
+    import hashlib
+    verdict = {"tensor": args.tensor if args.synthetic is None else "synthetic",
+               "format": args.fmt, "device_cols": cols,
+               "reference_accumulators_sha256_le": hashlib_sha256_le(expected, args.rows),
+               "payload_sha256": {"weights": hashlib.sha256(weights.read_bytes()).hexdigest(),
+                                  "activations": hashlib.sha256(act_path.read_bytes()).hexdigest()},
+               "rows": args.rows, "y_lines": len(y), "expected": len(expected),
+               "bit_exact": capture_error is None and len(y) == len(expected) and not mismatch
+                            and [a for a, _ in y] == list(range(args.rows))
+                            and summary["device_run"] == args.run
+                            and summary["words"] == args.rows * cols // model.LANES[fmt]
+                            and summary["bad_words"] == 0 and summary["stray_acks"] == 0,
+               "counters": summary, "capture_error": capture_error, "lines": lines,
                "first_mismatch": mismatch[:5],
                "summary_lines": [(t, a, b) for t, a, b in lines if t in "dcownuz"],
                "first_y": [(a, b) for a, b in y[:4]],
