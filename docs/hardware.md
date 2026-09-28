@@ -220,8 +220,8 @@ committed captures by `python3 tools/stage2-report.py`): the ALINX AX7203
 60 MHz -- the lowest DDR3 clock that calibrates on this board: 160 MHz does
 not, 300 MHz does; 75 MHz controller builds fail the controller's own
 routing once real decode logic exists), read with one outstanding request
-and an 8-clock gap after every ack (overlapping requests answer zero data,
-#75), decoded and dotted on the device -- **320/320 Y lines bit-exact in
+and an 8-clock gap after every ack (overlapping requests failed in this
+integrated build, #75), decoded and dotted on the device -- **320/320 Y lines bit-exact in
 both formats** against the t27/C reference.
 
 <!-- stage2-measurement:start -->
@@ -235,6 +235,8 @@ Counter values per run are arithmetic means over all runs; stall percentages are
 The dense5/baseline2 throughput ratio is 1.0000 (arithmetic ceiling 1.25). DDR3 latency as the bottleneck is not established. The timed matvec includes UART result backpressure: y_pending stops FIFO consumption until the emitter accepts the row. Separate computation from result emission before testing the bandwidth thesis (measured dense5/baseline2 ratio 1.0000).
 
 v1 wait_stalls is w.a (issue-hold cycles); v1 consumer_stalls is w.b (request-wait cycles). Actual consumer stalls are n.b, discarded by v1. Consumer stalls for the 12-run series cannot be recovered; null is unknown, not zero. Separate golden runs have 19 (dense5) and 65 (baseline2) consumer stalls; these are not the missing 12-run measurements.
+
+The direct reader at 83.33 MHz recorded 1653 passing, 1653 model-checked runs across 3 loads, 0.944726-0.944888 words/clock, and up to 9 outstanding requests. Separate direct reader (a6d9745f, seed 6), without the loader's Wishbone arbiter. The seed-1 loads did not calibrate; their zero run count is not a failed data comparison. These short captures do not establish the integrated matvec's performance or long-term stability.
 <!-- stage2-measurement:end -->
 
 ## FPGA measurement track (AX7203)
@@ -2028,9 +2030,9 @@ Definitions (added by #65):
 - **weights/s** = logical trits delivered (padding lanes excluded) × f_ctrl / cycles,
   where f_ctrl is the controller clock derived from the board's 200 MHz oscillator
   through the design's PLL (derived, not instrument-measured).
-- **Memory-bound** (per the issue): consumer stalls are 0 in both formats, so the
-  gap to the bus peak belongs to DDR3 (command and wait stalls, refresh). The
-  workload consumer also reports its stall counts unrounded.
+- **Memory-bound** must be established in a delivery test isolated from consumer
+  and result-output backpressure. Zero consumer stalls alone do not prove that
+  DDR3 causes the remaining gap when request issuance can also be held.
 - **Ceiling** (arithmetic, not a result): at most 1.25 weights/s between the
   formats (`10/8`), reached only when the transfer is payload-bound; x16 at
   480 MT/s peaks at 4.8 G (dense5) and 3.84 G (baseline2) weights/s
@@ -2045,7 +2047,7 @@ loaded once per format, 12 doorbell runs each, every run bit-exact.
 |---|---|---|---|---|---|---|---|
 | B (device matvec) | dense5 | 1.6 | 10,240 | 33,240,080.583 | 1,478,697 ± 65 | **1.0000** | not established; UART in timed path |
 | B (device matvec) | baseline2 | 2.0 | 12,800 | 33,239,417.000 | 1,478,726 ± 97 | | not established; UART in timed path |
-| A (delivery, #62) | both | 1.6 / 2.0 | — | — | not measurable at bus rate | — | see reason |
+| A through the integrated loader arbiter at 60 MHz | both | 1.6 / 2.0 | — | — | not measured at bus rate | — | see reason |
 
 **Correction:** the v1 measurement writer mislabeled UART `w.a` (issue-hold
 cycles) as wait stalls and `w.b` (request-wait cycles) as consumer stalls.
@@ -2061,6 +2063,10 @@ latency bottleneck: the timed path includes UART result emission, and
 `y_pending` stops FIFO consumption while the emitter is busy. Issue-hold
 cycles are 99.9440% / 99.9310%; request-wait cycles are 0.2465% / 0.3082%.
 The next throughput measurement must separate computation from result
-emission. The overlapping-request failure remains a separate board issue
-to investigate before the consumer-A bandwidth test. See
+emission. The overlapping-request failure in the integrated loader/matvec
+remains an integration issue to investigate before a delivery test through
+that arbiter. The separate direct reader in #62 at controller 83.33 MHz
+already passed 1653 runs across three seed-6 loads at about 0.945 words/clock,
+with up to nine outstanding requests. The seed-1 captures with zero runs
+failed calibration, not a pipelined data comparison. See
 [the measurement erratum](stage2-errata.md) for the protocol and limitations.
