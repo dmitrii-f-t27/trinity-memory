@@ -1,6 +1,6 @@
 {
  "schema": "trinity.stage2-report.v1",
- "written_utc": "2026-09-27T09:44:37Z",
+ "written_utc": "2026-09-28T00:38:13Z",
  "issue": "dmitrii-f-t27/trinity-memory#67",
  "epic": "#59",
  "what_ran": {
@@ -61,34 +61,43 @@
     "format": "dense5",
     "bits_per_weight": 1.6,
     "runs": 12,
-    "cycles_mean": 33240192.0,
+    "cycles_mean": 33240080.583,
     "weights_per_s_mean": 1478696.8,
     "weights_per_s_sd": 65.3,
+    "weights_per_s_sd_percent": 0.004418,
     "weights_per_s_min": 1478570.9,
     "weights_per_s_max": 1478792.1,
-    "consumer_stalls_per_run": 81931,
-    "wait_stalls_per_run": 33221624,
-    "command_stalls_per_run": 8318
+    "consumer_stalls_per_run": 81930.917,
+    "wait_stalls_per_run": 33221476.5,
+    "command_stalls_per_run": 8354,
+    "consumer_stalls_percent": 0.246482,
+    "wait_stalls_percent": 99.944031,
+    "command_stalls_percent": 0.025132
    },
    {
     "format": "baseline2",
     "bits_per_weight": 2.0,
     "runs": 12,
-    "cycles_mean": 33238194.0,
+    "cycles_mean": 33239417.0,
     "weights_per_s_mean": 1478726.3,
     "weights_per_s_sd": 96.7,
+    "weights_per_s_sd_percent": 0.006541,
     "weights_per_s_min": 1478541.9,
     "weights_per_s_max": 1478828.3,
-    "consumer_stalls_per_run": 102428,
-    "wait_stalls_per_run": 33215216,
-    "command_stalls_per_run": 10168
+    "consumer_stalls_per_run": 102430.25,
+    "wait_stalls_per_run": 33216468,
+    "command_stalls_per_run": 10139,
+    "consumer_stalls_percent": 0.308159,
+    "wait_stalls_percent": 99.930958,
+    "command_stalls_percent": 0.030503
    }
   ],
+  "aggregation": "Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown.",
   "ratio_d5_b2": 1.0,
   "ratio_ceiling": 1.25,
   "memory_bound": {
    "definition": "consumer stalls 0 in both formats",
-   "observed": "consumer stalls 81931 of ~33,240,192 cycles (<0.0001%); wait stalls are 99.98% of all cycles",
+   "observed": "dense5: mean consumer stalls 81,930.917 of 33,240,080.583 cycles (0.2465%); wait stalls 99.9440%; baseline2: mean consumer stalls 102,430.250 of 33,239,417.000 cycles (0.3082%); wait stalls 99.9310%",
    "verdict": "latency-bound under the serialized read discipline; NOT bus-rate. The 1.25 format ratio is unreachable at this operating point (measured ratio 1.0000); the arbiter-free pattern test of #61 streamed the same port, so the seam to fix is the arbiter, not the DRAM."
   }
  },

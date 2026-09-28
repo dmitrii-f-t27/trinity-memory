@@ -9,7 +9,7 @@ h2{border-bottom:2px solid #1a1a1a;padding-bottom:.3rem}
 .ok{color:#046c3c;font-weight:bold}.warn{color:#8a4b00}
 </style></head><body>
 <h1>Stage 2: DDR3 on the AX7203</h1>
-<p>2026-09-27T09:44:37Z &middot; <a href="stage2.json">stage2.json</a> &middot; issue
+<p>2026-09-28T00:38:13Z &middot; <a href="stage2.json">stage2.json</a> &middot; issue
 <a href="https://github.com/dmitrii-f-t27/trinity-memory/issues/67">#67</a> of epic
 <a href="https://github.com/dmitrii-f-t27/trinity-memory/issues/59">#59</a></p>
 
@@ -22,7 +22,7 @@ both formats, read from DDR3 through the UART loader with one outstanding
 request and an 8-clock gap after every ack.</p>
 
 <h2>Bit-exact</h2>
-<p class="ok">__EXACT_D5__ and __EXACT_B2__: every one of the 320 Y lines equals
+<p class="ok">dense5: True and baseline2: True: every one of the 320 Y lines equals
 the t27/C reference (first rows [0, 1099511625215], [1, 2660], [2, 1099511627724], [3, 1099511625391]).</p>
 
 <h2>Weights per second (consumer B, the device matvec)</h2>
@@ -32,9 +32,9 @@ the t27/C reference (first rows [0, 1099511625215], [1, 2660], [2, 1099511627724
 <tr><td>dense5</td><td>1.6</td><td>12</td><td>1,478,697</td><td>&plusmn;65</td><td>1,478,571</td><td>1,478,792</td></tr>
 <tr><td>baseline2</td><td>2.0</td><td>12</td><td>1,478,726</td><td>&plusmn;97</td><td>1,478,542</td><td>1,478,828</td></tr>
 </table>
-<p>Ratio dense5/baseline2 = <b>1.0</b> against the arithmetic ceiling 1.25.
-The point is <b>latency-bound</b>: wait stalls are 99.98% of all cycles,
-consumer stalls 81931 per run, sample s.d. under 0.01%. Under the serialized
+<p>Ratio dense5/baseline2 = <b>1.0000</b> against the arithmetic ceiling 1.25.
+The point is <b>latency-bound</b>. dense5: mean consumer stalls 81,930.917 of 33,240,080.583 cycles (0.2465%); wait stalls 99.9440%; baseline2: mean consumer stalls 102,430.250 of 33,239,417.000 cycles (0.3082%); wait stalls 99.9310%.
+Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown. Under the serialized
 read discipline the port requires, each 128-bit word costs its fixed latency
 whatever it carries (64 or 80 trits) &mdash; the 1.6-bit format buys nothing
 here. The 1.25 test needs pipelined reads through the arbiter; the
