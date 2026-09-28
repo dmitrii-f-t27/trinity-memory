@@ -57,10 +57,13 @@ for name in tf_block_elements tf_block_bytes tf_scale_offset tf_scale_class tf_s
     tk_decode tk_encode tk_encoded_bytes tk_scale_count tk_scale_width tk_format_of_name tk_format_token \
     tk_error_status tk_error_token tk_flag_token tk_outcome_token tk_parse_flags tk_flags_text tk_compare_bytes \
     tk_compare_words tk_flag_state tk_verdict tk_fails tk_run_passed \
+    tlv_walk tlv_runtime tlv_model tlv_native tlv_ternary_count tlv_file_verdict tlv_max_header \
+    tlv_wasm_walk tlv_wasm_walk_size tlv_wasm_walk_field tlv_wasm_run_size tlv_wasm_run_field \
     tf_absmean_bf16; do
     formats_exports="$formats_exports --export=$name"
 done
 # shellcheck disable=SC2086
+# tlv_model's bounded duplicate-name tables need more than the old 64 KiB stack.
 "$linker" --no-entry $formats_exports --export=__heap_base --export-memory \
-    --initial-memory=4194304 --max-memory=4294967296 --stack-first -z stack-size=65536 "$out/formats.wasm.o" -o "$out/formats.wasm"
+    --initial-memory=4194304 --max-memory=4294967296 --stack-first -z stack-size=1048576 "$out/formats.wasm.o" -o "$out/formats.wasm"
 "${PYTHON:-python3}" tools/embed-wasm.py "$out/codecs.wasm" "$out/wasm_asset.c"
