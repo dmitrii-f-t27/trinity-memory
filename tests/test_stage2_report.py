@@ -1,6 +1,7 @@
 """The published stage-2 numbers must follow every captured run, not literals."""
 import contextlib
 import copy
+import gzip
 import importlib.util
 import io
 import json
@@ -70,6 +71,21 @@ class Stage2ReportTest(unittest.TestCase):
         self.assertEqual(gold["baseline2"]["consumer_stalls"], 65)
         self.assertEqual(gold["dense5"]["wait_stalls"], 81932)
         self.assertEqual(gold["dense5"]["issue_hold_cycles"], 33218427)
+
+    def test_direct_reader_evidence_matches_archived_runs_and_stays_separate(self):
+        report = tool.build()
+        reader = report["separate_direct_reader"]
+        runs = []
+        for load in tool.load("reader_summary")["board"]["seed6"]:
+            path = ROOT / load["capture"] / "capture.json.gz"
+            capture = json.loads(gzip.decompress(path.read_bytes()))
+            runs.extend(capture["decoded"]["reader"]["runs"])
+        self.assertEqual(reader["runs"], len(runs))
+        self.assertEqual(reader["passing_runs"], sum(all(r["checks"].values()) for r in runs))
+        self.assertEqual(reader["model_checked_runs"], sum(r["checks"]["equals_host_model"] for r in runs))
+        self.assertEqual(reader["max_outstanding"], max(r["max_outstanding"] for r in runs))
+        self.assertEqual(reader["words_per_clock_min"], min(r["words_per_clock"] for r in runs))
+        self.assertGreater(reader["controller_mhz"], report["what_ran"]["clock"]["controller_mhz"])
 
     def test_summary_rejects_missing_duplicate_and_invalid_counters(self):
         lines = tool.load("golden_d5")["summary_lines"]

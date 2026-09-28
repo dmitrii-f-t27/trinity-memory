@@ -41,4 +41,19 @@ mixed bits and bytes; the original field is not used as a measurement.
 The measurement writer now emits schema v2, checks required summary lines,
 decodes the correct fields and retains raw lines for every run. No new board
 measurements are claimed by this correction. Bit-exact output comparisons
-and the separate overlapping-request failure are unaffected.
+are unaffected.
+
+The statement that consumer A never measured pipelined delivery was also
+incorrect. The committed `ddr3-reader-summary-2026-09-24-a6d9745f-x16.json`
+and its three seed-6 captures contain 1653 passing, model-checked runs
+(825 complete baseline2/dense5 pairs), zero bad words and consumer stalls,
+0.944726–0.944888 words/clock, and up to nine outstanding requests. This
+direct reader connects to UberDDR3 without the loader's Wishbone arbiter,
+at controller 83.33 MHz (DDR3 333.33 MHz), a different design and operating
+point from the 60 MHz integrated matvec. The seed-1 captures with zero runs
+never calibrated. They are not evidence of failed pipelined data delivery.
+Each load was captured for only 20 seconds; this is not a long soak.
+
+The integrated loader/matvec's overlapping-request failure therefore needs
+an integration-level reproducer. It must not be generalized to all UberDDR3
+pipelined reads, or taken as proof that the arbiter is the root cause.

@@ -40,6 +40,8 @@ SOURCES = {
     "measure_b2": "ddr3-matvec-measure-2026-09-27-b2.json",
     "build_d5": "ddr3-build-2026-09-27-twoclock-m6d5/build.json",
     "build_b2": "ddr3-build-2026-09-27-twoclock-m6d5-b2/build.json",
+    "reader_summary": "ddr3-reader-summary-2026-09-24-a6d9745f-x16.json",
+    "reader_build": "ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6/build.json",
 }
 
 
@@ -96,6 +98,21 @@ def build() -> dict:
 
     rows = [row(md5, "dense5", 1.6), row(mb2, "baseline2", 2.0)]
     ratio = rows[0]["weights_per_s_mean"] / rows[1]["weights_per_s_mean"]
+    reader_loads = load("reader_summary")["board"]["seed6"]
+    reader = {
+        "controller_mhz": 1000 / next(c["period_ns"] for c in load("reader_build")["ddr3"]["clocks"]
+                                      if c["name"] == "clk_ctrl"),
+        "loads": len(reader_loads),
+        **{key: sum(x[key] for x in reader_loads)
+           for key in ("runs", "passing_runs", "model_checked_runs", "complete_pairs",
+                       "bad_words", "invalid_groups", "consumer_stalls")},
+        "words_per_clock_min": min(f["words_per_clock_min"] for x in reader_loads for f in x["per_format"].values()),
+        "words_per_clock_max": max(f["words_per_clock_max"] for x in reader_loads for f in x["per_format"].values()),
+        "max_outstanding": max(f["max_outstanding_max"] for x in reader_loads for f in x["per_format"].values()),
+        "scope": "Separate direct reader (a6d9745f, seed 6), without the loader's Wishbone arbiter. "
+                 "The seed-1 loads did not calibrate; their zero run count is not a failed data comparison. "
+                 "These short captures do not establish the integrated matvec's performance or long-term stability.",
+    }
 
     report = {
         "schema": "trinity.stage2-report.v2",
@@ -111,7 +128,8 @@ def build() -> dict:
             "workload": "BitNet b1.58 2B4T layer-0 self_attn.q_proj rows 0-319 "
                         "(819,200 weights), activations seed 27, both formats",
             "read_discipline": "one outstanding request, 8 idle clocks after each ack "
-                               "(overlapping requests answer zero data, #75)",
+                               "(overlapping requests failed in the integrated loader/matvec build, #75; "
+                               "the separate direct reader passed pipelined reads)",
         },
         "bit_exact": {
             "dense5": {"y_lines": gd5["y_lines"], "bit_exact": gd5["bit_exact"],
@@ -151,12 +169,13 @@ def build() -> dict:
                            f"the bandwidth thesis (measured dense5/baseline2 ratio {ratio:.4f}).",
         },
         },
+        "separate_direct_reader": reader,
         "not_measured": [
             "power and energy (no instrument on the bench)",
             "tokens per second and model quality (one layer chunk, not a model)",
-            "x32 DDR3, and DDR3 above 480 MT/s (the 667 MT/s class was never built)",
-            "bus-rate delivery (consumer A): the pipelined reads the port answers with "
-            "zero data are the open seam (#62, #65)",
+            "the integrated matvec at x32 or above 480 MT/s (separate DDR3 bring-up and reader builds exist)",
+            "bus-rate delivery through the integrated loader/matvec arbiter at controller 60 MHz; "
+            "the separate direct reader at 83.33 MHz did measure pipelined delivery",
         ],
         "evidence": {
             name: {"file": f"reports/fpga/{path}", "sha256": sha256_file(R / path)}
@@ -211,6 +230,9 @@ __STALLS__. __AGGREGATION__</p>
 <p class="warn">__COUNTER_CORRECTION__ __MISSING_COUNTERS__ __GOLDEN_SCOPE__</p>
 <p class="warn">__VERDICT__</p>
 
+<h2>Separate direct reader</h2>
+<p>__READER__</p>
+
 <h2>Not measured</h2>
 <ul>__NOTMEASURED__</ul>
 
@@ -248,7 +270,16 @@ def render(report: dict) -> str:
         .replace("__MISSING_COUNTERS__", report["measurement"]["counter_correction"]["missing"])
         .replace("__GOLDEN_SCOPE__", report["measurement"]["counter_correction"]["golden_scope"])
         .replace("__VERDICT__", report["measurement"]["memory_bound"]["verdict"])
+        .replace("__READER__", reader_text(report))
         .replace("__NOTMEASURED__", "".join(f"<li>{t}</li>" for t in report["not_measured"])))
+
+
+def reader_text(report: dict) -> str:
+    r = report["separate_direct_reader"]
+    return (f"The direct reader at {r['controller_mhz']:.2f} MHz recorded {r['passing_runs']} passing, "
+            f"{r['model_checked_runs']} model-checked runs across {r['loads']} loads, "
+            f"{r['words_per_clock_min']:.6f}-{r['words_per_clock_max']:.6f} words/clock, "
+            f"and up to {r['max_outstanding']} outstanding requests. " + r["scope"])
 
 
 def measurement_markdown(report: dict) -> str:
@@ -264,7 +295,7 @@ def measurement_markdown(report: dict) -> str:
         "(arithmetic ceiling 1.25). " + report["measurement"]["memory_bound"]["verdict"] + "\n\n" +
         report["measurement"]["counter_correction"]["mapping"] + " " +
         report["measurement"]["counter_correction"]["missing"] + " " +
-        report["measurement"]["counter_correction"]["golden_scope"] + "\n")
+        report["measurement"]["counter_correction"]["golden_scope"] + "\n\n" + reader_text(report) + "\n")
 
 
 def update_document(text: str, report: dict) -> str:
