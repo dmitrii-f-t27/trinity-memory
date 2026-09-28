@@ -188,7 +188,8 @@ def main() -> int:
                       "commit": build["commit"]},
         "board": board_identity(),
         "read_discipline": "one outstanding request, 8 idle clocks after each ack "
-                           "(UberDDR3 answers overlapping requests with zero data, #75)",
+                           "(workaround for the integrated loader/matvec failure, #75; "
+                           "the separate direct reader passed pipelined reads)",
         "first_run_verdict": first_y,
         "runs": runs,
         "statistic": stat,
