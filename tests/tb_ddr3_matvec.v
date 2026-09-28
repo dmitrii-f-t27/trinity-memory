@@ -18,8 +18,11 @@ module tb_ddr3_matvec;
     parameter [31:0] COLS = 2560, ROWS = 8, FMT = 1;
     parameter [31:0] DADDR = 32'h0000_0040, AADDR = 32'h0000_1000, WADDR = 32'h0000_4000;
     parameter [31:0] MAGIC = 32'h74337633, CAP = 4, WATCHDOG = 32'd16777216, POLL_DIV = 64;
+    parameter SERIAL_READS = 1'b1, READ_GAP = 32'd8, DEFER_RESULTS = 1'b0;
+    parameter USE_ARBITER = 0;
 
     reg clk = 1'b0, calib = 1'b0;
+    integer clocks = 0;
     always #(CLK_PS/2) clk = ~clk;
 
     reg stall = 1'b0, ack = 1'b0;
@@ -30,13 +33,52 @@ module tb_ddr3_matvec;
     wire [31:0] line_tag, line_a;
     wire [63:0] line_b;
     reg line_idle = 1'b1;
+    wire mv_cyc, mv_stb, dut_stall, dut_ack;
+    wire [31:0] mv_addr;
+
+    generate if (USE_ARBITER) begin : shared_port
+        wire m0_stall, m0_ack;
+        wire [31:0] stray;
+        reg m0_cyc = 0, m0_stb = 0;
+        integer completed_during_weights = 0;
+        always @(posedge clk) begin
+            if (!m0_cyc && calib && clocks % 73 == 0) begin
+                m0_cyc <= 1; m0_stb <= 1;
+            end
+            if (m0_stb && !m0_stall) m0_stb <= 0;
+            if (m0_ack) begin
+                m0_cyc <= 0;
+                if (dut.mstate == 4) completed_during_weights <= completed_during_weights + 1;
+            end
+            if (stray != 0) $fatal(1, "stray arbiter acknowledgement");
+            if (line_go && line_tag == 122 && completed_during_weights == 0)
+                $fatal(1, "competing master did not complete during the weight phase");
+        end
+        TrinityFpgaWbArbiterT27 arbiter (
+            .clk(clk), .rst_n(1'b1), .en(1'b1),
+            .m0_cyc(m0_cyc), .m0_stb(m0_stb), .m0_we(1'b0), .m0_addr(AADDR),
+            .m0_sel(32'hffff), .m0_lo(64'd0), .m0_hi(64'd0),
+            .m1_cyc(mv_stb), .m1_stb(mv_stb), .m1_we(1'b0), .m1_addr(mv_addr),
+            .m1_sel(32'hffff), .m1_lo(64'd0), .m1_hi(64'd0),
+            .wb_stall(stall), .wb_ack(ack), .cyc(wb_cyc), .stb(wb_stb), .addr(wb_addr),
+            .m0_stall(m0_stall), .m0_ack(m0_ack), .m1_stall(dut_stall), .m1_ack(dut_ack),
+            .stray(stray)
+        );
+    end else begin : direct_port
+        assign wb_cyc = mv_cyc;
+        assign wb_stb = mv_stb;
+        assign wb_addr = mv_addr;
+        assign dut_stall = stall;
+        assign dut_ack = ack;
+    end endgenerate
 
     TrinityFpgaDdr3MatvecT27 dut (
         .clk(clk), .rst_n(1'b1), .en(1'b1), .ready(),
-        .calib(calib), .stall(stall), .ack(ack), .rdata_lo(rdata_lo), .rdata_hi(rdata_hi),
+        .calib(calib), .stall(dut_stall), .ack(dut_ack), .rdata_lo(rdata_lo), .rdata_hi(rdata_hi),
         .cols(COLS), .rows(ROWS), .fmt(FMT), .waddr(WADDR), .aaddr(AADDR), .daddr(DADDR),
         .magic(MAGIC), .cap(CAP), .watchdog(WATCHDOG), .poll_div(POLL_DIV), .line_idle(line_idle),
-        .wb_cyc(wb_cyc), .wb_stb(wb_stb), .wb_addr(wb_addr),
+        .serial_reads(SERIAL_READS), .read_gap(READ_GAP), .defer_results(DEFER_RESULTS),
+        .wb_cyc(mv_cyc), .wb_stb(mv_stb), .wb_addr(mv_addr),
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
         .s_go(1'b0), .s_tag(32'd0), .s_a(32'd0), .s_b(64'd0)
     );
@@ -53,7 +95,7 @@ module tb_ddr3_matvec;
     parameter integer QDEPTH = 8;
     integer stall_pct = 0, ack_min = 0, ack_span = 4, calib_after = 40;
     integer lfsr = 32'h5eed0062;
-    integer clocks = 0, taken = 0, acked = 0;
+    integer taken = 0, acked = 0;
     reg [63:0] q_lo [0:QDEPTH-1];
     reg [63:0] q_hi [0:QDEPTH-1];
     integer q_due [0:QDEPTH-1];
@@ -95,12 +137,27 @@ module tb_ddr3_matvec;
     end
 
     // Line emitter stub and capture.
-    integer line_file, line_clocks = 24, busy_left = 0;
+    integer line_file, line_clocks = 24, busy_left = 0, stop_on_summary = 1;
+    integer desired_runs = 1, completed_runs = 0, clear_acts_between_runs = 0, ai;
     always @(posedge clk) begin
         if (line_go) begin
             busy_left = line_clocks;
             line_idle <= 1'b0;
             $fdisplay(line_file, "%0d\t%s\t%0d\t%0d", $time / 1000, tag_name(line_tag), line_a, line_b);
+            if (line_tag == 122) begin
+                completed_runs = completed_runs + 1;
+                if (completed_runs < desired_runs) begin
+                    if (clear_acts_between_runs)
+                        for (ai = 0; ai < ((COLS + 15) / 16) * 2; ai = ai + 1)
+                            mem[(AADDR & 32767) * 2 + ai] = 0;
+                    mem[(DADDR & 32767) * 2] = {MAGIC, 32'd0} | (completed_runs + 1);
+                end else if (stop_on_summary) begin
+                    // Let assertions in the other posedge blocks run before exit.
+                    #1;
+                    $fclose(line_file);
+                    $finish;
+                end
+            end
         end else if (busy_left > 0) begin
             busy_left = busy_left - 1;
             if (busy_left == 0) line_idle <= 1'b1;
@@ -137,6 +194,9 @@ module tb_ddr3_matvec;
         if ($value$plusargs("ack_span=%d", ack_span)) ;
         if ($value$plusargs("calib_after=%d", calib_after)) ;
         if ($value$plusargs("line_clocks=%d", line_clocks)) ;
+        if ($value$plusargs("stop_on_summary=%d", stop_on_summary)) ;
+        if ($value$plusargs("runs=%d", desired_runs)) ;
+        if ($value$plusargs("clear_acts_between_runs=%d", clear_acts_between_runs)) ;
         if ($value$plusargs("stop_after=%d", stop_after)) ;
         if ($value$plusargs("timeout_clocks=%d", timeout_clocks)) ;
         line_file = $fopen(capture, "w");

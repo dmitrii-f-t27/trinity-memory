@@ -42,10 +42,10 @@ import matvec_device_model as model  # noqa: E402
 SCHEMA = "trinity.fpga-ddr3-matvec-measure.v2"
 
 
-def board_identity() -> dict:
-    out = {}
-    for key, cmd in (("idcode", ["openFPGALoader", "--detect", "--cable", "digilent_hs3"]),
-                     ("dna", ["openFPGALoader", "--read-dna", "--cable", "digilent_hs3"])):
+def board_identity(cable: str) -> dict:
+    out = {"cable": cable}
+    for key, cmd in (("idcode", ["openFPGALoader", "--detect", "--cable", cable]),
+                     ("dna", ["openFPGALoader", "--read-dna", "--cable", cable])):
         try:
             done = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             lines = [l.strip() for l in (done.stdout + done.stderr).splitlines() if l.strip()]
@@ -103,6 +103,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", default="/dev/cu.usbserial-10")
     ap.add_argument("--baud", type=int, default=115200)
+    ap.add_argument("--cable", default="digilent_hs2")
     ap.add_argument("--fmt", choices=("d5", "b2"), required=True)
     ap.add_argument("--rows", type=int, default=320)
     ap.add_argument("--runs", type=int, default=12)
@@ -170,6 +171,12 @@ def main() -> int:
             "sample_sd": round(statistics.stdev(vals), 1) if len(vals) > 1 else 0.0}
     consumer_stalls = sum(r["consumer_stalls"] for r in runs)
     memory_bound = consumer_stalls == 0
+    variant = build.get("ddr3", {}).get("variant", "")
+    deferred = "defer_results 1" in variant
+    explicit_timing = "defer_results " in variant
+    timing = ("weight phase through consumer drain, including DRAIN_CLOCKS; activation prefetch excluded; "
+              + ("Y output emitted after timing stops" if deferred else "UART Y output backpressure included")) \
+        if explicit_timing else "legacy weight-phase counter; see source commit for timing boundaries"
     report = {
         "schema": SCHEMA, "written_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "issue": "dmitrii-f-t27/trinity-memory#65", "consumer": "B (device matvec of #64)",
@@ -186,15 +193,16 @@ def main() -> int:
         "bitstream": {"sha256": build["bitstream"]["sha256"],
                       "routed_fmax_mhz": build["nextpnr"]["clocks_routed"][0]["fmax_mhz"],
                       "commit": build["commit"]},
-        "board": board_identity(),
-        "read_discipline": "one outstanding request, 8 idle clocks after each ack "
-                           "(workaround for the integrated loader/matvec failure, #75; "
-                           "the separate direct reader passed pipelined reads)",
+        "board": board_identity(args.cable),
+        "read_discipline": variant or "read settings not recorded by the build report",
+        "timing_scope": timing,
         "first_run_verdict": first_y,
         "runs": runs,
         "statistic": stat,
         "memory_bound": {"consumer_stalls_zero": memory_bound,
-                         "verdict": "not established: timed matvec includes UART result backpressure"},
+                         "verdict": ("not established: Y output is deferred, but the matvec consumer and "
+                                     "request policy can still limit throughput" if deferred else
+                                     "not established: result-output isolation is not demonstrated")},
         "ceiling": {"arithmetic_weights_per_s": args.design_hz * lanes,
                     "note": "x16: 128 bits per controller clock, 80 dense5 or 64 baseline2 weights; "
                             "arithmetic only, not measured delivery"},
