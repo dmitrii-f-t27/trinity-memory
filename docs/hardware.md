@@ -224,17 +224,16 @@ and an 8-clock gap after every ack (overlapping requests answer zero data,
 #75), decoded and dotted on the device -- **320/320 Y lines bit-exact in
 both formats** against the t27/C reference.
 
-| Format | bits/weight | weights/s (mean of 12, +- s.d.) | ratio |
-|---|---|---|---|
-| dense5 | 1.6 | 1,478,697 +- 65 | 1.0000 (ceiling 1.25) |
-| baseline2 | 2.0 | 1,478,726 +- 97 | |
+<!-- stage2-measurement:start -->
+| Format | bits/weight | weights/s (mean, +- sample s.d.) | runs | consumer stalls/run (mean) | consumer stalls/cycles | wait stalls/cycles |
+|---|---|---|---|---|---|---|
+| dense5 | 1.6 | 1,478,697 +- 65 | 12 | 81,930.917 | 0.2465% | 99.9440% |
+| baseline2 | 2.0 | 1,478,726 +- 97 | 12 | 102,430.250 | 0.3082% | 99.9310% |
 
-The point is latency-bound, not bus-rate: wait stalls are 99.98% of all
-cycles, consumer stalls 19 per run, sample s.d. under 0.01%. The 1.25
-format ratio is unreachable at this operating point; the arbiter-free
-pattern test of #61 streamed the same port at bus rate, so the seam to fix
-for the bandwidth-bound test is the arbiter (#62, #65). Not measured:
-power, tokens per second, model quality, x32, DDR3 above 480 MT/s.
+Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown.
+
+The dense5/baseline2 throughput ratio is 1.0000 (arithmetic ceiling 1.25). The point is latency-bound, not bus-rate. The 1.25 format ratio is unreachable at this operating point; the arbiter-free pattern test of #61 streamed the same port at bus rate, so pipelining through the arbiter/controller seam remains the next bandwidth test (#62, #65). Not measured: power, tokens per second, model quality, x32, DDR3 above 480 MT/s.
+<!-- stage2-measurement:end -->
 
 ## FPGA measurement track (AX7203)
 

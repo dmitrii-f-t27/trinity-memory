@@ -2,14 +2,13 @@
 """The stage-2 report (issue #67): what was measured on the AX7203 with DDR3,
 what was not, every number traced to a committed capture.
 
-Builds reports/stage2/stage2.json and reports/stage2/index.html from the
-committed captures alone -- a clean clone with the fixture ranges cached
-rebuilds both with this one command. Sources: the golden-chunk captures
+Builds reports/stage2/stage2.json, reports/stage2/index.html and the measurement
+block in docs/hardware.md from the committed captures alone. Sources: the golden-chunk captures
 (both formats), the #65 measurements (both formats), the build records, the
 #61 pattern bring-up record. Evidence index: bitstream/spec/vector hashes,
 tool revisions, UberDDR3 pin and license, board identity.
 
-  python3 tools/stage2-report.py            # writes both, exit 0
+  python3 tools/stage2-report.py            # writes all three, exit 0
   python3 tools/stage2-report.py --check    # re-verify against the captures
 
 Exit codes: 0 written; 1 a number in the text cannot be traced to a capture.
@@ -21,11 +20,14 @@ import datetime
 import hashlib
 import json
 import pathlib
-import re
+import statistics
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 R = ROOT / "reports/fpga"
 OUT = ROOT / "reports/stage2"
+DOC = ROOT / "docs/hardware.md"
+DOC_START = "<!-- stage2-measurement:start -->"
+DOC_END = "<!-- stage2-measurement:end -->"
 
 SOURCES = {
     "golden_d5": "matvec-capture-2026-09-27-m6d5-golden.json",
@@ -55,20 +57,26 @@ def build() -> dict:
     bd5, bb2 = load("build_d5"), load("build_b2")
 
     def row(m: dict, fmt_name: str, bits: float) -> dict:
-        s = m["statistic"]
+        runs = m["runs"]
+        speeds = [r["weights_per_s"] for r in runs]
+        cycles = sum(r["cycles"] for r in runs)
+        if len(runs) < 2 or any(r["cycles"] <= 0 for r in runs):
+            raise ValueError(f"{fmt_name}: at least two runs with positive cycles required")
+        s = {"runs": len(runs), "mean": statistics.mean(speeds),
+             "sample_sd": statistics.stdev(speeds), "min": min(speeds), "max": max(speeds)}
         return {"format": fmt_name, "bits_per_weight": bits,
-                "runs": s["runs"], "cycles_mean": round(s["mean"] * 0 + _cycles(m), 0),
-                "weights_per_s_mean": s["mean"], "weights_per_s_sd": s["sample_sd"],
+                "runs": s["runs"], "cycles_mean": round(cycles / len(runs), 3),
+                "weights_per_s_mean": round(s["mean"], 1),
+                "weights_per_s_sd": round(s["sample_sd"], 1),
+                "weights_per_s_sd_percent": round(100 * s["sample_sd"] / s["mean"], 6),
                 "weights_per_s_min": s["min"], "weights_per_s_max": s["max"],
-                "consumer_stalls_per_run": m["runs"][0]["consumer_stalls"],
-                "wait_stalls_per_run": m["runs"][0]["wait_stalls"],
-                "command_stalls_per_run": m["runs"][0]["command_stalls"]}
-
-    def _cycles(m: dict) -> float:
-        return float(m["runs"][0]["cycles"])
+                **{f"{kind}_stalls_per_run": round(statistics.mean(r[f"{kind}_stalls"] for r in runs), 3)
+                   for kind in ("consumer", "wait", "command")},
+                **{f"{kind}_stalls_percent": round(100 * sum(r[f"{kind}_stalls"] for r in runs) / cycles, 6)
+                   for kind in ("consumer", "wait", "command")}}
 
     rows = [row(md5, "dense5", 1.6), row(mb2, "baseline2", 2.0)]
-    ratio = md5["statistic"]["mean"] / mb2["statistic"]["mean"]
+    ratio = rows[0]["weights_per_s_mean"] / rows[1]["weights_per_s_mean"]
 
     report = {
         "schema": "trinity.stage2-report.v1",
@@ -96,16 +104,21 @@ def build() -> dict:
         "measurement": {
             "consumer": "B (device matvec of #64)",
             "rows": rows,
+            "aggregation": "Counter values per run are arithmetic means over all runs; "
+                           "stall percentages are 100 * summed counter / summed cycles. "
+                           "Stall counters can overlap and are not an additive cycle breakdown.",
             "ratio_d5_b2": round(ratio, 4),
             "ratio_ceiling": 1.25,
             "memory_bound": {
                 "definition": "consumer stalls 0 in both formats",
-                "observed": f"consumer stalls {md5['runs'][0]['consumer_stalls']} of "
-                            f"~{int(md5['runs'][0]['cycles']):,} cycles (<0.0001%); "
-                            "wait stalls are 99.98% of all cycles",
+                "observed": "; ".join(
+                    f"{r['format']}: mean consumer stalls {r['consumer_stalls_per_run']:,.3f} "
+                    f"of {r['cycles_mean']:,.3f} cycles ({r['consumer_stalls_percent']:.4f}%); "
+                    f"wait stalls {r['wait_stalls_percent']:.4f}%"
+                    for r in rows),
                 "verdict": "latency-bound under the serialized read discipline; NOT "
                            "bus-rate. The 1.25 format ratio is unreachable at this "
-                           "operating point (measured ratio 1.0000); the arbiter-free "
+                           f"operating point (measured ratio {ratio:.4f}); the arbiter-free "
                            "pattern test of #61 streamed the same port, so the seam to "
                            "fix is the arbiter, not the DRAM.",
         },
@@ -166,8 +179,8 @@ the t27/C reference (first rows __FIRST__).</p>
 __ROWS__
 </table>
 <p>Ratio dense5/baseline2 = <b>__RATIO__</b> against the arithmetic ceiling 1.25.
-The point is <b>latency-bound</b>: wait stalls are 99.98% of all cycles,
-consumer stalls __CONS__ per run, sample s.d. under 0.01%. Under the serialized
+The point is <b>latency-bound</b>. __STALLS__.
+__AGGREGATION__ Under the serialized
 read discipline the port requires, each 128-bit word costs its fixed latency
 whatever it carries (64 or 80 trits) &mdash; the 1.6-bit format buys nothing
 here. The 1.25 test needs pipelined reads through the arbiter; the
@@ -201,10 +214,56 @@ def render(report: dict) -> str:
         .replace("__DDR__", str(int(report["what_ran"]["clock"]["ddr3_mhz"])))
         .replace("__CTRL__", str(int(report["what_ran"]["clock"]["controller_mhz"])))
         .replace("__FIRST__", first)
+        .replace("__EXACT_D5__", "dense5: " + str(report["bit_exact"]["dense5"]["bit_exact"]))
+        .replace("__EXACT_B2__", "baseline2: " + str(report["bit_exact"]["baseline2"]["bit_exact"]))
         .replace("__ROWS__", rows)
-        .replace("__RATIO__", str(report["measurement"]["ratio_d5_b2"]))
-        .replace("__CONS__", str(report["measurement"]["rows"][0]["consumer_stalls_per_run"]))
+        .replace("__RATIO__", f"{report['measurement']['ratio_d5_b2']:.4f}")
+        .replace("__STALLS__", report["measurement"]["memory_bound"]["observed"])
+        .replace("__AGGREGATION__", report["measurement"]["aggregation"])
         .replace("__NOTMEASURED__", "".join(f"<li>{t}</li>" for t in report["not_measured"])))
+
+
+def measurement_markdown(report: dict) -> str:
+    rows = report["measurement"]["rows"]
+    table = ["| Format | bits/weight | weights/s (mean, +- sample s.d.) | runs | consumer stalls/run (mean) | consumer stalls/cycles | wait stalls/cycles |",
+             "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        table.append(f"| {r['format']} | {r['bits_per_weight']} | "
+                     f"{fmt(r['weights_per_s_mean'])} +- {fmt(r['weights_per_s_sd'])} | {r['runs']} | "
+                     f"{r['consumer_stalls_per_run']:,.3f} | {r['consumer_stalls_percent']:.4f}% | "
+                     f"{r['wait_stalls_percent']:.4f}% |")
+    return "\n".join(table) + f"\n\n{report['measurement']['aggregation']}\n\n" + (
+        f"The dense5/baseline2 throughput ratio is {report['measurement']['ratio_d5_b2']:.4f} "
+        "(arithmetic ceiling 1.25). The point is latency-bound, not bus-rate. "
+        "The 1.25 format ratio is unreachable at this operating point; the "
+        "arbiter-free pattern test of #61 streamed the same port at bus rate, "
+        "so pipelining through the arbiter/controller seam remains the next "
+        "bandwidth test (#62, #65). Not measured: power, tokens per second, "
+        "model quality, x32, DDR3 above 480 MT/s.\n")
+
+
+def update_document(text: str, report: dict) -> str:
+    if text.count(DOC_START) != 1 or text.count(DOC_END) != 1:
+        raise ValueError("docs/hardware.md must contain one stage2-measurement block")
+    before, rest = text.split(DOC_START)
+    _, after = rest.split(DOC_END)
+    return before + DOC_START + "\n" + measurement_markdown(report) + DOC_END + after
+
+
+def check(report: dict) -> bool:
+    try:
+        saved = json.loads((OUT / "stage2.json").read_text())
+        # Generation time is metadata; all measurements and evidence must match.
+        report = {**report, "written_utc": saved["written_utc"]}
+        checks = {"JSON": saved == report,
+                  "HTML": (OUT / "index.html").read_text() == render(report),
+                  "documentation": DOC.read_text() == update_document(DOC.read_text(), report)}
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"check: FAIL ({exc})")
+        return False
+    for name, ok in checks.items():
+        print(f"check {name}: {'PASS' if ok else 'FAIL'}")
+    return all(checks.values())
 
 
 def main() -> int:
@@ -214,16 +273,13 @@ def main() -> int:
     args = ap.parse_args()
     report = build()
     if args.check:
-        # every statistic recomputed from the captures equals the report's
-        md5 = load("measure_d5")
-        ok = all(abs(r["weights_per_s_mean"] - md5["statistic"]["mean"]) < 1
-                 for r in report["measurement"]["rows"] if r["format"] == "dense5")
-        print("check:", "PASS" if ok else "FAIL")
-        return 0 if ok else 1
+        return 0 if check(report) else 1
+    doc = update_document(DOC.read_text(), report)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "stage2.json").write_text(json.dumps(report, indent=1) + "\n")
     (OUT / "index.html").write_text(render(report))
-    print(f"wrote {OUT}/stage2.json and {OUT}/index.html")
+    DOC.write_text(doc)
+    print(f"wrote {OUT}/stage2.json, {OUT}/index.html and {DOC}")
     return 0
 
 
