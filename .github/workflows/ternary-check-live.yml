@@ -145,7 +145,7 @@ jobs:
         id: previous
         if: github.event_name != 'pull_request'
         env:
-          PAGES_URL: https://dmitrii-f-t27.github.io/trinity-memory/
+          PAGES_URL: https://dmitrii-f-t27.github.io/trinity-memory
         run: |
           mkdir -p reports/live
           code=$(curl -sSL --retry 3 -w '%{http_code}' -o reports/live/scan.json "$PAGES_URL/scan.json")
