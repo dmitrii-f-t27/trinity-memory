@@ -220,21 +220,24 @@ committed captures by `python3 tools/stage2-report.py`): the ALINX AX7203
 60 MHz -- the lowest DDR3 clock that calibrates on this board: 160 MHz does
 not, 300 MHz does; 75 MHz controller builds fail the controller's own
 routing once real decode logic exists), read with one outstanding request
-and an 8-clock gap after every ack (overlapping requests answer zero data,
-#75), decoded and dotted on the device -- **320/320 Y lines bit-exact in
+and an 8-clock gap after every ack (overlapping requests failed in this
+integrated build, #75), decoded and dotted on the device -- **320/320 Y lines bit-exact in
 both formats** against the t27/C reference.
 
-| Format | bits/weight | weights/s (mean of 12, +- s.d.) | ratio |
-|---|---|---|---|
-| dense5 | 1.6 | 1,478,697 +- 65 | 1.0000 (ceiling 1.25) |
-| baseline2 | 2.0 | 1,478,726 +- 97 | |
+<!-- stage2-measurement:start -->
+| Format | bits/weight | weights/s (mean, +- sample s.d.) | runs | issue-hold/cycles | request-wait/cycles | consumer stalls |
+|---|---|---|---|---|---|---|
+| dense5 | 1.6 | 1,478,697 +- 65 | 12 | 99.9440% | 0.2465% | unknown |
+| baseline2 | 2.0 | 1,478,726 +- 97 | 12 | 99.9310% | 0.3082% | unknown |
 
-The point is latency-bound, not bus-rate: wait stalls are 99.98% of all
-cycles, consumer stalls 19 per run, sample s.d. under 0.01%. The 1.25
-format ratio is unreachable at this operating point; the arbiter-free
-pattern test of #61 streamed the same port at bus rate, so the seam to fix
-for the bandwidth-bound test is the arbiter (#62, #65). Not measured:
-power, tokens per second, model quality, x32, DDR3 above 480 MT/s.
+Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown.
+
+The dense5/baseline2 throughput ratio is 1.0000 (arithmetic ceiling 1.25). DDR3 latency as the bottleneck is not established. The timed matvec includes UART result backpressure: y_pending stops FIFO consumption until the emitter accepts the row. Separate computation from result emission before testing the bandwidth thesis (measured dense5/baseline2 ratio 1.0000).
+
+v1 wait_stalls is w.a (issue-hold cycles); v1 consumer_stalls is w.b (request-wait cycles). Actual consumer stalls are n.b, discarded by v1. Consumer stalls for the 12-run series cannot be recovered; null is unknown, not zero. Separate golden runs have 19 (dense5) and 65 (baseline2) consumer stalls; these are not the missing 12-run measurements.
+
+The direct reader at 83.33 MHz recorded 1653 passing, 1653 model-checked runs across 3 loads, 0.944726-0.944888 words/clock, and up to 9 outstanding requests. Separate direct reader (a6d9745f, seed 6), without the loader's Wishbone arbiter. The seed-1 loads did not calibrate; their zero run count is not a failed data comparison. These short captures do not establish the integrated matvec's performance or long-term stability.
+<!-- stage2-measurement:end -->
 
 ## FPGA measurement track (AX7203)
 
@@ -2027,12 +2030,13 @@ Definitions (added by #65):
 - **weights/s** = logical trits delivered (padding lanes excluded) × f_ctrl / cycles,
   where f_ctrl is the controller clock derived from the board's 200 MHz oscillator
   through the design's PLL (derived, not instrument-measured).
-- **Memory-bound** (per the issue): consumer stalls are 0 in both formats, so the
-  gap to the bus peak belongs to DDR3 (command and wait stalls, refresh). The
-  workload consumer also reports its stall counts unrounded.
+- **Memory-bound** must be established in a delivery test isolated from consumer
+  and result-output backpressure. Zero consumer stalls alone do not prove that
+  DDR3 causes the remaining gap when request issuance can also be held.
 - **Ceiling** (arithmetic, not a result): at most 1.25 weights/s between the
   formats (`10/8`), reached only when the transfer is payload-bound; x16 at
-  480 MT/s peaks at 6.0 G (dense5) and 4.8 G (baseline2) weights/s.
+  480 MT/s peaks at 4.8 G (dense5) and 3.84 G (baseline2) weights/s
+  (128 bits per 60 MHz controller clock).
 
 Measurement (tools/fpga-ddr3-matvec-measure.py, schema
 `trinity.fpga-ddr3-matvec-measure.v1`; both captures and their build records
@@ -2041,22 +2045,28 @@ loaded once per format, 12 doorbell runs each, every run bit-exact.
 
 | Consumer | Format | bits/weight | words | cycles (mean of 12) | weights/s (mean ± s.d.) | ratio d5/b2 | memory-bound |
 |---|---|---|---|---|---|---|---|
-| B (device matvec) | dense5 | 1.6 | 10,240 | 33,240,000 | 1,478,697 ± 65 | **1.0000** | latency-bound (see below) |
-| B (device matvec) | baseline2 | 2.0 | 12,800 | 33,240,000 | 1,478,726 ± 97 | | latency-bound (see below) |
-| A (delivery, #62) | both | 1.6 / 2.0 | — | — | not measurable at bus rate | — | see reason |
+| B (device matvec) | dense5 | 1.6 | 10,240 | 33,240,080.583 | 1,478,697 ± 65 | **1.0000** | not established; UART in timed path |
+| B (device matvec) | baseline2 | 2.0 | 12,800 | 33,239,417.000 | 1,478,726 ± 97 | | not established; UART in timed path |
+| A through the integrated loader arbiter at 60 MHz | both | 1.6 / 2.0 | — | — | not measured at bus rate | — | see reason |
 
-**Outcome in one sentence:** at the only read discipline this board's UberDDR3
-user port allows through the arbiter — one outstanding request, an 8-clock gap
-after every ack, overlapping requests return zero data (#75) — the two formats
-deliver the same logical chunk in the same 33.24M cycles and the weights/s
-ratio is exactly 1.0, not 1.25: delivery is latency-bound (≈3,246 cycles per
-128-bit word regardless of its 64- or 80-trit width; wait stalls ≈ 99.98% of
-all cycles, consumer stalls 19 of 33M, sample s.d. < 0.01%), so the 1.6-bit
-format buys nothing at this operating point. Consumer (A) at bus rate is
-unreachable for the same reason — the #62 reader's pipelined phases are the
-zero-data case (its 2026-09-24 captures hold `runs: 0`), while the direct,
-arbiter-free pattern test of #61 streamed 2^25 bursts on the same port, which
-localises the no-overlap behaviour to the arbiter/controller seam, not the
-DRAM itself. The 1.25 ratio remains testable only after the arbiter supports
-pipelined reads; that fix is the follow-up that would unlock both (A) and the
-bandwidth-bound thesis test.
+**Correction:** the v1 measurement writer mislabeled UART `w.a` (issue-hold
+cycles) as wait stalls and `w.b` (request-wait cycles) as consumer stalls.
+It discarded the actual consumer-stall counter, `n.b`. Historical capture
+files remain unchanged; the regenerated stage-2 report remaps the recoverable
+fields and marks the missing 12-run consumer counters as unknown. The separate
+golden runs retain their UART lines and show 19 (dense5) and 65 (baseline2)
+consumer stalls; these cannot be substituted for the measurement series.
+
+Both formats delivered the logical chunk in about 33.24M cycles, with a
+dense5/baseline2 ratio rounding to 1.0000. This does not establish a DDR3
+latency bottleneck: the timed path includes UART result emission, and
+`y_pending` stops FIFO consumption while the emitter is busy. Issue-hold
+cycles are 99.9440% / 99.9310%; request-wait cycles are 0.2465% / 0.3082%.
+The next throughput measurement must separate computation from result
+emission. The overlapping-request failure in the integrated loader/matvec
+remains an integration issue to investigate before a delivery test through
+that arbiter. The separate direct reader in #62 at controller 83.33 MHz
+already passed 1653 runs across three seed-6 loads at about 0.945 words/clock,
+with up to nine outstanding requests. The seed-1 captures with zero runs
+failed calibration, not a pipelined data comparison. See
+[the measurement erratum](stage2-errata.md) for the protocol and limitations.

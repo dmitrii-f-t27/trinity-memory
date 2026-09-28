@@ -1,6 +1,6 @@
 {
- "schema": "trinity.stage2-report.v1",
- "written_utc": "2026-09-27T09:44:37Z",
+ "schema": "trinity.stage2-report.v2",
+ "written_utc": "2026-09-28T00:49:24Z",
  "issue": "dmitrii-f-t27/trinity-memory#67",
  "epic": "#59",
  "what_ran": {
@@ -17,7 +17,7 @@
    "note": "the lowest DDR3 clock UberDDR3 calibrates on this board (160 fails; 300 works); 75 MHz controller builds fail the controller's own routing once real decode logic exists"
   },
   "workload": "BitNet b1.58 2B4T layer-0 self_attn.q_proj rows 0-319 (819,200 weights), activations seed 27, both formats",
-  "read_discipline": "one outstanding request, 8 idle clocks after each ack (overlapping requests answer zero data, #75)"
+  "read_discipline": "one outstanding request, 8 idle clocks after each ack (overlapping requests failed in the integrated loader/matvec build, #75; the separate direct reader passed pipelined reads)"
  },
  "bit_exact": {
   "dense5": {
@@ -61,42 +61,186 @@
     "format": "dense5",
     "bits_per_weight": 1.6,
     "runs": 12,
-    "cycles_mean": 33240192.0,
+    "cycles_mean": 33240080.583,
     "weights_per_s_mean": 1478696.8,
     "weights_per_s_sd": 65.3,
+    "weights_per_s_sd_percent": 0.004418,
     "weights_per_s_min": 1478570.9,
     "weights_per_s_max": 1478792.1,
-    "consumer_stalls_per_run": 81931,
-    "wait_stalls_per_run": 33221624,
-    "command_stalls_per_run": 8318
+    "issue_hold_cycles_per_run": 33221476.5,
+    "consumer_stalls_per_run": null,
+    "wait_stalls_per_run": 81930.917,
+    "command_stalls_per_run": 8354,
+    "issue_hold_cycles_percent": 99.944031,
+    "consumer_stalls_percent": null,
+    "wait_stalls_percent": 0.246482,
+    "command_stalls_percent": 0.025132,
+    "arithmetic_weights_per_s": 4800000000.0
    },
    {
     "format": "baseline2",
     "bits_per_weight": 2.0,
     "runs": 12,
-    "cycles_mean": 33238194.0,
+    "cycles_mean": 33239417.0,
     "weights_per_s_mean": 1478726.3,
     "weights_per_s_sd": 96.7,
+    "weights_per_s_sd_percent": 0.006541,
     "weights_per_s_min": 1478541.9,
     "weights_per_s_max": 1478828.3,
-    "consumer_stalls_per_run": 102428,
-    "wait_stalls_per_run": 33215216,
-    "command_stalls_per_run": 10168
+    "issue_hold_cycles_per_run": 33216468,
+    "consumer_stalls_per_run": null,
+    "wait_stalls_per_run": 102430.25,
+    "command_stalls_per_run": 10139,
+    "issue_hold_cycles_percent": 99.930958,
+    "consumer_stalls_percent": null,
+    "wait_stalls_percent": 0.308159,
+    "command_stalls_percent": 0.030503,
+    "arithmetic_weights_per_s": 3840000000.0
    }
   ],
+  "aggregation": "Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown.",
+  "counter_correction": {
+   "source_schema": "trinity.fpga-ddr3-matvec-measure.v1",
+   "mapping": "v1 wait_stalls is w.a (issue-hold cycles); v1 consumer_stalls is w.b (request-wait cycles). Actual consumer stalls are n.b, discarded by v1.",
+   "missing": "Consumer stalls for the 12-run series cannot be recovered; null is unknown, not zero.",
+   "golden_runs": {
+    "dense5": {
+     "device_run": 1,
+     "polls": 1055855,
+     "words": 10240,
+     "cycles": 33237059,
+     "max_outstanding": 1,
+     "command_stalls": 8382,
+     "issue_hold_cycles": 33218427,
+     "wait_stalls": 81932,
+     "bad_words": 0,
+     "consumer_stalls": 19,
+     "activation_words": 160,
+     "stray_acks": 0,
+     "runs_done": 3,
+     "total_bad": 0,
+     "summary_lines": [
+      [
+       "d",
+       1,
+       1055855
+      ],
+      [
+       "c",
+       10240,
+       33237059
+      ],
+      [
+       "o",
+       1,
+       8382
+      ],
+      [
+       "w",
+       33218427,
+       81932
+      ],
+      [
+       "n",
+       0,
+       19
+      ],
+      [
+       "u",
+       160,
+       0
+      ],
+      [
+       "z",
+       3,
+       0
+      ]
+     ]
+    },
+    "baseline2": {
+     "device_run": 2,
+     "polls": 660040,
+     "words": 12800,
+     "cycles": 33237325,
+     "max_outstanding": 1,
+     "command_stalls": 10117,
+     "issue_hold_cycles": 33214398,
+     "wait_stalls": 102429,
+     "bad_words": 0,
+     "consumer_stalls": 65,
+     "activation_words": 160,
+     "stray_acks": 0,
+     "runs_done": 1,
+     "total_bad": 0,
+     "summary_lines": [
+      [
+       "d",
+       2,
+       660040
+      ],
+      [
+       "c",
+       12800,
+       33237325
+      ],
+      [
+       "o",
+       1,
+       10117
+      ],
+      [
+       "w",
+       33214398,
+       102429
+      ],
+      [
+       "n",
+       0,
+       65
+      ],
+      [
+       "u",
+       160,
+       0
+      ],
+      [
+       "z",
+       1,
+       0
+      ]
+     ]
+    }
+   },
+   "golden_scope": "Separate golden runs have 19 (dense5) and 65 (baseline2) consumer stalls; these are not the missing 12-run measurements."
+  },
   "ratio_d5_b2": 1.0,
   "ratio_ceiling": 1.25,
   "memory_bound": {
-   "definition": "consumer stalls 0 in both formats",
-   "observed": "consumer stalls 81931 of ~33,240,192 cycles (<0.0001%); wait stalls are 99.98% of all cycles",
-   "verdict": "latency-bound under the serialized read discipline; NOT bus-rate. The 1.25 format ratio is unreachable at this operating point (measured ratio 1.0000); the arbiter-free pattern test of #61 streamed the same port, so the seam to fix is the arbiter, not the DRAM."
+   "definition": "Memory-limited delivery requires a test isolated from result-output backpressure.",
+   "observed": "dense5: request issue held 99.9440% of cycles; request wait 0.2465%; consumer stalls unavailable in the 12-run capture; baseline2: request issue held 99.9310% of cycles; request wait 0.3082%; consumer stalls unavailable in the 12-run capture",
+   "verdict": "DDR3 latency as the bottleneck is not established. The timed matvec includes UART result backpressure: y_pending stops FIFO consumption until the emitter accepts the row. Separate computation from result emission before testing the bandwidth thesis (measured dense5/baseline2 ratio 1.0000)."
   }
+ },
+ "separate_direct_reader": {
+  "controller_mhz": 83.33333333333333,
+  "loads": 3,
+  "runs": 1653,
+  "passing_runs": 1653,
+  "model_checked_runs": 1653,
+  "complete_pairs": 825,
+  "bad_words": 0,
+  "invalid_groups": 0,
+  "consumer_stalls": 0,
+  "words_per_clock_min": 0.944726,
+  "words_per_clock_max": 0.944888,
+  "max_outstanding": 9,
+  "scope": "Separate direct reader (a6d9745f, seed 6), without the loader's Wishbone arbiter. The seed-1 loads did not calibrate; their zero run count is not a failed data comparison. These short captures do not establish the integrated matvec's performance or long-term stability."
  },
  "not_measured": [
   "power and energy (no instrument on the bench)",
   "tokens per second and model quality (one layer chunk, not a model)",
-  "x32 DDR3, and DDR3 above 480 MT/s (the 667 MT/s class was never built)",
-  "bus-rate delivery (consumer A): the pipelined reads the port answers with zero data are the open seam (#62, #65)"
+  "the integrated matvec at x32 or above 480 MT/s (separate DDR3 bring-up and reader builds exist)",
+  "bus-rate delivery through the integrated loader/matvec arbiter at controller 60 MHz; the separate direct reader at 83.33 MHz did measure pipelined delivery"
  ],
  "evidence": {
   "golden_d5": {
@@ -122,6 +266,14 @@
   "build_b2": {
    "file": "reports/fpga/ddr3-build-2026-09-27-twoclock-m6d5-b2/build.json",
    "sha256": "sha256:4305131ba355ac8da655768bf352f8c0156fe0765e457ae7711f7654e20a4bd7"
+  },
+  "reader_summary": {
+   "file": "reports/fpga/ddr3-reader-summary-2026-09-24-a6d9745f-x16.json",
+   "sha256": "sha256:fff5c6da901efff5d1a82c6047c21d426e79eddbb461afacb3925e8fb7e5319b"
+  },
+  "reader_build": {
+   "file": "reports/fpga/ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6/build.json",
+   "sha256": "sha256:8f69b9af3a6147c5e9217defaa07079a4755cdcb98e20d808490b0fa674ff62f"
   }
  },
  "uberddr3": {

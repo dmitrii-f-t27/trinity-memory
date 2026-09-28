@@ -2,14 +2,13 @@
 """The stage-2 report (issue #67): what was measured on the AX7203 with DDR3,
 what was not, every number traced to a committed capture.
 
-Builds reports/stage2/stage2.json and reports/stage2/index.html from the
-committed captures alone -- a clean clone with the fixture ranges cached
-rebuilds both with this one command. Sources: the golden-chunk captures
+Builds reports/stage2/stage2.json, reports/stage2/index.html and the measurement
+block in docs/hardware.md from the committed captures alone. Sources: the golden-chunk captures
 (both formats), the #65 measurements (both formats), the build records, the
 #61 pattern bring-up record. Evidence index: bitstream/spec/vector hashes,
 tool revisions, UberDDR3 pin and license, board identity.
 
-  python3 tools/stage2-report.py            # writes both, exit 0
+  python3 tools/stage2-report.py            # writes all three, exit 0
   python3 tools/stage2-report.py --check    # re-verify against the captures
 
 Exit codes: 0 written; 1 a number in the text cannot be traced to a capture.
@@ -21,11 +20,18 @@ import datetime
 import hashlib
 import json
 import pathlib
-import re
+import statistics
+import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from matvec_device_model import decode_run_summary
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 R = ROOT / "reports/fpga"
 OUT = ROOT / "reports/stage2"
+DOC = ROOT / "docs/hardware.md"
+DOC_START = "<!-- stage2-measurement:start -->"
+DOC_END = "<!-- stage2-measurement:end -->"
 
 SOURCES = {
     "golden_d5": "matvec-capture-2026-09-27-m6d5-golden.json",
@@ -34,6 +40,8 @@ SOURCES = {
     "measure_b2": "ddr3-matvec-measure-2026-09-27-b2.json",
     "build_d5": "ddr3-build-2026-09-27-twoclock-m6d5/build.json",
     "build_b2": "ddr3-build-2026-09-27-twoclock-m6d5-b2/build.json",
+    "reader_summary": "ddr3-reader-summary-2026-09-24-a6d9745f-x16.json",
+    "reader_build": "ddr3-build-2026-09-24-a6d9745f-x16-reader-seed6/build.json",
 }
 
 
@@ -49,29 +57,65 @@ def fmt(x: float) -> str:
     return f"{x:,.0f}"
 
 
+def corrected_runs(measurement: dict) -> list[dict]:
+    if measurement["schema"] == "trinity.fpga-ddr3-matvec-measure.v1":
+        # Preserve the historical captures byte-for-byte. The v1 writer saved
+        # w.a as wait_stalls and w.b as consumer_stalls, and discarded n.b.
+        return [{**r, "issue_hold_cycles": r["wait_stalls"],
+                 "wait_stalls": r["consumer_stalls"], "consumer_stalls": None}
+                for r in measurement["runs"]]
+    if measurement["schema"] == "trinity.fpga-ddr3-matvec-measure.v2":
+        return [{**r, **decode_run_summary(r["summary_lines"])} for r in measurement["runs"]]
+    raise ValueError(f"unknown measurement schema: {measurement['schema']}")
+
+
 def build() -> dict:
     gd5, gb2 = load("golden_d5"), load("golden_b2")
     md5, mb2 = load("measure_d5"), load("measure_b2")
     bd5, bb2 = load("build_d5"), load("build_b2")
 
     def row(m: dict, fmt_name: str, bits: float) -> dict:
-        s = m["statistic"]
+        runs = corrected_runs(m)
+        speeds = [r["weights_per_s"] for r in runs]
+        cycles = sum(r["cycles"] for r in runs)
+        if len(runs) < 2 or any(r["cycles"] <= 0 for r in runs):
+            raise ValueError(f"{fmt_name}: at least two runs with positive cycles required")
+        s = {"runs": len(runs), "mean": statistics.mean(speeds),
+             "sample_sd": statistics.stdev(speeds), "min": min(speeds), "max": max(speeds)}
         return {"format": fmt_name, "bits_per_weight": bits,
-                "runs": s["runs"], "cycles_mean": round(s["mean"] * 0 + _cycles(m), 0),
-                "weights_per_s_mean": s["mean"], "weights_per_s_sd": s["sample_sd"],
+                "runs": s["runs"], "cycles_mean": round(cycles / len(runs), 3),
+                "weights_per_s_mean": round(s["mean"], 1),
+                "weights_per_s_sd": round(s["sample_sd"], 1),
+                "weights_per_s_sd_percent": round(100 * s["sample_sd"] / s["mean"], 6),
                 "weights_per_s_min": s["min"], "weights_per_s_max": s["max"],
-                "consumer_stalls_per_run": m["runs"][0]["consumer_stalls"],
-                "wait_stalls_per_run": m["runs"][0]["wait_stalls"],
-                "command_stalls_per_run": m["runs"][0]["command_stalls"]}
-
-    def _cycles(m: dict) -> float:
-        return float(m["runs"][0]["cycles"])
+                **{f"{key}_per_run": (round(statistics.mean(r[key] for r in runs), 3)
+                                      if all(r[key] is not None for r in runs) else None)
+                   for key in ("issue_hold_cycles", "consumer_stalls", "wait_stalls", "command_stalls")},
+                **{f"{key}_percent": (round(100 * sum(r[key] for r in runs) / cycles, 6)
+                                      if all(r[key] is not None for r in runs) else None)
+                   for key in ("issue_hold_cycles", "consumer_stalls", "wait_stalls", "command_stalls")},
+                "arithmetic_weights_per_s": m["clock"]["ctrl_hz"] * m["format"]["lanes_per_word"]}
 
     rows = [row(md5, "dense5", 1.6), row(mb2, "baseline2", 2.0)]
-    ratio = md5["statistic"]["mean"] / mb2["statistic"]["mean"]
+    ratio = rows[0]["weights_per_s_mean"] / rows[1]["weights_per_s_mean"]
+    reader_loads = load("reader_summary")["board"]["seed6"]
+    reader = {
+        "controller_mhz": 1000 / next(c["period_ns"] for c in load("reader_build")["ddr3"]["clocks"]
+                                      if c["name"] == "clk_ctrl"),
+        "loads": len(reader_loads),
+        **{key: sum(x[key] for x in reader_loads)
+           for key in ("runs", "passing_runs", "model_checked_runs", "complete_pairs",
+                       "bad_words", "invalid_groups", "consumer_stalls")},
+        "words_per_clock_min": min(f["words_per_clock_min"] for x in reader_loads for f in x["per_format"].values()),
+        "words_per_clock_max": max(f["words_per_clock_max"] for x in reader_loads for f in x["per_format"].values()),
+        "max_outstanding": max(f["max_outstanding_max"] for x in reader_loads for f in x["per_format"].values()),
+        "scope": "Separate direct reader (a6d9745f, seed 6), without the loader's Wishbone arbiter. "
+                 "The seed-1 loads did not calibrate; their zero run count is not a failed data comparison. "
+                 "These short captures do not establish the integrated matvec's performance or long-term stability.",
+    }
 
     report = {
-        "schema": "trinity.stage2-report.v1",
+        "schema": "trinity.stage2-report.v2",
         "written_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "issue": "dmitrii-f-t27/trinity-memory#67", "epic": "#59",
         "what_ran": {
@@ -84,7 +128,8 @@ def build() -> dict:
             "workload": "BitNet b1.58 2B4T layer-0 self_attn.q_proj rows 0-319 "
                         "(819,200 weights), activations seed 27, both formats",
             "read_discipline": "one outstanding request, 8 idle clocks after each ack "
-                               "(overlapping requests answer zero data, #75)",
+                               "(overlapping requests failed in the integrated loader/matvec build, #75; "
+                               "the separate direct reader passed pipelined reads)",
         },
         "bit_exact": {
             "dense5": {"y_lines": gd5["y_lines"], "bit_exact": gd5["bit_exact"],
@@ -96,26 +141,41 @@ def build() -> dict:
         "measurement": {
             "consumer": "B (device matvec of #64)",
             "rows": rows,
+            "aggregation": "Counter values per run are arithmetic means over all runs; "
+                           "stall percentages are 100 * summed counter / summed cycles. "
+                           "Stall counters can overlap and are not an additive cycle breakdown.",
+            "counter_correction": {
+                "source_schema": "trinity.fpga-ddr3-matvec-measure.v1",
+                "mapping": "v1 wait_stalls is w.a (issue-hold cycles); v1 consumer_stalls is "
+                           "w.b (request-wait cycles). Actual consumer stalls are n.b, discarded by v1.",
+                "missing": "Consumer stalls for the 12-run series cannot be recovered; null is unknown, not zero.",
+                "golden_runs": {"dense5": decode_run_summary(gd5["summary_lines"]),
+                                "baseline2": decode_run_summary(gb2["summary"])},
+                "golden_scope": "Separate golden runs have 19 (dense5) and 65 (baseline2) consumer stalls; "
+                                "these are not the missing 12-run measurements.",
+            },
             "ratio_d5_b2": round(ratio, 4),
             "ratio_ceiling": 1.25,
             "memory_bound": {
-                "definition": "consumer stalls 0 in both formats",
-                "observed": f"consumer stalls {md5['runs'][0]['consumer_stalls']} of "
-                            f"~{int(md5['runs'][0]['cycles']):,} cycles (<0.0001%); "
-                            "wait stalls are 99.98% of all cycles",
-                "verdict": "latency-bound under the serialized read discipline; NOT "
-                           "bus-rate. The 1.25 format ratio is unreachable at this "
-                           "operating point (measured ratio 1.0000); the arbiter-free "
-                           "pattern test of #61 streamed the same port, so the seam to "
-                           "fix is the arbiter, not the DRAM.",
+                "definition": "Memory-limited delivery requires a test isolated from result-output backpressure.",
+                "observed": "; ".join(
+                    f"{r['format']}: request issue held {r['issue_hold_cycles_percent']:.4f}% of cycles; "
+                    f"request wait {r['wait_stalls_percent']:.4f}%; "
+                    "consumer stalls unavailable in the 12-run capture"
+                    for r in rows),
+                "verdict": "DDR3 latency as the bottleneck is not established. The timed matvec includes "
+                           "UART result backpressure: y_pending stops FIFO consumption until the emitter "
+                           "accepts the row. Separate computation from result emission before testing "
+                           f"the bandwidth thesis (measured dense5/baseline2 ratio {ratio:.4f}).",
         },
         },
+        "separate_direct_reader": reader,
         "not_measured": [
             "power and energy (no instrument on the bench)",
             "tokens per second and model quality (one layer chunk, not a model)",
-            "x32 DDR3, and DDR3 above 480 MT/s (the 667 MT/s class was never built)",
-            "bus-rate delivery (consumer A): the pipelined reads the port answers with "
-            "zero data are the open seam (#62, #65)",
+            "the integrated matvec at x32 or above 480 MT/s (separate DDR3 bring-up and reader builds exist)",
+            "bus-rate delivery through the integrated loader/matvec arbiter at controller 60 MHz; "
+            "the separate direct reader at 83.33 MHz did measure pipelined delivery",
         ],
         "evidence": {
             name: {"file": f"reports/fpga/{path}", "sha256": sha256_file(R / path)}
@@ -166,13 +226,12 @@ the t27/C reference (first rows __FIRST__).</p>
 __ROWS__
 </table>
 <p>Ratio dense5/baseline2 = <b>__RATIO__</b> against the arithmetic ceiling 1.25.
-The point is <b>latency-bound</b>: wait stalls are 99.98% of all cycles,
-consumer stalls __CONS__ per run, sample s.d. under 0.01%. Under the serialized
-read discipline the port requires, each 128-bit word costs its fixed latency
-whatever it carries (64 or 80 trits) &mdash; the 1.6-bit format buys nothing
-here. The 1.25 test needs pipelined reads through the arbiter; the
-arbiter-free pattern test of #61 streamed the same port, so the seam to fix
-is the arbiter, not the DRAM.</p>
+__STALLS__. __AGGREGATION__</p>
+<p class="warn">__COUNTER_CORRECTION__ __MISSING_COUNTERS__ __GOLDEN_SCOPE__</p>
+<p class="warn">__VERDICT__</p>
+
+<h2>Separate direct reader</h2>
+<p>__READER__</p>
 
 <h2>Not measured</h2>
 <ul>__NOTMEASURED__</ul>
@@ -201,10 +260,66 @@ def render(report: dict) -> str:
         .replace("__DDR__", str(int(report["what_ran"]["clock"]["ddr3_mhz"])))
         .replace("__CTRL__", str(int(report["what_ran"]["clock"]["controller_mhz"])))
         .replace("__FIRST__", first)
+        .replace("__EXACT_D5__", "dense5: " + str(report["bit_exact"]["dense5"]["bit_exact"]))
+        .replace("__EXACT_B2__", "baseline2: " + str(report["bit_exact"]["baseline2"]["bit_exact"]))
         .replace("__ROWS__", rows)
-        .replace("__RATIO__", str(report["measurement"]["ratio_d5_b2"]))
-        .replace("__CONS__", str(report["measurement"]["rows"][0]["consumer_stalls_per_run"]))
+        .replace("__RATIO__", f"{report['measurement']['ratio_d5_b2']:.4f}")
+        .replace("__STALLS__", report["measurement"]["memory_bound"]["observed"])
+        .replace("__AGGREGATION__", report["measurement"]["aggregation"])
+        .replace("__COUNTER_CORRECTION__", report["measurement"]["counter_correction"]["mapping"])
+        .replace("__MISSING_COUNTERS__", report["measurement"]["counter_correction"]["missing"])
+        .replace("__GOLDEN_SCOPE__", report["measurement"]["counter_correction"]["golden_scope"])
+        .replace("__VERDICT__", report["measurement"]["memory_bound"]["verdict"])
+        .replace("__READER__", reader_text(report))
         .replace("__NOTMEASURED__", "".join(f"<li>{t}</li>" for t in report["not_measured"])))
+
+
+def reader_text(report: dict) -> str:
+    r = report["separate_direct_reader"]
+    return (f"The direct reader at {r['controller_mhz']:.2f} MHz recorded {r['passing_runs']} passing, "
+            f"{r['model_checked_runs']} model-checked runs across {r['loads']} loads, "
+            f"{r['words_per_clock_min']:.6f}-{r['words_per_clock_max']:.6f} words/clock, "
+            f"and up to {r['max_outstanding']} outstanding requests. " + r["scope"])
+
+
+def measurement_markdown(report: dict) -> str:
+    rows = report["measurement"]["rows"]
+    table = ["| Format | bits/weight | weights/s (mean, +- sample s.d.) | runs | issue-hold/cycles | request-wait/cycles | consumer stalls |",
+             "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        table.append(f"| {r['format']} | {r['bits_per_weight']} | "
+                     f"{fmt(r['weights_per_s_mean'])} +- {fmt(r['weights_per_s_sd'])} | {r['runs']} | "
+                     f"{r['issue_hold_cycles_percent']:.4f}% | {r['wait_stalls_percent']:.4f}% | unknown |")
+    return "\n".join(table) + f"\n\n{report['measurement']['aggregation']}\n\n" + (
+        f"The dense5/baseline2 throughput ratio is {report['measurement']['ratio_d5_b2']:.4f} "
+        "(arithmetic ceiling 1.25). " + report["measurement"]["memory_bound"]["verdict"] + "\n\n" +
+        report["measurement"]["counter_correction"]["mapping"] + " " +
+        report["measurement"]["counter_correction"]["missing"] + " " +
+        report["measurement"]["counter_correction"]["golden_scope"] + "\n\n" + reader_text(report) + "\n")
+
+
+def update_document(text: str, report: dict) -> str:
+    if text.count(DOC_START) != 1 or text.count(DOC_END) != 1:
+        raise ValueError("docs/hardware.md must contain one stage2-measurement block")
+    before, rest = text.split(DOC_START)
+    _, after = rest.split(DOC_END)
+    return before + DOC_START + "\n" + measurement_markdown(report) + DOC_END + after
+
+
+def check(report: dict) -> bool:
+    try:
+        saved = json.loads((OUT / "stage2.json").read_text())
+        # Generation time is metadata; all measurements and evidence must match.
+        report = {**report, "written_utc": saved["written_utc"]}
+        checks = {"JSON": saved == report,
+                  "HTML": (OUT / "index.html").read_text() == render(report),
+                  "documentation": DOC.read_text() == update_document(DOC.read_text(), report)}
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"check: FAIL ({exc})")
+        return False
+    for name, ok in checks.items():
+        print(f"check {name}: {'PASS' if ok else 'FAIL'}")
+    return all(checks.values())
 
 
 def main() -> int:
@@ -214,16 +329,13 @@ def main() -> int:
     args = ap.parse_args()
     report = build()
     if args.check:
-        # every statistic recomputed from the captures equals the report's
-        md5 = load("measure_d5")
-        ok = all(abs(r["weights_per_s_mean"] - md5["statistic"]["mean"]) < 1
-                 for r in report["measurement"]["rows"] if r["format"] == "dense5")
-        print("check:", "PASS" if ok else "FAIL")
-        return 0 if ok else 1
+        return 0 if check(report) else 1
+    doc = update_document(DOC.read_text(), report)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "stage2.json").write_text(json.dumps(report, indent=1) + "\n")
     (OUT / "index.html").write_text(render(report))
-    print(f"wrote {OUT}/stage2.json and {OUT}/index.html")
+    DOC.write_text(doc)
+    print(f"wrote {OUT}/stage2.json, {OUT}/index.html and {DOC}")
     return 0
 
 
