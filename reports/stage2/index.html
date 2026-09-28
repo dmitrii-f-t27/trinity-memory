@@ -9,7 +9,7 @@ h2{border-bottom:2px solid #1a1a1a;padding-bottom:.3rem}
 .ok{color:#046c3c;font-weight:bold}.warn{color:#8a4b00}
 </style></head><body>
 <h1>Stage 2: DDR3 on the AX7203</h1>
-<p>2026-09-28T00:38:13Z &middot; <a href="stage2.json">stage2.json</a> &middot; issue
+<p>2026-09-28T00:44:55Z &middot; <a href="stage2.json">stage2.json</a> &middot; issue
 <a href="https://github.com/dmitrii-f-t27/trinity-memory/issues/67">#67</a> of epic
 <a href="https://github.com/dmitrii-f-t27/trinity-memory/issues/59">#59</a></p>
 
@@ -33,13 +33,9 @@ the t27/C reference (first rows [0, 1099511625215], [1, 2660], [2, 1099511627724
 <tr><td>baseline2</td><td>2.0</td><td>12</td><td>1,478,726</td><td>&plusmn;97</td><td>1,478,542</td><td>1,478,828</td></tr>
 </table>
 <p>Ratio dense5/baseline2 = <b>1.0000</b> against the arithmetic ceiling 1.25.
-The point is <b>latency-bound</b>. dense5: mean consumer stalls 81,930.917 of 33,240,080.583 cycles (0.2465%); wait stalls 99.9440%; baseline2: mean consumer stalls 102,430.250 of 33,239,417.000 cycles (0.3082%); wait stalls 99.9310%.
-Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown. Under the serialized
-read discipline the port requires, each 128-bit word costs its fixed latency
-whatever it carries (64 or 80 trits) &mdash; the 1.6-bit format buys nothing
-here. The 1.25 test needs pipelined reads through the arbiter; the
-arbiter-free pattern test of #61 streamed the same port, so the seam to fix
-is the arbiter, not the DRAM.</p>
+dense5: request issue held 99.9440% of cycles; request wait 0.2465%; consumer stalls unavailable in the 12-run capture; baseline2: request issue held 99.9310% of cycles; request wait 0.3082%; consumer stalls unavailable in the 12-run capture. Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown.</p>
+<p class="warn">v1 wait_stalls is w.a (issue-hold cycles); v1 consumer_stalls is w.b (request-wait cycles). Actual consumer stalls are n.b, discarded by v1. Consumer stalls for the 12-run series cannot be recovered; null is unknown, not zero. Separate golden runs have 19 (dense5) and 65 (baseline2) consumer stalls; these are not the missing 12-run measurements.</p>
+<p class="warn">DDR3 latency as the bottleneck is not established. The timed matvec includes UART result backpressure: y_pending stops FIFO consumption until the emitter accepts the row. Separate computation from result emission before testing the bandwidth thesis (measured dense5/baseline2 ratio 1.0000).</p>
 
 <h2>Not measured</h2>
 <ul><li>power and energy (no instrument on the bench)</li><li>tokens per second and model quality (one layer chunk, not a model)</li><li>x32 DDR3, and DDR3 above 480 MT/s (the 667 MT/s class was never built)</li><li>bus-rate delivery (consumer A): the pipelined reads the port answers with zero data are the open seam (#62, #65)</li></ul>

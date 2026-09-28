@@ -5,7 +5,7 @@ dense5 (1.6 bits/weight) vs baseline2 (2 bits/weight), with error bars.
 The chunk is loaded once per format (the golden 320-row q_proj chunk through
 the #63 loader); every run then rings the doorbell with a fresh counter and
 reads the summary lines (d run, c words + cycles, o max outstanding +
-command stalls, w wait stalls + consumer stalls, n bad words, u act words,
+command stalls, w issue-hold cycles + wait stalls, n bad words + consumer stalls, u act words,
 z runs + total bad). Weights/s = logical trits x f_ctrl / cycles, per run;
 the report carries min/median/max and mean +- sample s.d. (at least --runs
 runs), the bitstream sha256 of the flashed build, IDCODE and DNA, and the
@@ -39,7 +39,7 @@ run_tool = importlib.util.module_from_spec(_spec)  # hyphen-named module
 _spec.loader.exec_module(run_tool)
 import matvec_device_model as model  # noqa: E402
 
-SCHEMA = "trinity.fpga-ddr3-matvec-measure.v1"
+SCHEMA = "trinity.fpga-ddr3-matvec-measure.v2"
 
 
 def board_identity() -> dict:
@@ -144,10 +144,15 @@ def main() -> int:
     for n in range(1, args.runs + 1):
         lines = one_run(args.port, args.baud, n, 240.0)
         y = [signed40(b) for tag, a, b in lines if tag == "y"]
-        summary = [(t, a, b) for t, a, b in lines if t in "dcownuz"]
-        by = {t: (a, b) for t, a, b in summary}
-        words = by.get("c", (0, 0))[0]
-        cycles = by.get("c", (0, 0))[1]
+        try:
+            counters = model.decode_run_summary(lines)
+        except ValueError as exc:
+            print(f"run {n}: {exc} — stopping", flush=True)
+            return 1
+        words, cycles = counters["words"], counters["cycles"]
+        if counters["device_run"] != n or words != trits_total // lanes or counters["bad_words"]:
+            print(f"run {n}: wrong run, word count or bad words — stopping", flush=True)
+            return 1
         exact = len(y) == args.rows and y == expected
         if first_y is None:
             first_y = {"y_lines": len(y), "bit_exact": exact,
@@ -156,12 +161,7 @@ def main() -> int:
             print(f"run {n}: NOT bit-exact ({len(y)} lines) — stopping", flush=True)
             return 1
         wps = trits_total * args.design_hz / cycles if cycles else 0.0
-        runs.append({"run": n, "words": words, "cycles": cycles,
-                     "weights_per_s": round(wps, 1),
-                     "command_stalls": by.get("o", (0, 0))[1],
-                     "wait_stalls": by.get("w", (0, 0))[0],
-                     "consumer_stalls": by.get("w", (0, 0))[1],
-                     "bad_words": by.get("n", (0, 0))[0]})
+        runs.append({"run": n, **counters, "weights_per_s": round(wps, 1)})
         print(f"run {n}: {words} words, {cycles} cycles, {wps/1e6:.3f} M weights/s", flush=True)
 
     vals = [r["weights_per_s"] for r in runs]
@@ -193,12 +193,10 @@ def main() -> int:
         "runs": runs,
         "statistic": stat,
         "memory_bound": {"consumer_stalls_zero": memory_bound,
-                         "verdict": "memory-bound per the definition" if memory_bound
-                                    else "NOT memory-bound: the consumer stalled"},
-        "ceiling": {"arithmetic_weights_per_s": (240e6 * 16 / 8 / 1.6 if fmt == model.FMT_D5
-                                                 else 240e6 * 16 / 8 / 2.0),
-                    "note": "x16 480 MT/s payload ceiling; the serialized read discipline "
-                            "sits far below it (latency-bound)"},
+                         "verdict": "not established: timed matvec includes UART result backpressure"},
+        "ceiling": {"arithmetic_weights_per_s": args.design_hz * lanes,
+                    "note": "x16: 128 bits per controller clock, 80 dense5 or 64 baseline2 weights; "
+                            "arithmetic only, not measured delivery"},
     }
     Path(args.output).write_text(json.dumps(report, indent=1))
     print(json.dumps(stat, indent=1))

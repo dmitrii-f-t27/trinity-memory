@@ -1,6 +1,6 @@
 {
- "schema": "trinity.stage2-report.v1",
- "written_utc": "2026-09-28T00:38:13Z",
+ "schema": "trinity.stage2-report.v2",
+ "written_utc": "2026-09-28T00:44:55Z",
  "issue": "dmitrii-f-t27/trinity-memory#67",
  "epic": "#59",
  "what_ran": {
@@ -67,12 +67,15 @@
     "weights_per_s_sd_percent": 0.004418,
     "weights_per_s_min": 1478570.9,
     "weights_per_s_max": 1478792.1,
-    "consumer_stalls_per_run": 81930.917,
-    "wait_stalls_per_run": 33221476.5,
+    "issue_hold_cycles_per_run": 33221476.5,
+    "consumer_stalls_per_run": null,
+    "wait_stalls_per_run": 81930.917,
     "command_stalls_per_run": 8354,
-    "consumer_stalls_percent": 0.246482,
-    "wait_stalls_percent": 99.944031,
-    "command_stalls_percent": 0.025132
+    "issue_hold_cycles_percent": 99.944031,
+    "consumer_stalls_percent": null,
+    "wait_stalls_percent": 0.246482,
+    "command_stalls_percent": 0.025132,
+    "arithmetic_weights_per_s": 4800000000.0
    },
    {
     "format": "baseline2",
@@ -84,21 +87,138 @@
     "weights_per_s_sd_percent": 0.006541,
     "weights_per_s_min": 1478541.9,
     "weights_per_s_max": 1478828.3,
-    "consumer_stalls_per_run": 102430.25,
-    "wait_stalls_per_run": 33216468,
+    "issue_hold_cycles_per_run": 33216468,
+    "consumer_stalls_per_run": null,
+    "wait_stalls_per_run": 102430.25,
     "command_stalls_per_run": 10139,
-    "consumer_stalls_percent": 0.308159,
-    "wait_stalls_percent": 99.930958,
-    "command_stalls_percent": 0.030503
+    "issue_hold_cycles_percent": 99.930958,
+    "consumer_stalls_percent": null,
+    "wait_stalls_percent": 0.308159,
+    "command_stalls_percent": 0.030503,
+    "arithmetic_weights_per_s": 3840000000.0
    }
   ],
   "aggregation": "Counter values per run are arithmetic means over all runs; stall percentages are 100 * summed counter / summed cycles. Stall counters can overlap and are not an additive cycle breakdown.",
+  "counter_correction": {
+   "source_schema": "trinity.fpga-ddr3-matvec-measure.v1",
+   "mapping": "v1 wait_stalls is w.a (issue-hold cycles); v1 consumer_stalls is w.b (request-wait cycles). Actual consumer stalls are n.b, discarded by v1.",
+   "missing": "Consumer stalls for the 12-run series cannot be recovered; null is unknown, not zero.",
+   "golden_runs": {
+    "dense5": {
+     "device_run": 1,
+     "polls": 1055855,
+     "words": 10240,
+     "cycles": 33237059,
+     "max_outstanding": 1,
+     "command_stalls": 8382,
+     "issue_hold_cycles": 33218427,
+     "wait_stalls": 81932,
+     "bad_words": 0,
+     "consumer_stalls": 19,
+     "activation_words": 160,
+     "stray_acks": 0,
+     "runs_done": 3,
+     "total_bad": 0,
+     "summary_lines": [
+      [
+       "d",
+       1,
+       1055855
+      ],
+      [
+       "c",
+       10240,
+       33237059
+      ],
+      [
+       "o",
+       1,
+       8382
+      ],
+      [
+       "w",
+       33218427,
+       81932
+      ],
+      [
+       "n",
+       0,
+       19
+      ],
+      [
+       "u",
+       160,
+       0
+      ],
+      [
+       "z",
+       3,
+       0
+      ]
+     ]
+    },
+    "baseline2": {
+     "device_run": 2,
+     "polls": 660040,
+     "words": 12800,
+     "cycles": 33237325,
+     "max_outstanding": 1,
+     "command_stalls": 10117,
+     "issue_hold_cycles": 33214398,
+     "wait_stalls": 102429,
+     "bad_words": 0,
+     "consumer_stalls": 65,
+     "activation_words": 160,
+     "stray_acks": 0,
+     "runs_done": 1,
+     "total_bad": 0,
+     "summary_lines": [
+      [
+       "d",
+       2,
+       660040
+      ],
+      [
+       "c",
+       12800,
+       33237325
+      ],
+      [
+       "o",
+       1,
+       10117
+      ],
+      [
+       "w",
+       33214398,
+       102429
+      ],
+      [
+       "n",
+       0,
+       65
+      ],
+      [
+       "u",
+       160,
+       0
+      ],
+      [
+       "z",
+       1,
+       0
+      ]
+     ]
+    }
+   },
+   "golden_scope": "Separate golden runs have 19 (dense5) and 65 (baseline2) consumer stalls; these are not the missing 12-run measurements."
+  },
   "ratio_d5_b2": 1.0,
   "ratio_ceiling": 1.25,
   "memory_bound": {
-   "definition": "consumer stalls 0 in both formats",
-   "observed": "dense5: mean consumer stalls 81,930.917 of 33,240,080.583 cycles (0.2465%); wait stalls 99.9440%; baseline2: mean consumer stalls 102,430.250 of 33,239,417.000 cycles (0.3082%); wait stalls 99.9310%",
-   "verdict": "latency-bound under the serialized read discipline; NOT bus-rate. The 1.25 format ratio is unreachable at this operating point (measured ratio 1.0000); the arbiter-free pattern test of #61 streamed the same port, so the seam to fix is the arbiter, not the DRAM."
+   "definition": "Memory-limited delivery requires a test isolated from result-output backpressure.",
+   "observed": "dense5: request issue held 99.9440% of cycles; request wait 0.2465%; consumer stalls unavailable in the 12-run capture; baseline2: request issue held 99.9310% of cycles; request wait 0.3082%; consumer stalls unavailable in the 12-run capture",
+   "verdict": "DDR3 latency as the bottleneck is not established. The timed matvec includes UART result backpressure: y_pending stops FIFO consumption until the emitter accepts the row. Separate computation from result emission before testing the bandwidth thesis (measured dense5/baseline2 ratio 1.0000)."
   }
  },
  "not_measured": [
