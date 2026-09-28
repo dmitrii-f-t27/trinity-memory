@@ -43,7 +43,7 @@ This is an integer matrix-vector product, not a complete transformer inference.
 ## Full matrix on AX7203, 2026-09-28
 
 Both bitstreams were generated from the clean source tree at
-`8d1bdf5fa08da5318a1a9c7fb8628e030e0b`: controller 60 MHz, DDR3 240 MHz,
+`8d1bdf5fa08da5318a1a9c7fb8628e030f852de0`: controller 60 MHz, DDR3 240 MHz,
 x16, CAP=4, pipelined reads, gap 0, deferred Y output. The dense5 build passes
 routed fabric timing at 66.92 MHz (seed 1); baseline2 at 67.56 MHz (seed 5).
 Hash-checked SRAM loads and retained boot headers confirm each build's identity,
