@@ -57,6 +57,7 @@ module tms_ddr3_loader_ax7203 #(
     parameter MATVEC_SERIAL_READS = 1'b1,
     parameter [31:0] MATVEC_READ_GAP = 32'd8,
     parameter MATVEC_DEFER_RESULTS = 1'b0,
+    parameter MATVEC_COMPUTE_PIPELINE = 1'b0,
     parameter [31:0] MATVEC_WATCHDOG = 32'd16777216,
     parameter [31:0] MATVEC_POLL_DIV = 32'd8192
 `endif
@@ -247,6 +248,7 @@ module tms_ddr3_loader_ax7203 #(
         .waddr(MATVEC_WADDR), .aaddr(MATVEC_AADDR), .daddr(MATVEC_DADDR), .magic(MATVEC_MAGIC),
         .cap(MATVEC_CAP), .watchdog(MATVEC_WATCHDOG), .poll_div(MATVEC_POLL_DIV),
         .serial_reads(MATVEC_SERIAL_READS), .read_gap(MATVEC_READ_GAP), .defer_results(MATVEC_DEFER_RESULTS),
+        .compute_pipeline(MATVEC_COMPUTE_PIPELINE),
         .line_idle(line_idle),
         .s_go(mv_s_go), .s_tag(mv_s_tag), .s_a(mv_s_a), .s_b(mv_s_b),
         .line_go(mv_line_go), .line_tag(mv_tag), .line_a(mv_a), .line_b(mv_b), .s_idle(mv_s_idle),

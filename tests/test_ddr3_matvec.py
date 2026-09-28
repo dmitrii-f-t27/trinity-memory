@@ -229,7 +229,8 @@ class MatvecSimulation(unittest.TestCase):
         self.run_chunk("b2_wide", (("stop_after", 40000),), 0x6912, 6912, 2, model.FMT_B2)
 
     def test_deferred_output_timing_is_independent_of_uart_latency(self):
-        for fmt, config in ((model.FMT_D5, "d5_deferred"), (model.FMT_B2, "b2_deferred")):
+        for fmt, config in ((model.FMT_D5, "d5_deferred"), (model.FMT_B2, "b2_deferred"),
+                             (model.FMT_D5, "d5_deferred_fast"), (model.FMT_B2, "b2_deferred_fast")):
             with self.subTest(format=fmt):
                 rng = random.Random(6455)
                 cols, rows = 2560, 2
@@ -261,7 +262,9 @@ class MatvecSimulation(unittest.TestCase):
 
     def test_repeated_doorbells_reload_activations_and_overwrite_results(self):
         for fmt, config, rows in ((model.FMT_D5, "d5", 8), (model.FMT_D5, "d5_deferred", 2),
-                                   (model.FMT_B2, "b2_deferred", 2)):
+                                   (model.FMT_B2, "b2_deferred", 2),
+                                   (model.FMT_D5, "d5_deferred_fast", 2),
+                                   (model.FMT_B2, "b2_deferred_fast", 2)):
             with self.subTest(format=fmt, mode=config):
                 rng = random.Random(88)
                 cols = 2560
@@ -278,7 +281,9 @@ class MatvecSimulation(unittest.TestCase):
 
     def test_unchanged_doorbell_does_not_repeat_a_completed_run(self):
         for fmt, config, rows in ((model.FMT_D5, "d5", 8), (model.FMT_D5, "d5_deferred", 2),
-                                  (model.FMT_B2, "b2_deferred", 2)):
+                                  (model.FMT_B2, "b2_deferred", 2),
+                                   (model.FMT_D5, "d5_deferred_fast", 2),
+                                   (model.FMT_B2, "b2_deferred_fast", 2)):
             with self.subTest(format=fmt, mode=config):
                 rng = random.Random(89)
                 acts = [rng.randint(-128, 127) for _ in range(2560)]
@@ -288,6 +293,39 @@ class MatvecSimulation(unittest.TestCase):
                                       acts, words, 2560, rows, fmt)
                 self.assertEqual(len(lines), 3 + rows + 7, "unchanged doorbell must execute exactly once")
                 self.assert_run_matches(lines, words, acts, 2560, rows, fmt)
+
+    def test_compute_pipeline_preserves_results_and_reduces_cycles(self):
+        for fmt, name in ((model.FMT_D5, "d5_deferred"), (model.FMT_B2, "b2_deferred")):
+            with self.subTest(format=fmt):
+                rng = random.Random(0x88)
+                cols, rows = 2560, 2
+                # Signed endpoints and varying adjacent lanes expose RAM/subgroup skew.
+                acts = [(-128, 127, 0, -1, 1)[i % 5] for i in range(cols)]
+                trits = [rng.choice((-1, 0, 1)) for _ in range(cols * rows)]
+                words = self.chunk_words(trits, cols, rows, fmt)
+                cycles = []
+                for config in (name, name + "_fast"):
+                    lines = self.simulate(config, (("ack_min", 12), ("ack_span", 0)),
+                                          acts, words, cols, rows, fmt)
+                    self.assert_run_matches(lines, words, acts, cols, rows, fmt)
+                    cycles.append(model.decode_run_summary(lines[3 + rows:])["cycles"])
+                self.assertLess(cycles[1] * 10, cycles[0] * 7, cycles)
+
+    def test_compute_pipeline_with_invalid_words_and_shared_bus(self):
+        for fmt, name in ((model.FMT_D5, "d5_shared_fast"), (model.FMT_B2, "b2_shared_fast")):
+            with self.subTest(format=fmt):
+                rng = random.Random(0xBAD88)
+                cols, rows = 2560, 2
+                acts = [rng.randint(-128, 127) for _ in range(cols)]
+                words = self.chunk_words([rng.choice((-1, 0, 1)) for _ in range(cols * rows)],
+                                         cols, rows, fmt)
+                for index in (0, len(words) // 2 - 1, len(words) - 1):
+                    lo, hi = words[index]
+                    words[index] = (lo | (255 if fmt == model.FMT_D5 else 3), hi)
+                lines = self.simulate(name, (("stall_pct", 60), ("ack_min", 2), ("ack_span", 30),
+                                            ("stop_after", 10000)), acts, words, cols, rows, fmt)
+                self.assert_run_matches(lines, words, acts, cols, rows, fmt)
+                self.assertEqual(model.decode_run_summary(lines[3 + rows:])["stray_acks"], 0)
 
     def test_a_doorbell_without_the_magic_starts_nothing(self):
         # The bench writes the descriptor with the model's magic; this config
@@ -328,6 +366,10 @@ CONFIGS = {
     "b2_down": {"FMT": 0, "ROWS": 16, "COLS": 7040, "CAP": 3, "POLL_DIV": 8,
                 "SERIAL_READS": 0, "READ_GAP": 0, "DEFER_RESULTS": 1, "USE_ARBITER": 1},
 }
+
+
+CONFIGS.update({name + "_fast": dict(params, COMPUTE_PIPELINE=1)
+                for name, params in list(CONFIGS.items())})
 
 
 def expect_from_words(words, activations, cols, rows, fmt):
@@ -376,7 +418,7 @@ class MatvecGoldenChunk(unittest.TestCase):
         MatvecSimulation.setUpClass()
         try:
             case = MatvecSimulation()
-            for fmt, config in ((model.FMT_D5, "d5_down"), (model.FMT_B2, "b2_down")):
+            for fmt, config in ((model.FMT_D5, "d5_down_fast"), (model.FMT_B2, "b2_down_fast")):
                 with self.subTest(format=fmt):
                     stream = host.weight_stream(trits, cols, 16, fmt)
                     import struct
@@ -403,7 +445,7 @@ class MatvecGoldenChunk(unittest.TestCase):
         MatvecSimulation.setUpClass()
         try:
             case = MatvecSimulation()
-            for fmt, config in ((model.FMT_D5, "d5_golden"), (model.FMT_B2, "b2_golden")):
+            for fmt, config in ((model.FMT_D5, "d5_golden_fast"), (model.FMT_B2, "b2_golden_fast")):
                 with self.subTest(format=fmt):
                     words = case.chunk_words(trits, cols, 320, fmt)
                     lines = case.simulate(config, (("stop_after", 400000), ("ack_min", 12),
