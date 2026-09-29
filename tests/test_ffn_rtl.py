@@ -172,6 +172,13 @@ class FfnPipeline(unittest.TestCase):
 
 
 class CaptureValidation(unittest.TestCase):
+    def test_doorbell_requires_a_valid_crc_and_load_reply(self):
+        p=vectors.proto
+        good=p.format_line('A',p.resp_word(1,True,0,p.CMD_LOAD,16),0)
+        self.assertTrue(vectors.doorbell_acknowledged(b'h000000000000000000\n'+good))
+        self.assertFalse(vectors.doorbell_acknowledged(good[:-2]+b'1\n'))
+        self.assertFalse(vectors.doorbell_acknowledged(p.format_line('A',p.resp_word(2,True,0,p.CMD_LOAD,16),0)))
+
     def test_ffn_build_includes_uart_rx_constraints(self):
         with tempfile.TemporaryDirectory(prefix='trinity-ffn-xdc-') as temp:
             work=Path(temp); xdc=work/'tms_ddr3_loader_ax7203.xdc'

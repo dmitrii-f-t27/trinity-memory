@@ -13,9 +13,23 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import ffn_reference as fr
 import matvec_device_model as device
+import uart_loader_protocol as proto
 
 MAGIC = 0x46464e31
 STAGES = ('h', 'g', 'u', 'a', 's', 'y')
+
+
+def doorbell_acknowledged(raw):
+    # Feed only complete A lines to the loader decoder: FFN numerical lines use
+    # a different protocol and a large unknown stream makes that parser slow.
+    for line in raw.splitlines(keepends=True):
+        if line.startswith(b'A'):
+            for event in proto.StreamDecoder().feed(line):
+                if event.kind == 'line' and event.tag == 'A' and event.check_ok:
+                    fields = event.resp()
+                    if fields['seq'] == 1 and fields['cmd'] == proto.CMD_LOAD and fields['reason'] == 0:
+                        return True
+    return False
 
 
 def regions(model, x, run=1):
