@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import random
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 REQUIRE_CACHED = os.environ.get("TRINITY_REQUIRE_CACHED") == "1"
@@ -106,6 +107,17 @@ class DatapathTest(unittest.TestCase):
         self.assertTrue(all(v == 0 for stage in ref.values() for v in stage))
         self.assertTrue(all(v == 0 for stage in fixed.values() for v in stage))
         self.assertTrue(all(v == 0 for v in counts.values()))
+
+    def test_relu2_replays_recorded_lane_without_libm_pow(self):
+        # Layer-0 seed-27 lane 2411: macOS pow(g, 2) differs from g*g
+        # enough to change the rounded Q32.32 oracle value by one unit.
+        model = self._tiny_model()
+        model["scales"] = {"gate": 1.0, "up": 1.0, "down": 1.0}
+        with patch.object(fr, "_rows_dot", side_effect=[
+            [112.52436228077653], [-68.13409503272983], [0.0]
+        ]):
+            ref = fr.reference_f64(model, [1] * 8)
+        self.assertEqual(fr.to_q(ref["a"][0], 32), -3705249640245178)
 
     def test_tiny_layer_inside_guard(self):
         model = self._tiny_model()

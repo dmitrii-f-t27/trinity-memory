@@ -197,7 +197,10 @@ def reference_f64(model: dict, x: list[int | float]) -> dict:
     h = rmsnorm([float(t) for t in x], model["w_post"])
     g = [model["scales"]["gate"] * s for s in _rows_dot(model["gate"], gr, gc, h)]
     u = [model["scales"]["up"] * s for s in _rows_dot(model["up"], gr, gc, h)]
-    a = [(max(t, 0.0) ** 2) * ui for t, ui in zip(g, u)]
+    # Explicit binary64 multiplies: libm pow(t, 2) can differ by an ulp
+    # between platforms and change the committed Q32.32 stage statistics.
+    relu = [max(t, 0.0) for t in g]
+    a = [r * r * ui for r, ui in zip(relu, u)]
     s = rmsnorm(a, model["w_sub"])
     y = [model["scales"]["down"] * v for v in _rows_dot(model["down"], dr, dc, s)]
     return {"h": h, "g": g, "u": u, "a": a, "s": s, "y": y}
