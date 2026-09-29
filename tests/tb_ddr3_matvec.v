@@ -20,6 +20,7 @@ module tb_ddr3_matvec;
     parameter [31:0] MAGIC = 32'h74337633, CAP = 4, WATCHDOG = 32'd16777216, POLL_DIV = 64;
     parameter SERIAL_READS = 1'b1, READ_GAP = 32'd8, DEFER_RESULTS = 1'b0;
     parameter USE_ARBITER = 0;
+    parameter COMPUTE_PIPELINE = 1'b0;
 
     reg clk = 1'b0, calib = 1'b0;
     integer clocks = 0;
@@ -41,6 +42,19 @@ module tb_ddr3_matvec;
         wire [31:0] stray;
         reg m0_cyc = 0, m0_stb = 0;
         integer completed_during_weights = 0;
+        integer m0_wait_clocks = 0;
+        reg stalled_last = 0;
+        reg [31:0] stalled_addr = 0;
+        always @(posedge clk) begin
+            if (stalled_last && (!wb_stb || wb_addr != stalled_addr))
+                $fatal(1, "arbiter withdrew or changed a stalled controller request");
+            stalled_last <= wb_stb && stall;
+            stalled_addr <= wb_addr;
+            if (m0_cyc && !m0_ack) m0_wait_clocks <= m0_wait_clocks + 1;
+            else m0_wait_clocks <= 0;
+            if (COMPUTE_PIPELINE && m0_wait_clocks > 1024)
+                $fatal(1, "read-only matvec starved master 0");
+        end
         always @(posedge clk) begin
             if (!m0_cyc && calib && clocks % 73 == 0) begin
                 m0_cyc <= 1; m0_stb <= 1;
@@ -55,7 +69,7 @@ module tb_ddr3_matvec;
                 $fatal(1, "competing master did not complete during the weight phase");
         end
         TrinityFpgaWbArbiterT27 arbiter (
-            .clk(clk), .rst_n(1'b1), .en(1'b1),
+            .clk(clk), .rst_n(1'b1), .en(1'b1), .preempt_read1(COMPUTE_PIPELINE),
             .m0_cyc(m0_cyc), .m0_stb(m0_stb), .m0_we(1'b0), .m0_addr(AADDR),
             .m0_sel(32'hffff), .m0_lo(64'd0), .m0_hi(64'd0),
             .m1_cyc(mv_stb), .m1_stb(mv_stb), .m1_we(1'b0), .m1_addr(mv_addr),
@@ -77,7 +91,7 @@ module tb_ddr3_matvec;
         .calib(calib), .stall(dut_stall), .ack(dut_ack), .rdata_lo(rdata_lo), .rdata_hi(rdata_hi),
         .cols(COLS), .rows(ROWS), .fmt(FMT), .waddr(WADDR), .aaddr(AADDR), .daddr(DADDR),
         .magic(MAGIC), .cap(CAP), .watchdog(WATCHDOG), .poll_div(POLL_DIV), .line_idle(line_idle),
-        .serial_reads(SERIAL_READS), .read_gap(READ_GAP), .defer_results(DEFER_RESULTS),
+        .serial_reads(SERIAL_READS), .read_gap(READ_GAP), .defer_results(DEFER_RESULTS), .compute_pipeline(COMPUTE_PIPELINE),
         .wb_cyc(mv_cyc), .wb_stb(mv_stb), .wb_addr(mv_addr),
         .line_go(line_go), .line_tag(line_tag), .line_a(line_a), .line_b(line_b),
         .s_go(1'b0), .s_tag(32'd0), .s_a(32'd0), .s_b(64'd0)

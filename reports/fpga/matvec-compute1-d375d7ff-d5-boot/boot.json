@@ -1,0 +1,261 @@
+{
+ "build_report": "reports/fpga/ddr3-build-2026-09-28-d375d7ff-x16-matvec/build.json",
+ "bitstream_sha256": "d4f68367a941295baf8d3dd04a5c3f04a9d878c54dd4f342b81d9584d9130c0d",
+ "checks": {
+  "board_steps": true,
+  "hello_build_id": true,
+  "matvec_header": true
+ },
+ "uart_sha256": "b1024c22ed25532a3d68b1dba16287ac345fd85f3cc17afeb4c1f81e9fa20a8d",
+ "lines": [
+  [
+   "H",
+   3547715583,
+   644296219914
+  ],
+  [
+   "q",
+   2560,
+   5637144580
+  ],
+  [
+   "k",
+   320,
+   137438953632
+  ],
+  [
+   "v",
+   1949529651,
+   8192
+  ]
+ ],
+ "run": {
+  "t0_utc": "2026-09-28T22:37:20.548Z",
+  "t0_note": "every *_s value is host seconds after t0 on one monotonic clock",
+  "steps": {
+   "idcode": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--detect"
+    ],
+    "started_utc": "2026-09-28T22:37:20.548Z",
+    "ended_utc": "2026-09-28T22:37:20.588Z",
+    "start_s": 0.0002,
+    "end_s": 0.0394,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "index 0:",
+     "\tidcode 0x3636093",
+     "\tmanufacturer xilinx",
+     "\tfamily artix a7 200t",
+     "\tmodel  xc7a200",
+     "\tirlength 6"
+    ]
+   },
+   "dna": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--read-dna"
+    ],
+    "started_utc": "2026-09-28T22:37:20.588Z",
+    "ended_utc": "2026-09-28T22:37:20.614Z",
+    "start_s": 0.0395,
+    "end_s": 0.0656,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"dna\": \"0x00389c0c2d85e85c\"}"
+    ]
+   },
+   "xadc_before": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-28T22:37:20.614Z",
+    "ended_utc": "2026-09-28T22:37:20.730Z",
+    "start_s": 0.0657,
+    "end_s": 0.1817,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 55.6572, ",
+     "    \"maxtemp\": 93.7191, ",
+     "    \"mintemp\": 55.3765, ",
+     "\"raw\":  {\"0\": 42755, \"1\": 21715, \"2\": 39118, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21732, \"7\": 0},",
+     "\"vccint\": 0.993896, ",
+     "   \"maxvccint\": 0.995361, ",
+     "   \"minvccint\": 0.991699, ",
+     "\"vccaux\": 1.79004, ",
+     "   \"maxvccaux\": 1.79443, ",
+     "   \"minvccaux\": 1.78784, ",
+     "}"
+    ]
+   },
+   "load": {
+    "cmd": [
+     "make",
+     "-s",
+     "-C",
+     "fpga/ax7203",
+     "ddr3-flash",
+     "DDR3_BUILD=build/fpga/ddr3-x16-matvec",
+     "DDR3_FLASH_REPORT=reports/fpga/ddr3-build-2026-09-28-d375d7ff-x16-matvec/build.json",
+     "OPENFPGALOADER=openFPGALoader",
+     "DDR3_CABLE=digilent_hs3"
+    ],
+    "started_utc": "2026-09-28T22:37:21.846Z",
+    "ended_utc": "2026-09-28T22:37:36.277Z",
+    "start_s": 1.2977,
+    "end_s": 15.7289,
+    "returncode": 0,
+    "output": [
+     "ddr3-flash: build/fpga/ddr3-x16-matvec/tms_ddr3_loader_ax7203.bit sha256 d4f68367a941295baf8d3dd04a5c3f04a9d878c54dd4f342b81d9584d9130c0d as in reports/fpga/ddr3-build-2026-09-28-d375d7ff-x16-matvec/build.json (whole file)",
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "Open file DONE",
+     "Parse file DONE",
+     "load program",
+     "",
+     "Load SRAM: [===                                               ] 6.00%",
+     "",
+     "Load SRAM: [=======                                           ] 14.00%",
+     "",
+     "Load SRAM: [===========                                       ] 21.00%",
+     "",
+     "Load SRAM: [==============                                    ] 28.00%",
+     "",
+     "Load SRAM: [==================                                ] 35.00%",
+     "",
+     "Load SRAM: [======================                            ] 43.00%",
+     "",
+     "Load SRAM: [=========================                         ] 50.00%",
+     "",
+     "Load SRAM: [=============================                     ] 58.00%",
+     "",
+     "Load SRAM: [=================================                 ] 66.00%",
+     "",
+     "Load SRAM: [=====================================             ] 74.00%",
+     "",
+     "Load SRAM: [=========================================         ] 82.00%",
+     "",
+     "Load SRAM: [=============================================     ] 90.00%",
+     "",
+     "Load SRAM: [================================================= ] 98.00%",
+     "",
+     "Load SRAM: [==================================================] 100.00%",
+     "",
+     "Done",
+     "Shift IR 35",
+     "ir: 1 isc_done 1 isc_ena 0 init 1 done 1"
+    ]
+   },
+   "xadc_after": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-09-28T22:37:51.361Z",
+    "ended_utc": "2026-09-28T22:37:51.492Z",
+    "start_s": 30.8132,
+    "end_s": 30.9444,
+    "returncode": 0,
+    "output": [
+     "empty",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 54.696, ",
+     "    \"maxtemp\": 56.1148, ",
+     "    \"mintemp\": 53.7309, ",
+     "\"raw\":  {\"0\": 42639, \"1\": 21736, \"2\": 39119, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21724, \"7\": 0},",
+     "\"vccint\": 0.994629, ",
+     "   \"maxvccint\": 0.995361, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.79004, ",
+     "   \"maxvccaux\": 1.79224, ",
+     "   \"minvccaux\": 1.78784, ",
+     "}"
+    ]
+   }
+  },
+  "idcode": "0x3636093",
+  "dna": "0x00389c0c2d85e85c",
+  "xadc_before": {
+   "temp": 55.6572,
+   "maxtemp": 93.7191,
+   "mintemp": 55.3765,
+   "raw": {
+    "0": 42755,
+    "1": 21715,
+    "2": 39118,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21732,
+    "7": 0
+   },
+   "vccint": 0.993896,
+   "maxvccint": 0.995361,
+   "minvccint": 0.991699,
+   "vccaux": 1.79004,
+   "maxvccaux": 1.79443,
+   "minvccaux": 1.78784
+  },
+  "uart_entries": [
+   {
+    "t_s": 15.7129,
+    "utc": "2026-09-28T22:37:36.261Z",
+    "line": "Hd375d7ff96030c1d0a"
+   },
+   {
+    "t_s": 22.3679,
+    "utc": "2026-09-28T22:37:42.916Z",
+    "line": "q00000a000150000004"
+   },
+   {
+    "t_s": 22.3679,
+    "utc": "2026-09-28T22:37:42.916Z",
+    "line": "k0000014020000000a0"
+   },
+   {
+    "t_s": 22.3679,
+    "utc": "2026-09-28T22:37:42.916Z",
+    "line": "v743376330000002000"
+   }
+  ],
+  "uart_error": null,
+  "xadc_after": {
+   "temp": 54.696,
+   "maxtemp": 56.1148,
+   "mintemp": 53.7309,
+   "raw": {
+    "0": 42639,
+    "1": 21736,
+    "2": 39119,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21724,
+    "7": 0
+   },
+   "vccint": 0.994629,
+   "maxvccint": 0.995361,
+   "minvccint": 0.992432,
+   "vccaux": 1.79004,
+   "maxvccaux": 1.79224,
+   "minvccaux": 1.78784
+  },
+  "load_end_s": 15.7289
+ }
+}
