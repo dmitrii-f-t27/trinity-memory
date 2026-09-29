@@ -12,6 +12,7 @@ below.
 | `DDR3_MATVEC_READ_GAP` | 8 | Idle clocks after an ack; must be 0 for pipelined mode |
 | `DDR3_MATVEC_DEFER_RESULTS` | 0 | 1: buffer row results and emit Y lines after timing stops |
 | `DDR3_MATVEC_CAP` | 4 | Outstanding-request limit, 1..4 |
+| `DDR3_MATVEC_COMPUTE_PIPELINE` | 0 | 1: overlap successive eight-lane subgroup products and sums |
 
 Deferred output holds up to 4096 rows in a synchronous-read memory, one signed
 21-bit result per row. Columns must fit the 7168-byte activation store and be
@@ -104,3 +105,79 @@ the retained failure explain the fix instead of hiding the failed experiment.
 The former approximately 1.48 M weights/s result included UART backpressure
 and used a different timer boundary. It cannot establish DDR3 latency or be
 used as the baseline of a claimed 140× compute speedup.
+
+## Compute pipeline (issue #88)
+
+`COMPUTE_PIPELINE=0` retains the deployed consumer for comparison. With
+`COMPUTE_PIPELINE=1`, the registered activation read and static lane extraction
+feed eight products each clock. The previous subgroup's registered products
+are summed into the row accumulator in parallel. A product-valid register
+excludes the initial pipeline fill; a final drain clock includes the last
+subgroup before the row is stored or the next FIFO word is popped.
+
+The word costs 23/19 clocks in the reference dense5/baseline2 consumer and
+14/12 in the pipelined consumer (including pop, decode, initial extract and
+final drain). DDR3/arbiter stalls and row output can increase complete-run
+latency; these cycle counts are not a board throughput measurement. The
+build option is checked as a boolean and included in the configuration stamp,
+netlist parameters and build report. Read policy, timer boundaries and the
+result/doorbell protocol are unchanged.
+
+Regressions compare both consumers on the same signed endpoint vectors and
+require more than 30% fewer timed cycles with deterministic memory latency.
+Both modes are checked for repeated/unchanged doorbells and invariance to
+UART delay. The pipeline also sees malformed weights at word/row boundaries,
+random memory latency, backpressure and a competing arbiter master. The cached
+q_proj and down_proj fixture simulations exercise the new consumer.
+
+Physical speedup, routed timing and resource use must be established by retained
+board captures before treating the new mode as board-validated.
+
+The faster consumer exposed starvation in the original arbiter: it could keep
+reads outstanding throughout a complete golden chunk, preventing the loader
+(master 0) from completing during the weight phase. In the new compute mode,
+`preempt_read1` drains master 1 when master 0 is waiting. The arbiter stops
+presenting new reads only after a request has been accepted or while no strobe
+is presented; all accepted reads are acknowledged to their original owner
+before handover. A controller request held by `stall` is never withdrawn.
+Master 0 still owns its complete chunk, and the reference compute mode retains
+the original arbitration. Shared-port tests require master 0 to make progress
+and monitor request stability while stalled. Simulation failures now include
+the simulator output so an arbitration failure is not hidden by a subprocess
+exception.
+
+## Compute pipeline paired board run, 2026-09-28 (issue #88)
+
+Source `d375d7f` (this branch), clean tracked tree; AX7203, controller 60 MHz,
+DDR3 240 MHz, x16, dense5 q_proj 320 x 2560, seed-27 activations,
+`SERIAL_READS=0 READ_GAP=0 DEFER_RESULTS=1 CAP=4` — only
+`COMPUTE_PIPELINE` differs between the two builds. Each variant: hash-checked
+SRAM load, retained boot capture (`hello` build id `0xd375d7ff`, calibrated
+DDR3), then 12 doorbell runs. All 24 runs are bit-exact against the golden
+reference (320 y lines each, zero bad words); every run of a variant repeats
+the same cycle count (sample SD 0).
+
+| Variant | Routed Fmax | Cycles/run | M weights/s |
+|---|---:|---:|---:|
+| `COMPUTE_PIPELINE=0` | 61.45 MHz | 235 544 | 208.674 |
+| `COMPUTE_PIPELINE=1` | 63.42 MHz | 143 384 | 342.800 |
+
+The compute consumer is the limit being moved: the same tree, read policy and
+output policy deliver **1.643x** more weights per second (235 544 / 143 384
+cycles exactly), matching the word-cost model (23 -> 14 clocks per dense5
+word before memory stalls). Evidence:
+[`matvec-compute-baseline-2026-09-28-d5.json`](../reports/fpga/matvec-compute-baseline-2026-09-28-d5.json)
+and
+[`matvec-compute-pipeline-2026-09-28-d5.json`](../reports/fpga/matvec-compute-pipeline-2026-09-28-d5.json),
+boot captures `matvec-compute{0,1}-d375d7ff-d5-boot/`, build reports
+`ddr3-build-2026-09-28-d375d7ff-x16-matvec-compute{0,1}-d5/`. The baseline
+reproduces the 669a144 pipelined-read number (208.674) exactly. DDR3
+saturation remains unestablished. The report's dense5 arithmetic ceiling is
+80 weights per 128-bit word times 60 million controller clocks per second,
+or 4,800 M weights/s. The measured 342.800 M weights/s is 7.14% of that
+arithmetic ceiling; this is not a measurement of physical bus utilisation.
+The previous 47% of 730.7 M weights/s statement used an unsupported ceiling
+and is withdrawn. The memory-bound verdict stays "not established".
+The die ran hot after
+a day idle at calibration (93.5 C, limit 80): the boot capture was made after
+an SRAM reset and cooldown to 50-56 C.
