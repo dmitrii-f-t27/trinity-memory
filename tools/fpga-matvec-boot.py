@@ -28,6 +28,7 @@ parser.add_argument("--port", default="/dev/cu.usbserial-10")
 parser.add_argument("--cable", default="digilent_hs2")
 parser.add_argument("--seconds", type=float, default=15.0)
 parser.add_argument("--max-temp", type=float, default=80.0)
+parser.add_argument("--ffn", action="store_true", help="check the full-layer FFN ready header instead of matvec")
 args = parser.parse_args()
 if args.output.exists():
     parser.error("output already exists; use a fresh directory to preserve earlier evidence")
@@ -37,7 +38,9 @@ if report["bitstream"]["sha256"] != hashlib.sha256(args.bit.read_bytes()).hexdig
 if not report["nextpnr"]["clocks_routed"] or any(
         c["verdict"] != "PASS" for c in report["nextpnr"]["clocks_routed"]):
     parser.error("the build report does not confirm routed timing")
-os.environ["DDR3_APP"] = "matvec"
+if args.ffn and 'FFN (' not in report['ddr3']['variant']:
+    parser.error('--ffn requires a declared FFN build')
+os.environ["DDR3_APP"] = "ffn" if args.ffn else "matvec"
 run_args = SimpleNamespace(loader="openFPGALoader", cable=args.cable,
     port=args.port, baud=115200, max_temp=args.max_temp,
     settle=1.0, seconds=args.seconds, no_load=False, bit=str(args.bit.resolve()))
@@ -60,6 +63,9 @@ build_id = int(build_id, 16) if isinstance(build_id, str) else build_id
 checks = {"board_steps": status == 0,
           "hello_build_id": bool(hello) and hello[-1][1] == build_id,
           "matvec_header": heads == model.head_lines(args.cols, args.rows, args.fmt, args.cap, 8192)}
+if args.ffn:
+    checks.pop('matvec_header')
+    checks['ffn_header'] = [line for line in lines if line[0] == 'F'] == [('F', 2560, 6912)]
 record = {"build_report": os.path.relpath(args.report.resolve(), ROOT),
           "bitstream_sha256": report["bitstream"]["sha256"], "checks": checks,
           "uart_sha256": hashlib.sha256(raw).hexdigest(), "lines": lines, "run": run}
