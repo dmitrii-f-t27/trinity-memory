@@ -1,5 +1,12 @@
 {
  "schema": "trinity.ffn-reference.v1",
+ "oracle_scope": "unquantized-activation FFN math; no ActQuant or bf16 execution rounding",
+ "rmsnorm_contract": "sqrt(mean(x*x) + epsilon)",
+ "upstream_sources": {
+  "rmsnorm": "https://github.com/huggingface/transformers/blob/7cd73d9df0c14b151c684b708a9f27d8d0349dfe/src/transformers/models/bitnet/modeling_bitnet.py",
+  "autobitlinear": "https://github.com/huggingface/transformers/blob/d6abd1333078195535f461589b64f112b53688b2/src/transformers/integrations/bitnet.py",
+  "config": "https://huggingface.co/microsoft/bitnet-b1.58-2B-4T/blob/04c3b9ad9361b824064a1f25ea60a8be9599b127/config.json"
+ },
  "seed": 27,
  "activations_int8": [
   117,
@@ -2566,7 +2573,8 @@
  "widths": {
   "hidden": 2560,
   "intermediate": 6912,
-  "max_vector": 6912
+  "max_vector": 6912,
+  "wide_sumsq_unsigned_bits": 139
  },
  "scales": {
   "gate": {
@@ -2597,22 +2605,22 @@
   },
   "g": {
    "max_abs": 79,
-   "mean_abs": 14.022280092592593,
+   "mean_abs": 14.02199074074074,
    "peak": 19204563,
    "max_rel": 0.02149532710280374,
    "outside_guard": false
   },
   "u": {
    "max_abs": 79,
-   "mean_abs": 16.123697916666668,
+   "mean_abs": 16.124131944444443,
    "peak": 24850146,
    "max_rel": 0.010632344711807499,
    "outside_guard": false
   },
   "a": {
-   "max_abs": 211170274194,
-   "mean_abs": 7887236317.687645,
-   "peak": 55352202339842776,
+   "max_abs": 211235902162,
+   "mean_abs": 7886784052.400318,
+   "peak": 55352202192805528,
    "max_rel": 0.043700666014345274,
    "outside_guard": false
   },
