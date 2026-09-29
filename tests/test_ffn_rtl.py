@@ -172,6 +172,16 @@ class FfnPipeline(unittest.TestCase):
 
 
 class CaptureValidation(unittest.TestCase):
+    def test_ffn_build_includes_uart_rx_constraints(self):
+        with tempfile.TemporaryDirectory(prefix='trinity-ffn-xdc-') as temp:
+            work=Path(temp); xdc=work/'tms_ddr3_loader_ax7203.xdc'
+            subprocess.run(['make','-C',str(ROOT/'fpga/ax7203'),str(xdc),
+                            'DDR3_APP=ffn','DDR3_BUILD='+str(work),
+                            'DDR3_PLL_MULT=6','DDR3_DDR_DIV=5'],capture_output=True,text=True,check=True)
+            text=xdc.read_text()
+            self.assertIn((ROOT/'fpga/ax7203/ddr3/tms_ddr3_loader.xdc').read_text().strip(),text)
+            self.assertIn('create_clock -period 16.667 -name clk_ctrl',text)
+
     def test_rejects_corruption_truncation_reordering_and_wrong_counts(self):
         expected={s:[-1] for s in vectors.STAGES}; sats={s:0 for s in vectors.STAGES}
         lines=['d000000010000000000\n']
