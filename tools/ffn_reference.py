@@ -11,9 +11,11 @@ intermediate 6912, hidden_act relu2, rms_norm_eps 1e-5):
     s = rmsnorm(a, mlp.ffn_sub_norm)              the 6912-wide BitNet sub-norm
     y = scale_d * (down_proj @ s)                 down_proj: [2560, 6912] trits
 
-The oracle evaluates the chain in f64 (math.fsum) from the cached fixtures the
-board tools read. The FPGA arithmetic then evaluates it again under the
-between-stage contract the board will use:
+The oracle evaluates the unquantized-activation FFN math in f64 (math.fsum)
+from the cached fixtures the board tools read. It is not a bit-exact replay
+of transformers AutoBitLinear: its ActQuant and bf16 rounding are not modeled.
+The candidate FPGA arithmetic evaluates the same math again under an explicit
+between-stage contract; no hardware implementation is claimed here:
 
 * h, g, u, s, y are signed Q16.16 (s32); a is held wide as Q32.32 (s64),
   because relu2(g) * u of the real layer-0 weights overflows Q16.16 (the
@@ -25,10 +27,12 @@ between-stage contract the board will use:
   ternary matvecs keep exact s64 accumulators (a trit only adds or subtracts
   an activation, so no product rounding happens inside a matvec), and the
   bf16 weight scale costs one rounding.
-* The rms of h runs in Q32.32 with an epsilon clamp; the rms of a runs in
-  Q64.64 (its sum of squares is Q64.64: on silicon this is one 128-bit
-  accumulator per norm). MAX_VECTOR is the 6912-wide intermediate.
-* Saturations are counted and clamped, never wrapped.
+* Both norms use sqrt(mean(v*v) + epsilon), as BitNetRMSNorm does.
+  The rms of h runs in Q32.32 and the rms of a in Q64.64. Python uses
+  unbounded intermediates: summing squares of MAX_VECTOR signed 64-bit
+  values requires 139 unsigned bits, not 128. RTL must budget these widths.
+* Saturations are counted and clamped, never wrapped, including the signed
+  64-bit relu2 product before the wide norm.
 
 The report compares the two evaluation stage by stage, so a later board
 capture is judged against a written contract instead of re-deriving one.
@@ -58,7 +62,16 @@ ONE_Q16 = 1 << Q
 EPS = 1e-5                           # config.json rms_norm_eps
 EPS_Q32 = int(EPS * (1 << QQ) + 0.5)
 S32_MIN, S32_MAX = -(1 << 31), (1 << 31) - 1
+S64_MIN, S64_MAX = -(1 << 63), (1 << 63) - 1
+WIDE_SUMSQ_BITS = (MAX_VECTOR * (1 << 126)).bit_length()
 SEED = 27                            # the house activation seed
+ORACLE_SCOPE = "unquantized-activation FFN math; no ActQuant or bf16 execution rounding"
+RMSNORM_CONTRACT = "sqrt(mean(x*x) + epsilon)"
+UPSTREAM_SOURCES = {
+    "rmsnorm": "https://github.com/huggingface/transformers/blob/7cd73d9df0c14b151c684b708a9f27d8d0349dfe/src/transformers/models/bitnet/modeling_bitnet.py",
+    "autobitlinear": "https://github.com/huggingface/transformers/blob/d6abd1333078195535f461589b64f112b53688b2/src/transformers/integrations/bitnet.py",
+    "config": "https://huggingface.co/microsoft/bitnet-b1.58-2B-4T/blob/04c3b9ad9361b824064a1f25ea60a8be9599b127/config.json",
+}
 
 LAYER = "model.layers.0"
 TENSORS = {
@@ -115,6 +128,16 @@ def clamp_s32(value: int, saturations: list) -> int:
     return value
 
 
+def clamp_s64(value: int, saturations: list) -> int:
+    if value < S64_MIN:
+        saturations.append(-1)
+        return S64_MIN
+    if value > S64_MAX:
+        saturations.append(1)
+        return S64_MAX
+    return value
+
+
 def sha256_le32(values) -> str:
     return hashlib.sha256(struct.pack(f"<{len(values)}i", *values)).hexdigest()
 
@@ -161,12 +184,12 @@ def load_ffn() -> dict:
     }
 
 
-def reference_f64(model: dict, x: list[int]) -> dict:
+def reference_f64(model: dict, x: list[int | float]) -> dict:
     """The f64 oracle: fsum everywhere, eps inside the sqrt (HF RMSNorm)."""
 
     def rmsnorm(v, w):
         mean = math.fsum(t * t for t in v) / len(v)
-        inv = 1.0 / max(math.sqrt(mean), EPS)      # clamp, the FPGA semantics
+        inv = 1.0 / math.sqrt(mean + EPS)
         return [t * inv * wi for t, wi in zip(v, w)]
 
     gr, gc = model["shapes"]["gate"]
@@ -196,7 +219,7 @@ def fpga_q16(model: dict, x_q16: list[int]) -> tuple[dict, dict]:
         """Q16.16 in, Q16.16 out; one combined rounding per element."""
         sumsq = sum(t * t for t in v)                     # exact, Q32.32
         mean_q32 = div_rne(sumsq, len(v))
-        rms_q32 = max(math.isqrt(mean_q32 << QQ), EPS_Q32)
+        rms_q32 = math.isqrt((mean_q32 + EPS_Q32) << QQ)
         out = []
         for t, wi in zip(v, w):
             out.append(clamp(stage, div_rne((t * to_q(wi)) << Q, rms_q32)))
@@ -206,7 +229,7 @@ def fpga_q16(model: dict, x_q16: list[int]) -> tuple[dict, dict]:
         """Q32.32 in (s64), Q16.16 out; the rms itself runs in Q64.64."""
         sumsq = sum(t * t for t in v)                     # exact, Q64.64
         mean_q64 = div_rne(sumsq, len(v))
-        rms_q64 = max(math.isqrt(mean_q64 << (2 * QQ)), EPS_Q64)
+        rms_q64 = math.isqrt((mean_q64 + EPS_Q64) << (2 * QQ))
         out = []
         for t, wi in zip(v, w):
             # numerator Q48.48 << 32 over the Q64.64 rms leaves Q16.16 units
@@ -234,7 +257,7 @@ def fpga_q16(model: dict, x_q16: list[int]) -> tuple[dict, dict]:
     a = []
     for gi, ui in zip(g, u):
         r = gi if gi > 0 else 0
-        a.append(rne(r * r * ui, Q))          # relu2 product, kept Q32.32
+        a.append(clamp_s64(rne(r * r * ui, Q), events["a"]))
     s = rmsnorm_wide("s", a, model["w_sub"])
     y = matvec("y", model["down"], dr, dc, s, model["scales"]["down"])
     for name, ev in events.items():
@@ -247,7 +270,7 @@ STAGE_BITS = {"h": Q, "g": Q, "u": Q, "a": QQ, "s": Q, "y": Q}
 # costs a small bias that relu2 then amplifies near its kink, so a tight ulp
 # envelope would fail on noise; 2**-6 of each stage's peak instead catches
 # contract bugs (wrong rounding, scale, norm or saturation) with an order of
-# magnitude to spare. The observed envelope of this layer is ~5e-3 of peak.
+# magnitude to spare. Observed errors are recorded in the generated report.
 GUARD_REL, GUARD_ABS = 2 ** -6, 2
 
 
@@ -285,9 +308,13 @@ def main() -> int:
         all(not st["outside_guard"] for st in stages.values())
     report = {
         "schema": SCHEMA,
+        "oracle_scope": ORACLE_SCOPE,
+        "rmsnorm_contract": RMSNORM_CONTRACT,
+        "upstream_sources": UPSTREAM_SOURCES,
         "seed": args.seed,
         "activations_int8": x8,
-        "widths": {"hidden": HIDDEN, "intermediate": INTERMEDIATE, "max_vector": MAX_VECTOR},
+        "widths": {"hidden": HIDDEN, "intermediate": INTERMEDIATE, "max_vector": MAX_VECTOR,
+                   "wide_sumsq_unsigned_bits": WIDE_SUMSQ_BITS},
         "scales": {k: {"bf16": v, "q16": to_q(v)} for k, v in model["scales"].items()},
         "packed_sha256": model["packed_sha256"],
         "stages": stages,
@@ -305,8 +332,8 @@ def main() -> int:
               f"  mean {st['mean_abs']:11.2f}  max_rel {st['max_rel']:.2e}"
               f"  {'OUTSIDE' if st['outside_guard'] else 'ok'}")
     print(f"  saturations: {sat}")
-    print(f"  y sha256 (oracle->q16 / datapath): {report['y_f64_q16_sha256_le'][:16]}… / "
-          f"{report['y_q16_sha256_le'][:16]}…")
+    print(f"  y sha256 (oracle->q16 / datapath): {report['y_f64_q16_sha256_le'][:16]}... / "
+          f"{report['y_q16_sha256_le'][:16]}...")
     return 0 if ok else 1
 
 
