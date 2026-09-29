@@ -107,5 +107,11 @@ at ten-second intervals, retains raw UART, validates every stage and restores
 115200 on success. A failed attempt preserves evidence and may require a fresh
 boot before retrying. No configuration flash is written by these commands.
 
-Full-layer simulation and board evidence are recorded in the stage-5 report;
-the existence of this implementation is not a completion claim.
+Both full-layer board runs passed on the AX7203 on 2026-09-29: seed 27 and
+the zero vector each produced 32768/32768 stage values exactly matching the
+integer reference with zero saturations, in identical 860531932 clocks
+(including UART reporting), and an independent offline replay re-decoded every
+memory readback with CRC and re-checked every signed value. Evidence, hashes
+and the retained failed builds (`a138be21`, `a6eed6b9`) that led to the
+routed 70.41 MHz of `eecc619f`:
+`reports/fpga/ffn-q16-2026-09-29-eecc619f/`.
