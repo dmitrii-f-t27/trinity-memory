@@ -7,7 +7,9 @@ module TrinityFpgaFfnT27;
 // post gamma 0x2000, sub gamma 0x3000, gate/up/down 0x10000/60000/b0000.
 // Descriptor: low u32 run, next u32 0x46464e31. Run zero is ignored.
 // Stages h,g,u,a,s,y emit low/high u32 as lower/upper ASCII tags with index.
-// Summary: c(run, clocks including reporting), t(stage, saturations), z(run,0).
+// Summary: c(run, clocks including reporting), k(0, report-wait clocks),
+// k(1, memory-wait clocks), t(stage, saturations), z(run,0). Every active
+// clock falls in exactly one bucket; compute = c - k0 - k1.
 // This implements the fixed arithmetic contract, not ActQuant/bf16 execution.
 
 // Construct large constants from positive small literals. The pinned compiler
@@ -32,6 +34,8 @@ var run_id: u32 = 0;
 var poll: u32 = 0;
 var active: bool = false;
 var cycles: u64 = 0;
+var report_cycles: u64 = 0;
+var memory_cycles: u64 = 0;
 var error_code: u32 = 0;
 var vec: [8192]u32;
 var gate: [8192]u32;
@@ -185,6 +189,10 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     sum_carry1 = carry(sum1,q1) + carry(add1,sum_carry0);
     math_start = false;
     if (active) { cycles = cycles + 1; }
+    // Classify by the state this clock executes: waiting for the report line
+    // (run start and value emits) or for a DDR3 read (request and response).
+    if (active && (state == 8 || (state >= 300 && state <= 302))) { report_cycles = report_cycles + 1; }
+    if (active && (state == 200 || state == 201)) { memory_cycles = memory_cycles + 1; }
     if (state == 0) {
         if (calib) {
             wb_cyc = true; ptag = 70; pa = hidden; pb = inner as u64; pending = true;
@@ -198,7 +206,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         state = 1; poll = 8192;
         if ((read0 >> 32) == 1179012657 && (read0 & MASK32) != 0 && (read0 & MASK32) != last_run) {
             last_run = read0 as u32; run_id = read0 as u32; index = 0;
-            cycles = 0; active = true; error_code = 0;
+            cycles = 0; report_cycles = 0; memory_cycles = 0; active = true; error_code = 0;
             state = 8;
             if (hidden == 0 || inner == 0 || output_rows == 0 || hidden > 2560 || inner > 6912 || output_rows > 2560) {
                 error_code = 1; state = 900;
@@ -350,7 +358,11 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     } else if (state == 302) {
         if (!pending) { state = after_emit; }
     } else if (state == 600) {
-        if (!pending) { ptag = 99; pa = run_id; pb = cycles; pending = true; state = 601; }
+        if (!pending) { ptag = 99; pa = run_id; pb = cycles; pending = true; state = 603; }
+    } else if (state == 603) {
+        if (!pending) { ptag = 107; pa = 0; pb = report_cycles; pending = true; state = 604; }
+    } else if (state == 604) {
+        if (!pending) { ptag = 107; pa = 1; pb = memory_cycles; pending = true; state = 601; }
     } else if (state == 601) {
         if (!pending) { ptag = 116; pa = index; pb = sats[index] as u64; pending = true;
             if (index == 5) { state = 602; } else { index = index+1; }

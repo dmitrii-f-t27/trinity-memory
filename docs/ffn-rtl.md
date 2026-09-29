@@ -62,9 +62,20 @@ F announces H/I after calibration; d marks a new run ID. Each h/g/u/a/s/y value 
 lines: lowercase tag for low u32, uppercase for high u32, both with element
 index in line a. The high half of a uses J to avoid the loader's A acknowledgement.
 h/g/u/s/y are sign-extended to 64 bits. After all stages,
-c reports the run ID and clocks, six t lines give stage saturation counts,
-and z marks completion. Clocks include report backpressure and exclude
-host uploads; they are not a compute-only throughput measurement.
+c reports the run ID and clocks, two k lines split those clocks, six t lines
+give stage saturation counts, and z marks completion. Clocks count every
+controller clock from the doorbell to the last y value and exclude host
+uploads. `k` index 0 counts clocks spent waiting for the report line (the run
+start and every value emit, including the minimum three clocks per value);
+index 1 counts clocks spent on DDR3 reads, from request to response. The
+remaining `c - k0 - k1` clocks are compute: every other active state. Each
+clock falls in exactly one bucket, and a simulation test checks that compute
+clocks do not change when memory latency and report backpressure do. Compute
+clocks are this serial controller's own work outside the two waits; even a
+zero-latency memory would still need at least one request clock per read,
+which the memory bucket holds. None of this is a throughput claim for a
+different design. Captures
+from before the split (eecc619f) have no k lines and still validate.
 
 ## Validation and build
 
