@@ -42,7 +42,9 @@ def main():
         if len(data)!=region['bytes'] or hashlib.sha256(data).hexdigest()!=region['sha256']:
             raise ValueError('input payload hash mismatch')
     (out/'command.json').write_text(json.dumps({'argv':sys.argv,'bitstream_sha256':boot['bitstream_sha256'],
-        'vectors':str(args.vectors.resolve()),'boot':str(args.boot.resolve())},indent=2)+'\n')
+        'vectors':str(args.vectors.resolve()),'boot':str(args.boot.resolve()),
+        'tool_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        'tool_commit':subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip()},indent=2)+'\n')
     last_check=0
     def temperature(force=False):
         nonlocal last_check
@@ -125,9 +127,7 @@ def main():
     if not complete: raise TimeoutError('no FFN completion')
     # Loader acknowledgement is a separate CRC-checked protocol line. J is the
     # FFN a-high tag, so the acknowledgement cannot alias a numerical result.
-    events=proto.StreamDecoder().feed(bytes(raw))
-    acked=any(e.kind=='line' and e.tag=='A' and e.check_ok and e.resp()['seq']==1
-              and e.resp()['cmd']==proto.CMD_LOAD for e in events)
+    acked=fv.doorbell_acknowledged(bytes(raw))
     if not acked: raise RuntimeError('doorbell load acknowledgement absent')
     result=fv.validate(bytes(raw),ref['expected'],ref['saturations'],ref['run'])
     rate(921600,115200,'uart-restored'); temperature(True)
