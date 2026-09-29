@@ -240,6 +240,16 @@ module tms_ddr3_loader_ax7203 #(
     wire        mv_cyc, mv_stb, mv_line_go, mv_s_go, mv_s_idle;
     wire [31:0] mv_addr, mv_tag, mv_a, mv_s_tag, mv_s_a;
     wire [63:0] mv_b, mv_s_b;
+`ifdef DDR3_LOADER_FFN
+    trinity_ffn_t27 ffn (
+        .clk(clk_ctrl), .rst_n(app_rst_n), .calib(calib_complete), .stall(m1_stall), .ack(m1_ack),
+        .rdata_lo(wb_rdata[63:0]), .rdata_hi(wb_rdata[127:64]),
+        .hidden(32'd2560), .inner(32'd6912), .output_rows(32'd2560),
+        .line_idle(line_idle), .s_go(mv_s_go), .s_tag(mv_s_tag), .s_a(mv_s_a), .s_b(mv_s_b),
+        .line_go(mv_line_go), .line_tag(mv_tag), .line_a(mv_a), .line_b(mv_b), .s_idle(mv_s_idle),
+        .wb_cyc(mv_cyc), .wb_stb(mv_stb), .wb_addr(mv_addr), .state()
+    );
+`else
     TrinityFpgaDdr3MatvecT27 matvec (
         .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .ready(),
         .calib(calib_complete), .stall(m1_stall), .ack(m1_ack),
@@ -254,6 +264,7 @@ module tms_ddr3_loader_ax7203 #(
         .line_go(mv_line_go), .line_tag(mv_tag), .line_a(mv_a), .line_b(mv_b), .s_idle(mv_s_idle),
         .wb_cyc(mv_cyc), .wb_stb(mv_stb), .wb_addr(mv_addr)
     );
+`endif
 `endif
 `ifdef DDR3_LOADER_READER
     wire        r_go, r_idle, r_tx_start, r_tx_busy, r_cyc;

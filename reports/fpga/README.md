@@ -121,3 +121,15 @@ reference; the conformance lab carries `device_evidence: fpga` for the
 in 55, 50 and 45 RAMB36E1 (2.000, 1.800 and 1.636 bits per trit) and reads it
 back without error on the device. Not measured: DDR and power (see
 `docs/hardware.md`).
+
+## Q16 FFN evidence (2026-09-29)
+
+`ffn-q16-2026-09-29-eecc619f/` (issue #92, draft PR #93, source `eecc619f`):
+the generated serial FFN with real BitNet weights (H=2560, I=6912, O=2560,
+baseline2). Routed 70.41 MHz for the 60 MHz target after pipelining the limb
+arithmetic; 42 RAMB36E1; final synthesis CHECK zero. Two board runs from one
+SRAM load (seed 27 and the zero vector): 32768/32768 stage values exact, zero
+saturations, 860531932 clocks each, temperatures below 51 C; every payload
+read back and CRC-verified over raw UART at 921600; independent offline replay
+in each run directory. Simulation counterpart (full layer, zero vector and
+the 6912-saturation extreme) recorded alongside. See the directory's README.
