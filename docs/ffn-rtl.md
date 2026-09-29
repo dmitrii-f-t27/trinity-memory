@@ -22,11 +22,15 @@ EPS_Q64=184467440737096, and take floor(sqrt(value << 64)); the output
 numerator is `(a * gamma) << 32`. Epsilon is inside the square root.
 
 The sum of 6912 squares of -2^63 needs 139 unsigned bits. It is accumulated
-in three explicit u64 limbs (192 bits), never an unsupported wide scalar
+in explicit u64/u64/u32 limbs (160 bits), never an unsupported wide scalar
 type. The square-root radicand fits 192 bits and its root fits 96 bits.
-The generated wide unit implements unsigned multiply64x64 (64 cycles),
-divide192by128 (192 cycles, divisor below 2^127), and sqrt192 (96 cycles).
-These are operation cycles, excluding the controller handshake.
+The generated wide unit implements unsigned multiply64x64 (128 cycles),
+divide192by128 (384 cycles, divisor below 2^127), and sqrt192 (192 cycles).
+Each iteration registers independent limb operations before propagating the
+carry or borrow on the second clock. These are operation cycles, excluding
+the controller handshake. The controller delays completion by five clocks
+to drain registered rounding, carry and clamping paths. The arithmetic
+contract and rounding boundaries are unchanged.
 
 ## Memory and protocol
 

@@ -48,7 +48,7 @@ var root0: u64 = 0;
 var root1: u64 = 0;
 var sum0: u64 = 0;
 var sum1: u64 = 0;
-var sum2: u64 = 0;
+var sum2: u32 = 0;
 var acc: u64 = 0;
 var weight0: u64 = 0;
 var weight1: u64 = 0;
@@ -128,39 +128,35 @@ fn trit_sum(a: u64, x: u64, code: u64) -> u64 {
     if (code == 1) { return a+x; } if (code == 2) { return a-x; } return a;
 }
 var s_idle: bool;
-var rounded0: u64;
-var rounded1: u64;
-var rounded2: u64;
-var inc: u64;
+var rounded0: u64 = 0;
+var rounded1: u64 = 0;
+var rounded2: u64 = 0;
+var inc: u64 = 0;
 var shifted0: u64;
 var shifted1: u64;
 var sinc: u64;
-var scaled0: u64;
-var scaled1: u64;
-var value32: u32;
-var value64: u64;
-var eps0: u64;
-var eps1: u64;
-var add1: u64;
-var accum1: u64;
+var scaled0: u64 = 0;
+var scaled1: u64 = 0;
+var value32: u32 = 0;
+var value64: u64 = 0;
+var eps0: u64 = 0;
+var eps1: u64 = 0;
+var eps_carry: u64 = 0;
+var add1: u64 = 0;
+var accum1: u64 = 0;
+var sum_carry0: u64 = 0;
+var sum_carry1: u64 = 0;
+var done1: bool = false;
+var done2: bool = false;
+var done3: bool = false;
+var done4: bool = false;
+var result_ready: bool = false;
 var vec_addr: u32;
 vec_addr = pick32(state == 33 || state == 34,col,index);
 s_idle = !sbuf;
-inc = rne_up(q0,r0,r1,b0,b1);
-rounded0 = q0 + inc;
-rounded1 = q1 + carry(q0,inc);
-rounded2 = q2 + carry(q1,carry(q0,inc));
 shifted0 = (q0 >> 16) | (q1 << 48);
 shifted1 = (q1 >> 16) | (q2 << 48);
 sinc = pick((q0 & 65535) > 32768 || ((q0 & 65535) == 32768 && (shifted0 & 1) != 0),1,0);
-scaled0 = shifted0 + sinc;
-scaled1 = shifted1 + carry(shifted0,sinc);
-value32 = clamp32(pick(state == 23,rounded0,scaled0),pick(state == 23,rounded1 | rounded2,scaled1),product_neg);
-value64 = clamp64(scaled0,scaled1,product_neg);
-eps0 = rounded0 + pick(stage == 0,EPS32,EPS64);
-eps1 = rounded1 + carry(rounded0,pick(stage == 0,EPS32,EPS64));
-add1 = sum1 + q1;
-accum1 = add1 + carry(sum0,q0);
 
 fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             hidden: u32, inner: u32, output_rows: u32,
@@ -168,6 +164,25 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             line_idle: bool, s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
     // Explicit registered RAM reads keep all vector stores in block RAM.
     vr = vec[vec_addr]; wr = wide[index];
+    // Five clocks drain the registered round/carry/clamp paths after math_done.
+    // The wide unit holds q/r until the next start, so every stage sees the
+    // same exact value. No arithmetic rounding boundary changes.
+    done1 = math_done; done2 = done1; done3 = done2; done4 = done3; result_ready = done4;
+    inc = rne_up(q0,r0,r1,b0,b1);
+    rounded0 = q0 + inc;
+    rounded1 = q1 + pick(q0 == (0 as u64)-1 && inc != 0,1,0);
+    rounded2 = q2 + pick(q0 == (0 as u64)-1 && q1 == (0 as u64)-1 && inc != 0,1,0);
+    scaled0 = shifted0 + sinc;
+    scaled1 = shifted1 + pick(shifted0 == (0 as u64)-1 && sinc != 0,1,0);
+    value32 = clamp32(pick(state == 23,rounded0,scaled0),pick(state == 23,rounded1 | rounded2,scaled1),product_neg);
+    value64 = clamp64(scaled0,scaled1,product_neg);
+    eps_carry = carry(rounded0,pick(stage == 0,EPS32,EPS64));
+    eps0 = rounded0 + pick(stage == 0,EPS32,EPS64);
+    eps1 = rounded1 + eps_carry;
+    sum_carry0 = carry(sum0,q0);
+    add1 = sum1 + q1;
+    accum1 = add1 + sum_carry0;
+    sum_carry1 = carry(sum1,q1) + carry(add1,sum_carry0);
     math_start = false;
     if (active) { cycles = cycles + 1; }
     if (state == 0) {
@@ -217,24 +232,24 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         math_mode = 1; a0 = magnitude(sample); b0 = magnitude(sample);
         a1 = 0; a2 = 0; b1 = 0; math_start = true; state = 13;
     } else if (state == 13) {
-        if (math_done) {
+        if (result_ready) {
             sum0 = sum0 + q0; sum1 = accum1;
-            sum2 = sum2 + carry(sum1,q1) + carry(add1,carry(sum0,q0));
+            sum2 = sum2 + (sum_carry1 as u32);
             if (index == length-1) { state = 14; }
             else { index = index+1; state = 9; }
         }
     } else if (state == 14) {
-        math_mode = 2; a0 = sum0; a1 = sum1; a2 = sum2;
+        math_mode = 2; a0 = sum0; a1 = sum1; a2 = sum2 as u64;
         b0 = length as u64; b1 = 0; math_start = true; state = 15;
     } else if (state == 15) {
-        if (math_done) {
+        if (result_ready) {
             math_mode = 3;
             if (stage == 0) { a0 = eps0 << 32; a1 = (eps1 << 32) | (eps0 >> 32); a2 = eps1 >> 32; }
             else { a0 = 0; a1 = eps0; a2 = eps1; }
             math_start = true; state = 17;
         }
     } else if (state == 17) {
-        if (math_done) { root0 = q0; root1 = q1; index = 0; state = 18; }
+        if (result_ready) { root0 = q0; root1 = q1; index = 0; state = 18; }
     } else if (state == 18) {
         wb_addr = pick32(stage == 0,8192,12288)+index;
         wb_stb = true; response = 19; state = 200; quiet = 0;
@@ -245,14 +260,14 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         math_mode = 1; a0 = magnitude(sample); b0 = magnitude(gamma);
         a1 = 0; a2 = 0; b1 = 0; math_start = true; state = 21;
     } else if (state == 21) {
-        if (math_done) {
+        if (result_ready) {
             math_mode = 2;
             if (stage == 0) { a0 = q0 << 16; a1 = (q1 << 16) | (q0 >> 48); a2 = q1 >> 48; }
             else { a0 = q0 << 32; a1 = (q1 << 32) | (q0 >> 32); a2 = q1 >> 32; }
             b0 = root0; b1 = root1; math_start = true; state = 23;
         }
     } else if (state == 23) {
-        if (math_done) {
+        if (result_ready) {
             vec[index] = value32; emit_value = sx32(value32); emit_index = index;
             if (sat32(rounded0,rounded1 | rounded2,product_neg)) { sats[stage] = sats[stage]+1; }
             after_emit = 24; state = 300;
@@ -286,7 +301,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         math_mode = 1; a0 = magnitude(acc); b0 = magnitude(gamma);
         a1 = 0; a2 = 0; b1 = 0; math_start = true; state = 36;
     } else if (state == 36) {
-        if (math_done) {
+        if (result_ready) {
             if (stage == 1) { gate[row] = value32; }
             if (stage == 2) { up[row] = value32; }
             if (sat32(scaled0,scaled1,product_neg)) { sats[stage] = sats[stage]+1; }
@@ -306,12 +321,12 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         b0 = pick((gr & 2147483648) == 0,gr as u64,0);
         a1 = 0; a2 = 0; b1 = 0; math_start = true; state = 42;
     } else if (state == 42) {
-        if (math_done) {
+        if (result_ready) {
             a0 = q0; b0 = magnitude(sx32(ur)); math_start = true;
             product_neg = (ur & 2147483648) != 0; state = 43;
         }
     } else if (state == 43) {
-        if (math_done) {
+        if (result_ready) {
             wide[index] = value64;
             if (sat64(scaled0,scaled1,product_neg)) { sats[3] = sats[3]+1; }
             emit_value = value64; emit_index = index; after_emit = 44; state = 300;
