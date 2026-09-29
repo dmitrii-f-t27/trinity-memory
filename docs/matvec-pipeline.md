@@ -172,8 +172,12 @@ and
 boot captures `matvec-compute{0,1}-d375d7ff-d5-boot/`, build reports
 `ddr3-build-2026-09-28-d375d7ff-x16-matvec-compute{0,1}-d5/`. The baseline
 reproduces the 669a144 pipelined-read number (208.674) exactly. DDR3
-saturation remains unestablished: 342.8 M weights/s is 47 % of the x16
-theoretical 730.7 M weights/s at 2 bits/weight, and the memory-bound verdict
-stays "not established" for the same reasons as above. The die ran hot after
+saturation remains unestablished. The report's dense5 arithmetic ceiling is
+80 weights per 128-bit word times 60 million controller clocks per second,
+or 4,800 M weights/s. The measured 342.800 M weights/s is 7.14% of that
+arithmetic ceiling; this is not a measurement of physical bus utilisation.
+The previous 47% of 730.7 M weights/s statement used an unsupported ceiling
+and is withdrawn. The memory-bound verdict stays "not established".
+The die ran hot after
 a day idle at calibration (93.5 C, limit 80): the boot capture was made after
 an SRAM reset and cooldown to 50-56 C.
