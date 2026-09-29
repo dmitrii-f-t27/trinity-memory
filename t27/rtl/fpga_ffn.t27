@@ -36,6 +36,8 @@ var active: bool = false;
 var cycles: u64 = 0;
 var report_cycles: u64 = 0;
 var memory_cycles: u64 = 0;
+var report_wait: bool = false;
+var memory_wait: bool = false;
 var error_code: u32 = 0;
 var vec: [8192]u32;
 var gate: [8192]u32;
@@ -191,8 +193,14 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     if (active) { cycles = cycles + 1; }
     // Classify by the state this clock executes: waiting for the report line
     // (run start and value emits) or for a DDR3 read (request and response).
-    if (active && (state == 8 || (state >= 300 && state <= 302))) { report_cycles = report_cycles + 1; }
-    if (active && (state == 200 || state == 201)) { memory_cycles = memory_cycles + 1; }
+    // The flags are registered so the state decode does not drive the 64-bit
+    // counter enables (58.81 MHz at seed 6 without this). Each counter lags
+    // one clock; the last active clock is compute (state 37), so both are
+    // complete before state 600 reports them.
+    if (report_wait) { report_cycles = report_cycles + 1; }
+    if (memory_wait) { memory_cycles = memory_cycles + 1; }
+    report_wait = active && (state == 8 || state == 300 || state == 301 || state == 302);
+    memory_wait = active && (state == 200 || state == 201);
     if (state == 0) {
         if (calib) {
             wb_cyc = true; ptag = 70; pa = hidden; pb = inner as u64; pending = true;
