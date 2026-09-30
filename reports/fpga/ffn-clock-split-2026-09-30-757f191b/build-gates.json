@@ -1,0 +1,31 @@
+{
+  "source": {
+    "dirty": false,
+    "head": "757f191b9c0b41b5c5bf92b2bd0660e567aa8a18",
+    "tracked_changes": []
+  },
+  "bitstream_sha256": "8af9abc912cbf4d6f4472e6775e76df5cc169ef6965b5607276779e2b5d78e91",
+  "routed_clocks": [
+    {
+      "clock": "clk_ctrl",
+      "fmax_mhz": 62.74,
+      "target_mhz": 60.0,
+      "verdict": "PASS",
+      "seed": "heap_seed2"
+    }
+  ],
+  "seeds_tried": {
+    "heap_seed1": "59.94 MHz FAIL",
+    "heap_seed2": "62.74 MHz PASS (first to meet timing; later seeds not run)"
+  },
+  "final_yosys_check_problems": 0,
+  "RAMB36E1": 42,
+  "latch_cells": 0,
+  "modeled_ck_dqs_offset_ps": [
+    -439,
+    -342
+  ],
+  "ck_dqs_formula": "clk_ddr buffer->OBUFDS P/IN minus buffer->OSERDESE2_dqs CLK (stage 5 eecc619f: 1800-2877=-1077, 1800-2487=-687)",
+  "retained_failure": "12c5ec4a seed6 58.81 MHz FAIL, not loaded (build/stage6/build-12c5ec4a-seed6-58.81MHz-FAIL.log)",
+  "scope": "nextpnr fabric timing and modeled clock route delays, not PHY signoff"
+}

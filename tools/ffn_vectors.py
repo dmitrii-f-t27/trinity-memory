@@ -90,8 +90,11 @@ def validate(raw, expected, sats, run=1):
     require([(a,b) for t,a,b in lines if t=='d']==[(run,0)],'missing/duplicate run start')
     require([(a,b) for t,a,b in lines if t=='z']==[(run,0)],'missing/duplicate completion')
     require(not any(t=='E' for t,_,_ in lines),'device reported fatal error')
-    require(all(t in 'FdchHgGuUaJsSyYtzA' for t,_,_ in lines),'unexpected UART tag')
+    require(all(t in 'FdchHgGuUaJsSyYtzAk' for t,_,_ in lines),'unexpected UART tag')
     require(len([b for t,a,b in lines if t=='c'])==1,'missing/duplicate clock counter')
+    # Captures before the clock split (stage 5, eecc619f) have no k lines.
+    split=[(a,b) for t,a,b in lines if t=='k']
+    require(split==[] or [a for a,_ in split]==[0,1],'missing/duplicate clock split')
     require([(i,v) for t,i,v in lines if t=='t']==list(enumerate(sats[s] for s in STAGES)),
             'saturation counts differ')
     for stage in STAGES:
@@ -103,8 +106,15 @@ def validate(raw, expected, sats, run=1):
     for stage in STAGES:
         sequence.extend((t,i) for i in range(len(expected[stage]))
                         for t in (stage,'J' if stage=='a' else stage.upper()))
-    sequence.extend([('c',run),*[('t',i) for i in range(6)],('z',run)])
+    sequence.extend([('c',run),*[('k',i) for i,_ in enumerate(split)],*[('t',i) for i in range(6)],('z',run)])
     require([(t,i) for t,i,_ in lines if t not in ('F','A')]==sequence,'stage/report order differs')
-    return {'pass':True,'run':run,'stage_values':sum(len(expected[s]) for s in STAGES),
+    cycles=[b for t,a,b in lines if t=='c']
+    result={'pass':True,'run':run,'stage_values':sum(len(expected[s]) for s in STAGES),
             'capture_bytes':len(raw),'capture_sha256':hashlib.sha256(raw).hexdigest(),
-            'saturations':sats,'cycles':[b for t,a,b in lines if t=='c']}
+            'saturations':sats,'cycles':cycles}
+    if split:
+        report,memory=split[0][1],split[1][1]
+        require(report+memory<=cycles[0],'clock split exceeds total')
+        result['clock_split']={'total':cycles[0],'report_wait':report,'memory_wait':memory,
+                               'compute':cycles[0]-report-memory}
+    return result

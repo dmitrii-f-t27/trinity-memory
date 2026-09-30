@@ -3,8 +3,10 @@
 
 A static page from a scan report (trinity.ternary-check-live.v2): one row per
 model with its files, layouts, verdicts, the pinned revisions and the check
-date; every non-ok verdict links to its explanation; the confirmed findings
-link to their ledger entries (docs/live/findings.md). A shields.io badge
+date; a model the findings ledger (docs/live/findings.md) covers links to its
+entry with the entry's status, and a refusal the ledger withdrew (the file is
+correct for a runtime that is not pinned here) is shown, and badged, as
+other_runtime. The header counts the legacy group-128 Q2_0 files of the scan. A shields.io badge
 endpoint per repository renders the current verdict for model cards.
 
 The in-browser check is a separate, self-contained page (check.html) that
@@ -44,13 +46,67 @@ def e(text) -> str:
     return html.escape(str(text))
 
 
-def badge_json(scan: dict, repo: str) -> dict | None:
+LEDGER = ROOT / "docs/live/findings.md"
+LEDGER_URL = "https://github.com/dmitrii-f-t27/trinity-memory/blob/master/docs/live/findings.md"
+
+
+def ledger(path: pathlib.Path = LEDGER) -> list:
+    """The entries of the findings ledger: id, status word, the repositories
+    its `where` bullet names and the anchor GitHub gives its heading."""
+    import re
+    if not path.is_file():
+        return []
+    entries = []
+    for block in re.split(r"(?m)^## (?=F-\d+ )", path.read_text())[1:]:
+        title, _, body = block.partition("\n")
+        status = re.search(r"\*\*status\*\*: (\w+)", body)
+        where = re.search(r"- \*\*where\*\*: (.*?)(?=\n- \*\*|\Z)", body, re.S)
+        slug = re.sub(r"[^a-z0-9 _-]", "", title.strip().lower()).replace(" ", "-")
+        entries.append({"id": title.split()[0], "status": status.group(1) if status else "?",
+                        "repos": set(re.findall(r"`([\w.-]+/[\w.-]+)`", where.group(1) if where else "")),
+                        "anchor": slug})
+    return entries
+
+
+def ledger_entry(entries: list, repo: str, verdict: str) -> dict | None:
+    """The ledger entry that covers a repository's model that is not ok."""
+    if verdict == "ok":
+        return None
+    return next((x for x in entries if repo in x["repos"]), None)
+
+
+def shown_verdict(verdict: str, entry: dict | None) -> str:
+    """A refusal the ledger withdrew (the file is correct for a runtime that
+    is not pinned here) is shown as written for another runtime."""
+    return "other_runtime" if entry and entry["status"] == "withdrawn" and verdict == "refused" else verdict
+
+
+def legacy_q2_0(scan: dict, entries: list) -> dict:
+    """Files that declare type 42 (Q2_0) while every such record fits the
+    group-128 layout (PQ2_0), without the ones the ledger withdrew."""
+    rows = []
+    for r in scan.get("repositories", []):
+        for m in r.get("models", []):
+            fits = ((m.get("problems") or {}).get("extent") or {}).get("fits") or {}
+            entry = ledger_entry(entries, r["repo"], m.get("verdict", "?"))
+            if "PQ2_0" in fits and any(t == 42 for t, _ in m.get("ggml_types", [])) \
+                    and not (entry and entry["status"] == "withdrawn"):
+                rows += [(r["repo"], f.get("lfs_sha256")) for f in m.get("files", [])]
+    own = {sha for repo, sha in rows if repo.startswith("prism-ml/")}
+    third = [(repo, sha) for repo, sha in rows if not repo.startswith("prism-ml/")]
+    return {"files": len(rows), "third_party": len(third), "repositories": len({repo for repo, _ in third}),
+            "copies": sum(sha in own for _, sha in third)}
+
+
+def badge_json(scan: dict, repo: str, entries: list | None = None) -> dict | None:
     for r in scan.get("repositories", []):
         if r.get("repo") == repo:
             break
     else:
         return None
-    verdicts = {m.get("verdict") for m in r.get("models", [])}
+    entries = ledger() if entries is None else entries
+    verdicts = {shown_verdict(m.get("verdict"), ledger_entry(entries, repo, m.get("verdict")))
+                for m in r.get("models", [])}
     if not verdicts:
         label, value, color = "ternary check", "no gguf", "lightgrey"
     elif verdicts <= {"ok"}:
@@ -71,12 +127,12 @@ def render_drift(d: dict) -> str:
     newrej = d.get("new_rejections") or []
     rows = "".join(
         f'<tr><td><a href="https://huggingface.co/{e(m["repo"])}">{e(m["repo"])}</a></td>'
-        f"<td><code>{e(m["file"])}</code></td>"
+        f'<td><code>{e(m["file"])}</code></td>'
         f'<td class="v mid">{e(m["was"])}</td><td class="v bad">{e(m["now"])}</td></tr>'
         for m in newrej)
     rows += "".join(
         f'<tr><td><a href="https://huggingface.co/{e(m["repo"])}">{e(m["repo"])}</a></td>'
-        f"<td><code>{e(m["file"])}</code></td>"
+        f'<td><code>{e(m["file"])}</code></td>'
         f'<td class="v mid">{e(m["was"])}</td><td class="v mid">{e(m["now"])}</td></tr>'
         for m in moved if m not in newrej)
     rows += "".join(
@@ -90,7 +146,9 @@ def render_drift(d: dict) -> str:
             "The findings ledger holds the explanations.</div>")
 
 
-def render(scan: dict) -> str:
+def render(scan: dict, entries: list | None = None) -> str:
+    entries = ledger() if entries is None else entries
+    legacy = legacy_q2_0(scan, entries)
     when = scan.get("started", "")[:10] or "unknown date"
     s = scan.get("summary", {})
     runtimes = scan.get("runtimes", {})
@@ -99,15 +157,19 @@ def render(scan: dict) -> str:
     rows = []
     for r in scan.get("repositories", []):
         for m in r.get("models", []):
-            v = m.get("verdict", "?")
+            raw = m.get("verdict", "?")
+            entry = ledger_entry(entries, r["repo"], raw)
+            v = shown_verdict(raw, entry)
+            note = (f' <a href="{LEDGER_URL}#{e(entry["anchor"])}">{e(entry["id"])} {e(entry["status"])}</a>'
+                    if entry else "")
             files = ", ".join(f"<code>{e(f.get('file'))}</code>" for f in (m.get("files") or [])[:3])
             native = m.get("native") or "?"
             rows.append(
                 f'<tr><td><a href="https://huggingface.co/{e(r["repo"])}">{e(r["repo"])}</a></td>'
                 f"<td>{files}</td>"
-                f'<td class="v {VERDICT_CLASS.get(v, "mid")}">{e(v)}</td>'
-                f"<td><code>{e(native)}</code></td>"
-                f'<td class="r">{e(v if v == "ok" else (m.get("runtimes", {}) or {}).get("llama.cpp", {}).get("verdict", "?"))}</td></tr>')
+                f'<td class="v {VERDICT_CLASS.get(v, "mid")}">{e(v)}{note}</td>'
+                f"<td><code>{e('its own runtime' if v != raw else native)}</code></td>"
+                f'<td class="r">{e(raw if raw == "ok" else (m.get("runtimes", {}) or {}).get("llama.cpp", {}).get("verdict", "?"))}</td></tr>')
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Ternary Check Live</title>
@@ -138,6 +200,10 @@ bytes every reader parses first — checked against the pinned revisions above.
 measure model quality or speed, and it says nothing about weights the header
 does not describe. Rejections link to
 <a href="https://github.com/dmitrii-f-t27/trinity-memory/blob/master/docs/live/findings.md">the findings ledger</a>.
+<br><b>Legacy Q2_0.</b> {legacy["files"]} files declare type 42 (<code>Q2_0</code>) but store the older
+128-weight layout, so the pinned llama.cpp and PrismML readers refuse them: {legacy["files"] - legacy["third_party"]} of PrismML's own and
+{legacy["third_party"]} third-party files in {legacy["repositories"]} repositories, {legacy["copies"]} of them byte-identical
+copies of PrismML's. A file the ledger withdrew as a defect is shown as <b>other_runtime</b>.
 <br><b>Check any file yourself:</b> <a href="check.html">the browser check</a>
 inspects bounded file prefixes with HTTP range requests; nothing is uploaded.
 </div>
