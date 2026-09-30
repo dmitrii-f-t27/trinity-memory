@@ -2,6 +2,32 @@
 
 Date: 2026-09-30. Local platform: macOS arm64.
 
+## Combined validation after PR #101
+
+Master advanced to 4b4b0eb during validation, adding mortar.cpp
+`236418ec92aaf51f8635b965f5557457c8126ca7`. This work is integrated with the
+new pins and loader rules. The fourth table explicitly declares
+`tensor_extra=false`; all generated tables were regenerated from JSON.
+
+- `cached-replay-four-readers-macos.json`: 55 files, 220/220 agreements,
+  zero disagreements/no-verdicts/crashes/timeouts.
+- `fuzz-seed27-four-readers-macos.json`: 160,000 headers, 640,000 attempted
+  observations, 610,351 agreements, 29,649 without a t27 verdict, zero
+  disagreements/timeouts. Bitnet.cpp and mortar.cpp each assert on 7,054
+  malformed inputs; those exits are separately counted and treated as
+  refusals where comparable. 96 worker-to-single-reader crosschecks pass.
+  Same seed/corpus hash as the three-reader snapshot below.
+- Fresh native and four-reader builds, native Live ASan/UBSan, Live WASM,
+  81 targeted unit tests, all 12 specs/seals/conformance/reference/RTL
+  checks, and page generation pass on the combined state.
+- The fuzz driver uses `live.SPEC_NAMES` for every pinned runtime, rather
+  than retaining a three-reader list. CI disables core dumps for malformed
+  inputs while still recording every assertion signal.
+
+The three-reader subsection below is a preserved earlier snapshot, not the
+final combined-state acceptance. Remote CI and full public scan status are
+tracked in PR #99, separately from these local results.
+
 ## Reader provenance
 
 | Runtime | Pinned source commit |
@@ -53,6 +79,7 @@ Use the compiler revision in `native/compiler.lock`, then:
 ```sh
 sh tools/build-t27.sh
 sh tools/live-replay.sh
+ulimit -c 0
 python3 tools/live-fuzz.py --seed 27 --cases 160000 --out build/live/fuzz.json
 ```
 
