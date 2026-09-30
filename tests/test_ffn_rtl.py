@@ -119,11 +119,19 @@ def check_capture(test, path, expected, sats):
     test.assertEqual([(i,v) for tag,i,v in lines if tag=='t'],list(enumerate(sats.values())))
     test.assertEqual([(i,v) for tag,i,v in lines if tag=='z'],[(1,0)])
     test.assertEqual([(i,v) for tag,i,v in lines if tag=='d'],[(1,0)])
+    total=[v for tag,i,v in lines if tag=='c']
+    split=[(i,v) for tag,i,v in lines if tag=='k']
+    test.assertEqual(len(total),1)
+    test.assertEqual([i for i,_ in split],[0,1],'clock split lines')
+    report,memory=split[0][1],split[1][1]
+    test.assertGreater(report,0); test.assertGreater(memory,0)
+    test.assertLessEqual(report+memory,total[0])
+    return {'total':total[0],'report_wait':report,'memory_wait':memory,'compute':total[0]-report-memory}
 
 
 @unittest.skipUnless(COMPILER.is_file() and shutil.which('iverilog'), 'pinned t27c and Icarus required')
 class FfnPipeline(unittest.TestCase):
-    def simulate(self, model, x, label):
+    def simulate(self, model, x, label, mem_base=2, out_base=1):
         expected, sats = fr.fpga_q16(model,x)
         with tempfile.TemporaryDirectory(prefix='trinity-ffn-'+label+'-') as temp:
             work=Path(temp)
@@ -132,19 +140,21 @@ class FfnPipeline(unittest.TestCase):
             exe=work/'test.vvp'; output=work/'capture.txt'
             h=model['shapes']['gate'][1]; inner=model['shapes']['gate'][0]; out=model['shapes']['down'][0]
             subprocess.run(['iverilog','-g2012','-s','tb_ffn',f'-Ptb_ffn.H={h}',f'-Ptb_ffn.I={inner}',
-                            f'-Ptb_ffn.O={out}','-o',str(exe),*map(str,rtl),str(ROOT/'rtl/t27/ffn.v'),
+                            f'-Ptb_ffn.O={out}',f'-Ptb_ffn.MEM_BASE={mem_base}',
+                            f'-Ptb_ffn.OUT_BASE={out_base}','-o',str(exe),*map(str,rtl),str(ROOT/'rtl/t27/ffn.v'),
                             str(ROOT/'tests/tb_ffn.v')],text=True,capture_output=True,check=True)
             command=['vvp',str(exe)]
             if os.environ.get('TRINITY_FFN_SIMULATOR')=='verilator':
                 subprocess.run(['verilator','--binary','--timing','--top-module','tb_ffn','-Wno-fatal','-j','4',
-                                f'-GH={h}',f'-GI={inner}',f'-GO={out}','--Mdir',str(work/'obj_dir'),
+                                f'-GH={h}',f'-GI={inner}',f'-GO={out}',
+                                f'-GMEM_BASE={mem_base}',f'-GOUT_BASE={out_base}','--Mdir',str(work/'obj_dir'),
                                 *map(str,rtl),str(ROOT/'rtl/t27/ffn.v'),str(ROOT/'tests/tb_ffn.v')],
                                capture_output=True,text=True,check=True)
                 command=[str(work/'obj_dir/Vtb_ffn')]
             run=subprocess.run([*command,'+input='+str(inp),'+output='+str(output)],
                                text=True,capture_output=True,timeout=180)
             self.assertEqual(run.returncode,0,run.stdout+run.stderr)
-            check_capture(self,output,expected,sats)
+            return check_capture(self,output,expected,sats)
 
     def test_small_and_saturating_complete_layers(self):
         from tests.test_ffn_reference import DatapathTest
@@ -157,6 +167,16 @@ class FfnPipeline(unittest.TestCase):
         self.simulate(model,[1 << 16]*8,'positive-saturation')
         model['up']=[-1]*48
         self.simulate(model,[1 << 16]*8,'negative-saturation')
+
+    def test_compute_clocks_do_not_depend_on_memory_or_report_latency(self):
+        from tests.test_ffn_reference import DatapathTest
+        model=DatapathTest()._tiny_model(); x=[v << 16 for v in (3,-5,7,1,-2,4,0,-8)]
+        fast=self.simulate(model,x,'split-fast')
+        slow=self.simulate(model,x,'split-slow',mem_base=9,out_base=13)
+        self.assertEqual(fast['compute'],slow['compute'])
+        self.assertGreater(slow['memory_wait'],fast['memory_wait'])
+        self.assertGreater(slow['report_wait'],fast['report_wait'])
+        self.assertGreater(slow['total'],fast['total'])
 
     def test_partial_words_and_signed_extremes(self):
         rng=random.Random(927)
@@ -197,6 +217,17 @@ class CaptureValidation(unittest.TestCase):
         lines+=['c000000010000000123\n']+[f't{i:08x}0000000000\n' for i in range(6)]+['z000000010000000000\n']
         raw=''.join(lines).encode()
         self.assertTrue(vectors.validate(raw,expected,sats)['pass'])
+        self.assertNotIn('clock_split',vectors.validate(raw,expected,sats))
+        split_lines=lines[:-8]+['c000000010000000123\n','k000000000000000020\n','k000000010000000003\n']+lines[-7:]
+        split=''.join(split_lines).encode()
+        self.assertEqual(vectors.validate(split,expected,sats)['clock_split'],
+                         {'total':0x123,'report_wait':0x20,'memory_wait':3,'compute':0x100})
+        for broken in [split.replace(b'k00000001',b'k00000000'),
+                       split.replace(b'k000000010000000003\n',b''),
+                       split.replace(b'k000000000000000020',b'k000000000000000200'),
+                       b''.join(l.encode() for l in split_lines[:-9]+split_lines[-7:-6]+split_lines[-9:-7]+split_lines[-6:])]:
+            with self.subTest(broken=broken[-80:]),self.assertRaises(ValueError):
+                vectors.validate(broken,expected,sats)
         for broken in [raw[:-1],raw+b'garbage\n',raw.replace(b'h0000000000ffffffff',b'h0000000000fffffffe'),
                        ''.join(lines[:1]+lines[3:]+lines[1:3]).encode(),raw+lines[-1].encode()]:
             with self.subTest(broken=broken[:40]),self.assertRaises(ValueError):
