@@ -103,6 +103,31 @@ class CheckModelTest(unittest.TestCase):
         self.assertEqual(record["runtimes"]["prismml"], {"verdict": "accepts"})
         self.assertEqual(record["hadamard"], {"present": False, "status": "ok"})
 
+    def test_a_g8_0_model_is_written_for_mortar_cpp(self):
+        # mortar.cpp reads id 42 in 128-weight groups (34 bytes) and id 143 as
+        # G8_0 (32 weights in 16 bytes); the fork reads 143 as PTQ1_0 and refuses.
+        records = [("a.weight", [1024, 4], 42, 0), ("token_embd.weight", [1024, 4], 143, 1088),
+                   ("b.weight", [1024, 4], 42, 1088 + 2048)]
+        header = _gguf(records)
+        record = live.check_model([("m.gguf", header, len(header) + 1088 + 2048 + 1088)])
+        self.assertEqual((record["verdict"], record["native"]), ("ok", "mortar.cpp"))
+        self.assertEqual(record["layouts"], {"PQ2_0": 2, "G8_0": 1})
+        self.assertEqual({key: entry["verdict"] for key, entry in record["runtimes"].items()},
+                         {"llama.cpp": "refuses", "prismml": "refuses", "bitnet.cpp": "refuses", "mortar.cpp": "accepts"})
+        # The same id 143 with the fork's PTQ1_0 bytes (28 per 128 weights) stays the fork's.
+        fork = _gguf([("a.weight", [1024, 4], 142, 0), ("b.weight", [1024, 4], 143, 1088)])
+        record = live.check_model([("m.gguf", fork, len(fork) + 1088 + 896)])
+        self.assertEqual((record["verdict"], record["native"]), ("ok", "prismml"))
+        self.assertEqual(record["runtimes"]["mortar.cpp"]["verdict"], "refuses")
+
+    def test_legacy_q2_0_alone_is_not_taken_for_a_mortar_cpp_model(self):
+        # Id 42 in 128-weight groups with no id 143: the legacy Prism case
+        # (PrismML-Eng/llama.cpp#167), although mortar.cpp's reader accepts it.
+        header, size = _file([("a.weight", 42, 128), ("b.weight", 42, 128)], 34)
+        record = live.check_model([("m-Q2_0.gguf", header, size)])
+        self.assertEqual((record["verdict"], record["native"]), ("refused", "llama.cpp"))
+        self.assertEqual(record["runtimes"]["mortar.cpp"]["verdict"], "accepts")
+
     def test_a_declared_rotation_is_ignored_outside_the_fork(self):
         header, size = _file([("blk.0.attn_q.weight", 1, 1)], 2, keys=_hadamard_keys(["blk.0.attn_q.weight"]))
         record = live.check_header(header, size)
@@ -203,7 +228,8 @@ class RuntimeTablesTest(unittest.TestCase):
                               capture_output=True, text=True)
         self.assertEqual(done.returncode, 0, done.stderr)
         lock = json.loads((ROOT / "specs" / "formats" / "upstream.lock.json").read_text())["upstreams"]
-        pins = {"llama_cpp": lock["llama.cpp"], "prismml": lock["prismml"], "bitnet_cpp": lock["bitnet.cpp-llama.cpp"]}
+        pins = {"llama_cpp": lock["llama.cpp"], "prismml": lock["prismml"], "bitnet_cpp": lock["bitnet.cpp-llama.cpp"],
+                "mortar_cpp": lock["mortar.cpp"]}
         for name, pin in pins.items():
             spec = json.loads((ROOT / "specs" / "runtimes" / f"{name}.json").read_text())
             self.assertEqual((spec["repo"], spec["commit"]), (pin["repo"], pin["commit"]), name)
