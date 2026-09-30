@@ -79,8 +79,10 @@ LOG_EVERY = 25
 # ---- t27/live.t27 --------------------------------------------------------------------
 
 U64 = C.c_uint64
-LLAMA_CPP, PRISMML, BITNET_CPP = 1, 2, 3
-RUNTIMES = {LLAMA_CPP: "llama.cpp", PRISMML: "prismml", BITNET_CPP: "bitnet.cpp"}
+LLAMA_CPP, PRISMML, BITNET_CPP, MORTAR_CPP = 1, 2, 3, 4
+RUNTIMES = {LLAMA_CPP: "llama.cpp", PRISMML: "prismml", BITNET_CPP: "bitnet.cpp", MORTAR_CPP: "mortar.cpp"}
+# The specs/runtimes/<name>.json and gguf_replay_<name> of each runtime.
+SPEC_NAMES = {LLAMA_CPP: "llama_cpp", PRISMML: "prismml", BITNET_CPP: "bitnet_cpp", MORTAR_CPP: "mortar_cpp"}
 NATIVE = {0: "other", **RUNTIMES}
 RUN = {0: "accepts", 1: "refuses", 2: "ignores_rotation"}
 FILE = {0: "ok", 1: "refused", 2: "no_ternary_layout", 3: "undecided", 4: "other_runtime"}
@@ -93,8 +95,9 @@ TOKENS = {-63: "hadamard_type", -64: "hadamard_missing", -65: "hadamard_version"
           -71: "hadamard_tensor", -72: "offsets", -73: "magic", -74: "version", -75: "endian", -76: "key",
           -77: "alignment", -78: "name", -79: "shape", -80: "type", -81: "row", -82: "bounds", -83: "arch",
           -84: "limit", -85: "split", -86: "count", -87: "short", -88: "hadamard_tied", -89: "tensor_extra"}
-# Ternary layouts bitnet.cpp reads without a storage contract in formats.t27.
-LAYOUTS = {101: "TL1", 102: "TL2"}
+# Ternary layouts bitnet.cpp (TL1, TL2) and mortar.cpp (G8_0) read without a storage
+# contract in formats.t27.
+LAYOUTS = {101: "TL1", 102: "TL2", 103: "G8_0"}
 
 
 def status_token(status: int) -> str:
@@ -822,8 +825,7 @@ def report(entries: list, discovery: dict, started: str) -> dict:
     return {"schema": SCHEMA, "started": started, "trinity_memory": _commit(),
             "compiler": COMPILER_LOCK.read_text().strip(),
             "runtimes": {key: json.loads((ROOT / "specs" / "runtimes" / f"{name}.json").read_text())["commit"]
-                         for key, name in (("llama.cpp", "llama_cpp"), ("prismml", "prismml"),
-                                           ("bitnet.cpp", "bitnet_cpp"))},
+                         for key, name in ((RUNTIMES[runtime], SPEC_NAMES[runtime]) for runtime in RUNTIMES)},
             "discovery": discovery, "summary": summary(entries), "repositories": entries}
 
 
@@ -871,7 +873,7 @@ def main(argv=None) -> int:
         if current.get("schema") != SCHEMA:
             parser.error(f"{args.out}: not a {SCHEMA} report")
         binaries = {RUNTIMES[runtime]: args.replay / f"gguf_replay_{name}"
-                    for runtime, name in ((LLAMA_CPP, "llama_cpp"), (PRISMML, "prismml"), (BITNET_CPP, "bitnet_cpp"))
+                    for runtime, name in SPEC_NAMES.items()
                     if (args.replay / f"gguf_replay_{name}").is_file()}
         if not binaries:
             parser.error(f"{args.replay}: no gguf_replay_* binaries (run sh tools/live-replay.sh)")

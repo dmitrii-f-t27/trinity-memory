@@ -321,8 +321,9 @@ later status.
   `G8_0` ("Pestle exact ternary: four BF16 scales per 32 values", 16-byte
   blocks of 32, i.e. 4 bits per weight) — both extents fit. The file is
   consistent with the program it is made for. The scan's `native` guess
-  (`prismml`) is wrong because mortar.cpp is not among the pinned runtimes;
-  adding it is an open item for #51.
+  (`prismml`) was wrong because mortar.cpp was not among the pinned runtimes.
+  It is pinned since 2026-09-30 (`specs/runtimes/mortar_cpp.json`): the model
+  is now judged in mortar.cpp, whose reader accepts it, and its verdict is `ok`.
 - **reported**: — (nothing to report)
 - **answer**: —
 

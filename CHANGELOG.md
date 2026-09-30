@@ -8,6 +8,20 @@ minor version may change interfaces). Most entries name the pull requests
 that made them; 0.2.0 was made by direct commits, and the README and Release
 entries of 0.4.0 come from the release pull request itself.
 
+## [Unreleased]
+
+- Ternary Check Live: mortar.cpp (DosesAI/mortar.cpp@236418ec) is the fourth pinned
+  runtime (issue #51). Its type table is in `specs/runtimes/mortar_cpp.json` (id 42 in
+  128-weight groups, id 143 G8_0); its `gguf.cpp` is bitnet.cpp's blob, so the reader
+  rules are shared (`tlv_old_reader`). `tlv_native` names mortar.cpp for a model with id
+  142 or 143 that the PrismML fork refuses and mortar.cpp accepts; id 42 alone in
+  128-weight groups stays the legacy Prism case. `tools/live-replay.sh` builds its reader
+  like the others. Checked on the real readers: 48 of 48 answers over the 12 files of
+  the findings F-4..F-9, and 800,000 comparisons of the differential fuzzer over four
+  readers with 0 disagreements (`reports/live/mortar-2026-09-30/`).
+- The live page reads the findings ledger; `tools/live-replay.sh` builds bitnet.cpp's
+  reader on macOS (pull request #97).
+
 ## [0.5.0] - 2026-09-27
 
 Ternary Check Live ([epic #57](https://github.com/dmitrii-f-t27/trinity-memory/issues/57)):

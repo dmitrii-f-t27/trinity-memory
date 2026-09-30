@@ -1,0 +1,412 @@
+{
+ "schema": "trinity.runtime-tables.v1",
+ "runtime": "mortar.cpp",
+ "id": 4,
+ "repo": "DosesAI/mortar.cpp",
+ "commit": "236418ec92aaf51f8635b965f5557457c8126ca7",
+ "files": {
+  "ggml/include/ggml.h": "ea6578aa68a824af90bb2b3981dbe8ace3ab1fb6",
+  "ggml/src/ggml.c": "f6863bb424ece3e8d7f5890a2a8f7a8510be9cb3",
+  "ggml/src/gguf.cpp": "5e1986182515b3baadd3ab4c45c7e09038d0b64e",
+  "src/llama-arch.cpp": "329a6b93f57e5a96c58190d02e46880e1d1b485b",
+  "src/llama-model-loader.cpp": "2b4bf2559ca33caf632a0039e739800ebd9be13c",
+  "src/llama-model.cpp": "d1c3c79fe33fb6b38f146c8633fcf585895862ea"
+ },
+ "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the commit (cmake target ggml-base, CPU only), ids with no traits omitted; they equal the PrismML fork's at bdc23b56 except id 42 (Q2_0: 128 weights in 34 bytes here, QK2_0 128 in ggml-common.h, where the fork and ggml-org read 64 in 18) and id 143 (G8_0, 'Pestle exact ternary: four BF16 scales per 32 values', 32 weights in 16 bytes, where the fork has PTQ1_0); ggml_nbytes ggml/src/ggml.c:1296-1319 has no per-type rule; ggml/src/gguf.cpp is byte-identical to the one of bitnet.cpp's llama.cpp at 390c3077 (blob 5e198618), so the reader rules are that reader's; architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp that the model mapping src/llama-model.cpp:38-304 maps to a model class (unknown names are refused at :323, unmapped ones, clip among them, by the mapping's default); no prism.hadamard handling in src/llama-model.cpp",
+ "type_count": 144,
+ "hadamard": false,
+ "tensor_extra": false,
+ "types": [
+  {
+   "id": 0,
+   "name": "f32",
+   "blck": 1,
+   "bytes": 4,
+   "rule": "blocks"
+  },
+  {
+   "id": 1,
+   "name": "f16",
+   "blck": 1,
+   "bytes": 2,
+   "rule": "blocks"
+  },
+  {
+   "id": 2,
+   "name": "q4_0",
+   "blck": 32,
+   "bytes": 18,
+   "rule": "blocks"
+  },
+  {
+   "id": 3,
+   "name": "q4_1",
+   "blck": 32,
+   "bytes": 20,
+   "rule": "blocks"
+  },
+  {
+   "id": 6,
+   "name": "q5_0",
+   "blck": 32,
+   "bytes": 22,
+   "rule": "blocks"
+  },
+  {
+   "id": 7,
+   "name": "q5_1",
+   "blck": 32,
+   "bytes": 24,
+   "rule": "blocks"
+  },
+  {
+   "id": 8,
+   "name": "q8_0",
+   "blck": 32,
+   "bytes": 34,
+   "rule": "blocks"
+  },
+  {
+   "id": 9,
+   "name": "q8_1",
+   "blck": 32,
+   "bytes": 36,
+   "rule": "blocks"
+  },
+  {
+   "id": 10,
+   "name": "q2_K",
+   "blck": 256,
+   "bytes": 84,
+   "rule": "blocks"
+  },
+  {
+   "id": 11,
+   "name": "q3_K",
+   "blck": 256,
+   "bytes": 110,
+   "rule": "blocks"
+  },
+  {
+   "id": 12,
+   "name": "q4_K",
+   "blck": 256,
+   "bytes": 144,
+   "rule": "blocks"
+  },
+  {
+   "id": 13,
+   "name": "q5_K",
+   "blck": 256,
+   "bytes": 176,
+   "rule": "blocks"
+  },
+  {
+   "id": 14,
+   "name": "q6_K",
+   "blck": 256,
+   "bytes": 210,
+   "rule": "blocks"
+  },
+  {
+   "id": 15,
+   "name": "q8_K",
+   "blck": 256,
+   "bytes": 292,
+   "rule": "blocks"
+  },
+  {
+   "id": 16,
+   "name": "iq2_xxs",
+   "blck": 256,
+   "bytes": 66,
+   "rule": "blocks"
+  },
+  {
+   "id": 17,
+   "name": "iq2_xs",
+   "blck": 256,
+   "bytes": 74,
+   "rule": "blocks"
+  },
+  {
+   "id": 18,
+   "name": "iq3_xxs",
+   "blck": 256,
+   "bytes": 98,
+   "rule": "blocks"
+  },
+  {
+   "id": 19,
+   "name": "iq1_s",
+   "blck": 256,
+   "bytes": 50,
+   "rule": "blocks"
+  },
+  {
+   "id": 20,
+   "name": "iq4_nl",
+   "blck": 32,
+   "bytes": 18,
+   "rule": "blocks"
+  },
+  {
+   "id": 21,
+   "name": "iq3_s",
+   "blck": 256,
+   "bytes": 110,
+   "rule": "blocks"
+  },
+  {
+   "id": 22,
+   "name": "iq2_s",
+   "blck": 256,
+   "bytes": 82,
+   "rule": "blocks"
+  },
+  {
+   "id": 23,
+   "name": "iq4_xs",
+   "blck": 256,
+   "bytes": 136,
+   "rule": "blocks"
+  },
+  {
+   "id": 24,
+   "name": "i8",
+   "blck": 1,
+   "bytes": 1,
+   "rule": "blocks"
+  },
+  {
+   "id": 25,
+   "name": "i16",
+   "blck": 1,
+   "bytes": 2,
+   "rule": "blocks"
+  },
+  {
+   "id": 26,
+   "name": "i32",
+   "blck": 1,
+   "bytes": 4,
+   "rule": "blocks"
+  },
+  {
+   "id": 27,
+   "name": "i64",
+   "blck": 1,
+   "bytes": 8,
+   "rule": "blocks"
+  },
+  {
+   "id": 28,
+   "name": "f64",
+   "blck": 1,
+   "bytes": 8,
+   "rule": "blocks"
+  },
+  {
+   "id": 29,
+   "name": "iq1_m",
+   "blck": 256,
+   "bytes": 56,
+   "rule": "blocks"
+  },
+  {
+   "id": 30,
+   "name": "bf16",
+   "blck": 1,
+   "bytes": 2,
+   "rule": "blocks"
+  },
+  {
+   "id": 34,
+   "name": "tq1_0",
+   "blck": 256,
+   "bytes": 54,
+   "rule": "blocks"
+  },
+  {
+   "id": 35,
+   "name": "tq2_0",
+   "blck": 256,
+   "bytes": 66,
+   "rule": "blocks"
+  },
+  {
+   "id": 39,
+   "name": "mxfp4",
+   "blck": 32,
+   "bytes": 17,
+   "rule": "blocks"
+  },
+  {
+   "id": 40,
+   "name": "nvfp4",
+   "blck": 64,
+   "bytes": 36,
+   "rule": "blocks"
+  },
+  {
+   "id": 41,
+   "name": "q1_0",
+   "blck": 128,
+   "bytes": 18,
+   "rule": "blocks"
+  },
+  {
+   "id": 42,
+   "name": "q2_0",
+   "blck": 128,
+   "bytes": 34,
+   "rule": "blocks"
+  },
+  {
+   "id": 142,
+   "name": "pq2_0",
+   "blck": 128,
+   "bytes": 34,
+   "rule": "blocks"
+  },
+  {
+   "id": 143,
+   "name": "g8_0",
+   "blck": 32,
+   "bytes": 16,
+   "rule": "blocks"
+  }
+ ],
+ "archs": [
+  "llama",
+  "llama4",
+  "deci",
+  "falcon",
+  "grok",
+  "gpt2",
+  "gptneox",
+  "mpt",
+  "baichuan",
+  "starcoder",
+  "refact",
+  "bert",
+  "modern-bert",
+  "nomic-bert",
+  "nomic-bert-moe",
+  "neo-bert",
+  "jina-bert-v2",
+  "jina-bert-v3",
+  "eurobert",
+  "bloom",
+  "stablelm",
+  "qwen",
+  "qwen2",
+  "qwen2moe",
+  "qwen2vl",
+  "qwen3",
+  "qwen3moe",
+  "qwen3next",
+  "qwen3vl",
+  "qwen3vlmoe",
+  "qwen35",
+  "qwen35moe",
+  "dspark",
+  "phi2",
+  "phi3",
+  "phimoe",
+  "plamo",
+  "plamo2",
+  "plamo3",
+  "codeshell",
+  "orion",
+  "internlm2",
+  "minicpm",
+  "minicpm3",
+  "gemma",
+  "gemma2",
+  "gemma3",
+  "gemma3n",
+  "gemma4",
+  "gemma4-assistant",
+  "gemma-embedding",
+  "starcoder2",
+  "mamba",
+  "mamba2",
+  "jamba",
+  "falcon-h1",
+  "xverse",
+  "command-r",
+  "cohere2",
+  "dbrx",
+  "olmo",
+  "olmo2",
+  "olmoe",
+  "openelm",
+  "arctic",
+  "deepseek",
+  "deepseek2",
+  "deepseek2-ocr",
+  "deepseek32",
+  "chatglm",
+  "glm4",
+  "glm4moe",
+  "glm-dsa",
+  "bitnet",
+  "t5",
+  "t5encoder",
+  "jais",
+  "jais2",
+  "nemotron",
+  "nemotron_h",
+  "nemotron_h_moe",
+  "exaone",
+  "exaone4",
+  "exaone-moe",
+  "rwkv6",
+  "rwkv6qwen2",
+  "rwkv7",
+  "arwkv7",
+  "granite",
+  "granitemoe",
+  "granitehybrid",
+  "chameleon",
+  "wavtokenizer-dec",
+  "plm",
+  "bailingmoe",
+  "bailingmoe2",
+  "dots1",
+  "arcee",
+  "afmoe",
+  "ernie4_5",
+  "ernie4_5-moe",
+  "hunyuan-moe",
+  "hunyuan-dense",
+  "hunyuan_vl",
+  "smollm3",
+  "gpt-oss",
+  "lfm2",
+  "lfm2moe",
+  "dream",
+  "smallthinker",
+  "llada",
+  "llada-moe",
+  "seed_oss",
+  "grovemoe",
+  "apertus",
+  "minimax-m2",
+  "cogvlm",
+  "rnd1",
+  "pangu-embedded",
+  "mistral3",
+  "mistral4",
+  "paddleocr",
+  "mimo2",
+  "step35",
+  "llama-embed",
+  "maincoder",
+  "kimi-linear",
+  "talkie",
+  "mellum"
+ ],
+ "archs_refused_as_main": []
+}

@@ -4,7 +4,7 @@ Issues [#48](https://github.com/dmitrii-f-t27/trinity-memory/issues/48)–[#55](
 epic [#57](https://github.com/dmitrii-f-t27/trinity-memory/issues/57).
 
 **What it answers.** For every public ternary GGUF model on the Hugging Face Hub, at the
-pinned commits of llama.cpp, the PrismML fork and bitnet.cpp: will each of them read it,
+pinned commits of llama.cpp, the PrismML fork, bitnet.cpp and mortar.cpp: will each of them read it,
 and if not, why; which layout its ternary tensors really hold; are the PrismML fork's
 Hadamard metadata valid, and does a runtime ignore a rotation the model declares. A model
 is one GGUF file, or the parts of a split model (`<prefix>-KKKKK-of-NNNNN.gguf`), which
@@ -36,7 +36,8 @@ main model, each with its commit and file blobs). `tlv_walk` reads a header as t
 runtime's `gguf.cpp` reads it, rule by rule and in its order, including the reader's own
 limits (strings and arrays of at most 2^30, non-negative counts, the data section inside
 the file) and bitnet.cpp's two differences (no guard for tensors without elements;
-`general.alignment` read with `gguf_get_val_u32`); `tlv_model` applies the model loader in
+`general.alignment` read with `gguf_get_val_u32`), which are mortar.cpp's too: its
+`ggml/src/gguf.cpp` is the same blob; `tlv_model` applies the model loader in
 its order: the architecture key's type, the file-end rule, the split rules across the
 parts, the architecture mapping, in the PrismML fork the Hadamard rules (`tlv_hadamard`,
 over the tensors of every part), and clip refused as a main model; `tlv_native` names the
@@ -58,7 +59,7 @@ runtimes whose reader was built and replayed. The weekly workflow
 
 **Seeded differential fuzzing (issue #98).** After building the readers, run
 `python3 tools/live-fuzz.py --out build/live/fuzz.json`. Its default seed 27
-generates 160,000 bounded synthetic headers and attempts each on all three
+generates 160,000 bounded synthetic headers and attempts each on all pinned
 readers through a persistent I/O-only adapter. Coverage includes type/shape
 and offset boundaries, metadata types, arrays, duplicate and C-string names,
 alignments, truncation, and GGUF counts/magic/version. The first 24 headers
@@ -78,7 +79,9 @@ apply the rotation, so the model computes the wrong function; `no_verdict` with
 
 **Verdict per model**, in the runtime it is written for: the PrismML fork when a key
 starts `prism.`; bitnet.cpp when the architecture is `bitnet-b1.58`; the fork when a
-tensor has id 142 or 143; bitnet.cpp when one has id 36 or 38, or has id 42 (Q2_0 in
+tensor has id 142 or 143, unless the fork refuses the model and mortar.cpp accepts it
+(mortar.cpp reads id 143 as G8_0, 32 weights in 16 bytes, and id 42 in 128-weight groups):
+then mortar.cpp; bitnet.cpp when one has id 36 or 38, or has id 42 (Q2_0 in
 llama.cpp, TL2 in bitnet.cpp) and bitnet.cpp accepts the model while llama.cpp does not;
 else llama.cpp. A model written for software none of them is (a type id none of them
 defines, an architecture none of them maps, no architecture at all, or records of a type
@@ -90,8 +93,11 @@ limit, or arithmetic whose outcome depends on the compiler), `other_runtime`, `u
 (a header could not be fetched) or `error`. `problems` lists, per status, the records
 whose bytes do not fill their place and, for a ternary record, the layout that fills it
 instead (for example `extent` with `PQ2_0`: type 42 declared, 128-weight groups stored,
-PrismML-Eng/llama.cpp#167). TL1 and TL2 count as ternary layouts: their places are
-checked, their weights have no storage contract in `t27/formats.t27`. Status tokens are
+PrismML-Eng/llama.cpp#167). A model with id 42 alone in 128-weight groups stays that
+legacy case and is judged in llama.cpp, although mortar.cpp's reader accepts it: the
+header cannot tell the two apart. TL1, TL2 and mortar.cpp's G8_0 count as ternary
+layouts: their places are checked, their weights have no storage contract in
+`t27/formats.t27`. Status tokens are
 in [`specs/formats/OWNERS.md`](../specs/formats/OWNERS.md#status-classes).
 
 **What a verdict does not say.** Nothing about model quality, speed or the tensors'

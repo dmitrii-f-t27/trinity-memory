@@ -107,10 +107,12 @@ jobs:
         run: |
           set -o pipefail
           python3 -m trinity_memory.live --out build/live/scan.json --replay build/replay 2>&1 | tee -a build/live/scan.log
-      - name: Differential fuzz of all three pinned GGUF readers
+      - name: Differential fuzz of all pinned GGUF readers
         if: steps.readers.outcome == 'success'
         run: |
           set -o pipefail
+          # Malformed inputs exercise assertions; do not dump a core per case.
+          ulimit -c 0
           python3 tools/live-fuzz.py --out build/live/fuzz.json 2>&1 | tee build/live/fuzz.log
       - name: Summary
         if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')

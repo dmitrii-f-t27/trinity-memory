@@ -29,7 +29,7 @@ from trinity_memory import live
 from tests.test_live import _gguf, _string
 
 ROOT = Path(__file__).resolve().parent.parent
-NAMES = {1: "llama_cpp", 2: "prismml", 3: "bitnet_cpp"}
+NAMES = live.SPEC_NAMES
 
 
 def cases(seed, count):
