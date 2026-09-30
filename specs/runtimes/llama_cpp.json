@@ -3,19 +3,20 @@
  "runtime": "llama.cpp",
  "id": 1,
  "repo": "ggml-org/llama.cpp",
- "commit": "e6ab7c1a41054a888ada952eab4c886444c2f5ad",
+ "commit": "4364bf7232e65c34eca8d9500c5464389662de6b",
  "files": {
   "ggml/include/ggml.h": "224bdef927ac90bfa07ee39db3247b7bac4f14ec",
-  "ggml/src/ggml.c": "a286083b9320acbe9654b34c1cec68930a8d39ee",
+  "ggml/src/ggml.c": "cdc10a75970fe753ea50552158129d411b39d478",
   "ggml/src/gguf.cpp": "0eb9fb744d289c5805431de5ac8987a352bae122",
-  "src/llama-arch.cpp": "03b7951c3cc109c92c0e03f4e0bea41a4af21db8",
+  "src/llama-arch.cpp": "8f1e239daef0f2438dccee2feb009fe82b8b4e75",
   "src/llama-model-loader.cpp": "43c396f15af3475e405da8dd73e6a8010ce3d7a5",
-  "src/llama-model.cpp": "e195f50d0bde50333eef771a651cebde87d9616f",
-  "src/llama.cpp": "ad8e443882ad66e8a68c028f970a0fffd03b92d4"
+  "src/llama-model.cpp": "ab5e744b5d1076c2ad9c4700051ae3bdb9edb024",
+  "src/llama.cpp": "e97272c8895b6399b6ed3812c11dc5fa25d4ce22"
  },
- "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the commit (cmake target ggml, CPU only), ids with no traits omitted; architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp that the model mapping src/llama-model.cpp:43-349 maps to a model class (unknown names are refused at :368-369, unmapped ones at :348); clip is mapped but refused as a main model after the hyperparameters, src/llama.cpp:352-353; gguf.cpp rules ggml/src/gguf.cpp:230-427 (reads) and :459-803",
+ "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the commit (cmake target ggml, CPU only), ids with no traits omitted; architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp that the model mapping src/llama-model.cpp:43-349 maps to a model class (unknown names are refused at :368-369, unmapped ones at :348); clip is mapped but refused as a main model after the hyperparameters, src/llama.cpp:352-353; gguf.cpp rules ggml/src/gguf.cpp:230-427 (reads) and :459-803; the activation precision policy src/llama-model.cpp:1237-1272, read in load_tensors (:1799, after the vocabulary, src/llama.cpp:369): general.tensor_extra.name, when it is an array, must hold strings and general.tensor_extra.prec_a4 must be a bool array of the same length",
  "type_count": 43,
  "hadamard": false,
+ "tensor_extra": true,
  "types": [
   {
    "id": 0,

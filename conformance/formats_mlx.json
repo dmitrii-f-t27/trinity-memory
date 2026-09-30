@@ -78,7 +78,7 @@
   "spec_path": "specs/formats/mlx.t27",
   "upstream": {
     "mlx": {
-      "commit": "59d600b5e64c238427d0f8d897ab7c682ef4d3d2",
+      "commit": "0a8e18e034d61b591f53a0616c722d2d9770f379",
       "files": [
         "mlx/ops.cpp"
       ],
@@ -256,7 +256,7 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "mlx/ops.cpp:5297-5298"
+            "mlx/ops.cpp:5314-5315"
           ],
           "note": "w = q * scale + bias per group, without checks",
           "upstream": "mlx"
@@ -304,7 +304,7 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "mlx/ops.cpp:5297-5298"
+            "mlx/ops.cpp:5314-5315"
           ],
           "note": "w = q * scale + bias per group, without checks",
           "upstream": "mlx"
@@ -352,7 +352,7 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "mlx/ops.cpp:5297-5298"
+            "mlx/ops.cpp:5314-5315"
           ],
           "note": "w = q * scale + bias per group, without checks",
           "upstream": "mlx"
@@ -400,7 +400,7 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "mlx/ops.cpp:5297-5298"
+            "mlx/ops.cpp:5314-5315"
           ],
           "note": "w = q * scale + bias per group, without checks",
           "upstream": "mlx"
@@ -448,7 +448,7 @@
         {
           "behaviour": "decodes",
           "cite": [
-            "mlx/ops.cpp:5297-5298"
+            "mlx/ops.cpp:5314-5315"
           ],
           "note": "w = q * scale + bias per group, without checks",
           "upstream": "mlx"
@@ -485,8 +485,8 @@
         {
           "behaviour": "rejects",
           "cite": [
-            "mlx/ops.cpp:5007-5012",
-            "mlx/ops.cpp:5249-5256"
+            "mlx/ops.cpp:5024-5029",
+            "mlx/ops.cpp:5266-5273"
           ],
           "note": "the quantizer offers groups of 32, 64 and 128 only; the dequantizer refuses scales that do not cover the row in groups of 48",
           "upstream": "mlx"
@@ -523,8 +523,8 @@
         {
           "behaviour": "rejects",
           "cite": [
-            "mlx/ops.cpp:5207-5214",
-            "mlx/ops.cpp:5249-5256"
+            "mlx/ops.cpp:5224-5231",
+            "mlx/ops.cpp:5266-5273"
           ],
           "note": "the last dimension must be whole groups",
           "upstream": "mlx"
@@ -561,7 +561,7 @@
         {
           "behaviour": "rejects",
           "cite": [
-            "mlx/ops.cpp:5249-5256"
+            "mlx/ops.cpp:5266-5273"
           ],
           "note": "affine_dequantize refuses words, scales and biases whose shapes disagree for the group size",
           "upstream": "mlx"
@@ -584,7 +584,7 @@
         {
           "behaviour": "not_applicable",
           "cite": [
-            "mlx/ops.cpp:4957-5002"
+            "mlx/ops.cpp:4974-5019"
           ],
           "note": "pack_and_quantize clips codes to 0..3 from float weights",
           "upstream": "mlx"
