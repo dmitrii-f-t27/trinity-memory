@@ -4,6 +4,23 @@ Date: 2026-09-30. Local platform: macOS arm64.
 
 ## Combined validation after PR #101
 
+Final adapter configuration: `fuzz-seed27-four-readers-final-macos.json`
+sets `GGML_NO_BACKTRACE=1` for both reader adapters. Source ggml.c returns
+from backtrace diagnostics under this flag, while ggml_abort still calls
+abort(). A complete repeat produces exactly the same corpus and every
+accept/refuse/agreement/no-verdict/crash counter as the earlier four-reader
+run. Assertions remain visible in the JSON; debugger output is not part of
+the worker protocol. Node/WASM checks also pass after adding browser labels
+for the new -88/-89 refusals.
+
+`public-replay-linux-a83.json` is independently inspected Linux evidence:
+294 repositories, 509 models, 578 file entries, 13 split models, 447 replayed
+headers x 4 readers = 1,788 agreements, no disagreements/no-verdicts/crashes/
+timeouts. Artifact 11116754261 / run 36756798361 finished scan and replay;
+the overall workflow was cancelled during fuzz to update diagnostics.
+It is not recorded as a full-workflow success. Numeric t27/runtime/reader
+sources are unchanged by the later browser/diagnostic-only adjustments.
+
 Master advanced to 4b4b0eb during validation, adding mortar.cpp
 `236418ec92aaf51f8635b965f5557457c8126ca7`. This work is integrated with the
 new pins and loader rules. The fourth table explicitly declares
