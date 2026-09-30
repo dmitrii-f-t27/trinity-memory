@@ -2,6 +2,9 @@
 `timescale 1ns/1ps
 module tb_ffn;
     parameter H=8, I=6, O=4;
+    // Minimum memory latency and report-line busy time; the clock split test
+    // varies them and expects identical compute clocks.
+    parameter MEM_BASE=2, OUT_BASE=1;
     reg clk=0; always #5 clk=~clk;
     reg rst_n=0, ack=0;
     wire cyc, stb, go, s_idle;
@@ -30,12 +33,12 @@ module tb_ffn;
             end
             if (cyc && stb && !stall) begin
                 if (addr>=1048576 || ^mem[addr]===1'bx) $fatal(1,"uninitialized read %h",addr);
-                address<=addr; wait_left<=2+(tick%3);
+                address<=addr; wait_left<=MEM_BASE+(tick%3);
             end
             if (output_wait>0) output_wait<=output_wait-1;
             if (go) begin
                 if (output_wait!=0) $fatal(1,"output while busy");
-                output_wait<=1+(tick%5);
+                output_wait<=OUT_BASE+(tick%5);
                 $fdisplay(fd,"%c%08x%010x",tag[7:0],a,b[39:0]);
                 if (tag==69) $fatal(1,"FFN error %d",a);
                 if (tag==122) begin $display("PASS FFN clocks=%0d",tick); $fclose(fd); $finish; end
