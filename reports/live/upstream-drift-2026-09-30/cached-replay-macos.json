@@ -1,0 +1,2747 @@
+{
+ "compiler": "bff21b85b206a0dd367876343e56dcd8312d81ba",
+ "discovery": {
+  "endpoint": "https://huggingface.co",
+  "errors": [],
+  "file_filter": "(?<![a-z0-9])(?:tq1_0|tq2_0|pq2_0|ptq1_0|i2_s|tl1|tl2|q2_0|q2_g\\d+|q2_0_g\\d+|q1_0)(?![a-z0-9])",
+  "gguf_pages": 2,
+  "gguf_repositories": 2000,
+  "hits": {
+   "1.58": 41,
+   "1_58": 74,
+   "bitnet": 118,
+   "bonsai": 208,
+   "falcon-e": 33,
+   "i2_s": 22,
+   "q1_0": 24,
+   "q2_0": 239,
+   "ternary": 136,
+   "trilm": 13
+  },
+  "limit": 12,
+  "min_downloads_30d": 100,
+  "name_filter": "ternary|bitnet|1\\.58|1_58|bonsai|trilm|falcon-e|(?<![a-z0-9])(?:tq1_0|tq2_0|pq2_0|ptq1_0|i2_s|q2_0|q1_0)(?![a-z0-9])",
+  "queries": [
+   "ternary",
+   "bitnet",
+   "bonsai",
+   "1.58",
+   "1_58",
+   "trilm",
+   "falcon-e",
+   "q1_0",
+   "q2_0",
+   "i2_s"
+  ]
+ },
+ "rechecked": "2026-09-30T17:50:20+00:00",
+ "replay": {
+  "agree": 165,
+  "crashes": 0,
+  "disagree": 0,
+  "disagreements": [],
+  "files": 55,
+  "no_verdict": 0,
+  "runtimes": [
+   "bitnet.cpp",
+   "llama.cpp",
+   "prismml"
+  ],
+  "timeouts": 0
+ },
+ "repositories": [
+  {
+   "downloads_30d": 10762547,
+   "gguf_files": 28,
+   "gguf_models": 27,
+   "last_modified": "2026-01-30T06:29:38.000Z",
+   "models": [
+    {
+     "architecture": "qwen3moe",
+     "file": "Qwen3-Coder-30B-A3B-Instruct-UD-TQ1_0.gguf",
+     "files": [
+      {
+       "file": "Qwen3-Coder-30B-A3B-Instruct-UD-TQ1_0.gguf",
+       "lfs_sha256": "fcb403c1d7a98bc0ffbe98ec7fbfafe1cdd0050af808ba4af8cd6dcaa807f8d9",
+       "size": 8005213344,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       241
+      ],
+      [
+       12,
+       1
+      ],
+      [
+       13,
+       16
+      ],
+      [
+       14,
+       11
+      ],
+      [
+       16,
+       26
+      ],
+      [
+       18,
+       76
+      ],
+      [
+       19,
+       98
+      ],
+      [
+       21,
+       80
+      ],
+      [
+       23,
+       30
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "2c85de97b5b66ac47baa4a316975fa5553361b93e080d90ce771ca531f31c8f7"
+     ],
+     "keys": 44,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "verdict": "accepts"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 8005213344,
+     "tensors": 579,
+     "ternary_tensors": 0,
+     "verdict": "no_ternary_layout",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+   "revision": "b17cb02dd882d5b6ab62fc777ad2995f19668350",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 3343748,
+   "gguf_files": 3,
+   "gguf_models": 3,
+   "last_modified": "2026-09-25T21:58:06.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+       "lfs_sha256": "3907dc1658db1f78a9826bf8d5bcb8dc65db0d466388937af57f2294fae62ec1",
+       "size": 7206168928,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       30,
+       96
+      ],
+      [
+       142,
+       402
+      ]
+     ],
+     "hadamard": {
+      "block_size": 1024,
+      "explicit_signs": true,
+      "gdn_v_grouped": true,
+      "inverse_names": 1,
+      "present": true,
+      "sign_values": 28672,
+      "sign_widths": 3,
+      "status": "ok",
+      "weight_names": 401
+     },
+     "header_sha256": [
+      "3bfe50e79bf8f63a30f31dca5b0508af7905ed8f1e8efeff8d971484afef8e5b"
+     ],
+     "keys": 49,
+     "layouts": {
+      "PQ2_0": 402
+     },
+     "native": "prismml",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 7206168928,
+     "tensors": 851,
+     "ternary_tensors": 402,
+     "verdict": "ok",
+     "version": 3
+    },
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+       "lfs_sha256": "53107f530aa52eb00912263ab1ee29bd199261c87cd7b4ad4ca1318c1fe33ee3",
+       "size": 5946648928,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       30,
+       96
+      ],
+      [
+       143,
+       402
+      ]
+     ],
+     "hadamard": {
+      "block_size": 1024,
+      "explicit_signs": true,
+      "gdn_v_grouped": true,
+      "inverse_names": 1,
+      "present": true,
+      "sign_values": 28672,
+      "sign_widths": 3,
+      "status": "ok",
+      "weight_names": 401
+     },
+     "header_sha256": [
+      "c2745c0473a980a45c99fe1d2fe85cbbf86f7eca41132d25beb55f249fe703fa"
+     ],
+     "keys": 49,
+     "layouts": {
+      "PTQ1_0": 402
+     },
+     "native": "prismml",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 5946648928,
+     "tensors": 851,
+     "ternary_tensors": 402,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 2,
+   "models_named": 2,
+   "repo": "prism-ml/Ternary-Bonsai-2-27B-gguf",
+   "revision": "b072e1d3b35a0a630cece372c2127528e0994386",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 2201683,
+   "gguf_files": 38,
+   "gguf_models": 38,
+   "last_modified": "2026-09-21T17:35:19.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Huihui-Qwen3.8-27B-abliterated-Ternary-Bonsai-PQ2_0.gguf",
+     "files": [
+      {
+       "file": "Huihui-Qwen3.8-27B-abliterated-Ternary-Bonsai-PQ2_0.gguf",
+       "lfs_sha256": "0de67be7b5256c20971f44e514d87ec7fa81ad4f8d8fcf151644009f74f3a5cf",
+       "size": 7704693216,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       10,
+       23
+      ],
+      [
+       11,
+       31
+      ],
+      [
+       30,
+       96
+      ],
+      [
+       142,
+       348
+      ]
+     ],
+     "hadamard": {
+      "block_size": 1024,
+      "explicit_signs": true,
+      "gdn_v_grouped": true,
+      "inverse_names": 1,
+      "present": true,
+      "sign_values": 28672,
+      "sign_widths": 3,
+      "status": "ok",
+      "weight_names": 401
+     },
+     "header_sha256": [
+      "cefe4e4713d66fcada31d5902c1793e00db69c5f7f5d0c7d34a6ef616a8323aa"
+     ],
+     "keys": 51,
+     "layouts": {
+      "PQ2_0": 348
+     },
+     "native": "prismml",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 7704693216,
+     "tensors": 851,
+     "ternary_tensors": 348,
+     "verdict": "ok",
+     "version": 3
+    },
+    {
+     "architecture": "qwen35",
+     "file": "Huihui-Qwen3.8-27B-abliterated-Ternary-Bonsai-PTQ1_0.gguf",
+     "files": [
+      {
+       "file": "Huihui-Qwen3.8-27B-abliterated-Ternary-Bonsai-PTQ1_0.gguf",
+       "lfs_sha256": "b27e1d4be4d93e86308a0138f6157fee89dd5a67304632ddb6032bf2719e5f6e",
+       "size": 6608603616,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       10,
+       23
+      ],
+      [
+       11,
+       31
+      ],
+      [
+       30,
+       96
+      ],
+      [
+       143,
+       348
+      ]
+     ],
+     "hadamard": {
+      "block_size": 1024,
+      "explicit_signs": true,
+      "gdn_v_grouped": true,
+      "inverse_names": 1,
+      "present": true,
+      "sign_values": 28672,
+      "sign_widths": 3,
+      "status": "ok",
+      "weight_names": 401
+     },
+     "header_sha256": [
+      "a278a9e8634a6ef4ff956e7318db22196a1e1dd00c5979edeff4e496b93b3e41"
+     ],
+     "keys": 51,
+     "layouts": {
+      "PTQ1_0": 348
+     },
+     "native": "prismml",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 6608603616,
+     "tensors": 851,
+     "ternary_tensors": 348,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 2,
+   "models_named": 2,
+   "repo": "huihui-ai/Huihui-Qwen3.8-27B-abliterated-GGUF",
+   "revision": "3f101cd22b7999228bbd5d79a33975414eb9758b",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 638546,
+   "gguf_files": 6,
+   "gguf_models": 6,
+   "last_modified": "2026-08-31T22:04:46.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-27B-PQ2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-27B-PQ2_0.gguf",
+       "lfs_sha256": "e4781999f1997ef97ce0c58d05750835acc999d18d83ee6489ba7ac7b14cb5f6",
+       "size": 7165121600,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       142,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "48ea7e63475e7ef007a7ab7a7f494b9bdb7ca63f3c944d38e8d4777882cf9fb0"
+     ],
+     "keys": 37,
+     "layouts": {
+      "PQ2_0": 498
+     },
+     "native": "prismml",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 7165121600,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "ok",
+     "version": 3
+    },
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-27B-Q2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-27B-Q2_0.gguf",
+       "lfs_sha256": "868c11714cf8fe47f5ec9eeb2be0ab1a337112886f92ee0ede6b855c4fa31757",
+       "size": 7165121600,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 267523456"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 357580800"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 357580800"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       42,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "e085e126864687beab4f6d8bf26e13133ee1886650298be89bfe1d851963a09a"
+     ],
+     "keys": 37,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 498,
+       "examples": [
+        "output.weight",
+        "token_embd.weight",
+        "blk.0.attn_gate.weight"
+       ],
+       "fits": {
+        "PQ2_0": 498
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 267523456,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 357580800,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "expected": 357580800,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 7165121600,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "refused",
+     "version": 3
+    },
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-27B-Q2_g64.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-27B-Q2_g64.gguf",
+       "lfs_sha256": "59a45d1ecef702b14531b06d22949f33b25c1897da31a8c0b298e01e4d9138eb",
+       "size": 7585330240,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 357580800, expected 267523456"
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       42,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "9310b2e33743f3c68cbd2a54aa2421e43db5016ebd18c832ce52085fa8161892"
+     ],
+     "keys": 37,
+     "layouts": {
+      "Q2_0": 498
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 267523456,
+       "found": 357580800,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 7585330240,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 3,
+   "models_named": 3,
+   "repo": "prism-ml/Ternary-Bonsai-27B-gguf",
+   "revision": "86e89f34c93201c3dfd5e5880fedb0022fc7e34d",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 616118,
+   "gguf_files": 10,
+   "gguf_models": 10,
+   "last_modified": "2026-09-26T17:35:07.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Qwen3_8_27B_Uncensored/Ternary-Bonsai-2-27B-Abliterated-PTQ1_0.gguf",
+     "files": [
+      {
+       "file": "Qwen3_8_27B_Uncensored/Ternary-Bonsai-2-27B-Abliterated-PTQ1_0.gguf",
+       "lfs_sha256": "94dd53cbad55db5a515f245887c9f0317484502a451ccc0424c7d7788b52900a",
+       "size": 5946648928,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       30,
+       96
+      ],
+      [
+       143,
+       402
+      ]
+     ],
+     "hadamard": {
+      "block_size": 1024,
+      "explicit_signs": true,
+      "gdn_v_grouped": true,
+      "inverse_names": 1,
+      "present": true,
+      "sign_values": 28672,
+      "sign_widths": 3,
+      "status": "ok",
+      "weight_names": 401
+     },
+     "header_sha256": [
+      "c2745c0473a980a45c99fe1d2fe85cbbf86f7eca41132d25beb55f249fe703fa"
+     ],
+     "keys": 49,
+     "layouts": {
+      "PTQ1_0": 402
+     },
+     "native": "prismml",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 5946648928,
+     "tensors": 851,
+     "ternary_tensors": 402,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "DeepBeepMeep/Wan2.1",
+   "revision": "72147accc0b794361eee38257d2e4a9087ac7698",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 466322,
+   "gguf_files": 28,
+   "gguf_models": 27,
+   "last_modified": "2025-07-31T15:52:41.000Z",
+   "models": [
+    {
+     "architecture": "qwen3moe",
+     "file": "Qwen3-30B-A3B-Instruct-2507-UD-TQ1_0.gguf",
+     "files": [
+      {
+       "file": "Qwen3-30B-A3B-Instruct-2507-UD-TQ1_0.gguf",
+       "lfs_sha256": "096637927b14939158966d17d929ce0aacba68bb2387e657e14168a5d76c425d",
+       "size": 8094142880,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       241
+      ],
+      [
+       12,
+       1
+      ],
+      [
+       13,
+       16
+      ],
+      [
+       14,
+       11
+      ],
+      [
+       16,
+       30
+      ],
+      [
+       18,
+       77
+      ],
+      [
+       19,
+       93
+      ],
+      [
+       21,
+       79
+      ],
+      [
+       23,
+       31
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "3aea215f08a75ec1f5acc6c5c1d97a1c7f29552e3bafa74058ed14081b295a49"
+     ],
+     "keys": 45,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "verdict": "accepts"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 8094142880,
+     "tensors": 579,
+     "ternary_tensors": 0,
+     "verdict": "no_ternary_layout",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+   "revision": "eea7b2be5805a5f151f8847ede8e5f9a9284bf77",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 434257,
+   "gguf_files": 4,
+   "gguf_models": 4,
+   "last_modified": "2026-07-17T16:05:42.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Bonsai-27B-Q1_0.gguf",
+     "files": [
+      {
+       "file": "Bonsai-27B-Q1_0.gguf",
+       "lfs_sha256": "17ef842e47450caeb8eaa3ebfbbab5d2f2278b62b79be107985fb69a2f819aa0",
+       "size": 3803452480,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       41,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "9cd94be36ea2102f0e339198ec6bdc1744de48b489d50ebf9cd3f9b381abde23"
+     ],
+     "keys": 37,
+     "layouts": {
+      "Q1_0": 498
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "verdict": "accepts"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 3803452480,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "prism-ml/Bonsai-27B-gguf",
+   "revision": "f10afb355f104535e3e3e98cf7ab7795c72bd292",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 422548,
+   "gguf_files": 166,
+   "gguf_models": 9,
+   "last_modified": "2026-08-07T02:12:13.000Z",
+   "models": [
+    {
+     "architecture": "kimi-k3",
+     "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00001-of-00011.gguf",
+     "files": [
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00001-of-00011.gguf",
+       "lfs_sha256": "6a4bef3afb5edb2223c210dd591d8f6f4b8d4ade105d26d5505d1acaeb25131c",
+       "size": 6934176,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00002-of-00011.gguf",
+       "lfs_sha256": "acfa63854d29c5903f7911d458ea62811c28bce183c163af3c720d31d8ea3e16",
+       "size": 49451648256,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' of type 66 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00003-of-00011.gguf",
+       "lfs_sha256": "d87c6e05e0c26e56d756a82e77a20843e2013c7122f1e7d9aa13aea80aea82f8",
+       "size": 49915144704,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.10.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.10.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.10.ffn_down_exps.weight' of type 66 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00004-of-00011.gguf",
+       "lfs_sha256": "bebce65d763eaa4d617bc9f10568e4d68cb14a1da5c16b656a714ab78ba0bd40",
+       "size": 48718816992,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.20.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.20.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.20.ffn_down_exps.weight' of type 66 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00005-of-00011.gguf",
+       "lfs_sha256": "4326257c8e4aab36725a0f330b7d2e7bf4b5e74b04fa1efa8650666faf11bfd4",
+       "size": 48704075008,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.29.ffn_up_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.29.ffn_up_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.29.ffn_up_exps.weight' of type 66 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00006-of-00011.gguf",
+       "lfs_sha256": "f73541f61bdcbb1d256fe691a2d1ae78e399b54205b1c914de969958de0de360",
+       "size": 48812431168,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.39.ffn_gate_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.39.ffn_gate_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.39.ffn_gate_exps.weight' of type 66 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00007-of-00011.gguf",
+       "lfs_sha256": "28ebbc7ce2b2593687d17da08c4adb6820933939479edfb8e6f2dd2ab8aab060",
+       "size": 49955195808,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.49.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.49.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.49.ffn_down_exps.weight' of type 66 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00008-of-00011.gguf",
+       "lfs_sha256": "754ab1f3ded34ea92277a9f97ab5586420fd7ce56828a988a618f12fc41c9fd2",
+       "size": 48678765856,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.59.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.59.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.59.ffn_down_exps.weight' of type 66 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00009-of-00011.gguf",
+       "lfs_sha256": "a2da78211d9821974657ed6e053bb267cae021ae03d738f79a8f9a3aef8b3931",
+       "size": 48831701952,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.68.ffn_up_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.68.ffn_up_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.68.ffn_up_exps.weight' of type 66 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00010-of-00011.gguf",
+       "lfs_sha256": "1ddbe59fc65d1419f04b6dedba47353ceac5c5134db7b72d81edbb4d2ca18a63",
+       "size": 48684804256,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.78.ffn_gate_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.78.ffn_gate_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.78.ffn_gate_exps.weight' of type 66 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00011-of-00011.gguf",
+       "lfs_sha256": "2609b7b714f570bd40243e73b59244df412cf599047ea2df17357f3d7fda933e",
+       "size": 24609938144,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.88.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.88.ffn_down_exps.weight' has invalid ggml type 66. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.88.ffn_down_exps.weight' of type 66 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       1181
+      ],
+      [
+       8,
+       1116
+      ],
+      [
+       66,
+       276
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "9c4721efb6e89abcd6ea798a05c6fa6548cef56e51c6747e6dcaa0e3d0dd6fd9",
+      "5210d13404ce2e317655f1797f31bff3aa195c8ae9c0fc967998cf149444d9aa",
+      "d5a9cb5eb5aa564ac781cdb099210ae8eb1de9b04de6a45ba099edd5be18bcdf",
+      "2eb51476c15185a7c203ee3789676fc354709d0b8172b05c1e59bc027e67f856",
+      "9fd6183fdbab1e3ddc4e6683e0b6d791fdd1a0052c95c47539515ec50ed61485",
+      "4fe36c8cc04b28cb3632c7fae116b097fb96382c11be44edf6eead6c2d7ab50c",
+      "22c25d04fa24b6e78d9b59f9ec5f1b81997edcc25b3b56714a8428c5f2e14163",
+      "787b21cd864ee5c271956bf478cd7408189f332381624fb5389bff15791a5477",
+      "558188883b154354bd55391ba2f3d9dd23eb2355d9dee762be5c0440f77d4e42",
+      "46cacf74b155a1ae62959a5bff66ba9087760436f8129c9b056a039f7482485c",
+      "086b17331e0f7bdb68aa7eca217e7d2ae8a35656933ff223dfcaa1d4430fbccf"
+     ],
+     "keys": 64,
+     "layouts": {},
+     "native": "other",
+     "problems": {
+      "type": {
+       "count": 276,
+       "examples": [
+        "blk.1.ffn_down_exps.weight",
+        "blk.1.ffn_gate_exps.weight",
+        "blk.1.ffn_up_exps.weight"
+       ]
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00002-of-00011.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00002-of-00011.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "file": "UD-Q1_0/Kimi-K3-UD-Q1_0-00002-of-00011.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      }
+     },
+     "size": 466369456320,
+     "split": 11,
+     "tensors": 2573,
+     "ternary_tensors": 0,
+     "verdict": "other_runtime",
+     "version": 3
+    },
+    {
+     "architecture": "kimi-k3",
+     "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00001-of-00012.gguf",
+     "files": [
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00001-of-00012.gguf",
+       "lfs_sha256": "d92fc6d6783f62a46077a32d0517a656eac7e6b4abb7c31302f6f2a9d1fa1938",
+       "size": 6934176,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00002-of-00012.gguf",
+       "lfs_sha256": "80e5814d47635c0105267865dda257bea361980c038c717ae41018114cde22b7",
+       "size": 49728525568,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' of type 65 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00003-of-00012.gguf",
+       "lfs_sha256": "b741e1fe35679e51235750bc614c4ee4f6cc9ebafa670421d223572b8b447d29",
+       "size": 49497214208,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.9.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.9.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.9.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00004-of-00012.gguf",
+       "lfs_sha256": "eae7a07c990f1739b857fcd383f9bf07577ccd5f799b6d6782e68a3b5bc6a372",
+       "size": 49369587296,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.18.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.18.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.18.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00005-of-00012.gguf",
+       "lfs_sha256": "3ba472e56a8695ed3bf89c9338446b562665435508fbc7d79c6f857614a40554",
+       "size": 49397589824,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.27.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.27.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.27.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00006-of-00012.gguf",
+       "lfs_sha256": "47222ae548e11ae348dfe6cd10605569b48d9480e10cff2626fa86a7208f7859",
+       "size": 49497214240,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.36.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.36.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.36.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00007-of-00012.gguf",
+       "lfs_sha256": "5b18a6d6798c4601d02a3ae48af60875f086643216bb1e4f83e629c2a34fa80b",
+       "size": 49497214240,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.45.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.45.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.45.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00008-of-00012.gguf",
+       "lfs_sha256": "41afa79753e61f2b84c8df4ed5f78c5922122886960e598bccd47f69ffe732ad",
+       "size": 49369587296,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.54.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.54.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.54.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00009-of-00012.gguf",
+       "lfs_sha256": "61a0dddb71d6d14704e8c4bbeff7b5573c573d12c7544a336c5a4c8326f2c650",
+       "size": 49397589824,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.63.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.63.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.63.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00010-of-00012.gguf",
+       "lfs_sha256": "35a6ee1c3e851970f7e0808f874b44191e11ff9c693a74da9c9b59b722ed4da4",
+       "size": 49497214240,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.72.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.72.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.72.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00011-of-00012.gguf",
+       "lfs_sha256": "1ead4f3e3816b67453d4a4e8bd7820f9167f103e0f680c286c05e03fb4e88ef4",
+       "size": 49497214240,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.81.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.81.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.81.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00012-of-00012.gguf",
+       "lfs_sha256": "2b03cb37022f94320cfe5679ce92f7d31b36b85f5d2b8e7f9349f7a327e0508c",
+       "size": 14156396800,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.90.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.90.ffn_gate_exps.weight' has invalid ggml type 65. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.90.ffn_gate_exps.weight' of type 65 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       1181
+      ],
+      [
+       8,
+       1116
+      ],
+      [
+       65,
+       276
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "d560d90693fddc6f57175a0821276eb189ec72c1e0c5c52149e8583d58612999",
+      "2bb48267207b3aa1b07c82bf3c67fff681ef2784c5fee16ec8bca5d3d34e06e6",
+      "ff8865144952ef896ae6c1764efc3abeac42da3d6601a02fec3899de41e75aa1",
+      "063a27d3a4f547bc678fae9f8b697065e5b11ac1b43c29755836425bdac8b2d5",
+      "9ebbfc9e49e1d0c5de65fda2df31d133c41869c057a74cef30b545033ad99ab4",
+      "0faae4a5c4aff0688617f8e689b0eaa4e91dd08ac29b707be7b99438b685373e",
+      "af643592d667a8decefef4fecd03dcb313bb4fd2b6a50ffaf2d51cf8858d1220",
+      "f7844ba0b7161034788355532a701b0306830a43beecf199a065153cbec63e71",
+      "9a823ee6055c4d4c81b06b7b14ef7cb01ffc84f9cc6c894c28d5633ec968dffb",
+      "f18aac89f0f9c64d530e200df4c0de9479c71bb87498d61bffe69c51dd33614a",
+      "e07b6a1c328d5fc9a08440a6d187788967fd7263520cfdc39fd67d82faad77ed",
+      "115ee6d2e0c65bfe3f5a0da00872bb9541ee3f686f75727622c51d0585ea4e9f"
+     ],
+     "keys": 64,
+     "layouts": {},
+     "native": "other",
+     "problems": {
+      "type": {
+       "count": 276,
+       "examples": [
+        "blk.1.ffn_down_exps.weight",
+        "blk.1.ffn_gate_exps.weight",
+        "blk.1.ffn_up_exps.weight"
+       ]
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00002-of-00012.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00002-of-00012.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "file": "UD-TQ1_0/Kimi-K3-UD-TQ1_0-00002-of-00012.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      }
+     },
+     "size": 508912281952,
+     "split": 12,
+     "tensors": 2573,
+     "ternary_tensors": 0,
+     "verdict": "other_runtime",
+     "version": 3
+    },
+    {
+     "architecture": "kimi-k3",
+     "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00001-of-00013.gguf",
+     "files": [
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00001-of-00013.gguf",
+       "lfs_sha256": "e8971ac0514c194b8132568216e406e0dbd62c7fb5850114208fe42322806c56",
+       "size": 6934176,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00002-of-00013.gguf",
+       "lfs_sha256": "957dcb10cd0800ed680abdd9e7a78ab6930620129a093e2fe7c569f9c83e599f",
+       "size": 49469193824,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.1.ffn_down_exps.weight' of type 64 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00003-of-00013.gguf",
+       "lfs_sha256": "cb73d4a505c7cabdfcb57db0f0aa1fa9067f5dfc7587e3fcb1a6dc691c3a46fd",
+       "size": 49939837536,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.8.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.8.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.8.ffn_up_exps.weight' of type 64 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00004-of-00013.gguf",
+       "lfs_sha256": "a72621377024b57ed0dd64e9f2491601263d2708b00b87c548554372b7afaeb0",
+       "size": 49465810176,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.17.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.17.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.17.ffn_down_exps.weight' of type 64 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00005-of-00013.gguf",
+       "lfs_sha256": "257f86ba8507103a53a69fb972ac870bfbbaab9c4838b150167801d2283be2ed",
+       "size": 49546163840,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.25.ffn_gate_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.25.ffn_gate_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.25.ffn_gate_exps.weight' of type 64 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00006-of-00013.gguf",
+       "lfs_sha256": "90d46fa6e50735c0a0a55acd9876c2fed2d6b7b6104d92396dec24673cdca0c8",
+       "size": 49939837568,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.33.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.33.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.33.ffn_up_exps.weight' of type 64 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00007-of-00013.gguf",
+       "lfs_sha256": "b2e020cadae4d69d150aba9d1e58232c84bb4d47904f12e68a70df631639363f",
+       "size": 49465810176,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.42.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.42.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.42.ffn_down_exps.weight' of type 64 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00008-of-00013.gguf",
+       "lfs_sha256": "8363e36d526d8204e1d57165aba80a9d0daff55a176eff39420a8305e0c69200",
+       "size": 49546163840,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.50.ffn_gate_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.50.ffn_gate_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.50.ffn_gate_exps.weight' of type 64 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00009-of-00013.gguf",
+       "lfs_sha256": "a6d314a7ac392cd19c0384c3b3e921628a0646bc8b889630400662b58c3556f3",
+       "size": 49812210624,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.58.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.58.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.58.ffn_up_exps.weight' of type 64 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00010-of-00013.gguf",
+       "lfs_sha256": "e2e8850d5ad2d39ca4b1f428c7677b84cb3d891ab5b0f2cec0d72b46fa998f04",
+       "size": 49465810176,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.67.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.67.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.67.ffn_down_exps.weight' of type 64 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00011-of-00013.gguf",
+       "lfs_sha256": "a179419582473019d5f5ed27866661ab330845afeb804fcb3bfa12768bc1b547",
+       "size": 49546163840,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.75.ffn_gate_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.75.ffn_gate_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.75.ffn_gate_exps.weight' of type 64 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00012-of-00013.gguf",
+       "lfs_sha256": "841dd9440eebb2ff4eb492ef03cdc17409ce6eec095ee341700eb7cd0afe1c6a",
+       "size": 49712586208,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.83.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.83.ffn_up_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.83.ffn_up_exps.weight' of type 64 ((null)) has 3584 elements per row, not a multiple of block size (0)"
+        }
+       }
+      },
+      {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00013-of-00013.gguf",
+       "lfs_sha256": "b5e36e431f354ab6ee23215dd8208cda195ffb5f8625a97c1b752d6cffffdb5e",
+       "size": 5538585504,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.92.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.92.ffn_down_exps.weight' has invalid ggml type 64. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.92.ffn_down_exps.weight' of type 64 ((null)) has 3072 elements per row, not a multiple of block size (0)"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       1181
+      ],
+      [
+       8,
+       1116
+      ],
+      [
+       64,
+       276
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "1e2f356104f9db0aa523443e7dbf952f7acc3ac187edf7f464e5acde23a6194c",
+      "2dcb75e9831d0c7c55145bcb74d9f747d33b7875f97d5d622887e189f618835c",
+      "340db5322fd18d3b3053840c76a64eda00de23758921c62d3fbb17ace0fa0806",
+      "79c7ab22219143039edc5c35427c120f364ce235bf041030b5378b7851908137",
+      "d1ebbea6c2bd9ad8cd04fb5c607ea511923dd51a7760b374ff5ddd91a3e7dfa8",
+      "8e4f40d6e76f4c4fd74ec3c508bfbe71ed4d890b6b0a2f4460c4974f6bd2f8e6",
+      "fbecd4f4044a1f3b6632bf85dfa43648e24312552b802932adac163143d9b0dc",
+      "e9425ec52533437ebf100921c96120a58a15769b0e2c562a6107ada454649199",
+      "0d53c970333548cdffdf8264c06d3c08be8e779ed3c3df574154c1f67036820e",
+      "6816a03b4d64d4b1c614457ad9089a9bb7e528a7374d5683385c76644449c861",
+      "ebad699ebcfd6866d40dcbd03338c91101b63e02bd6bc5556bed3d7865c59319",
+      "4eb34057ea901e915968287bf0a32eb1c3a8253452848a98e4fd28fdd10fc660",
+      "71d46efab7b49bf7b1452e0e6ac4ac8013af5cfc0aaabc2cf1c4646676d2a094"
+     ],
+     "keys": 64,
+     "layouts": {},
+     "native": "other",
+     "problems": {
+      "type": {
+       "count": 276,
+       "examples": [
+        "blk.1.ffn_down_exps.weight",
+        "blk.1.ffn_gate_exps.weight",
+        "blk.1.ffn_up_exps.weight"
+       ]
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00002-of-00013.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00002-of-00013.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "file": "UD-TQ2_0/Kimi-K3-UD-TQ2_0-00002-of-00013.gguf",
+       "record": "blk.1.ffn_down_exps.weight",
+       "status": "type",
+       "verdict": "refuses"
+      }
+     },
+     "size": 551455107488,
+     "split": 13,
+     "tensors": 2573,
+     "ternary_tensors": 0,
+     "verdict": "other_runtime",
+     "version": 3
+    }
+   ],
+   "models_checked": 3,
+   "models_named": 3,
+   "repo": "unsloth/Kimi-K3-GGUF",
+   "revision": "a0836360ce58dfec088d966a97f2ddc8a606279b",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 412130,
+   "gguf_files": 8,
+   "gguf_models": 4,
+   "last_modified": "2026-09-26T23:47:58.000Z",
+   "models": [
+    {
+     "architecture": "qwen4exp",
+     "file": "Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf",
+     "files": [
+      {
+       "file": "Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf",
+       "lfs_sha256": "69820c02ec7d0b45ef2ebb19d6620299db749fe2aded7f39f93c6b88b199b720",
+       "size": 37623740192,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.ffn_down_shexp.weight' has offset 982046720, expected 746485792"
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      },
+      {
+       "file": "Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00002-of-00002.gguf",
+       "lfs_sha256": "316b46f3a2dbd68c900f43136ab9449f9dcc3725dfd8c794847c204bc161e113",
+       "size": 28800138432,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       292
+      ],
+      [
+       1,
+       1
+      ],
+      [
+       2,
+       16
+      ],
+      [
+       6,
+       7
+      ],
+      [
+       8,
+       2
+      ],
+      [
+       11,
+       91
+      ],
+      [
+       12,
+       38
+      ],
+      [
+       13,
+       16
+      ],
+      [
+       14,
+       12
+      ],
+      [
+       20,
+       8
+      ],
+      [
+       23,
+       56
+      ],
+      [
+       30,
+       483
+      ],
+      [
+       42,
+       202
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "bf118cd5acbabeae0459b52a6b8cb94cc00acbf89b39fb72b337975331abefb9",
+      "60a762da9127f76c0a895de009e7245566708ee638c2ae57f0c12b20ae948e4d"
+     ],
+     "keys": 73,
+     "layouts": {
+      "Q2_0": 202
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 746485792,
+       "file": "Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf",
+       "found": 982046720,
+       "record": "blk.0.ffn_down_shexp.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "file": "Q2_0/Qwen3.8-Flash-Next-GSQ-RCO-Q2_0-00001-of-00002.gguf",
+       "status": "arch",
+       "verdict": "refuses"
+      }
+     },
+     "size": 66423878624,
+     "split": 2,
+     "tensors": 1224,
+     "ternary_tensors": 202,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF",
+   "revision": "2a55d75962e22f7a4a1d9963ab6eae3678537831",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 371006,
+   "gguf_files": 4,
+   "gguf_models": 4,
+   "last_modified": "2026-06-10T22:41:30.000Z",
+   "models": [
+    {
+     "architecture": "qwen3",
+     "file": "Ternary-Bonsai-8B-PQ2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-8B-PQ2_0.gguf",
+       "lfs_sha256": "1376f942aa90e60f7b570c1d81b3916fea1315ff85aa1c4d19006af68fb4b922",
+       "size": 2182184672,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 142. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       145
+      ],
+      [
+       142,
+       254
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "e6a59115e204571364054751498a4bf0682406843052ab12853247b154630c0e"
+     ],
+     "keys": 35,
+     "layouts": {
+      "PQ2_0": 254
+     },
+     "native": "prismml",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 2182184672,
+     "tensors": 399,
+     "ternary_tensors": 254,
+     "verdict": "ok",
+     "version": 3
+    },
+    {
+     "architecture": "qwen3",
+     "file": "Ternary-Bonsai-8B-Q2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-8B-Q2_0.gguf",
+       "lfs_sha256": "3c8d70470a5d97e5a2b9410ddd899cb740116591462626c60cb2fead6448f60b",
+       "size": 2182184672,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 165015872, expected 131042048"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 165015872, expected 174722688"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 165015872, expected 174722688"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       145
+      ],
+      [
+       42,
+       254
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "43cb3666fba5506eb15ccdbaac1a32d8d334466502421d8086a81f7c0631da72"
+     ],
+     "keys": 35,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 254,
+       "examples": [
+        "output.weight",
+        "token_embd.weight",
+        "blk.0.attn_k.weight"
+       ],
+       "fits": {
+        "PQ2_0": 254
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 131042048,
+       "found": 165015872,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 174722688,
+       "found": 165015872,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "expected": 174722688,
+       "found": 165015872,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 2182184672,
+     "tensors": 399,
+     "ternary_tensors": 254,
+     "verdict": "refused",
+     "version": 3
+    },
+    {
+     "architecture": "qwen3",
+     "file": "Ternary-Bonsai-8B-Q2_0_g64.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-8B-Q2_0_g64.gguf",
+       "lfs_sha256": "e17b298d84ee78797916ae5c2ecc8211469cc65cccfe3080cd9a9bb503fbc55e",
+       "size": 2310125920,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 174722688, expected 131042048"
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       145
+      ],
+      [
+       42,
+       254
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "65f39f56a3e26fd848b7ca8476340b2fd0601dbe400098f5f76e5b0b4fe71a04"
+     ],
+     "keys": 35,
+     "layouts": {
+      "Q2_0": 254
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 131042048,
+       "found": 174722688,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 2310125920,
+     "tensors": 399,
+     "ternary_tensors": 254,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 3,
+   "models_named": 3,
+   "repo": "prism-ml/Ternary-Bonsai-8B-gguf",
+   "revision": "c2aefbeb4b24469cd11579c3384b990404c17a30",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 292697,
+   "gguf_files": 1,
+   "gguf_models": 1,
+   "last_modified": "2026-07-30T20:09:12.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Bonsai-27B-Q1_0.gguf",
+     "files": [
+      {
+       "file": "Bonsai-27B-Q1_0.gguf",
+       "lfs_sha256": "71d6871836886267f39f1ac69b1b1dd8a783970708d7a189960112ed02978901",
+       "size": 3803452576,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       41,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "1fbb426638ea0ca3b0490ed766b6d97bf58611e57f50f58256d86ee44a39f977"
+     ],
+     "keys": 39,
+     "layouts": {
+      "Q1_0": 498
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "verdict": "accepts"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 3803452576,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "lmstudio-community/Bonsai-27B-GGUF",
+   "revision": "f4e1b84fac8d99a340cc87d06cd572dbe8a974d5",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 268289,
+   "gguf_files": 2,
+   "gguf_models": 2,
+   "last_modified": "2026-09-27T04:47:57.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "TAARDIS-27B-Full-Ternary-V1.gguf",
+     "files": [
+      {
+       "file": "TAARDIS-27B-Full-Ternary-V1.gguf",
+       "lfs_sha256": "0b18b4dc07a60cbd3d37f6b346e2d669d68c4d5838a13d9d0bf81b9d5a5effbc",
+       "size": 7165123488,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 43. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 43. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' of type 43 ((null)) has 5120 elements per row, not a multiple of block size (0)"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       43,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "662d3c902a5a525586d0a030ae788642c043a13bbf4d35f638cc312ba8bdc44a"
+     ],
+     "keys": 53,
+     "layouts": {},
+     "native": "other",
+     "problems": {
+      "type": {
+       "count": 498,
+       "examples": [
+        "output.weight",
+        "token_embd.weight",
+        "blk.0.attn_gate.weight"
+       ]
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      }
+     },
+     "size": 7165123488,
+     "tensors": 851,
+     "ternary_tensors": 0,
+     "verdict": "other_runtime",
+     "version": 3
+    },
+    {
+     "architecture": "qwen35",
+     "file": "TAARDIS-27B-Full-Ternary-V2-1.75bit.gguf",
+     "files": [
+      {
+       "file": "TAARDIS-27B-Full-Ternary-V2-1.75bit.gguf",
+       "lfs_sha256": "b2c50008a53d3522558be43d2d8e5e099cbbebba28d7a4f159d8b1c05725c482",
+       "size": 5904497568,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 44. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has invalid ggml type 44. should be in [0, 43)"
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' of type 44 ((null)) has 5120 elements per row, not a multiple of block size (0)"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       44,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "f09f67a37c54ed82c556ce4562e1db85a9056b099e4abc956333f0a4d14bf126"
+     ],
+     "keys": 53,
+     "layouts": {},
+     "native": "other",
+     "problems": {
+      "type": {
+       "count": 498,
+       "examples": [
+        "output.weight",
+        "token_embd.weight",
+        "blk.0.attn_gate.weight"
+       ]
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "record": "output.weight",
+       "status": "type",
+       "verdict": "refuses"
+      }
+     },
+     "size": 5904497568,
+     "tensors": 851,
+     "ternary_tensors": 0,
+     "verdict": "other_runtime",
+     "version": 3
+    }
+   ],
+   "models_checked": 2,
+   "models_named": 0,
+   "repo": "CodeMasterCody3D/taardis-27b-full-ternary",
+   "revision": "411f35838cf4810be3f96b7596c84e610439263c",
+   "state": "scanned"
+  }
+ ],
+ "runtimes": {
+  "bitnet.cpp": "390c307752ab78fd8189f359d6954c9ba1be74af",
+  "llama.cpp": "4364bf7232e65c34eca8d9500c5464389662de6b",
+  "prismml": "87268f775d74cf8f7ffc6c22a95684aa55995533"
+ },
+ "schema": "trinity.ternary-check-live.v2",
+ "started": "2026-09-27T11:08:52+00:00",
+ "summary": {
+  "downloads_30d_scanned": 20229891,
+  "files": 55,
+  "models": 21,
+  "named_models_not_checked": 0,
+  "other_models_not_checked": 114,
+  "repositories": 12,
+  "repositories_with_refused_models": 2,
+  "runtimes": {
+   "bitnet.cpp": {
+    "accepts": 4,
+    "refuses": 17
+   },
+   "llama.cpp": {
+    "accepts": 7,
+    "refuses": 14
+   },
+   "prismml": {
+    "accepts": 13,
+    "refuses": 8
+   }
+  },
+  "split_models": 4,
+  "states": {
+   "scanned": 12
+  },
+  "verdicts": {
+   "no_ternary_layout": 2,
+   "ok": 12,
+   "other_runtime": 5,
+   "refused": 2
+  }
+ },
+ "trinity_memory": "f06b3226fd5198fc114ffc1bca0035dd3ed86016"
+}
