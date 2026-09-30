@@ -24,7 +24,7 @@ double tm_json_strtod(uint8_t *);
 #include "live.h"
 
 enum { T_U16 = 2, T_U32 = 4, T_I32 = 5, T_F32 = 6, T_BOOL = 7, T_STR = 8, T_ARR = 9, T_U64 = 10 };
-enum { LLAMA = 1, PRISM = 2, BITNET = 3 };
+enum { LLAMA = 1, PRISM = 2, BITNET = 3, MORTAR = 4 };
 #define NONE UINT64_MAX
 
 typedef struct {
@@ -208,6 +208,9 @@ static void test_record_rules(void) {
     assert(walk_of(&b, fs, LLAMA, &w) == 0 && walk_of(&b, fs, BITNET, &w) == TLV_ERR_SHAPE); free(b.data);
     g = (Gguf){0}; rec2(&g, "a", 0, 32, 0, 0); b = finish(&g, &fs, 0);
     assert(walk_of(&b, fs, BITNET, &w) == 0); free(b.data);
+    /* mortar.cpp ships bitnet.cpp's gguf.cpp (the same blob): the same two differences */
+    g = (Gguf){0}; rec2(&g, "a", 32, 0, 0, 0); b = finish(&g, &fs, 0);
+    assert(walk_of(&b, fs, MORTAR, &w) == TLV_ERR_SHAPE); free(b.data);
     /* types per runtime, and whole blocks per row */
     g = (Gguf){0}; rec2(&g, "a", 128, 1, 142, 0); b = finish(&g, &fs, 64);
     assert(walk_of(&b, fs, LLAMA, &w) == TLV_ERR_TYPE && w.record == 0);
@@ -339,6 +342,36 @@ static void test_native_and_nbytes(void) {
         assert(st[0] == TLV_LAYOUT_TL2 && st[1] == TLV_LAYOUT_TL2 && w.ternary_ok == 2);
         free(b.data);
     }
+    /* mortar.cpp: id 42 in 128-weight groups (34 bytes), id 143 G8_0 (32 weights in 16
+     * bytes). The fork reads 143 as PTQ1_0 and refuses; mortar.cpp accepts: written for it */
+    {
+        g = (Gguf){0}; kv_str(&g, "general.architecture", "qwen35");
+        rec2(&g, "a", 1024, 4, 42, 0); rec2(&g, "token_embd.weight", 1024, 4, 143, 1088); rec2(&g, "b", 1024, 4, 42, 1088 + 2048);
+        b = finish(&g, &fs, 1088 + 2048 + 1088);
+        TLVRun r;
+        assert(model_of(&b, fs, MORTAR, &r) == TLV_RUN_ACCEPTS && model_of(&b, fs, PRISM, &r) == TLV_RUN_REFUSES);
+        assert(model_of(&b, fs, LLAMA, &r) == TLV_RUN_REFUSES && model_of(&b, fs, BITNET, &r) == TLV_RUN_REFUSES);
+        assert(native_of(&b, fs) == MORTAR);
+        uint64_t row[5] = {0, b.size, fs, 0, 0};
+        assert(tlv_ternary_count(b.data, b.size, row, 1, MORTAR) == 3);
+        int32_t st[4], fit[4]; uint32_t types[4]; uint64_t at[4], size[4];
+        TLVWalk w;
+        assert(tlv_walk(b.data, 0, b.size, fs, MORTAR, st, fit, types, at, size, 4, &w) == 0);
+        assert(st[0] == TF_PQ2_0 && st[1] == TLV_LAYOUT_G8_0 && st[2] == TF_PQ2_0 && w.ternary_ok == 3);
+        free(b.data);
+        /* id 143 with the fork's PTQ1_0 bytes (28 per 128 weights): the fork's model */
+        g = (Gguf){0}; kv_str(&g, "general.architecture", "qwen35");
+        rec2(&g, "a", 1024, 4, 142, 0); rec2(&g, "b", 1024, 4, 143, 1088);
+        b = finish(&g, &fs, 1088 + 896);
+        assert(model_of(&b, fs, PRISM, &r) == TLV_RUN_ACCEPTS && model_of(&b, fs, MORTAR, &r) == TLV_RUN_REFUSES);
+        assert(native_of(&b, fs) == PRISM); free(b.data);
+        /* id 42 alone in 128-weight groups: the legacy Prism layout, not a mortar.cpp model,
+         * although mortar.cpp's reader takes it */
+        g = (Gguf){0}; kv_str(&g, "general.architecture", "qwen35");
+        rec2(&g, "a", 1024, 4, 42, 0); rec2(&g, "b", 1024, 4, 42, 1088);
+        b = finish(&g, &fs, 2 * 1088);
+        assert(model_of(&b, fs, MORTAR, &r) == TLV_RUN_ACCEPTS && native_of(&b, fs) == LLAMA); free(b.data);
+    }
     /* ggml_nbytes (ggml.c) and bitnet.cpp's special cases (its ggml.c:1300-1330) */
     assert(tlv_nbytes(LLAMA, 0, 8, 2, 1, 1) == 64);
     assert(tlv_nbytes(LLAMA, 42, 1024, 4, 1, 1) == 1152);
@@ -356,6 +389,9 @@ static void test_native_and_nbytes(void) {
     assert(tlv_nbytes(LLAMA, 2, (uint64_t)1 << 62, 1, 1, 1) == (uint64_t)1 << 58);
     assert(trt_type_count(LLAMA) == 43 && trt_type_count(PRISM) == 144 && trt_type_count(BITNET) == 43);
     assert(trt_blck(LLAMA, 42) == 64 && trt_bytes(LLAMA, 42) == 18 && trt_blck(BITNET, 42) == 1);
+    assert(trt_type_count(MORTAR) == 144 && trt_blck(MORTAR, 42) == 128 && trt_bytes(MORTAR, 42) == 34);
+    assert(trt_blck(MORTAR, 143) == 32 && trt_bytes(MORTAR, 143) == 16 && trt_blck(MORTAR, 36) == 0);
+    assert(tlv_nbytes(MORTAR, 42, 1024, 4, 1, 1) == 1088 && tlv_nbytes(MORTAR, 143, 1024, 4, 1, 1) == 2048);
     assert(tlv_file_verdict(TLV_RUN_REFUSES, TLV_ERR_TYPE, 5, LLAMA) == TLV_FILE_REFUSED);
     assert(tlv_file_verdict(TF_ERR_TRUNCATED, TF_ERR_TRUNCATED, 5, LLAMA) == TLV_FILE_UNDECIDED);
     assert(tlv_file_verdict(TLV_RUN_ACCEPTS, 0, 0, LLAMA) == TLV_FILE_NO_TERNARY);
@@ -551,7 +587,7 @@ static void test_runtime(void) {
     /* the architecture comes before the Hadamard rules (src/llama-model.cpp:368-369), even with a bad version */
     Spec s = base(); s.arch = "foo"; s.version = 2;
     Buf b = build(&s, &fs);
-    for (int32_t rt = LLAMA; rt <= BITNET; rt++) {
+    for (int32_t rt = LLAMA; rt <= MORTAR; rt++) {
         assert(tlv_runtime(b.data, b.size, fs, rt, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_ARCH);
     }
     free(b.data);
@@ -584,7 +620,7 @@ static void test_runtime(void) {
     const char *refused[] = {"gptj", "(unknown)", "clip"};
     for (int i = 0; i < 3; i++) {
         g = (Gguf){0}; kv_str(&g, "general.architecture", refused[i]); rec2(&g, "w", 8, 1, 0, 0); b = finish(&g, &fs, 32);
-        for (int32_t rt = LLAMA; rt <= BITNET; rt++) {
+        for (int32_t rt = LLAMA; rt <= MORTAR; rt++) {
             assert(tlv_runtime(b.data, b.size, fs, rt, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_ARCH);
         }
         free(b.data);
@@ -636,7 +672,7 @@ static void test_split_models(void) {
     m = (Parts){0};
     add_part(&m, split_part(1, 2, 2, "blk.0.attn_q.weight", 0, &fs1, 32), fs1, 1, 2);
     add_part(&m, split_part(2, 2, 2, "blk.1.attn_q.weight", 0, &fs2, 32), fs2, 2, 2);
-    for (int32_t rt = LLAMA; rt <= BITNET; rt++) {
+    for (int32_t rt = LLAMA; rt <= MORTAR; rt++) {
         assert(tlv_model(m.all.data, m.all.size, m.rows, m.count, rt, &r) == TLV_RUN_ACCEPTS);
     }
     assert(tlv_loaded(m.all.data, m.all.size, m.rows, m.count) == 2 && tlv_native(m.all.data, m.all.size, m.rows, m.count) == LLAMA);

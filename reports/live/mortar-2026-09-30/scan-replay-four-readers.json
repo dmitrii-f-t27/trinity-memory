@@ -1,0 +1,1273 @@
+{
+ "compiler": "bff21b85b206a0dd367876343e56dcd8312d81ba",
+ "discovery": {
+  "endpoint": "https://huggingface.co",
+  "limit": 0,
+  "min_downloads_30d": 100,
+  "repos": [
+   "dealignai/Bonsai-27b-Ternary-CRACK-GGUF",
+   "Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF",
+   "OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF",
+   "Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark",
+   "Doses-AI/Pestle-27B-Ternary-GGUF",
+   "darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF"
+  ]
+ },
+ "replay": {
+  "agree": 48,
+  "crashes": 0,
+  "disagree": 0,
+  "disagreements": [],
+  "files": 12,
+  "no_verdict": 0,
+  "runtimes": [
+   "bitnet.cpp",
+   "llama.cpp",
+   "mortar.cpp",
+   "prismml"
+  ],
+  "timeouts": 0
+ },
+ "repositories": [
+  {
+   "downloads_30d": 18448,
+   "gguf_files": 1,
+   "gguf_models": 1,
+   "last_modified": "2026-07-22T09:50:48.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-27B-Abliterated-LowDeg-Q2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-27B-Abliterated-LowDeg-Q2_0.gguf",
+       "lfs_sha256": "527f276ddf047b3494de964985b5529b9fc3ecf739ea64d8fab3a6ef8403e81d",
+       "size": 7165121600,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 267523456"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 357580800"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 357580800"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       42,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "e085e126864687beab4f6d8bf26e13133ee1886650298be89bfe1d851963a09a"
+     ],
+     "keys": 37,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 498,
+       "examples": [
+        "output.weight",
+        "token_embd.weight",
+        "blk.0.attn_gate.weight"
+       ],
+       "fits": {
+        "PQ2_0": 498
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 267523456,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 357580800,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 357580800,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 7165121600,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "refused",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF",
+   "revision": "60b1880c4c2e30711e1c90867a057f71ab45d587",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 13572,
+   "gguf_files": 1,
+   "gguf_models": 1,
+   "last_modified": "2026-07-15T20:12:33.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Bonsai-27b-Ternary-CRACK-Q2_0.gguf",
+     "files": [
+      {
+       "file": "Bonsai-27b-Ternary-CRACK-Q2_0.gguf",
+       "lfs_sha256": "bbaf268989f0106776c2eb1606fed1eb3376b6045bfbcabc70c3b529278d7e4e",
+       "size": 8247797056,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1764745248"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1766973440"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1766973440"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       12,
+       1
+      ],
+      [
+       14,
+       1
+      ],
+      [
+       42,
+       496
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "eb32429959cdf2c4e181743318b3d7cfb51f9c2124e06e4a933939648849a2dd"
+     ],
+     "keys": 41,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 496,
+       "examples": [
+        "blk.0.attn_gate.weight",
+        "blk.0.attn_qkv.weight",
+        "blk.0.ffn_down.weight"
+       ],
+       "fits": {
+        "PQ2_0": 496
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 1764745248,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 1766973440,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 1766973440,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 8247797056,
+     "tensors": 851,
+     "ternary_tensors": 496,
+     "verdict": "refused",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "dealignai/Bonsai-27b-Ternary-CRACK-GGUF",
+   "revision": "67c2f0ed38d9d987895265db664c0d2c35497df3",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 4105,
+   "gguf_files": 2,
+   "gguf_models": 2,
+   "last_modified": "2026-07-15T14:48:31.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-27B-antidoom-Q2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-27B-antidoom-Q2_0.gguf",
+       "lfs_sha256": "cca1827df238a5160e0fda4fcd5141b366a842806b6f818de135fb99e1084359",
+       "size": 8247796896,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1764745248"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1766973440"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1766973440"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       12,
+       1
+      ],
+      [
+       14,
+       1
+      ],
+      [
+       42,
+       496
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "650c23037084552e73c62f2303f34ec3a53938aeddb9968f3e9a98592788cda7"
+     ],
+     "keys": 38,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 496,
+       "examples": [
+        "blk.0.attn_gate.weight",
+        "blk.0.attn_qkv.weight",
+        "blk.0.ffn_down.weight"
+       ],
+       "fits": {
+        "PQ2_0": 496
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 1764745248,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 1766973440,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 1766973440,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 8247796896,
+     "tensors": 851,
+     "ternary_tensors": 496,
+     "verdict": "refused",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 1,
+   "repo": "Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark",
+   "revision": "663b5d9aca32192dd67210d4adbac67a6ea29191",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 4010,
+   "gguf_files": 2,
+   "gguf_models": 2,
+   "last_modified": "2026-08-02T06:03:42.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-27B-heretic-ja-Q2_0.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-27B-heretic-ja-Q2_0.gguf",
+       "lfs_sha256": "eadb68417776b7b174ac80f2ddf7c1267ee20f9e0a1b0da4f6c98362e124205a",
+       "size": 7165121696,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 267523456"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 357580800"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 337715200, expected 357580800"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       42,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "6755bf63d5b644913d820b826e744497c4ba07b77894fae121e3b23946558f18"
+     ],
+     "keys": 38,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 498,
+       "examples": [
+        "output.weight",
+        "token_embd.weight",
+        "blk.0.attn_gate.weight"
+       ],
+       "fits": {
+        "PQ2_0": 498
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 267523456,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 357580800,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 357580800,
+       "found": 337715200,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 7165121696,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "refused",
+     "version": 3
+    },
+    {
+     "architecture": "qwen35",
+     "file": "Ternary-Bonsai-27B-heretic-ja-Q2_g64.gguf",
+     "files": [
+      {
+       "file": "Ternary-Bonsai-27B-heretic-ja-Q2_g64.gguf",
+       "lfs_sha256": "728377f1de087d01ffe1f5f347e93b80a9761ccc9c323659f16c32ef968dff08",
+       "size": 7585330560,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 357580800, expected 267523456"
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "mortar.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 357580800, expected 337715200"
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       42,
+       498
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "e0f4fe50517e9769e093001db2e93cf03798581fa3ca8dfd21dd0aaebdbeed4f"
+     ],
+     "keys": 40,
+     "layouts": {
+      "Q2_0": 498
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 267523456,
+       "found": 357580800,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "mortar.cpp": {
+       "expected": 337715200,
+       "found": 357580800,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 7585330560,
+     "tensors": 851,
+     "ternary_tensors": 498,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 2,
+   "models_named": 2,
+   "repo": "OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF",
+   "revision": "d9aa6defc5519fb8915b60a2f28cfca4043ce634",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 377,
+   "gguf_files": 6,
+   "gguf_models": 6,
+   "last_modified": "2026-08-17T09:58:10.000Z",
+   "models": [
+    {
+     "architecture": "qwen3",
+     "file": "AJAN-SIMIT-Ternary-Bonsai-1.7B-Q2_0.gguf",
+     "files": [
+      {
+       "file": "AJAN-SIMIT-Ternary-Bonsai-1.7B-Q2_0.gguf",
+       "lfs_sha256": "d97d94eb564590c9f0300e54d3f87bbbb25a78693d0ade9f6e177973dcb8228a",
+       "size": 463290464,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_k.weight' has offset 82516128, expected 66338144"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_k.weight' has offset 82516128, expected 87369536"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_k.weight' has offset 82516128, expected 87369536"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       113
+      ],
+      [
+       42,
+       197
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "eb8b2b797dd5fbebeb31ae963b9d4826913787f681eb86b6b5047dd608f6b363"
+     ],
+     "keys": 35,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 197,
+       "examples": [
+        "token_embd.weight",
+        "blk.0.attn_k.weight",
+        "blk.0.attn_output.weight"
+       ],
+       "fits": {
+        "PQ2_0": 197
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 66338144,
+       "found": 82516128,
+       "record": "blk.0.attn_k.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 87369536,
+       "found": 82516128,
+       "record": "blk.0.attn_k.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 87369536,
+       "found": 82516128,
+       "record": "blk.0.attn_k.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 463290464,
+     "tensors": 310,
+     "ternary_tensors": 197,
+     "verdict": "refused",
+     "version": 3
+    },
+    {
+     "architecture": "qwen35",
+     "file": "AJAN-SIMIT-Ternary-Bonsai-27B-Q2_0.gguf",
+     "files": [
+      {
+       "file": "AJAN-SIMIT-Ternary-Bonsai-27B-Q2_0.gguf",
+       "lfs_sha256": "bac08d39515b7d321d4019d1f0d1fc8366a720bf917242ab117aa8ee5bfd5834",
+       "size": 8247796800,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1764745248"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1766973440"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_norm.weight' has offset 1766481920, expected 1766973440"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       353
+      ],
+      [
+       12,
+       1
+      ],
+      [
+       14,
+       1
+      ],
+      [
+       42,
+       496
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "8bba99cc0993e98d5f263218b562988be97e78bf16a2a565da54d7b1b6566c2d"
+     ],
+     "keys": 37,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 496,
+       "examples": [
+        "blk.0.attn_gate.weight",
+        "blk.0.attn_qkv.weight",
+        "blk.0.ffn_down.weight"
+       ],
+       "fits": {
+        "PQ2_0": 496
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 1764745248,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 1766973440,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 1766973440,
+       "found": 1766481920,
+       "record": "blk.0.attn_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 8247796800,
+     "tensors": 851,
+     "ternary_tensors": 496,
+     "verdict": "refused",
+     "version": 3
+    },
+    {
+     "architecture": "qwen3",
+     "file": "AJAN-SIMIT-Ternary-Bonsai-4B-Q2_0.gguf",
+     "files": [
+      {
+       "file": "AJAN-SIMIT-Ternary-Bonsai-4B-Q2_0.gguf",
+       "lfs_sha256": "4e0bf8b737b0431552f8c2c97695ab7c0cb214c94bcdeb4f5f267e67ddf28b8b",
+       "size": 1074969344,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_k.weight' has offset 103145184, expected 82518208"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_k.weight' has offset 103145184, expected 109211936"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'blk.0.attn_k.weight' has offset 103145184, expected 109211936"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       145
+      ],
+      [
+       42,
+       253
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "7fe69172e3191bc22963e8d4ad6e1648c6a4130e7c6ff5aef96b2cf67d60e076"
+     ],
+     "keys": 35,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 253,
+       "examples": [
+        "token_embd.weight",
+        "blk.0.attn_k.weight",
+        "blk.0.attn_output.weight"
+       ],
+       "fits": {
+        "PQ2_0": 253
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 82518208,
+       "found": 103145184,
+       "record": "blk.0.attn_k.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 109211936,
+       "found": 103145184,
+       "record": "blk.0.attn_k.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 109211936,
+       "found": 103145184,
+       "record": "blk.0.attn_k.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 1074969344,
+     "tensors": 398,
+     "ternary_tensors": 253,
+     "verdict": "refused",
+     "version": 3
+    },
+    {
+     "architecture": "qwen3",
+     "file": "AJAN-SIMIT-Ternary-Bonsai-4B-TQ2_0.gguf",
+     "files": [
+      {
+       "file": "AJAN-SIMIT-Ternary-Bonsai-4B-TQ2_0.gguf",
+       "lfs_sha256": "e8e7ba16a58bd34390eaa904bfa528517e44110711e492d939d34eccb909f4f8",
+       "size": 1261954048,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       145
+      ],
+      [
+       14,
+       1
+      ],
+      [
+       35,
+       252
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "57527fdfb94309ba806711cde809a2cb393c7a72dd97d6ba9f4cf32f573dff58"
+     ],
+     "keys": 35,
+     "layouts": {
+      "TQ2_0": 252
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "verdict": "accepts"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 1261954048,
+     "tensors": 398,
+     "ternary_tensors": 252,
+     "verdict": "ok",
+     "version": 3
+    },
+    {
+     "architecture": "qwen3",
+     "file": "AJAN-SIMIT-Ternary-Bonsai-8B-Q2_0.gguf",
+     "files": [
+      {
+       "file": "AJAN-SIMIT-Ternary-Bonsai-8B-Q2_0.gguf",
+       "lfs_sha256": "3c8d70470a5d97e5a2b9410ddd899cb740116591462626c60cb2fead6448f60b",
+       "size": 2182184672,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 165015872, expected 131042048"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 165015872, expected 174722688"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output_norm.weight' has offset 165015872, expected 174722688"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       145
+      ],
+      [
+       42,
+       254
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "43cb3666fba5506eb15ccdbaac1a32d8d334466502421d8086a81f7c0631da72"
+     ],
+     "keys": 35,
+     "layouts": {},
+     "native": "llama.cpp",
+     "problems": {
+      "extent": {
+       "count": 254,
+       "examples": [
+        "output.weight",
+        "token_embd.weight",
+        "blk.0.attn_k.weight"
+       ],
+       "fits": {
+        "PQ2_0": 254
+       }
+      }
+     },
+     "runtimes": {
+      "bitnet.cpp": {
+       "expected": 131042048,
+       "found": 165015872,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "expected": 174722688,
+       "found": 165015872,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 174722688,
+       "found": 165015872,
+       "record": "output_norm.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 2182184672,
+     "tensors": 399,
+     "ternary_tensors": 254,
+     "verdict": "refused",
+     "version": 3
+    },
+    {
+     "architecture": "qwen3",
+     "file": "AJAN-SIMIT-Ternary-Bonsai-8B-TQ2_0.gguf",
+     "files": [
+      {
+       "file": "AJAN-SIMIT-Ternary-Bonsai-8B-TQ2_0.gguf",
+       "lfs_sha256": "402fb50d13cb320f4333cf198e0de92d7d053380c53833d489cedbd4de92d956",
+       "size": 2656942336,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "llama.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": true,
+         "agrees": true
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       145
+      ],
+      [
+       12,
+       1
+      ],
+      [
+       14,
+       1
+      ],
+      [
+       35,
+       252
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "0b6b27ed901b202717f2fd26bd2d891299058526d64f5c96ce263615e3589393"
+     ],
+     "keys": 35,
+     "layouts": {
+      "TQ2_0": 252
+     },
+     "native": "llama.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "verdict": "accepts"
+      },
+      "llama.cpp": {
+       "verdict": "accepts"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "verdict": "accepts"
+      }
+     },
+     "size": 2656942336,
+     "tensors": 399,
+     "ternary_tensors": 252,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 6,
+   "models_named": 6,
+   "repo": "darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF",
+   "revision": "5d28f49b2d5c89ba8dfe1d502341f3b0ee21ac5d",
+   "state": "scanned"
+  },
+  {
+   "downloads_30d": 256,
+   "gguf_files": 1,
+   "gguf_models": 1,
+   "last_modified": "2026-08-16T10:51:42.000Z",
+   "models": [
+    {
+     "architecture": "qwen35",
+     "file": "pestle-27b-ternary.gguf",
+     "files": [
+      {
+       "file": "pestle-27b-ternary.gguf",
+       "lfs_sha256": "6e0977c8a57e29fe46d536d9eb0c4b28199bf31e6da3955e3a071c88583d14bb",
+       "size": 8480707488,
+       "upstream": {
+        "bitnet.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'token_embd.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "llama.cpp": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'token_embd.weight' has invalid ggml type 143. should be in [0, 43)"
+        },
+        "mortar.cpp": {
+         "accepted": true,
+         "agrees": true
+        },
+        "prismml": {
+         "accepted": false,
+         "agrees": true,
+         "message": "gguf_init_from_reader: tensor 'output.weight' has offset 1390770176, expected 1033189376"
+        }
+       }
+      }
+     ],
+     "ggml_types": [
+      [
+       0,
+       1820
+      ],
+      [
+       30,
+       7
+      ],
+      [
+       42,
+       978
+      ],
+      [
+       143,
+       2
+      ]
+     ],
+     "hadamard": {
+      "present": false,
+      "status": "ok"
+     },
+     "header_sha256": [
+      "0934669cfeb24f9ff3ccecd1dbf5fcef5211336c2631af43a52fcda96da061c2"
+     ],
+     "keys": 33,
+     "layouts": {
+      "G8_0": 2,
+      "PQ2_0": 978
+     },
+     "native": "mortar.cpp",
+     "problems": {},
+     "runtimes": {
+      "bitnet.cpp": {
+       "record": "token_embd.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "llama.cpp": {
+       "record": "token_embd.weight",
+       "status": "type",
+       "verdict": "refuses"
+      },
+      "mortar.cpp": {
+       "verdict": "accepts"
+      },
+      "prismml": {
+       "expected": 1033189376,
+       "found": 1390770176,
+       "record": "output.weight",
+       "status": "offsets",
+       "verdict": "refuses"
+      }
+     },
+     "size": 8480707488,
+     "tensors": 2807,
+     "ternary_tensors": 980,
+     "verdict": "ok",
+     "version": 3
+    }
+   ],
+   "models_checked": 1,
+   "models_named": 0,
+   "repo": "Doses-AI/Pestle-27B-Ternary-GGUF",
+   "revision": "736c65eadb0b137bb7a06a29c80d3bcdb741e28f",
+   "state": "scanned"
+  }
+ ],
+ "runtimes": {
+  "bitnet.cpp": "390c307752ab78fd8189f359d6954c9ba1be74af",
+  "llama.cpp": "e6ab7c1a41054a888ada952eab4c886444c2f5ad",
+  "mortar.cpp": "236418ec92aaf51f8635b965f5557457c8126ca7",
+  "prismml": "bdc23b56b4458b9f1655aec5287f3ab56ee8daaa"
+ },
+ "schema": "trinity.ternary-check-live.v2",
+ "started": "2026-09-30T16:23:19+00:00",
+ "summary": {
+  "downloads_30d_scanned": 40768,
+  "files": 12,
+  "models": 12,
+  "named_models_not_checked": 0,
+  "other_models_not_checked": 1,
+  "repositories": 6,
+  "repositories_with_refused_models": 5,
+  "runtimes": {
+   "bitnet.cpp": {
+    "accepts": 2,
+    "refuses": 10
+   },
+   "llama.cpp": {
+    "accepts": 3,
+    "refuses": 9
+   },
+   "mortar.cpp": {
+    "accepts": 11,
+    "refuses": 1
+   },
+   "prismml": {
+    "accepts": 3,
+    "refuses": 9
+   }
+  },
+  "split_models": 0,
+  "states": {
+   "scanned": 6
+  },
+  "verdicts": {
+   "ok": 4,
+   "refused": 8
+  }
+ },
+ "trinity_memory": "8376d5463a6b010a21c476935c507529ca3dd8ca"
+}
