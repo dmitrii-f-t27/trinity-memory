@@ -87,12 +87,12 @@ FILE = {0: "ok", 1: "refused", 2: "no_ternary_layout", 3: "undecided", 4: "other
 TRUNCATED = -55
 LIMIT = -84
 PART_FIELDS = 5
-# Status classes -63 .. -87 (specs/formats/OWNERS.md), after those of formats.t27.
+# Status classes -63 .. -89 (specs/formats/OWNERS.md), after those of formats.t27.
 TOKENS = {-63: "hadamard_type", -64: "hadamard_missing", -65: "hadamard_version", -66: "hadamard_block",
           -67: "hadamard_transform", -68: "hadamard_signs", -69: "hadamard_arch", -70: "hadamard_name",
           -71: "hadamard_tensor", -72: "offsets", -73: "magic", -74: "version", -75: "endian", -76: "key",
           -77: "alignment", -78: "name", -79: "shape", -80: "type", -81: "row", -82: "bounds", -83: "arch",
-          -84: "limit", -85: "split", -86: "count", -87: "short"}
+          -84: "limit", -85: "split", -86: "count", -87: "short", -88: "hadamard_tied", -89: "tensor_extra"}
 # Ternary layouts bitnet.cpp reads without a storage contract in formats.t27.
 LAYOUTS = {101: "TL1", 102: "TL2"}
 

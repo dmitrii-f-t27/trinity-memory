@@ -4,8 +4,8 @@
 // (block size in weights, bytes per block, the ggml_nbytes rule), the architecture
 // names its model mapping turns into a model class and those it refuses as a main
 // model. Sources, per runtime:
-//   1 llama.cpp: ggml-org/llama.cpp@e6ab7c1a41054a888ada952eab4c886444c2f5ad
-//   2 PrismML llama.cpp fork: PrismML-Eng/llama.cpp@bdc23b56b4458b9f1655aec5287f3ab56ee8daaa
+//   1 llama.cpp: ggml-org/llama.cpp@4364bf7232e65c34eca8d9500c5464389662de6b
+//   2 PrismML llama.cpp fork: PrismML-Eng/llama.cpp@87268f775d74cf8f7ffc6c22a95684aa55995533
 //   3 bitnet.cpp: isHuangXin/llama.cpp@390c307752ab78fd8189f359d6954c9ba1be74af
 // Their files and blob SHAs are listed in the specs; the rules they restate are cited
 // in t27/live.t27, the module that reads these tables.
@@ -287,6 +287,15 @@ module TrinityMemoryRuntimes {
     fn trt_hadamard(runtime: i32) -> bool {
         if (runtime == 1) { return false; }
         if (runtime == 2) { return true; }
+        if (runtime == 3) { return false; }
+        return false;
+    }
+
+    // Whether the loader checks general.tensor_extra.* (the activation precision policy;
+    // stock llama.cpp from 4364bf72).
+    fn trt_tensor_extra(runtime: i32) -> bool {
+        if (runtime == 1) { return true; }
+        if (runtime == 2) { return false; }
         if (runtime == 3) { return false; }
         return false;
     }
