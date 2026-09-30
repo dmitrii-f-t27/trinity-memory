@@ -1,5 +1,5 @@
 // This binding moves bytes and reads C fields; every verdict comes from t27.
-export const RUNTIMES = [[1, 'llama.cpp'], [2, 'PrismML'], [3, 'bitnet.cpp']];
+export const RUNTIMES = [[1, 'llama.cpp'], [2, 'PrismML'], [3, 'bitnet.cpp'], [4, 'mortar.cpp']];
 export const TRUNCATED = -55;
 const WALK = ['status', 'reader', 'needed', 'version', 'keys', 'tensors', 'data_start',
   'alignment', 'ternary', 'ternary_ok', 'misfit_ternary', 'misfit_other', 'read',

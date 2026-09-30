@@ -18,7 +18,7 @@ import sys
 ROOT = Path(__file__).resolve().parent.parent
 SPECS = ROOT / "specs" / "runtimes"
 OUT = ROOT / "t27" / "runtimes.t27"
-ORDER = ("llama_cpp", "prismml", "bitnet_cpp")
+ORDER = ("llama_cpp", "prismml", "bitnet_cpp", "mortar_cpp")
 RULES = {"blocks": "TRT_RULE_BLOCKS", "i2s": "TRT_RULE_I2S", "tl2": "TRT_RULE_TL2"}
 
 
