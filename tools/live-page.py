@@ -127,12 +127,12 @@ def render_drift(d: dict) -> str:
     newrej = d.get("new_rejections") or []
     rows = "".join(
         f'<tr><td><a href="https://huggingface.co/{e(m["repo"])}">{e(m["repo"])}</a></td>'
-        f"<td><code>{e(m["file"])}</code></td>"
+        f'<td><code>{e(m["file"])}</code></td>'
         f'<td class="v mid">{e(m["was"])}</td><td class="v bad">{e(m["now"])}</td></tr>'
         for m in newrej)
     rows += "".join(
         f'<tr><td><a href="https://huggingface.co/{e(m["repo"])}">{e(m["repo"])}</a></td>'
-        f"<td><code>{e(m["file"])}</code></td>"
+        f'<td><code>{e(m["file"])}</code></td>'
         f'<td class="v mid">{e(m["was"])}</td><td class="v mid">{e(m["now"])}</td></tr>'
         for m in moved if m not in newrej)
     rows += "".join(
