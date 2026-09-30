@@ -106,8 +106,8 @@ later status.
 
 ## F-4 — `dealignai/Bonsai-27b-Ternary-CRACK-GGUF`: `Q2_0` file in the legacy group-128 layout
 
-- **status**: wording (confirmed 2026-09-29; the note text waits for the
-  founders' approval)
+- **status**: reported (HF discussion [dealignai/Bonsai-27b-Ternary-CRACK-GGUF#2](https://huggingface.co/dealignai/Bonsai-27b-Ternary-CRACK-GGUF/discussions/2), filed 2026-09-30
+  with the wording the founders approved on 2026-09-29; confirmed 2026-09-29)
 - **where**: `dealignai/Bonsai-27b-Ternary-CRACK-GGUF` @ `67c2f0ed38d9` → `Bonsai-27b-Ternary-CRACK-Q2_0.gguf`
   (8,247,797,056 bytes, lfs `bbaf2689…7e4e`, header sha256 `eb324299…a2dd`)
 - **what the header says**: 496 records declare type 42; at `blk.0.attn_norm.weight` the walk
@@ -138,13 +138,13 @@ later status.
 - **context**: the owner's card points users to the PrismML fork; the fork's
   `prism` branch switched id 42 to mainline's group-64 `Q2_0`, which PrismML
   explains in [PrismML-Eng/llama.cpp#167](https://github.com/PrismML-Eng/llama.cpp/issues/167).
-- **reported**: —
+- **reported**: [dealignai/Bonsai-27b-Ternary-CRACK-GGUF#2](https://huggingface.co/dealignai/Bonsai-27b-Ternary-CRACK-GGUF/discussions/2) (2026-09-30, the approved wording verbatim)
 - **answer**: —
 
 ## F-5 — `Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF`: `Q2_0` file in the legacy group-128 layout
 
-- **status**: wording (confirmed 2026-09-29; the note text waits for the
-  founders' approval)
+- **status**: reported (HF discussion [Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF#2](https://huggingface.co/Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF/discussions/2), filed 2026-09-30
+  with the wording the founders approved on 2026-09-29; confirmed 2026-09-29)
 - **where**: `Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF` @ `60b1880c4c2e` →
   `Ternary-Bonsai-27B-Abliterated-LowDeg-Q2_0.gguf` (7,165,121,600 bytes, lfs
   `527f276d…e81d`, header sha256 `e085e126…a09a`, byte-identical to the header of
@@ -177,13 +177,13 @@ later status.
 - **context**: the owner's card points users to the PrismML fork; the fork's
   `prism` branch switched id 42 to mainline's group-64 `Q2_0`, which PrismML
   explains in [PrismML-Eng/llama.cpp#167](https://github.com/PrismML-Eng/llama.cpp/issues/167).
-- **reported**: —
+- **reported**: [Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF#2](https://huggingface.co/Hikari07jp/Ternary-Bonsai-27B-Abliterated-LowDeg-GGUF/discussions/2) (2026-09-30, the approved wording verbatim)
 - **answer**: —
 
 ## F-6 — `OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF`: `Q2_0` file in the legacy group-128 layout
 
-- **status**: wording (confirmed 2026-09-29; the note text waits for the
-  founders' approval)
+- **status**: reported (HF discussion [OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF#1](https://huggingface.co/OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF/discussions/1), filed 2026-09-30
+  with the wording the founders approved on 2026-09-29; confirmed 2026-09-29)
 - **where**: `OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF` @ `d9aa6defc551` →
   `Ternary-Bonsai-27B-heretic-ja-Q2_0.gguf` (7,165,121,696 bytes, lfs `eadb6841…205a`,
   header sha256 `6755bf63…8f18`)
@@ -216,13 +216,13 @@ later status.
 - **context**: the owner's card points users to the PrismML fork; the fork's
   `prism` branch switched id 42 to mainline's group-64 `Q2_0`, which PrismML
   explains in [PrismML-Eng/llama.cpp#167](https://github.com/PrismML-Eng/llama.cpp/issues/167).
-- **reported**: —
+- **reported**: [OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF#1](https://huggingface.co/OS-Software/Ternary-Bonsai-27B-heretic-ja-GGUF/discussions/1) (2026-09-30, the approved wording verbatim)
 - **answer**: —
 
 ## F-7 — `Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark`: `Q2_0` file in the legacy group-128 layout
 
-- **status**: wording (confirmed 2026-09-29; the note text waits for the
-  founders' approval)
+- **status**: reported (HF discussion [Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark#1](https://huggingface.co/Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark/discussions/1), filed 2026-09-30
+  with the wording the founders approved on 2026-09-29; confirmed 2026-09-29)
 - **where**: `Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark` @ `663b5d9aca32` →
   `Ternary-Bonsai-27B-antidoom-Q2_0.gguf` (8,247,796,896 bytes, lfs `cca1827d…4359`,
   header sha256 `650c2303…cda7`)
@@ -254,13 +254,13 @@ later status.
 - **context**: the owner's card points users to the PrismML fork; the fork's
   `prism` branch switched id 42 to mainline's group-64 `Q2_0`, which PrismML
   explains in [PrismML-Eng/llama.cpp#167](https://github.com/PrismML-Eng/llama.cpp/issues/167).
-- **reported**: —
+- **reported**: [Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark#1](https://huggingface.co/Danny-Dasilva/Ternary-Bonsai-27B-antidoom-DSpark/discussions/1) (2026-09-30, the approved wording verbatim)
 - **answer**: —
 
 ## F-8 — `darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF`: four `Q2_0` files in the legacy group-128 layout
 
-- **status**: wording (confirmed 2026-09-29; the note text waits for the
-  founders' approval)
+- **status**: reported (HF discussion [darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF#1](https://huggingface.co/darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF/discussions/1), filed 2026-09-30
+  with the wording the founders approved on 2026-09-29; confirmed 2026-09-29)
 - **where**: `darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF` @ `5d28f49b2d5c`:
   `…-1.7B-Q2_0.gguf` (lfs `d97d94eb…228a`, header `eb8b2b79…b363`),
   `…-4B-Q2_0.gguf` (lfs `4e0bf8b7…8b8b`, header `7fe69172…e076`),
@@ -300,7 +300,7 @@ later status.
 - **context**: the owner's card points users to the PrismML fork; the fork's
   `prism` branch switched id 42 to mainline's group-64 `Q2_0`, which PrismML
   explains in [PrismML-Eng/llama.cpp#167](https://github.com/PrismML-Eng/llama.cpp/issues/167).
-- **reported**: —
+- **reported**: [darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF#1](https://huggingface.co/darkstarinitiative/AJAN-SIMIT-Ternary-Bonsai-Q2_0-GGUF/discussions/1) (2026-09-30, the approved wording verbatim)
 - **answer**: —
 
 ## F-9 — `Doses-AI/Pestle-27B-Ternary-GGUF`: written for mortar.cpp, not a defect
