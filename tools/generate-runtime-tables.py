@@ -35,6 +35,8 @@ def load() -> list[dict]:
             raise SystemExit(f"{name}: every type needs a known rule and positive sizes")
         if len(set(spec["archs"])) != len(spec["archs"]) or any(not a or "\"" in a or "\\" in a for a in spec["archs"]):
             raise SystemExit(f"{name}: architecture names must be unique plain strings")
+        if not isinstance(spec.get("tensor_extra"), bool):
+            raise SystemExit(f"{name}: tensor_extra must be true or false")
         if not set(spec.get("archs_refused_as_main", [])) <= set(spec["archs"]):
             raise SystemExit(f"{name}: archs_refused_as_main must name mapped architectures")
         specs.append(spec)
@@ -91,6 +93,12 @@ def generate(specs: list[dict]) -> str:
     out.append("    fn trt_hadamard(runtime: i32) -> bool {")
     for spec in specs:
         out.append(f"        if (runtime == {spec['id']}) {{ return {'true' if spec['hadamard'] else 'false'}; }}")
+    out += ["        return false;", "    }", ""]
+    out.append("    // Whether the loader checks general.tensor_extra.* (the activation precision policy;")
+    out.append("    // stock llama.cpp from 4364bf72).")
+    out.append("    fn trt_tensor_extra(runtime: i32) -> bool {")
+    for spec in specs:
+        out.append(f"        if (runtime == {spec['id']}) {{ return {'true' if spec['tensor_extra'] else 'false'}; }}")
     out += ["        return false;", "    }", ""]
     for field, doc in (("archs", ("Whether data[at .. at + size) is an architecture name the runtime's model mapping",
                                    "turns into a model class (the caller passes the name up to its first NUL, as the",

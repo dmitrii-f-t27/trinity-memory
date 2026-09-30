@@ -23,6 +23,7 @@ build() {
     src="$out/src-$name"
     echo "$name: $repo@$commit"
     rm -f "$out/gguf_replay_$name"
+    rm -f "$out/gguf_fuzz_$name"
     if [ "$(git -C "$src" rev-parse -q --verify HEAD 2>/dev/null || true)" != "$commit" ]; then
         rm -rf "$src"
         git init -q "$src" &&
@@ -54,6 +55,11 @@ build() {
     # shellcheck disable=SC2086
     ${CC:-cc} -O1 -I "$src/ggml/include" tests/upstream/gguf_replay.c $extra -L "$lib" -lggml-base \
         -Wl,-rpath,"$(cd "$lib" && pwd)" -o "$out/gguf_replay_$name" || return 1
+    # Issue #98: the same reader/library in a persistent worker for bounded,
+    # deterministic differential fuzzing. This adapter only moves bytes.
+    # shellcheck disable=SC2086
+    ${CC:-cc} -O1 -I "$src/ggml/include" tests/upstream/gguf_fuzz_reader.c $extra -L "$lib" -lggml-base \
+        -Wl,-rpath,"$(cd "$lib" && pwd)" -o "$out/gguf_fuzz_$name" || return 1
     echo "built $out/gguf_replay_$name"
 }
 for spec in specs/runtimes/*.json; do

@@ -5,8 +5,8 @@
 // moves bytes.
 //
 // Runtimes and their tables are in t27/runtimes.t27 (generated from
-// specs/runtimes/*.json): ggml-org/llama.cpp@e6ab7c1a, the PrismML fork
-// PrismML-Eng/llama.cpp@bdc23b56, bitnet.cpp's llama.cpp @390c3077 and
+// specs/runtimes/*.json): ggml-org/llama.cpp@4364bf72, the PrismML fork
+// PrismML-Eng/llama.cpp@87268f77, bitnet.cpp's llama.cpp @390c3077 and
 // DosesAI/mortar.cpp@236418ec. Line numbers below are ggml-org's; the fork,
 // bitnet.cpp and mortar.cpp hold the same code a few lines away unless a
 // difference is named. mortar.cpp's ggml/src/gguf.cpp is byte-identical to
@@ -52,7 +52,7 @@
 //    apply prism.hadamard.* accepts such a model but ignores the rotation it
 //    declares.
 //  - tlv_hadamard: the fork's rules for prism.hadamard.* (src/llama-model.cpp
-//    :1196-1335 for the keys, :1971-2095 per listed weight), in its order,
+//    :1196-1356 for the keys, :1992-2128 per listed weight), in its order,
 //    over the tensors of every part. A model without prism.hadamard.version
 //    passes with out.present false: the fork then applies no rotation at all
 //    (PrismML-Eng/llama.cpp#242).
@@ -67,7 +67,7 @@
 // Strings are compared as C strings, as the readers compare them (strcmp and
 // c_str in gguf.cpp and the loaders): up to the first NUL. Duplicate keys are
 // compared on all their bytes, as gguf.cpp does.
-// Status classes (specs/formats/OWNERS.md): -63 .. -87. This module needs
+// Status classes (specs/formats/OWNERS.md): -63 .. -89. This module needs
 // formats.h and runtimes.h earlier in the same translation unit.
 module TrinityMemoryLive {
     const TLV_ERR_HADAMARD_TYPE: i32 = -63;
@@ -95,6 +95,8 @@ module TrinityMemoryLive {
     const TLV_ERR_SPLIT: i32 = -85;
     const TLV_ERR_COUNT: i32 = -86;
     const TLV_ERR_SHORT: i32 = -87;
+    const TLV_ERR_HADAMARD_TIED: i32 = -88;
+    const TLV_ERR_TENSOR_EXTRA: i32 = -89;
 
     // Limits of this scanner, not of the readers: past them the answer is
     // TLV_ERR_LIMIT and no verdict. TLV_MAX_HEADER bounds the bytes of one
@@ -1170,6 +1172,49 @@ module TrinityMemoryLive {
         return 0xffffffffffffffff;
     }
 
+    // Whether every tensor record of the first `count` parts lies inside the
+    // `total` bytes held, so that tlv_tensor_ne0 and tlv_has_tensor can walk
+    // them (tlv_hadamard is also called on headers cut short).
+    fn tlv_records_fit(data: []u8, total: u64, records: []u64, tensors: []u64, count: u64) -> bool {
+        var i: u64 = 0;
+        while (i < count) {
+            var pos: u64 = records[i as usize];
+            var t: u64 = 0;
+            while (t < tensors[i as usize]) {
+                if (pos > total || total - pos < 12) { return false; }
+                var length: u64 = tf_read_u64(data, pos as usize);
+                if (length > total - pos - 12) { return false; }
+                var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                if (dims > 4 || 8 * dims + 12 > total - pos - 12 - length) { return false; }
+                pos = pos + 12 + length + 8 * dims + 12;
+                t = t + 1;
+            }
+            i = i + 1;
+        }
+        return true;
+    }
+
+    // Whether a tensor of the first `count` parts is named `text` (the
+    // loader's get_weight: C-string names).
+    fn tlv_has_tensor(data: []u8, records: []u64, tensors: []u64, count: u64, text: str, text_size: usize) -> bool {
+        var i: u64 = 0;
+        while (i < count) {
+            var pos: u64 = records[i as usize];
+            var t: u64 = 0;
+            while (t < tensors[i as usize]) {
+                var length: u64 = tf_read_u64(data, pos as usize);
+                var dims: u64 = tf_read_u32(data, (pos + 8 + length) as usize) as u64;
+                if (tf_same_text(data, (pos + 8) as usize, tlv_cstr(data, pos + 8, length) as usize, text, text_size)) {
+                    return true;
+                }
+                pos = pos + 12 + length + 8 * dims + 12;
+                t = t + 1;
+            }
+            i = i + 1;
+        }
+        return false;
+    }
+
     // ---- prism.hadamard.* --------------------------------------------------------
 
     // The fork's get_arr (src/llama-model-loader.cpp:310-352): a key that is
@@ -1187,7 +1232,7 @@ module TrinityMemoryLive {
         return 0;
     }
 
-    // Verified weight paths (src/llama-model.cpp:1279-1303).
+    // Verified weight paths (src/llama-model.cpp:1287-1311).
     fn tlv_kind(data: []u8, at: usize, size: usize) -> bool {
         if (tf_same_text(data, at, size, "attn_q.weight", 13)) { return true; }
         if (tf_same_text(data, at, size, "attn_k.weight", 13)) { return true; }
@@ -1232,7 +1277,7 @@ module TrinityMemoryLive {
         return false;
     }
 
-    // One listed entry (src/llama-model.cpp:1971-2095), in the fork's order: a
+    // One listed entry (src/llama-model.cpp:1992-2128), in the fork's order: a
     // tensor of the model, ne[0] divisible by the block size, a sign vector of
     // width ne[0] in explicit mode, then for a grouped GDN ssm_out weight the
     // head geometry (n_k > 0, n_v > 0, n_v % n_k == 0, ne[0] % n_v == 0 with
@@ -1265,6 +1310,7 @@ module TrinityMemoryLive {
         var gdn: TLVKey;
         var inverse: TLVKey;
         var arch: TLVKey;
+        var tied_key: TLVKey;
         var budget: TLVBudget;
         var records: [1024]u64;
         var tensors: [1024]u64;
@@ -1277,14 +1323,32 @@ module TrinityMemoryLive {
         var all_tensors: u64 = 0;
         var r: u64 = 0;
         while (r < rows) { all_tensors = all_tensors + tensors[r as usize]; r = r + 1; }
-        // :1196-1200 version (optional u32, must be 1)
-        var status: i32 = tlv_key(data, size, "prism.hadamard.version", 22, &version);
+        // :1197 tied_output (optional bool, read before the version and
+        // whether or not there is one; any nonzero byte is true)
+        var status: i32 = tlv_key(data, size, "prism.hadamard.tied_output", 26, &tied_key);
         if (status < 0) { return status; }
-        if (!version.found) { return 0; }
+        if (tied_key.found && tied_key.vtype != 7) { return TLV_ERR_HADAMARD_TYPE; }
+        var tied: bool = false;
+        if (tied_key.found && data[tied_key.at as usize] != 0) { tied = true; }
+        // :1198-1208 version (optional u32, 1 or 2); version 2 exactly when
+        // tied_output, and then no output.weight
+        status = tlv_key(data, size, "prism.hadamard.version", 22, &version);
+        if (status < 0) { return status; }
+        if (!version.found) {
+            // :1345-1348 tied_output without a version: no rotation is declared,
+            // and the fork refuses the file
+            if (tied) { return TLV_ERR_HADAMARD_TIED; }
+            return 0;
+        }
         out.present = true;
+        if (!tlv_records_fit(data, total as u64, records, tensors, rows)) { return TF_ERR_TRUNCATED; }
+        var has_output: bool = tlv_has_tensor(data, records, tensors, rows, "output.weight", 13);
         if (version.vtype != 4) { return TLV_ERR_HADAMARD_TYPE; }
-        if (tf_read_u32(data, version.at as usize) != 1) { return TLV_ERR_HADAMARD_VERSION; }
-        // :1208-1212 required keys, read in this order
+        var version_value: u32 = tf_read_u32(data, version.at as usize);
+        if (version_value != 1 && version_value != 2) { return TLV_ERR_HADAMARD_VERSION; }
+        if ((version_value == 2) != tied) { return TLV_ERR_HADAMARD_TIED; }
+        if (tied && has_output) { return TLV_ERR_HADAMARD_TIED; }
+        // :1216-1220 required keys, read in this order
         status = tlv_key(data, size, "prism.hadamard.block_size", 25, &block_key);
         if (status < 0) { return status; }
         if (!block_key.found) { return TLV_ERR_HADAMARD_MISSING; }
@@ -1305,7 +1369,7 @@ module TrinityMemoryLive {
         if (status < 0) { return status; }
         status = tlv_string_array(&names);
         if (status < 0) { return status; }
-        // :1214-1228 values
+        // :1222-1236 values
         var block: u32 = tf_read_u32(data, block_key.at as usize);
         out.block_size = block;
         out.names = names.count;
@@ -1316,7 +1380,7 @@ module TrinityMemoryLive {
         if (!explicit_signs && !tlv_text_at(data, mode.at, "identity", 8)) { return TLV_ERR_HADAMARD_TRANSFORM; }
         if (names.count == 0) { out.index = 0; return TLV_ERR_HADAMARD_NAME; }
         if (names.count > TLV_MAX_TENSORS || names.count * all_tensors > TLV_MAX_NAME_WORK) { return TLV_ERR_LIMIT; }
-        // :1230-1257 explicit signs: widths partition the values, each a
+        // :1238-1265 explicit signs: widths partition the values, each a
         // positive multiple of the block size, every value +1 or -1
         out.explicit_signs = explicit_signs;
         if (explicit_signs) {
@@ -1349,14 +1413,14 @@ module TrinityMemoryLive {
             }
             if (offset != values.count) { out.index = offset; return TLV_ERR_HADAMARD_SIGNS; }
         }
-        // :1259 gdn_v_grouped (optional bool; any nonzero byte is true)
+        // :1267 gdn_v_grouped (optional bool; any nonzero byte is true)
         status = tlv_key(data, size, "prism.hadamard.gdn_v_grouped", 28, &gdn);
         if (status < 0) { return status; }
         if (gdn.found && gdn.vtype != 7) { return TLV_ERR_HADAMARD_TYPE; }
         var gdn_on: bool = false;
         if (gdn.found && data[gdn.at as usize] != 0) { gdn_on = true; }
         out.gdn_v_grouped = gdn_on;
-        // :1264-1277 verified architectures
+        // :1272-1285 verified architectures
         status = tlv_key(data, size, "general.architecture", 20, &arch);
         if (status < 0) { return status; }
         var dspark: bool = false;
@@ -1367,7 +1431,7 @@ module TrinityMemoryLive {
             && !tlv_text_at(data, arch.at, "qwen35moe", 9) && !tlv_text_at(data, arch.at, "qwen3next", 9)) {
             return TLV_ERR_HADAMARD_ARCH;
         }
-        // :1305-1318 every weight name on a verified path, no duplicates
+        // :1313-1326 every weight name on a verified path, no duplicates
         var at: u64 = names.items;
         var i: u64 = 0;
         while (i < names.count) {
@@ -1395,7 +1459,7 @@ module TrinityMemoryLive {
             at = name_at + length;
             i = i + 1;
         }
-        // :1320-1335 inverse names (optional; a key that is not an array is ignored)
+        // :1328-1342 inverse names (optional; a key that is not an array is ignored)
         status = tlv_key(data, size, "prism.hadamard.inverse_weight_names", 35, &inverse);
         if (status < 0) { return status; }
         var inverse_count: u64 = 0;
@@ -1443,7 +1507,16 @@ module TrinityMemoryLive {
             at = name_at + length;
             i = i + 1;
         }
-        // :1971-2095 every listed weight, then every inverse table
+        // :1345-1356 a tied output needs the latent token embedding (the only
+        // inverse table the loop above lets through), which then also counts
+        // as a rotated weight; a latent token embedding with no output.weight
+        // needs version 2 and tied_output. The rotated copy has the same ne[0]
+        // as the inverse table, which the loop below checks, and in every
+        // verified architecture the output falls back to token_embd.weight
+        // (src/models/<arch>.cpp), so :1997-2002 binds it.
+        if (tied && inverse_count == 0) { return TLV_ERR_HADAMARD_TIED; }
+        if (!tied && inverse_count > 0 && !has_output) { return TLV_ERR_HADAMARD_TIED; }
+        // :1992-2128 every listed weight, then every inverse table
         var n_v: u64 = tlv_arch_u32(data, size, arch.at, ".ssm.time_step_rank", 19);
         var n_k: u64 = tlv_arch_u32(data, size, arch.at, ".ssm.group_count", 16);
         at = names.items;
@@ -1470,6 +1543,28 @@ module TrinityMemoryLive {
             at = at + 8 + length;
             i = i + 1;
         }
+        return 0;
+    }
+
+    // ---- general.tensor_extra.* ------------------------------------------------------
+
+    // Stock llama.cpp's activation precision policy (4364bf72
+    // src/llama-model.cpp:1237-1272, read in load_tensors at :1799): nothing
+    // when general.tensor_extra.name is missing or not an array (get_arr,
+    // src/llama-model-loader.cpp:305-314); otherwise its elements must be
+    // strings (:319-332) and general.tensor_extra.prec_a4 a bool array of the
+    // same length. Keys of the first file, as the loader's metadata.
+    fn tlv_tensor_extra(data: []u8, size: usize) -> i32 {
+        var names: TLVKey;
+        var prec: TLVKey;
+        var status: i32 = tlv_key(data, size, "general.tensor_extra.name", 25, &names);
+        if (status < 0) { return status; }
+        if (!names.found || names.vtype != 9) { return 0; }
+        if (names.elem != 8) { return TLV_ERR_TENSOR_EXTRA; }
+        status = tlv_key(data, size, "general.tensor_extra.prec_a4", 28, &prec);
+        if (status < 0) { return status; }
+        if (!prec.found || prec.vtype != 9 || prec.elem != 7) { return TLV_ERR_TENSOR_EXTRA; }
+        if (prec.count != names.count) { return TLV_ERR_TENSOR_EXTRA; }
         return 0;
     }
 
@@ -1524,7 +1619,7 @@ module TrinityMemoryLive {
         if (n_split > 1) {
             if (n_split > TLV_MAX_PARTS) { return tlv_undecided(out, TLV_ERR_LIMIT, 0); }
             // split.no 0 in the first file (:599-606); the loader derives the
-            // other names from the first's (:608-616, src/llama.cpp:569-598).
+            // other names from the first's (:608-616, src/llama.cpp:570-599).
             var no: u64 = tlv_u16_key(data, size, "split.no", 8);
             if (tlv_key(data, size, "split.no", 8, &key) < 0 || !key.found || no != 0) {
                 return tlv_refuse(out, TLV_ERR_SPLIT, 0, 0xffffffffffffffff, 0, no);
@@ -1610,6 +1705,13 @@ module TrinityMemoryLive {
         // clip after the hyperparameters (src/llama.cpp:352-353).
         if (trt_arch_refused_as_main(runtime, data, (arch.at + 8) as usize, arch_size as usize)) {
             return tlv_refuse(out, TLV_ERR_ARCH, 0, 0xffffffffffffffff, 0, 0);
+        }
+        // The vocabulary, then load_tensors (src/llama.cpp:356-369), where
+        // stock llama.cpp reads the activation precision policy.
+        if (trt_tensor_extra(runtime)) {
+            var extra: i32 = tlv_tensor_extra(data, size);
+            if (extra == TLV_ERR_TENSOR_EXTRA) { return tlv_refuse(out, extra, 0, 0xffffffffffffffff, 0, 0); }
+            if (extra < 0) { return tlv_undecided(out, TF_ERR_CONTAINER, 0); }
         }
         if (!trt_hadamard(runtime) && rotation.present) {
             out.verdict = TLV_RUN_IGNORES_ROTATION; out.status = 0;

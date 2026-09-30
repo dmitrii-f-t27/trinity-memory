@@ -2,13 +2,13 @@
  * (issues #48-#51). The headers are written here byte by byte from the GGUF
  * definition, and the expected verdicts are the checks of the pinned readers
  * read from their sources, not from the t27 source: gguf.cpp (ggml-org
- * e6ab7c1a ggml/src/gguf.cpp:230-427 and :459-803; bitnet.cpp's differences
+ * 4364bf72 ggml/src/gguf.cpp:230-427 and :459-803; bitnet.cpp's differences
  * in its gguf.cpp:609-616 and :681-687), the loader's file-end rule
  * (src/llama-model-loader.h:40-50), its split rules
  * (src/llama-model-loader.cpp:570-674) and architecture rules
  * (src/llama-model.cpp:43-349, :368-369, src/llama.cpp:352-353), ggml_nbytes
  * (ggml.c:1298-1321, bitnet.cpp's :1300-1331), and the PrismML fork's
- * Hadamard rules (bdc23b56 src/llama-model.cpp:1196-1335, 1971-2095). Built
+ * Hadamard rules (87268f77 src/llama-model.cpp:1196-1356, 1992-2128). Built
  * by tools/test-t27.sh with ASan and UBSan. */
 #include <assert.h>
 #include <stdbool.h>
@@ -62,6 +62,10 @@ static void kv_strn(Gguf *g, const char *k, const char *v, size_t n) { key(g, k)
 static void kv_strs(Gguf *g, const char *k, const char **v, size_t n) {
     key(g, k); u32(&g->kv, T_ARR); u32(&g->kv, T_STR); u64(&g->kv, n);
     for (size_t i = 0; i < n; i++) str(&g->kv, v[i]);
+}
+static void kv_bools(Gguf *g, const char *k, const bool *v, size_t n) {
+    key(g, k); u32(&g->kv, T_ARR); u32(&g->kv, T_BOOL); u64(&g->kv, n);
+    for (size_t i = 0; i < n; i++) { uint8_t x = v[i]; put(&g->kv, &x, 1); }
 }
 static void kv_ints(Gguf *g, const char *k, uint32_t elem, const int32_t *v, size_t n) {
     key(g, k); u32(&g->kv, T_ARR); u32(&g->kv, elem); u64(&g->kv, n);
@@ -412,6 +416,8 @@ typedef struct {
     uint64_t ne0, embd_ne0;
     bool drop_tensor, skip_transform, transform_u32;
     uint32_t rank, groups;
+    int tied;                      /* prism.hadamard.tied_output: 0 absent, 1 false, 2 true, 3 wrong type */
+    bool output;                   /* an output.weight tensor */
 } Spec;
 
 static const char *one_name[] = {"blk.0.attn_q.weight"};
@@ -444,6 +450,9 @@ static Buf build(const Spec *s, uint64_t *fs) {
     }
     if (s->widths) kv_ints(&g, "prism.hadamard.sign_widths", s->sign_elem, s->widths, s->n_widths);
     if (s->values) kv_ints(&g, "prism.hadamard.sign_values", s->sign_elem, s->values, s->n_values);
+    if (s->tied == 1) kv_bool(&g, "prism.hadamard.tied_output", false);
+    if (s->tied == 2) kv_bool(&g, "prism.hadamard.tied_output", true);
+    if (s->tied == 3) kv_u32(&g, "prism.hadamard.tied_output", 1);
     if (s->gdn == 1) kv_bool(&g, "prism.hadamard.gdn_v_grouped", false);
     if (s->gdn == 2) kv_bool(&g, "prism.hadamard.gdn_v_grouped", true);
     if (s->gdn == 3) kv_u32(&g, "prism.hadamard.gdn_v_grouped", 1);
@@ -465,6 +474,7 @@ static Buf build(const Spec *s, uint64_t *fs) {
         }
     }
     rec2(&g, "token_embd.weight", s->embd_ne0, 4, 1, off); off += (s->embd_ne0 * 4 * 2 + 31) / 32 * 32;
+    if (s->output) { rec2(&g, "output.weight", s->embd_ne0, 4, 1, off); off += (s->embd_ne0 * 4 * 2 + 31) / 32 * 32; }
     return finish(&g, fs, off);
 }
 
@@ -495,7 +505,7 @@ static void test_hadamard(void) {
     assert(verdict(&s, &h) == 0 && h.explicit_signs && h.widths == 2 && h.signs == 12);
     s.sign_elem = T_U32; assert(verdict(&s, &h) == 0);                          /* uint32 arrays: 0xffffffff is -1 */
     const char *inverse[] = {"token_embd.weight"};
-    s = base(); s.inverse = inverse; s.n_inverse = 1; assert(verdict(&s, &h) == 0 && h.inverse == 1);
+    s = base(); s.inverse = inverse; s.n_inverse = 1; s.output = true; assert(verdict(&s, &h) == 0 && h.inverse == 1);
     s.embd_ne0 = 10; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TENSOR && h.index == 1);  /* inverse table rules */
     s = base(); s.inverse = inverse; s.inverse_kind = 2; assert(verdict(&s, &h) == 0 && h.inverse == 0);  /* not an array: ignored */
     s = base(); s.inverse = inverse; s.inverse_kind = 1; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TYPE);
@@ -505,7 +515,8 @@ static void test_hadamard(void) {
 
     /* rejections, in the fork's order */
     s = base(); s.version_type = T_U64; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TYPE && h.present);
-    s = base(); s.version = 2; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_VERSION);
+    s = base(); s.version = 3; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_VERSION);
+    s = base(); s.version = 2; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED && h.present);  /* version 2 needs tied_output */
     s = base(); s.block = -1; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_MISSING);
     s = base(); s.skip_transform = true; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_MISSING);
     s = base(); s.transform_u32 = true; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TYPE);
@@ -551,13 +562,47 @@ static void test_hadamard(void) {
     s = base(); s.ne0 = 10; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TENSOR);
     s = base(); s.mode = "explicit"; s.widths = w4; s.n_widths = 1; s.values = v4; s.n_values = 4;
     assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TENSOR);                        /* no vector of width 8 */
-    /* grouped GDN heads (src/llama-model.cpp:2090-2095) */
+    /* grouped GDN heads (src/llama-model.cpp:2123-2128) */
     const char *ssm[] = {"blk.3.ssm_out.weight"};
     s = base(); s.names = ssm; s.gdn = 2; s.ne0 = 1024; s.rank = 48; s.groups = 16;
     assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TENSOR && h.gdn_v_grouped);      /* 1024 % 48 != 0 */
     s.ne0 = 1536; assert(verdict(&s, &h) == 0);
     s.groups = 0; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TENSOR);           /* no group count */
     s.groups = 16; s.gdn = 1; s.ne0 = 1024; assert(verdict(&s, &h) == 0);       /* false: not checked */
+
+    /* tied output, version 2 (87268f77 src/llama-model.cpp:1197-1208, :1345-1356) */
+    s = base(); s.version = 2; s.tied = 2; s.inverse = inverse; s.n_inverse = 1;
+    assert(verdict(&s, &h) == 0 && h.present && h.inverse == 1);
+    s.output = true; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED);          /* output.weight must be absent */
+    s.output = false; s.inverse = NULL; s.n_inverse = 0;
+    assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED);                           /* no latent token embedding */
+    s = base(); s.version = 2; s.tied = 1; s.inverse = inverse; s.n_inverse = 1;
+    assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED);                           /* version 2 with tied_output false */
+    s = base(); s.tied = 2; s.inverse = inverse; s.n_inverse = 1; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED);  /* version 1 forbids it */
+    s = base(); s.tied = 1; assert(verdict(&s, &h) == 0);                       /* explicit false with version 1 */
+    s = base(); s.inverse = inverse; s.n_inverse = 1; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED);  /* version 1, latent embedding, no output */
+    s = base(); s.version = 2; s.tied = 3; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TYPE);
+    /* dspark rotates only output.weight, which a tied output forbids (:1206-1208, before any other key) */
+    s = base(); s.version = 2; s.tied = 2; s.arch = "dspark"; s.names = out_inverse;
+    assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED);
+    s.inverse = inverse; s.n_inverse = 1; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED);
+    s = base(); s.version = 2; s.tied = 2; s.inverse = inverse; s.n_inverse = 1; s.embd_ne0 = 10;
+    assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TENSOR && h.index == 1);         /* the rotated copy is the inverse table's size */
+    /* tied_output without a version: nothing is rotated, and the fork refuses it */
+    s = base(); s.version_type = 0; s.tied = 2; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TIED && !h.present);
+    s.tied = 1; assert(verdict(&s, &h) == 0 && !h.present);
+    s.tied = 3; assert(verdict(&s, &h) == TLV_ERR_HADAMARD_TYPE && !h.present);  /* read before the version */
+    /* a header cut inside its tensor records, in a buffer of exactly that size: the
+       output.weight lookup stops at the cut instead of reading past it (ASan) */
+    s = base(); s.version = 2; s.tied = 2; s.inverse = inverse; s.n_inverse = 1; s.output = true;
+    Buf whole = build(&s, &fs);
+    for (size_t cut = 24; cut < whole.size; cut++) {
+        uint8_t *exact = malloc(cut); memcpy(exact, whole.data, cut);
+        uint64_t row[5] = {0, cut, fs, 0, 0};
+        (void)tlv_hadamard(exact, cut, row, 1, &h);
+        free(exact);
+    }
+    free(whole.data);
 }
 
 static void test_c_strings(void) {
@@ -596,10 +641,50 @@ static void test_runtime(void) {
     assert(tlv_runtime(b.data, b.size, fs, LLAMA, &r) == TLV_RUN_IGNORES_ROTATION);
     assert(tlv_runtime(b.data, b.size, fs, BITNET, &r) == TLV_RUN_IGNORES_ROTATION);
     free(b.data);
-    s = base(); s.version = 2; b = build(&s, &fs);
+    s = base(); s.version = 3; b = build(&s, &fs);
     assert(tlv_runtime(b.data, b.size, fs, PRISM, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_HADAMARD_VERSION);
     assert(tlv_runtime(b.data, b.size, fs, LLAMA, &r) == TLV_RUN_IGNORES_ROTATION);
     free(b.data);
+    /* a tied version-2 file: the fork applies it, the others load it without the rotation */
+    const char *latent[] = {"token_embd.weight"};
+    s = base(); s.version = 2; s.tied = 2; s.inverse = latent; s.n_inverse = 1; b = build(&s, &fs);
+    assert(tlv_runtime(b.data, b.size, fs, PRISM, &r) == TLV_RUN_ACCEPTS);
+    assert(tlv_runtime(b.data, b.size, fs, LLAMA, &r) == TLV_RUN_IGNORES_ROTATION);
+    assert(tlv_runtime(b.data, b.size, fs, BITNET, &r) == TLV_RUN_IGNORES_ROTATION);
+    free(b.data);
+    /* tied_output alone: only the fork reads it */
+    s = base(); s.version_type = 0; s.tied = 2; b = build(&s, &fs);
+    assert(tlv_runtime(b.data, b.size, fs, PRISM, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_HADAMARD_TIED);
+    assert(tlv_runtime(b.data, b.size, fs, LLAMA, &r) == TLV_RUN_ACCEPTS);
+    free(b.data);
+    /* general.tensor_extra.* (stock llama.cpp 4364bf72 src/llama-model.cpp:1237-1272) */
+    const char *extra_names[] = {"blk.0.attn_q.weight", "blk.0.attn_k.weight"};
+    const bool prec2[] = {true, false}, prec1[] = {true};
+    const int32_t ints2[] = {1, 0};
+    for (int c = 0; c < 9; c++) {
+        Gguf e = {0}; kv_str(&e, "general.architecture", c == 8 ? "clip" : "qwen35");
+        if (c == 0 || c == 1 || c == 3 || c == 4 || c == 5 || c == 8) kv_strs(&e, "general.tensor_extra.name", extra_names, 2);
+        if (c == 2) kv_str(&e, "general.tensor_extra.name", "blk.0.attn_q.weight");
+        if (c == 6) kv_ints(&e, "general.tensor_extra.name", T_I32, ints2, 2);
+        if (c == 0 || c == 2 || c == 6 || c == 8) kv_bools(&e, "general.tensor_extra.prec_a4", prec2, 2);
+        if (c == 3) kv_bools(&e, "general.tensor_extra.prec_a4", prec1, 1);
+        if (c == 4) kv_ints(&e, "general.tensor_extra.prec_a4", T_I32, ints2, 2);
+        if (c == 5) kv_bool(&e, "general.tensor_extra.prec_a4", true);
+        rec2(&e, "w", 8, 1, 0, 0); b = finish(&e, &fs, 32);
+        /* 0 valid, 1 no prec_a4, 2 names not an array (ignored), 3 lengths differ, 4 int array,
+           5 not an array, 6 names not strings, 7 no policy, 8 clip is refused first */
+        bool refused = c == 1 || c == 3 || c == 4 || c == 5 || c == 6;
+        int32_t v = tlv_runtime(b.data, b.size, fs, LLAMA, &r);
+        if (c == 8) assert(v == TLV_RUN_REFUSES && r.status == TLV_ERR_ARCH);
+        else if (refused) assert(v == TLV_RUN_REFUSES && r.status == TLV_ERR_TENSOR_EXTRA);
+        else assert(v == TLV_RUN_ACCEPTS);
+        if (c != 8) {
+            assert(tlv_runtime(b.data, b.size, fs, PRISM, &r) == TLV_RUN_ACCEPTS);
+            assert(tlv_runtime(b.data, b.size, fs, BITNET, &r) == TLV_RUN_ACCEPTS);
+            assert(tlv_runtime(b.data, b.size, fs, MORTAR, &r) == TLV_RUN_ACCEPTS);
+        }
+        free(b.data);
+    }
     /* the fork's ids without any prism. key */
     Gguf g = {0}; kv_str(&g, "general.architecture", "qwen35"); rec2(&g, "a", 128, 4, 142, 0);
     b = finish(&g, &fs, 4 * 34);
