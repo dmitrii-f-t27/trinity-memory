@@ -57,6 +57,20 @@ reader that crashes (an assertion ends it) or runs out of time. The report names
 runtimes whose reader was built and replayed. The weekly workflow
 `ternary-check-live.yml` does both; its log and step summary hold counts only.
 
+**Seeded differential fuzzing (issue #98).** After building the readers, run
+`python3 tools/live-fuzz.py --out build/live/fuzz.json`. Its default seed 27
+generates 160,000 bounded synthetic headers and attempts each on all pinned
+readers through a persistent I/O-only adapter. Coverage includes type/shape
+and offset boundaries, metadata types, arrays, duplicate and C-string names,
+alignments, truncation, and GGUF counts/magic/version. The first 24 headers
+are also replayed through the original single-file adapter to check worker
+equivalence. The JSON records the corpus SHA-256, exact pins, source and
+binary hashes, accept/refuse counts, disagreements, no-verdicts, assertion
+crashes and timeouts. A disagreement saves the header and stops the run.
+Assertions count as refusals and separately as crashes; no-verdicts do not
+count as agreements. This checks the GGUF reader, not the full model loader
+or inference. The weekly/manual Live workflow runs it and saves its evidence.
+
 **Verdicts per runtime.** `accepts`: its reader and loader rules accept the model;
 `refuses` with a status token and, where it has one, the file and the record it names;
 `ignores_rotation`: it accepts a model that declares `prism.hadamard.*` but does not

@@ -3,19 +3,20 @@
  "runtime": "PrismML llama.cpp fork",
  "id": 2,
  "repo": "PrismML-Eng/llama.cpp",
- "commit": "bdc23b56b4458b9f1655aec5287f3ab56ee8daaa",
+ "commit": "87268f775d74cf8f7ffc6c22a95684aa55995533",
  "files": {
   "ggml/include/ggml.h": "d875a15ed066e29e3b43415bdba9ea9b59c75a47",
   "ggml/src/ggml.c": "fa2a9c44f5cfa6b8688f8f70026fa5fedfb4556a",
   "ggml/src/gguf.cpp": "d97df4a8deea9a028bb215f6d4cfbbe44f54e096",
-  "src/llama-arch.cpp": "eb17e096723695bb975cb0ea0e2e6a53fc7943e5",
+  "src/llama-arch.cpp": "4c3fcb2575a48b2a122e4ab8639b2dba9c212d51",
   "src/llama-model-loader.cpp": "835d172d33f7a9f5d13eccbe0e62787602bbb008",
-  "src/llama-model.cpp": "191d025e2810818d05824304ce6868b22dcd29b2",
+  "src/llama-model.cpp": "c2ac6a50b316e84e68e51e2d48cd91c8658d3548",
   "src/llama.cpp": "1609fec88ddfe3032e677590794bbadd1c93a2f7"
  },
- "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the head 0324c665 of branch prism, whose ggml.h and type traits for these ids equal the pin's (ids 142 PQ2_0 and 143 PTQ1_0: ggml.h:435-437); architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp at the pin that the model mapping src/llama-model.cpp:44-342 maps to a model class (unknown names are refused at :361-362, unmapped ones at :341); clip is mapped but refused as a main model after the hyperparameters (and so after the Hadamard key rules), src/llama.cpp:349-350; Hadamard rules src/llama-model.cpp:1196-1335, 1971-2095",
+ "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the head 0324c665 of branch prism, whose ggml.h and type traits for these ids equal the pin's (ids 142 PQ2_0 and 143 PTQ1_0: ggml.h:435-437); architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp at the pin that the model mapping src/llama-model.cpp:44-342 maps to a model class (unknown names are refused at :361-362, unmapped ones at :341); clip is mapped but refused as a main model after the hyperparameters (and so after the Hadamard key rules), src/llama.cpp:349-350; Hadamard rules src/llama-model.cpp:1196-1356, 1992-2128 (version 1, or version 2 with prism.hadamard.tied_output)",
  "type_count": 144,
  "hadamard": true,
+ "tensor_extra": false,
  "types": [
   {
    "id": 0,

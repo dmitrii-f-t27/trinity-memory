@@ -26,7 +26,7 @@ class LockFile(unittest.TestCase):
 
     def test_single_pin(self):
         self.assertEqual(self.lock["repo"], "ggml-org/llama.cpp")
-        self.assertEqual(self.lock["commit"], "e6ab7c1a41054a888ada952eab4c886444c2f5ad")
+        self.assertEqual(self.lock["commit"], "4364bf7232e65c34eca8d9500c5464389662de6b")
         self.assertEqual(self.lock["directory"], "llama.cpp-" + self.lock["commit"][:8])
 
     def test_files_and_ranges(self):

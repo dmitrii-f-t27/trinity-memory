@@ -15,6 +15,7 @@
  "source": "type traits: ggml_blck_size and ggml_type_size of a build of ggml at the commit (cmake target ggml-base, CPU only), ids with no traits omitted; they equal the PrismML fork's at bdc23b56 except id 42 (Q2_0: 128 weights in 34 bytes here, QK2_0 128 in ggml-common.h, where the fork and ggml-org read 64 in 18) and id 143 (G8_0, 'Pestle exact ternary: four BF16 scales per 32 values', 32 weights in 16 bytes, where the fork has PTQ1_0); ggml_nbytes ggml/src/ggml.c:1296-1319 has no per-type rule; ggml/src/gguf.cpp is byte-identical to the one of bitnet.cpp's llama.cpp at 390c3077 (blob 5e198618), so the reader rules are that reader's; architectures: the names of LLM_ARCH_NAMES in src/llama-arch.cpp that the model mapping src/llama-model.cpp:38-304 maps to a model class (unknown names are refused at :323, unmapped ones, clip among them, by the mapping's default); no prism.hadamard handling in src/llama-model.cpp",
  "type_count": 144,
  "hadamard": false,
+ "tensor_extra": false,
  "types": [
   {
    "id": 0,

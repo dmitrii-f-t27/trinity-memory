@@ -3065,7 +3065,7 @@ def safetensors_vectors():
 def mlx_encode(values, rows, cols):
     out = bytearray(rows * cols // 4)
     for r in range(rows):
-        for w in range(cols // 16):  # ops.cpp:4975, shifts 2^(0, 2, ..., 30)
+        for w in range(cols // 16):  # ops.cpp:4992, shifts 2^(0, 2, ..., 30)
             word = sum((values[r * cols + 16 * w + k] + 1) << (2 * k) for k in range(16))
             out[4 * (r * cols // 16 + w):4 * (r * cols // 16 + w) + 4] = word.to_bytes(4, "little")
     return bytes(out)
@@ -3123,8 +3123,8 @@ def build_formats_mlx():
                                       "bias": real_source("bonsai_mlx_bias")}))
     three = list(values)
     three[5] = 2
-    affine = view("mlx", "decodes", "mlx/ops.cpp:5297-5298", "w = q * scale + bias per group, without checks")
-    shapes = view("mlx", "rejects", "mlx/ops.cpp:5249-5256",
+    affine = view("mlx", "decodes", "mlx/ops.cpp:5314-5315", "w = q * scale + bias per group, without checks")
+    shapes = view("mlx", "rejects", "mlx/ops.cpp:5266-5273",
                   "affine_dequantize refuses words, scales and biases whose shapes disagree for the group size")
     vectors.append(viewed(mlx_vector("mlx_code3", mlx_encode(three, 2, 128), 2, 128, 64, scales, biases,
                                      "Code 3 with bias = -scale is +2; flagged", encode=True, flag_class="outside_ternary"),
@@ -3144,12 +3144,12 @@ def build_formats_mlx():
                                        biases[:3] + [0xFC00], "An infinite bias", error_class="scale_nonfinite"), affine))
     vectors.append(rejected(mlx_vector("mlx_group_48", mlx_encode(values, 2, 128), 2, 128, 48, scales, biases,
                                        "Group sizes are 32, 64 or 128", error_class="length"),
-                            view("mlx", "rejects", ["mlx/ops.cpp:5007-5012", "mlx/ops.cpp:5249-5256"],
+                            view("mlx", "rejects", ["mlx/ops.cpp:5024-5029", "mlx/ops.cpp:5266-5273"],
                                  "the quantizer offers groups of 32, 64 and 128 only; the dequantizer refuses scales "
                                  "that do not cover the row in groups of 48")))
     vectors.append(rejected(mlx_vector("mlx_cols_not_divisible", mlx_encode(values, 2, 128)[:2 * 24], 2, 96, 64, scales,
                                        biases, "96 columns are not whole groups of 64", error_class="length"),
-                            view("mlx", "rejects", ["mlx/ops.cpp:5207-5214", "mlx/ops.cpp:5249-5256"],
+                            view("mlx", "rejects", ["mlx/ops.cpp:5224-5231", "mlx/ops.cpp:5266-5273"],
                                  "the last dimension must be whole groups")))
     vectors.append(rejected(mlx_vector("mlx_size_mismatch", mlx_encode(values, 2, 128)[:-4], 2, 128, 64, scales, biases,
                                        "One word missing", error_class="length"), shapes))
@@ -3159,7 +3159,7 @@ def build_formats_mlx():
                              "group": 64, "values_hex": i8_hex(bad), "error_class": "code",
                              "expect": {"status": FORMAT_ERRORS["code"]},
                              "description": "A 2-bit code holds q = 0..3, values -1..2; nothing is written"},
-                            view("mlx", "not_applicable", "mlx/ops.cpp:4957-5002",
+                            view("mlx", "not_applicable", "mlx/ops.cpp:4974-5019",
                                  "pack_and_quantize clips codes to 0..3 from float weights")))
     constants = {"mlx": {"id": 9, "bits": 2, "codes_per_word": 16, "groups": [32, 64, 128], "zero_point": 1,
                          "value": "scale * q + bias; ternary iff bias == -scale",
