@@ -77,6 +77,11 @@ which the memory bucket holds. None of this is a throughput claim for a
 different design. Captures
 from before the split (eecc619f) have no k lines and still validate.
 
+Measured on the board (757f191b, both vectors, 60 MHz): 118308783 compute
+clocks in both runs (13.75%, 1.97 s), about 9.98M DDR3 wait clocks (1.16%)
+and about 732.24M report wait clocks (85.09%) of 860.53M. Evidence:
+`reports/fpga/ffn-clock-split-2026-09-30-757f191b/`.
+
 ## Validation and build
 
 `python3 -m unittest tests.test_ffn_rtl -v` generates actual RTL with the
