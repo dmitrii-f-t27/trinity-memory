@@ -30,6 +30,9 @@ from tests.test_live import _gguf, _string
 
 ROOT = Path(__file__).resolve().parent.parent
 NAMES = live.SPEC_NAMES
+# Assertions remain refusals/signals; thousands of debugger launches are
+# diagnostic overhead, not part of reader acceptance (ggml.c backtrace).
+READER_ENV = {**os.environ, "GGML_NO_BACKTRACE": "1"}
 
 
 def cases(seed, count):
@@ -114,7 +117,7 @@ class Worker:
     def observe(self, header, size):
         if self.process is None:
             self.process = subprocess.Popen([str(self.binary)], stdin=subprocess.PIPE,
-                                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=READER_ENV)
         process = self.process
         try:
             process.stdin.write(struct.pack("<QQ", len(header), size) + header)
@@ -181,7 +184,7 @@ def main():
                     if index < args.crosscheck_single and observed is not None:
                         path.write_bytes(header)
                         single = subprocess.run([str(args.readers / f"gguf_replay_{NAMES[runtime]}"), str(path), str(size)],
-                                                capture_output=True, timeout=5)
+                                                capture_output=True, timeout=5, env=READER_ENV)
                         accepted = single.returncode == 0 and single.stdout.startswith(b"ACCEPTED")
                         if accepted != observed:
                             raise RuntimeError(f"batch/single disagreement at {index}, runtime {runtime}")
@@ -217,6 +220,7 @@ def main():
               "single_reader_crosschecks": crosschecked, "disagreements": failures,
               "elapsed_seconds": round(time.monotonic() - started, 3),
               "scope": "GGUF reader acceptance only; no complete model loader or inference"}
+    report["reader_environment"] = {"GGML_NO_BACKTRACE": "1"}
     report["source_sha256"] = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in
                                ("tools/live-fuzz.py", "tests/upstream/gguf_fuzz_reader.c",
                                 "t27/live.t27", "t27/runtimes.t27", "native/compiler.lock")}
