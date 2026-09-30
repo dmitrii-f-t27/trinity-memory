@@ -32,7 +32,15 @@ build() {
     fi
     mkdir -p "$out/src"
     for stub in ggml-bitnet-lut.cpp ggml-bitnet-mad.cpp; do [ -f "$out/src/$stub" ] || : > "$out/src/$stub"; done
-    cmake -S "$src" -B "$src/build" -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=OFF -DGGML_BLAS=OFF \
+    # On macOS a shared library may not leave symbols undefined at link time,
+    # so bitnet.cpp's ggml-base (which refers to two I2_S functions of its CPU
+    # kernels) is linked with a dynamic lookup; the program's stand-ins resolve
+    # them at load time, as they do on Linux.
+    lookup=
+    if [ "$name" = bitnet_cpp ] && [ "$(uname -s)" = Darwin ]; then
+        lookup='-DCMAKE_SHARED_LINKER_FLAGS=-undefined dynamic_lookup'
+    fi
+    cmake -S "$src" -B "$src/build" ${lookup:+"$lookup"} -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=OFF -DGGML_BLAS=OFF \
         -DGGML_ACCELERATE=OFF -DGGML_CUDA=OFF -DGGML_VULKAN=OFF -DGGML_OPENMP=OFF -DGGML_NATIVE=OFF \
         -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_TOOLS=OFF \
         -DLLAMA_BUILD_SERVER=OFF > "$out/$name-cmake.log" 2>&1 || { tail -40 "$out/$name-cmake.log" >&2; return 1; }
