@@ -9,6 +9,7 @@ const statuses = new Map([
   [-79, 'Tensor shape'], [-80, 'Tensor type'], [-81, 'Row alignment'], [-82, 'File bounds'],
   [-83, 'Architecture'], [-84, 'Inspection limit'], [-85, 'Split metadata'], [-86, 'Record count'],
   [-87, 'File ends inside its header'],
+  [-88, 'Hadamard tied output metadata'], [-89, 'Tensor activation precision metadata'],
 ]);
 let worker;
 const node = (tag, text) => { const element = document.createElement(tag); element.textContent = text; return element; };
