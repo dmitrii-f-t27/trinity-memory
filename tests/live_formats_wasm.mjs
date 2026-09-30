@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
-import {createInspector} from '../site/live/wasm-live.mjs';
+import {createInspector, RUNTIMES} from '../site/live/wasm-live.mjs';
 import {parseURL, readHeader} from '../site/live/header-fetch.mjs';
 
 const {instance} = await WebAssembly.instantiate(readFileSync('build/t27/formats.wasm'), {});
@@ -55,4 +55,4 @@ await readHeader(url.replace(sha, 'main'), inspector, () => {}, async (requestUR
   return rangeFetch(requestURL, options);
 });
 assert.equal(resolved, true);
-console.log(`PASS live formats.wasm: ${vectors.length} headers x 3 runtimes, native parity and bounded HTTP ranges`);
+console.log(`PASS live formats.wasm: ${vectors.length} headers x ${RUNTIMES.length} runtimes, native parity and bounded HTTP ranges`);
