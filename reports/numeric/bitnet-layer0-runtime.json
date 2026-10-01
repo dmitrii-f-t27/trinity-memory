@@ -1,0 +1,3458 @@
+{
+  "schema": "trinity.bitnet-layer0-runtime.v1",
+  "model": {
+    "repo": "microsoft/bitnet-b1.58-2B-4T",
+    "revision": "04c3b9ad9361b824064a1f25ea60a8be9599b127"
+  },
+  "scope": "text-derived layer-0 states; local FFN replacement only; no later layers, logits or generation quality",
+  "runtime": {
+    "torch": "2.11.0",
+    "transformers": "5.14.1",
+    "numpy": "2.4.3",
+    "tokenizers": "0.22.2",
+    "huggingface-hub": "1.11.0",
+    "safetensors": "0.8.0"
+  },
+  "upstream_sha256": {
+    "integrations/bitnet.py": "bb5b7f1108fa20b4ed8ad9e7eb0adc65c2974b9a4a2e8acf4fc3d230f67b4d05",
+    "models/bitnet/modeling_bitnet.py": "a23741c59696ab92a53db28b697a3ce54400fafd301222a53a578cf072a5d47c",
+    "activations.py": "4b1a469c24be4e4c6320536ad55a7337d24de04c3ecc71597fbf0267f1560612"
+  },
+  "machine": "arm64",
+  "device": "CPU, one thread, deterministic, eager, torch.compile disabled",
+  "denormal_flush_requested": false,
+  "denormal_api_supported": true,
+  "input_lock_sha256": "26fca4b54a272bd02d3606e78dfcd3f3e4d4fea2f69c78766539580fa9bdf2c3",
+  "total_tokens": 45,
+  "source_sha256": {
+    "tools/capture_bitnet_layer0.py": "4100df161c05dd668a1627d5109e36bc6f8d749762ce5d78efd5c297c8f79875",
+    "tools/bitnet_ffn_runtime.py": "e42b4773c0b690f9c2ee81f083c0791c1cb51a0804a1e76c99118a758ca9bc48",
+    "tools/gf16_reference.py": "498be45ca1d08677094109118bfd853728677c315717da6ecc6f5ac0d5784cce",
+    "tools/bitnet-capture-requirements.txt": "5eae569adfdc4ba5c043e757a9c43edf7dd31506e27853a6e3cbe0d322235a7e"
+  },
+  "cases": [
+    {
+      "prompt_index": 0,
+      "tokens": 9,
+      "calibration": {
+        "x": {
+          "elements": 23040,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "h": {
+          "elements": 23040,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "g": {
+          "elements": 62208,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "u": {
+          "elements": 62208,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "a": {
+          "elements": 62208,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "s": {
+          "elements": 62208,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "y": {
+          "elements": 23040,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        }
+      },
+      "capture_sha256_f32": {
+        "x": "eef13034d27358ca7ef7f27dee5878c58345b82290737bbc19bd64c603b85e6a",
+        "h": "3f04eb8a962ebca15116612038694e20d2856bd5bc0ea72f8a232b588301f498",
+        "g": "514ebb8f0103be42f8b3417928cd232de674fc0c54e3f9369e7eb1a04bc5fb95",
+        "u": "993624570e94603f83a532073ee3db1deaa82539fcbb6f9572a46e508e5a3dbc",
+        "a": "959426a85300a412de1b023ee90a5d11819e74e74614919ec7aa5323c9bb5da2",
+        "s": "a5e9329fe6d99209f9ca71e5e6d1b37552e9aaa9a91321cf1b6b7fef47a9f963",
+        "y": "9c9c66f38879e0795629794de1148ed77ba6ec29afdd39368946bdda34e02e77"
+      },
+      "reference_peaks": {
+        "x": 15.0625,
+        "h": 16.25,
+        "g": 2096.0,
+        "u": 2448.0,
+        "a": 10737418240.0,
+        "s": 12.0,
+        "y": 386.0
+      },
+      "profiles": {
+        "bf16": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 23040,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 23040,
+              "mismatches": 23019,
+              "nmse": 5.4314886317965984e-06,
+              "max_abs_error": 0.04895782470703125
+            },
+            "g": {
+              "elements": 62208,
+              "mismatches": 59237,
+              "nmse": 3.0368599829723524e-05,
+              "max_abs_error": 5.22705078125
+            },
+            "u": {
+              "elements": 62208,
+              "mismatches": 59238,
+              "nmse": 5.495936544230158e-05,
+              "max_abs_error": 5.5654296875
+            },
+            "a": {
+              "elements": 62208,
+              "mismatches": 33732,
+              "nmse": 1.4668207477875352e-05,
+              "max_abs_error": 31150080.0
+            },
+            "s": {
+              "elements": 62208,
+              "mismatches": 33732,
+              "nmse": 8.6066731883766e-05,
+              "max_abs_error": 0.0716552734375
+            },
+            "y": {
+              "elements": 23040,
+              "mismatches": 23040,
+              "nmse": 0.00027815795836921847,
+              "max_abs_error": 5.703197479248047
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "bf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "bf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "bf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "bf16",
+              "input_peak": 16.2783203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "bf16",
+              "input_peak": 1352.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "bf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "bf16",
+              "input_peak": 2101.9375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "bf16",
+              "input_peak": 1336.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "bf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "bf16",
+              "input_peak": 2442.375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "bf16",
+              "input_peak": 4393216.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "bf16",
+              "input_peak": 10748952576.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "bf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "bf16",
+              "input_peak": 82.96004486083984,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "bf16",
+              "input_peak": 12.01416015625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "bf16",
+              "input_peak": 11.999999046325684,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "bf16",
+              "input_peak": 179.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "bf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "bf16",
+              "input_peak": 385.96875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 0,
+            "u": 0,
+            "y": 0
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.00025334388037757255,
+            0.00028768966809662966,
+            0.00034035603060744073,
+            0.00020116473252784235,
+            9.887060803714892e-05,
+            0.0002021387576648826,
+            0.0002907412460002093,
+            0.0003267548520117973,
+            8.60621703016828e-05
+          ]
+        },
+        "f32": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 23040,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 23040,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "g": {
+              "elements": 62208,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "u": {
+              "elements": 62208,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "a": {
+              "elements": 62208,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "s": {
+              "elements": 62208,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "y": {
+              "elements": 23040,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "f32",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "f32",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "f32",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "f32",
+              "input_peak": 1348.2738037109375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "f32",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "f32",
+              "input_peak": 2096.14453125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "f32",
+              "input_peak": 1336.3681640625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "f32",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "f32",
+              "input_peak": 2443.048095703125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 4393822.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 10734318592.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "f32",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "f32",
+              "input_peak": 82.95953369140625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "f32",
+              "input_peak": 12.071081161499023,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "f32",
+              "input_peak": 12.07108211517334,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "f32",
+              "input_peak": 177.6442413330078,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "f32",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "f32",
+              "input_peak": 383.04541015625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 1567,
+            "u": 1567,
+            "y": 857
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "gf16": {
+          "status": "nonfinite",
+          "blocked_at": "a",
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 23040,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 23040,
+              "mismatches": 23017,
+              "nmse": 3.409724365843676e-07,
+              "max_abs_error": 0.01354217529296875
+            },
+            "g": {
+              "elements": 62208,
+              "mismatches": 59237,
+              "nmse": 6.177164535493327e-06,
+              "max_abs_error": 1.778564453125
+            },
+            "u": {
+              "elements": 62208,
+              "mismatches": 59238,
+              "nmse": 1.245497901246014e-05,
+              "max_abs_error": 1.8015189170837402
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1348.19287109375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 2095.71875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1336.278076171875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 2442.375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "gf16",
+              "input_peak": 4393216.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "gf16",
+              "input_peak": 10731388928.0,
+              "overflow": 2,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 1660,
+            "u": 1660
+          },
+          "per_token_y_nmse_vs_f32": null
+        },
+        "gf16_wide_product": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 23040,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 23040,
+              "mismatches": 23017,
+              "nmse": 3.409724365843676e-07,
+              "max_abs_error": 0.01354217529296875
+            },
+            "g": {
+              "elements": 62208,
+              "mismatches": 59237,
+              "nmse": 6.177164535493327e-06,
+              "max_abs_error": 1.778564453125
+            },
+            "u": {
+              "elements": 62208,
+              "mismatches": 59238,
+              "nmse": 1.245497901246014e-05,
+              "max_abs_error": 1.8015189170837402
+            },
+            "a": {
+              "elements": 62208,
+              "mismatches": 33690,
+              "nmse": 1.223833713486004e-06,
+              "max_abs_error": 10384896.0
+            },
+            "s": {
+              "elements": 62208,
+              "mismatches": 33690,
+              "nmse": 1.5108004784500258e-05,
+              "max_abs_error": 0.0404052734375
+            },
+            "y": {
+              "elements": 23040,
+              "mismatches": 23039,
+              "nmse": 0.00013721355048576642,
+              "max_abs_error": 4.282218933105469
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1348.19287109375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 2095.71875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1336.278076171875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 2442.375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 4393216.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 10737019904.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "gf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 330,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "gf16",
+              "input_peak": 82.96027374267578,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 8
+            },
+            "s": {
+              "storage": "gf16",
+              "input_peak": 12.0819091796875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 7
+            },
+            "y_actquant": {
+              "storage": "gf16",
+              "input_peak": 12.078125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "gf16",
+              "input_peak": 178.7781982421875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "gf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "gf16",
+              "input_peak": 385.4296875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 1660,
+            "u": 1660,
+            "y": 889
+          },
+          "per_token_y_nmse_vs_f32": [
+            8.133968576220958e-05,
+            0.00015429115765143268,
+            0.000122166225261546,
+            6.550451863117088e-05,
+            5.6280411355848733e-05,
+            9.021512316162953e-05,
+            0.00011492561598394593,
+            0.0001839686999537793,
+            3.776488941067036e-05
+          ]
+        }
+      }
+    },
+    {
+      "prompt_index": 1,
+      "tokens": 8,
+      "calibration": {
+        "x": {
+          "elements": 20480,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "h": {
+          "elements": 20480,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "g": {
+          "elements": 55296,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "u": {
+          "elements": 55296,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "a": {
+          "elements": 55296,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "s": {
+          "elements": 55296,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "y": {
+          "elements": 20480,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        }
+      },
+      "capture_sha256_f32": {
+        "x": "1f4ccb29065d9a8aa3ee3fb4dead7dffd63c3912c5e35b0b207593dc20085b90",
+        "h": "85883609b0b8311f7d15a9ba4d42eef2c3afb8b9422d06da96ea3066bf8c3fde",
+        "g": "3e8a42589b4aabfd2b0c7c11c9d10e1485cbe8fdaa1b71087f44f8e728b327c0",
+        "u": "176ef338d7f76bbbe346ba9d8305a97e1b3b0287330d9c02f55acd55ce81a70e",
+        "a": "118eca278eccca46e37c4137b0f7d5baa99db41c1121b5d33dbb557d21c132a7",
+        "s": "d67d6478ee88970206a9e1dec6be0c67207856e69cd492edf10956e16017b93d",
+        "y": "3e4ca81af67adff3ace27ded549fc6e3c60d8e242ed0d2fce1e50457d810dd5d"
+      },
+      "reference_peaks": {
+        "x": 15.0625,
+        "h": 16.25,
+        "g": 1680.0,
+        "u": 1976.0,
+        "a": 5570035712.0,
+        "s": 9.6875,
+        "y": 320.0
+      },
+      "profiles": {
+        "bf16": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 20480,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 20480,
+              "mismatches": 20462,
+              "nmse": 5.30056058996098e-06,
+              "max_abs_error": 0.04895782470703125
+            },
+            "g": {
+              "elements": 55296,
+              "mismatches": 52656,
+              "nmse": 2.9500232539287497e-05,
+              "max_abs_error": 6.4056396484375
+            },
+            "u": {
+              "elements": 55296,
+              "mismatches": 52654,
+              "nmse": 5.511790917802141e-05,
+              "max_abs_error": 6.4906005859375
+            },
+            "a": {
+              "elements": 55296,
+              "mismatches": 30948,
+              "nmse": 4.728448771552083e-05,
+              "max_abs_error": 44438528.0
+            },
+            "s": {
+              "elements": 55296,
+              "mismatches": 30948,
+              "nmse": 9.200517987894495e-05,
+              "max_abs_error": 0.0716552734375
+            },
+            "y": {
+              "elements": 20480,
+              "mismatches": 20480,
+              "nmse": 0.0004914910758756017,
+              "max_abs_error": 5.898426055908203
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "bf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "bf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "bf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "bf16",
+              "input_peak": 16.2783203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "bf16",
+              "input_peak": 1080.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "bf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "bf16",
+              "input_peak": 1679.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "bf16",
+              "input_peak": 1080.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "bf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "bf16",
+              "input_peak": 1974.375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "bf16",
+              "input_peak": 2822400.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "bf16",
+              "input_peak": 5568462848.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "bf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "bf16",
+              "input_peak": 82.96004486083984,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "bf16",
+              "input_peak": 9.698486328125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "bf16",
+              "input_peak": 9.6875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "bf16",
+              "input_peak": 148.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "bf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "bf16",
+              "input_peak": 319.125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 0,
+            "u": 0,
+            "y": 0
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.00025334388037757255,
+            0.00021731692305127753,
+            0.0002466230055209711,
+            0.00036469081219762435,
+            0.0006860105492595654,
+            0.0001600241697642143,
+            0.0004036405812102891,
+            0.00016155551238095935
+          ]
+        },
+        "f32": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 20480,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 20480,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "g": {
+              "elements": 55296,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "u": {
+              "elements": 55296,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "a": {
+              "elements": 55296,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "s": {
+              "elements": 55296,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "y": {
+              "elements": 20480,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "f32",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "f32",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "f32",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "f32",
+              "input_peak": 1077.8333740234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "f32",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "f32",
+              "input_peak": 1675.694091796875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "f32",
+              "input_peak": 1077.5328369140625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "f32",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "f32",
+              "input_peak": 1969.86474609375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 2807950.75,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 5531282944.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "f32",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "f32",
+              "input_peak": 82.95953369140625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "f32",
+              "input_peak": 9.757058143615723,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "f32",
+              "input_peak": 9.757057189941406,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "f32",
+              "input_peak": 147.89254760742188,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "f32",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "f32",
+              "input_peak": 318.893310546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 1379,
+            "u": 1379,
+            "y": 503
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "gf16": {
+          "status": "nonfinite",
+          "blocked_at": "a",
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 20480,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 20480,
+              "mismatches": 20462,
+              "nmse": 3.441444533853995e-07,
+              "max_abs_error": 0.01354217529296875
+            },
+            "g": {
+              "elements": 55296,
+              "mismatches": 52655,
+              "nmse": 7.092075063402694e-06,
+              "max_abs_error": 1.84033203125
+            },
+            "u": {
+              "elements": 55296,
+              "mismatches": 52655,
+              "nmse": 1.4096089767483283e-05,
+              "max_abs_error": 1.9009380340576172
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1077.79296875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 1675.953125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1077.490234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 1970.71875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "gf16",
+              "input_peak": 2808976.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "gf16",
+              "input_peak": 5535416320.0,
+              "overflow": 3,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 1436,
+            "u": 1436
+          },
+          "per_token_y_nmse_vs_f32": null
+        },
+        "gf16_wide_product": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 20480,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 20480,
+              "mismatches": 20462,
+              "nmse": 3.441444533853995e-07,
+              "max_abs_error": 0.01354217529296875
+            },
+            "g": {
+              "elements": 55296,
+              "mismatches": 52655,
+              "nmse": 7.092075063402694e-06,
+              "max_abs_error": 1.84033203125
+            },
+            "u": {
+              "elements": 55296,
+              "mismatches": 52655,
+              "nmse": 1.4096089767483283e-05,
+              "max_abs_error": 1.9009380340576172
+            },
+            "a": {
+              "elements": 55296,
+              "mismatches": 30918,
+              "nmse": 1.5890359424149444e-06,
+              "max_abs_error": 7029760.0
+            },
+            "s": {
+              "elements": 55296,
+              "mismatches": 30917,
+              "nmse": 1.7222794504187892e-05,
+              "max_abs_error": 0.0404052734375
+            },
+            "y": {
+              "elements": 20480,
+              "mismatches": 20480,
+              "nmse": 0.00020604711904037527,
+              "max_abs_error": 3.9472408294677734
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1077.79296875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 1675.953125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1077.490234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 1970.71875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 2808976.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 5533682688.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "gf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 330,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "gf16",
+              "input_peak": 82.96027374267578,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 10
+            },
+            "s": {
+              "storage": "gf16",
+              "input_peak": 9.7412109375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 9
+            },
+            "y_actquant": {
+              "storage": "gf16",
+              "input_peak": 9.734375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "gf16",
+              "input_peak": 148.232421875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "gf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "gf16",
+              "input_peak": 319.6640625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 1436,
+            "u": 1436,
+            "y": 498
+          },
+          "per_token_y_nmse_vs_f32": [
+            8.133968576220958e-05,
+            8.29778427453354e-05,
+            0.00011280367604585571,
+            0.00018821409434664074,
+            0.0003077282974752084,
+            6.565171075831399e-05,
+            9.121811314880268e-05,
+            4.7696289347621484e-05
+          ]
+        }
+      }
+    },
+    {
+      "prompt_index": 2,
+      "tokens": 17,
+      "calibration": {
+        "x": {
+          "elements": 43520,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "h": {
+          "elements": 43520,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "g": {
+          "elements": 117504,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "u": {
+          "elements": 117504,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "a": {
+          "elements": 117504,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "s": {
+          "elements": 117504,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "y": {
+          "elements": 43520,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        }
+      },
+      "capture_sha256_f32": {
+        "x": "20a3e33b39cec4185ceb6636cd720530878e6082fd7acd7dba199d9b90dacfe1",
+        "h": "2a46bf1e8e1b0b706868f8738498e0edd3031e32c0a8b2be189bc7de620ce7cf",
+        "g": "b1331be86803e3c32681244eff49d7bcab8915f6736bfa56cf869fb8cef865d7",
+        "u": "5d250f9af15b261f17fe6bee371ed78d7943ffed3f14e9a4d6297758837828aa",
+        "a": "85b2de6a559db76f4282b86fb10c80d162006b3dd868d2d10eccd55ccb693cfb",
+        "s": "d0223c4b7feeee709475ec88efeff021046b53148f70774e9ea2a62327cb0680",
+        "y": "5785acc690eb9bf6c0485cb1f81e7b59903c7d3a1d4a3afa7a3d8c5df778be54"
+      },
+      "reference_peaks": {
+        "x": 15.0625,
+        "h": 16.25,
+        "g": 1992.0,
+        "u": 2320.0,
+        "a": 9193914368.0,
+        "s": 16.875,
+        "y": 932.0
+      },
+      "profiles": {
+        "bf16": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 43520,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 43520,
+              "mismatches": 43474,
+              "nmse": 5.427756480145533e-06,
+              "max_abs_error": 0.04895782470703125
+            },
+            "g": {
+              "elements": 117504,
+              "mismatches": 111893,
+              "nmse": 2.7349516579715397e-05,
+              "max_abs_error": 7.09716796875
+            },
+            "u": {
+              "elements": 117504,
+              "mismatches": 111891,
+              "nmse": 6.636617859051843e-05,
+              "max_abs_error": 12.387451171875
+            },
+            "a": {
+              "elements": 117504,
+              "mismatches": 74625,
+              "nmse": 8.953170275946047e-05,
+              "max_abs_error": 103589888.0
+            },
+            "s": {
+              "elements": 117504,
+              "mismatches": 74625,
+              "nmse": 0.00014313903202923584,
+              "max_abs_error": 0.14266347885131836
+            },
+            "y": {
+              "elements": 43520,
+              "mismatches": 43520,
+              "nmse": 0.00036522028923325863,
+              "max_abs_error": 14.62615966796875
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "bf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "bf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "bf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "bf16",
+              "input_peak": 16.2783203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "bf16",
+              "input_peak": 1280.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "bf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "bf16",
+              "input_peak": 1990.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "bf16",
+              "input_peak": 1272.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "bf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "bf16",
+              "input_peak": 2325.375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "bf16",
+              "input_peak": 3968064.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "bf16",
+              "input_peak": 9198632960.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "bf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "bf16",
+              "input_peak": 82.96004486083984,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "bf16",
+              "input_peak": 16.86865234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "bf16",
+              "input_peak": 432.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "bf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "bf16",
+              "input_peak": 931.5,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 0,
+            "u": 0,
+            "y": 0
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.00025334388037757255,
+            0.0005433626094465602,
+            0.00047533150149988996,
+            0.0002536479278946248,
+            0.00047636423144975645,
+            0.00012969940847721683,
+            0.0003187323979731835,
+            0.0002751217581584775,
+            0.0002856345860688918,
+            0.00030938284526105253,
+            0.0005607482734527355,
+            0.0004802333436858039,
+            0.00044256168512118305,
+            0.0004165531840209936,
+            0.00029473403316673325,
+            0.00043867522295326373,
+            0.00013120044381328781
+          ]
+        },
+        "f32": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 43520,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 43520,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "g": {
+              "elements": 117504,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "u": {
+              "elements": 117504,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "a": {
+              "elements": 117504,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "s": {
+              "elements": 117504,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "y": {
+              "elements": 43520,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "f32",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "f32",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "f32",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "f32",
+              "input_peak": 1283.8973388671875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "f32",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "f32",
+              "input_peak": 1996.0592041015625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "f32",
+              "input_peak": 1271.05419921875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "f32",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "f32",
+              "input_peak": 2323.64599609375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 3984252.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 9257992192.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "f32",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "f32",
+              "input_peak": 82.95953369140625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "f32",
+              "input_peak": 16.925823211669922,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "f32",
+              "input_peak": 16.925825119018555,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "f32",
+              "input_peak": 434.4795227050781,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "f32",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "f32",
+              "input_peak": 936.8464965820312,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 2415,
+            "u": 2415,
+            "y": 4600
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "gf16": {
+          "status": "nonfinite",
+          "blocked_at": "a",
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 43520,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 43520,
+              "mismatches": 43472,
+              "nmse": 3.5539415078763775e-07,
+              "max_abs_error": 0.01358795166015625
+            },
+            "g": {
+              "elements": 117504,
+              "mismatches": 111891,
+              "nmse": 6.105878464756125e-06,
+              "max_abs_error": 2.26153564453125
+            },
+            "u": {
+              "elements": 117504,
+              "mismatches": 111894,
+              "nmse": 1.6016297323934635e-05,
+              "max_abs_error": 3.64599609375
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1283.59716796875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 1996.21875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1270.75439453125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 2321.71875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "gf16",
+              "input_peak": 3984016.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "gf16",
+              "input_peak": 9246146560.0,
+              "overflow": 2,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 2533,
+            "u": 2533
+          },
+          "per_token_y_nmse_vs_f32": null
+        },
+        "gf16_wide_product": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 43520,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 43520,
+              "mismatches": 43472,
+              "nmse": 3.5539415078763775e-07,
+              "max_abs_error": 0.01358795166015625
+            },
+            "g": {
+              "elements": 117504,
+              "mismatches": 111891,
+              "nmse": 6.105878464756125e-06,
+              "max_abs_error": 2.26153564453125
+            },
+            "u": {
+              "elements": 117504,
+              "mismatches": 111894,
+              "nmse": 1.6016297323934635e-05,
+              "max_abs_error": 3.64599609375
+            },
+            "a": {
+              "elements": 117504,
+              "mismatches": 74595,
+              "nmse": 2.0501556737755293e-06,
+              "max_abs_error": 15075328.0
+            },
+            "s": {
+              "elements": 117504,
+              "mismatches": 74595,
+              "nmse": 2.849931082255991e-05,
+              "max_abs_error": 0.08207321166992188
+            },
+            "y": {
+              "elements": 43520,
+              "mismatches": 43520,
+              "nmse": 0.00015762622033908705,
+              "max_abs_error": 9.3626708984375
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1283.59716796875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 1996.21875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1270.75439453125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 2321.71875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 3984016.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 9242916864.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "gf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 330,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "gf16",
+              "input_peak": 82.96027374267578,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 9
+            },
+            "s": {
+              "storage": "gf16",
+              "input_peak": 16.8468017578125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 8
+            },
+            "y_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.84375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "gf16",
+              "input_peak": 431.8614501953125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "gf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "gf16",
+              "input_peak": 931.5,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 2533,
+            "u": 2533,
+            "y": 4583
+          },
+          "per_token_y_nmse_vs_f32": [
+            8.133968576220958e-05,
+            0.00021118172426464043,
+            0.00024266689910935898,
+            0.00011019866513918652,
+            0.00021602781354445545,
+            3.120122768603447e-05,
+            0.00012720118079708506,
+            0.000142531836091871,
+            0.000133035964291724,
+            0.00011788578304292239,
+            0.00019825924849019085,
+            0.00017406168769919234,
+            0.00024295061963897256,
+            0.00022518131298881268,
+            8.283525556260056e-05,
+            0.00019459468915248204,
+            4.843183220184151e-05
+          ]
+        }
+      }
+    },
+    {
+      "prompt_index": 3,
+      "tokens": 11,
+      "calibration": {
+        "x": {
+          "elements": 28160,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "h": {
+          "elements": 28160,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "g": {
+          "elements": 76032,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "u": {
+          "elements": 76032,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "a": {
+          "elements": 76032,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "s": {
+          "elements": 76032,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        },
+        "y": {
+          "elements": 28160,
+          "mismatches": 0,
+          "nmse": 0.0,
+          "max_abs_error": 0.0,
+          "bit_mismatches_f32": 0
+        }
+      },
+      "capture_sha256_f32": {
+        "x": "fbcb931003495d9555dc9a9e7830bef66e5cefa13d8f641a0a1eaff5c0437a6c",
+        "h": "446c8be9464f92d9fdb2b22fcfab28d10bf8b38acb833d580ff5e8f626c5c6f0",
+        "g": "15d1f2c998a7b2fe290dc5768f5224beae7aa59048ea0423c0f6b171136a62e6",
+        "u": "1c1ca71e5c2c5f61c4b12df6960150449d6757a08a851bb5399a64a4c3f71c30",
+        "a": "37d374b6f5d5061a6b30d7c8b43c956edcf00225c51afeca399c31a72adb6048",
+        "s": "c0a2c96b13fd2b12c8c94b99acbd8ae35b1977ec631b80117195af08fb25203d",
+        "y": "f86ad33c76283015029f88004a55a18a56b8b051b57f32c163427a7995b00426"
+      },
+      "reference_peaks": {
+        "x": 15.0625,
+        "h": 16.25,
+        "g": 2096.0,
+        "u": 2400.0,
+        "a": 10536091648.0,
+        "s": 15.625,
+        "y": 358.0
+      },
+      "profiles": {
+        "bf16": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 28160,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 28160,
+              "mismatches": 28131,
+              "nmse": 5.407101221067657e-06,
+              "max_abs_error": 0.04895782470703125
+            },
+            "g": {
+              "elements": 76032,
+              "mismatches": 72402,
+              "nmse": 2.8460836324058995e-05,
+              "max_abs_error": 4.997314453125
+            },
+            "u": {
+              "elements": 76032,
+              "mismatches": 72402,
+              "nmse": 5.055878596523769e-05,
+              "max_abs_error": 12.28759765625
+            },
+            "a": {
+              "elements": 76032,
+              "mismatches": 40730,
+              "nmse": 3.137864569047113e-05,
+              "max_abs_error": 51086336.0
+            },
+            "s": {
+              "elements": 76032,
+              "mismatches": 40730,
+              "nmse": 6.305359241746203e-05,
+              "max_abs_error": 0.0716552734375
+            },
+            "y": {
+              "elements": 28160,
+              "mismatches": 28160,
+              "nmse": 0.0003342859985262851,
+              "max_abs_error": 5.314475059509277
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "bf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "bf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "bf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "bf16",
+              "input_peak": 16.2783203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "bf16",
+              "input_peak": 1344.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "bf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "bf16",
+              "input_peak": 2089.5,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "bf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "bf16",
+              "input_peak": 1312.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "bf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "bf16",
+              "input_peak": 2398.5,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "bf16",
+              "input_peak": 4393216.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "bf16",
+              "input_peak": 10538188800.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "bf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "bf16",
+              "input_peak": 82.96004486083984,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "bf16",
+              "input_peak": 15.609375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "bf16",
+              "input_peak": 15.624999046325684,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "bf16",
+              "input_peak": 166.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "bf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "bf16",
+              "input_peak": 357.9375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 0,
+            "u": 0,
+            "y": 0
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.00025334388037757255,
+            0.0005133689418858197,
+            0.00044821551574468623,
+            0.0002610244219236492,
+            0.0003498689294301167,
+            0.00017111067851195344,
+            0.0002118352551906493,
+            0.00017764887754656485,
+            0.00021153904678672825,
+            0.00014019346007438768,
+            0.0001597281535220095
+          ]
+        },
+        "f32": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 28160,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 28160,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "g": {
+              "elements": 76032,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "u": {
+              "elements": 76032,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "a": {
+              "elements": 76032,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "s": {
+              "elements": 76032,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "y": {
+              "elements": 28160,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "f32",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "f32",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "f32",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "f32",
+              "input_peak": 1345.8914794921875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "f32",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "f32",
+              "input_peak": 2092.440673828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "f32",
+              "input_peak": 16.25298500061035,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "f32",
+              "input_peak": 1309.955322265625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "f32",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "f32",
+              "input_peak": 2394.761962890625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 4378308.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 10485005312.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "f32",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "f32",
+              "input_peak": 82.95953369140625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s": {
+              "storage": "f32",
+              "input_peak": 15.585521697998047,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_actquant": {
+              "storage": "f32",
+              "input_peak": 15.585521697998047,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "f32",
+              "input_peak": 166.594970703125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "f32",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "f32",
+              "input_peak": 359.22039794921875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 2108,
+            "u": 2108,
+            "y": 724
+          },
+          "per_token_y_nmse_vs_f32": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        },
+        "gf16": {
+          "status": "nonfinite",
+          "blocked_at": "a",
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 28160,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 28160,
+              "mismatches": 28131,
+              "nmse": 3.498590482997586e-07,
+              "max_abs_error": 0.01354217529296875
+            },
+            "g": {
+              "elements": 76032,
+              "mismatches": 72402,
+              "nmse": 5.400807135127988e-06,
+              "max_abs_error": 1.580047607421875
+            },
+            "u": {
+              "elements": 76032,
+              "mismatches": 72401,
+              "nmse": 1.009565754594996e-05,
+              "max_abs_error": 1.994384765625
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1345.72900390625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 2092.609375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1309.822021484375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 2394.84375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "gf16",
+              "input_peak": 4376464.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "gf16",
+              "input_peak": 10481369088.0,
+              "overflow": 3,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 2089,
+            "u": 2089
+          },
+          "per_token_y_nmse_vs_f32": null
+        },
+        "gf16_wide_product": {
+          "status": "finite",
+          "blocked_at": null,
+          "vs_f32_actquant": {
+            "x": {
+              "elements": 28160,
+              "mismatches": 0,
+              "nmse": 0.0,
+              "max_abs_error": 0.0
+            },
+            "h": {
+              "elements": 28160,
+              "mismatches": 28131,
+              "nmse": 3.498590482997586e-07,
+              "max_abs_error": 0.01354217529296875
+            },
+            "g": {
+              "elements": 76032,
+              "mismatches": 72402,
+              "nmse": 5.400807135127988e-06,
+              "max_abs_error": 1.580047607421875
+            },
+            "u": {
+              "elements": 76032,
+              "mismatches": 72401,
+              "nmse": 1.009565754594996e-05,
+              "max_abs_error": 1.994384765625
+            },
+            "a": {
+              "elements": 76032,
+              "mismatches": 40688,
+              "nmse": 1.3265655970403937e-06,
+              "max_abs_error": 10873344.0
+            },
+            "s": {
+              "elements": 76032,
+              "mismatches": 40688,
+              "nmse": 1.0153812045455171e-05,
+              "max_abs_error": 0.0404052734375
+            },
+            "y": {
+              "elements": 28160,
+              "mismatches": 28160,
+              "nmse": 0.00012574917408325086,
+              "max_abs_error": 3.7856292724609375
+            }
+          },
+          "rounding_events": {
+            "x": {
+              "storage": "gf16",
+              "input_peak": 15.0625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_weight": {
+              "storage": "gf16",
+              "input_peak": 2.234375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h_unit": {
+              "storage": "gf16",
+              "input_peak": 13.166975021362305,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "h": {
+              "storage": "gf16",
+              "input_peak": 16.259033203125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_dot": {
+              "storage": "gf16",
+              "input_peak": 1345.72900390625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g_scale": {
+              "storage": "gf16",
+              "input_peak": 1.5546875,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "g": {
+              "storage": "gf16",
+              "input_peak": 2092.609375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_actquant": {
+              "storage": "gf16",
+              "input_peak": 16.25,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_dot": {
+              "storage": "gf16",
+              "input_peak": 1309.822021484375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u_scale": {
+              "storage": "gf16",
+              "input_peak": 1.828125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "u": {
+              "storage": "gf16",
+              "input_peak": 2394.84375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "relu2": {
+              "storage": "f32",
+              "input_peak": 4376464.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "a": {
+              "storage": "f32",
+              "input_peak": 10486007808.0,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "s_weight": {
+              "storage": "gf16",
+              "input_peak": 4.5625,
+              "overflow": 0,
+              "underflow_to_zero": 330,
+              "subnormal_output": 0
+            },
+            "s_unit": {
+              "storage": "gf16",
+              "input_peak": 82.96027374267578,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 14
+            },
+            "s": {
+              "storage": "gf16",
+              "input_peak": 15.5830078125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 12
+            },
+            "y_actquant": {
+              "storage": "gf16",
+              "input_peak": 15.578125,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_dot": {
+              "storage": "gf16",
+              "input_peak": 166.134521484375,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y_scale": {
+              "storage": "gf16",
+              "input_peak": 2.15625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            },
+            "y": {
+              "storage": "gf16",
+              "input_peak": 358.4765625,
+              "overflow": 0,
+              "underflow_to_zero": 0,
+              "subnormal_output": 0
+            }
+          },
+          "actquant_code_changes_vs_bf16": {
+            "g": 2089,
+            "u": 2089,
+            "y": 711
+          },
+          "per_token_y_nmse_vs_f32": [
+            8.133968576220958e-05,
+            0.00010630695755616142,
+            0.0001821669372920814,
+            0.00011513224022513555,
+            0.00010104486935734818,
+            9.08146967581996e-05,
+            5.909510612910666e-05,
+            7.363162411845157e-05,
+            0.00012224890556634585,
+            5.221711478381889e-05,
+            3.9123395588001156e-05
+          ]
+        }
+      }
+    }
+  ]
+}
