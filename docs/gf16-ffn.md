@@ -88,11 +88,15 @@ E6 invalid GF16 word, E7 scalar overflow, E8 norm index, E9 ActQuant bound.
 Use the pinned compiler from `native/compiler.lock`. Tests require Icarus,
 Verilator, Yosys and a C compiler. The real-input replay additionally uses the
 pinned optional runtime in `tools/bitnet-capture-requirements.txt` and verified
-fixture/capture caches.
+fixture/capture caches. The fixture decoder must be built with
+`T27_ROOT=... sh tools/build-t27.sh`; populate its cache with
+`python tools/fetch-fixtures.py --jobs 4` before the offline replay.
 
 ```sh
 python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_gf16_wide -v
 python tools/replay_gf16_ffn.py --rtl selected
+python tools/fpga-ffn.py prepare --gf16-ffn --zero --run 2 --output build/gf16-zero
+python tools/fpga-ffn.py simulate --vectors build/gf16-zero --output build/gf16-zero-rtl
 ```
 
 The replay recalibrates every saved BF16 stage, compares all 45 real token rows

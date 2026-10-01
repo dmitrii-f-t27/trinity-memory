@@ -30,6 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
+      CC: clang
+      CXX: clang++
       T27_ROOT: ${{ github.workspace }}/build/compiler
       TORCH_COMPILE_DISABLE: '1'
       TRINITY_REQUIRE_CAPTURE_RUNTIME: '1'
@@ -48,7 +50,7 @@ jobs:
           git -C "$T27_ROOT" checkout --detach FETCH_HEAD
           rustup toolchain install 1.94.0 --profile minimal
           sudo apt-get update
-          sudo apt-get install -y iverilog verilator yosys clang
+          sudo apt-get install -y iverilog verilator yosys clang lld libssl-dev
       - uses: actions/cache@v4
         with:
           path: |
@@ -68,6 +70,14 @@ jobs:
             build/bitnet-capture/ranges
             ~/.cache/huggingface/hub
           key: bitnet-capture-${{ hashFiles('fixtures/bitnet-layer0-capture.json') }}
+      - uses: actions/cache@v4
+        with:
+          path: build/fixtures
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+      - name: Build the native fixture decoder and verify pinned fixture ranges
+        run: |
+          sh tools/build-t27.sh
+          python tools/fetch-fixtures.py --jobs 4
       - name: Arithmetic, bounds, rounding, sanitizers and RTL protocol
         run: python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_bitnet_runtime -v
       - name: Capture and require exact BF16 calibration
