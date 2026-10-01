@@ -30,13 +30,20 @@ def main():
     ap.add_argument('--port',required=True); ap.add_argument('--cable',required=True)
     ap.add_argument('--max-temp',type=float,default=70)
     ap.add_argument('--design-hz',type=int,default=60000000)
+    ap.add_argument('--gf16-ffn',action='store_true',help='require GF16 boot, vectors and stage protocol')
     args=ap.parse_args(); out=args.output; out.mkdir(parents=True,exist_ok=False)
     boot=json.loads(args.boot.read_text())
-    if not boot['checks'].get('ffn_header') or not all(boot['checks'].values()):
+    header='gf16_ffn_header' if args.gf16_ffn else 'ffn_header'
+    if not boot['checks'].get(header) or not all(boot['checks'].values()):
         raise ValueError('passing FFN boot evidence required')
     if args.design_hz != 60000000: raise ValueError('this experiment qualifies the 60 MHz configuration only')
     manifest=json.loads((args.vectors/'inputs.json').read_text())
     ref=json.loads((args.vectors/'reference.json').read_text())
+    run_id=ref.get('run',1) if args.gf16_ffn else ref['run']
+    if args.gf16_ffn:
+        sys.path.insert(0,str(ROOT))
+        from tools import gf16_ffn_vectors as gf_vectors
+        gf_vectors.validate_board_inputs(args.vectors, manifest, ref, run_id)
     for region in manifest.values():
         data=(args.vectors/region['file']).read_bytes()
         if len(data)!=region['bytes'] or hashlib.sha256(data).hexdigest()!=region['sha256']:
@@ -119,7 +126,7 @@ def main():
             port.write(proto.load_frame(1,manifest['doorbell']['byte_address'],payload)); port.flush()
             while time.monotonic()<deadline:
                 temperature(); raw.extend(port.read(max(1,port.in_waiting)))
-                if re.search(rb'z'+f'{ref["run"]:08x}'.encode()+rb'0000000000\n',raw):
+                if re.search(rb'z'+f'{run_id:08x}'.encode()+rb'0000000000\n',raw):
                     complete=True; break
                 if re.search(rb'E[0-9a-fA-F]{18}\n',raw): raise RuntimeError('FFN fatal error in capture')
     finally:
@@ -129,9 +136,11 @@ def main():
     # FFN a-high tag, so the acknowledgement cannot alias a numerical result.
     acked=fv.doorbell_acknowledged(bytes(raw))
     if not acked: raise RuntimeError('doorbell load acknowledgement absent')
-    result=fv.validate(bytes(raw),ref['expected'],ref['saturations'],ref['run'])
+    result=(gf_vectors.validate(bytes(raw),ref,run_id) if args.gf16_ffn else
+            fv.validate(bytes(raw),ref['expected'],ref['saturations'],run_id))
     rate(921600,115200,'uart-restored'); temperature(True)
-    result.update(bitstream_sha256=boot['bitstream_sha256'],doorbell_ack=True,f64_error=ref['f64_error'])
+    result.update(bitstream_sha256=boot['bitstream_sha256'],doorbell_ack=True)
+    if not args.gf16_ffn:result['f64_error']=ref['f64_error']
     (out/'result.json').write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result)); return 0
 
 
