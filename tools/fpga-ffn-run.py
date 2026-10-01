@@ -65,6 +65,8 @@ def main():
     ap.add_argument('--port',required=True); ap.add_argument('--cable',required=True)
     ap.add_argument('--max-temp',type=float,default=70)
     ap.add_argument('--design-hz',type=int,default=60000000)
+    ap.add_argument('--capture-baud',type=int,choices=(115200,230400,460800,921600),default=460800,
+                    help='continuous result stream baud; verified uploads still use921600 (default460800)')
     ap.add_argument('--gf16-ffn',action='store_true',help='require GF16 boot, vectors and stage protocol')
     args=ap.parse_args(); out=args.output; out.mkdir(parents=True,exist_ok=False)
     boot=json.loads(args.boot.read_text())
@@ -152,11 +154,13 @@ def main():
     for name in ('gate','up','down','scales','post','sub','x'):
         region=manifest[name]; print('Loading',name,region['bytes'],flush=True)
         load(args.vectors/region['file'],region['byte_address'],'load-'+name)
+    if args.capture_baud!=921600:
+        rate(921600,args.capture_baud,'uart-capture')
     import serial
     raw=bytearray(); acked=False
     payload=(args.vectors/manifest['doorbell']['file']).read_bytes()
     try:
-        with serial.Serial(args.port,921600,timeout=0.05) as port:
+        with serial.Serial(args.port,args.capture_baud,timeout=0.05) as port:
             capture_stream(port,proto.load_frame(1,manifest['doorbell']['byte_address'],payload),
                            raw,run_id,temperature)
     finally:
@@ -167,8 +171,8 @@ def main():
     if not acked: raise RuntimeError('doorbell load acknowledgement absent')
     result=(gf_vectors.validate(bytes(raw),ref,run_id) if args.gf16_ffn else
             fv.validate(bytes(raw),ref['expected'],ref['saturations'],run_id))
-    rate(921600,115200,'uart-restored'); temperature(True)
-    result.update(bitstream_sha256=boot['bitstream_sha256'],doorbell_ack=True)
+    rate(args.capture_baud,115200,'uart-restored'); temperature(True)
+    result.update(bitstream_sha256=boot['bitstream_sha256'],doorbell_ack=True,capture_baud=args.capture_baud)
     if not args.gf16_ffn:result['f64_error']=ref['f64_error']
     (out/'result.json').write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result)); return 0
 
