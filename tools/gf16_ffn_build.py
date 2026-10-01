@@ -47,9 +47,10 @@ def run_sim(work, command, inp, expected):
     return vectors.validate(capture.read_bytes(),expected)
 
 
-def simulate(work, rtl, model, x, expected, simulator='iverilog', mem_base=2, out_base=1):
+def simulate(work, rtl, model, x, expected, simulator='iverilog', mem_base=2, out_base=1, trace='full'):
     work=Path(work).resolve();work.mkdir(parents=True,exist_ok=True)
-    inp=vectors.write_inputs(work,model,x)
+    inp=vectors.write_inputs(work,model,x,trace=trace)
+    expected={**expected,"trace":trace}
     shape=(model['shapes']['gate'][1],model['shapes']['gate'][0],model['shapes']['down'][0])
     command=compile_sim(work,rtl,shape,simulator,mem_base,out_base)
     return run_sim(work,command,inp,expected)
