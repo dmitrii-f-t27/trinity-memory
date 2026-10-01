@@ -27,6 +27,10 @@ It also verifies five complete replay captures (163,840 stage values and
 All 45 integer input rows have the same input/stage/ActQuant/code hashes as
 the published iteration-5 report. The new replay report is
 [gf16-ffn-performance-replay.json](../../numeric/gf16-ffn-performance-replay.json).
+The [Linux CI run](https://github.com/dmitrii-f-t27/trinity-memory/actions/runs/36939837659)
+also passed: x86_64 and macOS arm64 match every source hash, all 45 integer
+rows, all five raw RTL captures and both modes' clock/phase measurements.
+The corresponding `*-linux.json` reports are checked by the portable verifier.
 See [the measurement contract](../../../docs/gf16-ffn-performance.md) for the
 active window and scope limitations. Simulation report-delay parameters must
 not be interpreted as physical UART throughput.

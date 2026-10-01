@@ -57,3 +57,17 @@ for record in replay['rtl']:
             assert hashlib.sha256(struct.pack('<'+fmt*len(values),*values)).hexdigest()==row[key][name]
     print(folder.name,'exact replay PASS')
 print('45 input rows unchanged; all replay source hashes match the current tree')
+
+linux_path=ROOT/'reports/numeric/gf16-ffn-performance-replay-linux.json'
+if linux_path.exists():
+    linux=json.loads(linux_path.read_text())
+    assert linux['machine']=='x86_64' and replay['machine']=='arm64'
+    assert linux['source_sha256']==replay['source_sha256']
+    assert [c['rows'] for c in linux['cases']]==[c['rows'] for c in replay['cases']]
+    assert linux['rtl']==replay['rtl']
+    measured=json.loads((ROOT/'reports/numeric/gf16-ffn-performance-linux.json').read_text())
+    assert measured['sources_sha256']==b['sources_sha256']
+    for mode in ('full','result'):
+        for key in ('clock_split','phase_clocks','projection_loop_clocks','stage_values','actquant_values'):
+            assert measured['runs'][mode][key]==b['runs'][mode][key]
+    print('Linux x86_64 / macOS arm64 exact replay and phase-counter parity PASS')
