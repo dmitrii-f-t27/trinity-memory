@@ -33,6 +33,8 @@ module tb_gf16_ffn;
         if (rst_n) begin
             if(dut.core.projection_read !== (dut.core.phase==3 || dut.core.phase==4 || dut.core.phase==7))
                 $fatal(1,"registered projection address selection differs from phase");
+            if(dut.core.active && ((dut.core.projection_read ? dut.core.col : dut.core.index)>=8192 || dut.core.row>=8192))
+                $fatal(1,"live GF16 RAM index exceeds physical address width");
             was_active<=dut.core.active;
             if (dut.core.active) begin
                 if (!was_active) begin
