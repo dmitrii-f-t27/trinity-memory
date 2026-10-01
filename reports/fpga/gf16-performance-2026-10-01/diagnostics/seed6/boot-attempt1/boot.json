@@ -1,0 +1,225 @@
+{
+ "build_report": "reports/fpga/gf16-performance-2026-10-01/accelerated/build/build.json",
+ "bitstream_sha256": "7f31b8d767d9ad6cd19c34effa8724f59c9173d8a7dddfb19ca0125cc53b9e77",
+ "checks": {
+  "board_steps": true,
+  "hello_build_id": true,
+  "gf16_ffn_header": false
+ },
+ "uart_sha256": "34de64215a0f104fd3cfb2d7712d2ece8f1583dd0fff92f61280502ac4200fdb",
+ "lines": [
+  [
+   "H",
+   3054372604,
+   803210009866
+  ]
+ ],
+ "run": {
+  "t0_utc": "2026-10-01T23:28:08.533Z",
+  "t0_note": "every *_s value is host seconds after t0 on one monotonic clock",
+  "steps": {
+   "idcode": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--detect"
+    ],
+    "started_utc": "2026-10-01T23:28:08.534Z",
+    "ended_utc": "2026-10-01T23:28:08.660Z",
+    "start_s": 0.0002,
+    "end_s": 0.127,
+    "returncode": 0,
+    "output": [
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "index 0:",
+     "\tidcode 0x3636093",
+     "\tmanufacturer xilinx",
+     "\tfamily artix a7 200t",
+     "\tmodel  xc7a200",
+     "\tirlength 6"
+    ]
+   },
+   "dna": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--read-dna"
+    ],
+    "started_utc": "2026-10-01T23:28:08.660Z",
+    "ended_utc": "2026-10-01T23:28:08.699Z",
+    "start_s": 0.1271,
+    "end_s": 0.1658,
+    "returncode": 0,
+    "output": [
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"dna\": \"0x00389c0c2d85e85c\"}"
+    ]
+   },
+   "xadc_before": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-10-01T23:28:08.699Z",
+    "ended_utc": "2026-10-01T23:28:08.825Z",
+    "start_s": 0.1659,
+    "end_s": 0.2912,
+    "returncode": 0,
+    "output": [
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 52.8946, ",
+     "    \"maxtemp\": 53.7693, ",
+     "    \"mintemp\": 49.5783, ",
+     "\"raw\":  {\"0\": 42400, \"1\": 21719, \"2\": 39095, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21717, \"7\": 0},",
+     "\"vccint\": 0.993896, ",
+     "   \"maxvccint\": 0.996094, ",
+     "   \"minvccint\": 0.991699, ",
+     "\"vccaux\": 1.78931, ",
+     "   \"maxvccaux\": 1.79224, ",
+     "   \"minvccaux\": 1.78638, ",
+     "}"
+    ]
+   },
+   "load": {
+    "cmd": [
+     "make",
+     "-s",
+     "-C",
+     "fpga/ax7203",
+     "ddr3-flash",
+     "DDR3_BUILD=build/gf16-performance/board-b60e06fc",
+     "DDR3_FLASH_REPORT=reports/fpga/gf16-performance-2026-10-01/accelerated/build/build.json",
+     "OPENFPGALOADER=openFPGALoader",
+     "DDR3_CABLE=digilent_hs3"
+    ],
+    "started_utc": "2026-10-01T23:28:09.903Z",
+    "ended_utc": "2026-10-01T23:28:23.449Z",
+    "start_s": 1.3698,
+    "end_s": 14.9159,
+    "returncode": 0,
+    "output": [
+     "ddr3-flash: build/gf16-performance/board-b60e06fc/tms_ddr3_loader_ax7203.bit sha256 7f31b8d767d9ad6cd19c34effa8724f59c9173d8a7dddfb19ca0125cc53b9e77 as in reports/fpga/gf16-performance-2026-10-01/accelerated/build/build.json (whole file)",
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "Open file build/gf16-performance/board-b60e06fc/tms_ddr3_loader_ax7203.bit DONE",
+     "Parse file Unknown key Generator",
+     "DONE",
+     "load program",
+     "",
+     "Load SRAM: [====                                              ] 7.00%",
+     "",
+     "Load SRAM: [========                                          ] 15.00%",
+     "",
+     "Load SRAM: [============                                      ] 23.00%",
+     "",
+     "Load SRAM: [================                                  ] 31.00%",
+     "",
+     "Load SRAM: [====================                              ] 39.00%",
+     "",
+     "Load SRAM: [========================                          ] 47.00%",
+     "",
+     "Load SRAM: [============================                      ] 55.00%",
+     "",
+     "Load SRAM: [================================                  ] 63.00%",
+     "",
+     "Load SRAM: [====================================              ] 71.00%",
+     "",
+     "Load SRAM: [========================================          ] 79.00%",
+     "",
+     "Load SRAM: [============================================      ] 87.00%",
+     "",
+     "Load SRAM: [================================================  ] 95.00%",
+     "",
+     "Load SRAM: [==================================================] 100.00%",
+     "",
+     "Done",
+     "Shift IR 35",
+     "ir: 1 isc_done 1 isc_ena 0 init 1 done 1"
+    ]
+   },
+   "xadc_after": {
+    "cmd": [
+     "openFPGALoader",
+     "-c",
+     "digilent_hs3",
+     "--read-xadc"
+    ],
+    "started_utc": "2026-10-01T23:28:38.630Z",
+    "ended_utc": "2026-10-01T23:28:38.786Z",
+    "start_s": 30.097,
+    "end_s": 30.2537,
+    "returncode": 0,
+    "output": [
+     "Jtag frequency : requested 6.00MHz    -> real 6.00MHz   ",
+     "{\"temp\": 52.2121, ",
+     "    \"maxtemp\": 53.1541, ",
+     "    \"mintemp\": 50.8625, ",
+     "\"raw\":  {\"0\": 42306, \"1\": 21717, \"2\": 39087, \"3\": 0, \"4\": 0, \"5\": 0, \"6\": 21731, \"7\": 0},",
+     "\"vccint\": 0.993896, ",
+     "   \"maxvccint\": 0.995361, ",
+     "   \"minvccint\": 0.992432, ",
+     "\"vccaux\": 1.79004, ",
+     "   \"maxvccaux\": 1.79224, ",
+     "   \"minvccaux\": 1.78711, ",
+     "}"
+    ]
+   }
+  },
+  "idcode": "0x3636093",
+  "dna": "0x00389c0c2d85e85c",
+  "xadc_before": {
+   "temp": 52.8946,
+   "maxtemp": 53.7693,
+   "mintemp": 49.5783,
+   "raw": {
+    "0": 42400,
+    "1": 21719,
+    "2": 39095,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21717,
+    "7": 0
+   },
+   "vccint": 0.993896,
+   "maxvccint": 0.996094,
+   "minvccint": 0.991699,
+   "vccaux": 1.78931,
+   "maxvccaux": 1.79224,
+   "minvccaux": 1.78638
+  },
+  "uart_entries": [
+   {
+    "t_s": 14.9143,
+    "utc": "2026-10-01T23:28:23.447Z",
+    "line": "Hb60e06fcbb030c1d0a"
+   }
+  ],
+  "uart_error": null,
+  "xadc_after": {
+   "temp": 52.2121,
+   "maxtemp": 53.1541,
+   "mintemp": 50.8625,
+   "raw": {
+    "0": 42306,
+    "1": 21717,
+    "2": 39087,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+    "6": 21731,
+    "7": 0
+   },
+   "vccint": 0.993896,
+   "maxvccint": 0.995361,
+   "minvccint": 0.992432,
+   "vccaux": 1.79004,
+   "maxvccaux": 1.79224,
+   "minvccaux": 1.78711
+  },
+  "load_end_s": 14.9159
+ }
+}
