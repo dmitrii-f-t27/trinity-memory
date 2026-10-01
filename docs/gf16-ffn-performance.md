@@ -45,6 +45,10 @@ RAM read and Q39 conversion prepare the next term. Only the first trit in each
 DDR word needs the two startup states; later trits use three clocks each.
 This preserves the signed128 accumulator and both scalar GF16 rounding/fault
 boundaries. No approximate accumulation or early rounding is introduced.
+The column/index read-address choice uses a registered projection flag, set at
+projection entry and cleared before normalization. The testbench checks its
+equivalence to the three projection phases on every clock; it removes a state
+range decoder from the RAM address path without changing the schedule.
 
 At full shape, the expected inner-loop count is
 `3 * 53,084,160 + 2 * 829,440 = 160,911,360` clocks. The ratio of loop counts is

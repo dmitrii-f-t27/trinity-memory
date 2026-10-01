@@ -73,6 +73,8 @@ var memory_cycles: u64 = 0;
 // Disjoint phase clocks count the same active window as cycles.
 // Full trace includes report backpressure; result-only drains y after active ends.
 var phase: u32 = 0;
+// Registered address selection: avoid a state-range decoder on the RAM path.
+var projection_read: bool = false;
 var phase0: u64 = 0;
 var phase1: u64 = 0;
 var phase2: u64 = 0;
@@ -183,7 +185,7 @@ var dot_sign: u32 = 0;
 var dot_word: u32 = 0;
 norm_out_ready = state == 20;
 s_idle = !sbuf;
-vec_addr = choose((state >= 73 && state <= 76) || state == 83,col,index);
+vec_addr = choose(projection_read,col,index);
 value40lo = magnitude0 << 1; value40hi = (magnitude1 << 1) | (magnitude0 >> 63);
 numerator0 = value40lo << 7; numerator1 = (value40hi << 7) | (value40lo >> 57);
 trit_negative = ((weight0 & 3) == 2) != ((vr & 32768) != 0);
@@ -229,7 +231,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if ((read0 >> 32) == 1195787825 && (read0 as u32) != 0 && (read0 as u32) != last_run) {
             last_run = read0 as u32; run_id = read0 as u32; index = 0; active = true;
             cycles = 0; report_cycles = 0; memory_cycles = 0; error_code = 0; state = 8;
-            phase = 0; phase0 = 0; phase1 = 0; phase2 = 0; phase3 = 0;
+            projection_read = false; phase = 0; phase0 = 0; phase1 = 0; phase2 = 0; phase3 = 0;
             phase4 = 0; phase5 = 0; phase6 = 0; phase7 = 0; projection_cycles = 0;
             result_only = read1 == 1;
             if (read1 > 1) { error_code = 10; state = 900; }
@@ -246,7 +248,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         else { index = index+1; state = 3; }
         if (!valid_word(read0,read1)) { error_code = 6; state = 900; }
     } else if (state == 10) {
-        phase = 1; norm_kind = 0; norm_length = hidden; length = hidden; norm_start = true; index = 0; state = 11;
+        projection_read = false; phase = 1; norm_kind = 0; norm_length = hidden; length = hidden; norm_start = true; index = 0; state = 11;
     } else if (state == 11) {
         wb_addr = 4096+index; wb_stb = true; response = 12; state = 200; quiet = 0;
     } else if (state == 12) {
@@ -281,7 +283,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (index+1 == length) { state = 50; }
         else { index = index+1; state = 20; }
     } else if (state == 40) {
-        phase = 5; norm_kind = 1; norm_length = inner; length = inner; norm_start = true; index = 0; state = 13;
+        projection_read = false; phase = 5; norm_kind = 1; norm_length = inner; length = inner; norm_start = true; index = 0; state = 13;
     } else if (state == 50) {
         phase = choose(norm_kind == 0,2,6); peak = 0; index = 0; state = 51;
     } else if (state == 51) { state = 52;
@@ -334,7 +336,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (index+1 == length) { stage = choose(norm_kind == 0,1,5); state = 70; }
         else { index = index+1; state = 55; }
     } else if (state == 70) {
-        phase = choose(stage == 1,3,choose(stage == 2,4,7));
+        projection_read = true; phase = choose(stage == 1,3,choose(stage == 2,4,7));
         row = 0; col = 0; acc0 = 0; acc1 = 0;
         ncols = choose(stage == 5,inner,hidden); nrows = choose(stage == 5,output_rows,inner);
         weight_addr = choose(stage == 1,65536,choose(stage == 2,393216,720896)); state = 71;
