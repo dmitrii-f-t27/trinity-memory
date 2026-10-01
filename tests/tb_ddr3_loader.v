@@ -130,6 +130,11 @@ module tb_ddr3_loader;
         if (out0 + out1 > max_out) max_out = out0 + out1;
         if (dut.master.read_ack && dut.master.drop_now) drops = drops + 1;
     end
+    // Registered credit lookahead must preserve the exact original handshake.
+    always @(negedge mclk) begin
+        if (dut.app_rst_n && dut.master.credit_available !== (dut.master.outst < 8))
+            $fatal(1,"loader credit differs from outstanding count");
+    end
     // Hits are decided before the clock edge: sampled at the falling edge, the model holds every
     // write taken so far and the kept word must equal it.
     always @(negedge mclk) begin

@@ -117,8 +117,8 @@ def replay(report_path, arrays_path, work, rtl_count):
         (work/'rtl.log').write_text(sim)
         rtl_result={'simulator':build.run(['verilator','--version']).strip(),
                     'rows':chosen,'values':sum(len(rows[i][0]) for i in chosen),'log':sim}
-    names=['t27/rtl/gf16_wide_norm.t27','t27/rtl/ffn_wide.t27','rtl/t27/gf16_wide_norm.v',
-           'tools/gf16_wide_reference.py','tools/gf16_wide_build.py','tools/replay_gf16_wide.py']
+    names=['t27/rtl/gf16_scalar.t27','tools/gf16_wide_build.py','t27/rtl/gf16_wide_norm.t27','t27/rtl/ffn_wide.t27','rtl/t27/gf16_wide_norm.v',
+           'tools/gf16_wide_reference.py','tools/replay_gf16_wide.py']
     result={'schema':'trinity.gf16-wide-norm.v1','profile':'gf16-wide-norm-v1',
         'source_sha256':{p:sha((ROOT/p).read_bytes()) for p in names},
         'compiler':(ROOT/'native/compiler.lock').read_text().strip(),'runtime':capture.VERSIONS,

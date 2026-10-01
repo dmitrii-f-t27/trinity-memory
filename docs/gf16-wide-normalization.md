@@ -5,6 +5,13 @@ This standalone kernel addresses the product overflows in the
 [real activation capture](gf16-bitnet-runtime.md). Its arithmetic profile is
 `gf16-wide-norm-v1`; scalar encoding remains `gf16-rne-gradual-v1`.
 
+
+Iteration 5 integrates this arithmetic into the [full GF16 FFN](gf16-ffn.md).
+The kernel now uses a clocked scalar datapath and separate reduction stages to
+shorten combinational paths. The numerical profile is unchanged. The iteration-4
+reports below retain their original source hashes and resource measurements;
+they do not describe the current integrated board implementation.
+
 ## Contract and bounds
 
 Accept 1..6912 pairs of finite GF16 gate/up values and finite GF16 norm weights.

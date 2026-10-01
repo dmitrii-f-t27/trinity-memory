@@ -241,7 +241,11 @@ module tms_ddr3_loader_ax7203 #(
     wire [31:0] mv_addr, mv_tag, mv_a, mv_s_tag, mv_s_a;
     wire [63:0] mv_b, mv_s_b;
 `ifdef DDR3_LOADER_FFN
+`ifdef DDR3_LOADER_GF16_FFN
+    trinity_gf16_ffn_t27 ffn (
+`else
     trinity_ffn_t27 ffn (
+`endif
         .clk(clk_ctrl), .rst_n(app_rst_n), .calib(calib_complete), .stall(m1_stall), .ack(m1_ack),
         .rdata_lo(wb_rdata[63:0]), .rdata_hi(wb_rdata[127:64]),
         .hidden(32'd2560), .inner(32'd6912), .output_rows(32'd2560),
