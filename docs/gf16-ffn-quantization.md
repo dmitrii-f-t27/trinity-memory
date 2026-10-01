@@ -1,5 +1,9 @@
 # GF16 / BF16 FFN boundary precision — iteration 2
 
+Follow-up: [text-derived runtime captures](gf16-bitnet-runtime.md) include
+ActQuant and reveal product overflows absent from these ordinary synthetic
+probes. Use that evidence before narrowing the FFN product to GF16.
+
 Issue [#105](https://github.com/dmitrii-f-t27/trinity-memory/issues/105).
 The [replayable report](../reports/numeric/ffn-quantization-v1.json) measures
 **real layer-0 BitNet weights with synthetic hidden-state inputs**. These are

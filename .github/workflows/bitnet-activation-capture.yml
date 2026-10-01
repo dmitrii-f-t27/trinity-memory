@@ -1,0 +1,49 @@
+name: BitNet layer-0 activation capture
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'tools/bitnet_ffn_runtime.py'
+      - 'tools/capture_bitnet_layer0.py'
+      - 'tools/bitnet-capture-requirements.txt'
+      - 'fixtures/bitnet-layer0-capture.json'
+      - 'tests/test_bitnet_runtime.py'
+      - '.github/workflows/bitnet-activation-capture.yml'
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TORCH_COMPILE_DISABLE: '1'
+      TRINITY_REQUIRE_CAPTURE_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: tools/bitnet-capture-requirements.txt
+      - name: Install optional experiment runtime
+        run: |
+          python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r tools/bitnet-capture-requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/bitnet-capture/metadata
+            build/bitnet-capture/ranges
+            ~/.cache/huggingface/hub
+          key: bitnet-capture-${{ hashFiles('fixtures/bitnet-layer0-capture.json') }}
+      - name: Codec, ActQuant and arithmetic controls
+        run: python -m unittest tests.test_bitnet_runtime -v
+      - name: Capture real layer-0 states and require exact BF16 calibration
+        run: python tools/capture_bitnet_layer0.py --fetch --output build/bitnet-capture/linux-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bitnet-layer0-capture
+          path: |
+            build/bitnet-capture/linux-report.json
+            build/bitnet-capture/captures.npz
