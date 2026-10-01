@@ -13,6 +13,7 @@ import random
 import re
 import subprocess
 import sys
+import threading
 import time
 from types import SimpleNamespace
 
@@ -20,6 +21,40 @@ import ffn_vectors as fv
 import uart_loader_protocol as proto
 
 ROOT=Path(__file__).resolve().parents[1]
+
+
+def capture_stream(port, payload, raw, run_id, temperature, timeout=180):
+    """Drain UART continuously, including while the main thread checks XADC."""
+    stop=threading.Event(); done=threading.Event(); errors=[]
+    finish=re.compile(rb'z'+f'{run_id:08x}'.encode()+rb'0000000000\n')
+    fatal=re.compile(rb'E[0-9a-fA-F]{18}\n')
+    def receive():
+        tail=b''
+        try:
+            while not stop.is_set():
+                chunk=port.read(4096)
+                if not chunk: continue
+                raw.extend(chunk)
+                # Scan only new bytes and a partial line, never the whole
+                # growing capture on every byte (quadratic at high baud).
+                window=tail+chunk;tail=window[-20:]
+                if fatal.search(window):
+                    errors.append(RuntimeError('FFN fatal error in capture'));done.set();return
+                if finish.search(window): done.set();return
+        except Exception as error:
+            errors.append(error);done.set()
+    port.reset_input_buffer()
+    reader=threading.Thread(target=receive,name='ffn-uart-reader')
+    reader.start()
+    try:
+        port.write(payload);port.flush();deadline=time.monotonic()+timeout
+        while not done.wait(0.05):
+            temperature()
+            if time.monotonic()>=deadline: raise TimeoutError('no FFN completion')
+        if errors: raise errors[0]
+    finally:
+        stop.set();reader.join(timeout=2)
+        if reader.is_alive(): raise RuntimeError('UART reader did not stop; use a finite serial timeout')
 
 
 def main():
@@ -118,20 +153,14 @@ def main():
         region=manifest[name]; print('Loading',name,region['bytes'],flush=True)
         load(args.vectors/region['file'],region['byte_address'],'load-'+name)
     import serial
-    raw=bytearray(); complete=False; acked=False
+    raw=bytearray(); acked=False
     payload=(args.vectors/manifest['doorbell']['file']).read_bytes()
     try:
         with serial.Serial(args.port,921600,timeout=0.05) as port:
-            port.reset_input_buffer(); deadline=time.monotonic()+180
-            port.write(proto.load_frame(1,manifest['doorbell']['byte_address'],payload)); port.flush()
-            while time.monotonic()<deadline:
-                temperature(); raw.extend(port.read(max(1,port.in_waiting)))
-                if re.search(rb'z'+f'{run_id:08x}'.encode()+rb'0000000000\n',raw):
-                    complete=True; break
-                if re.search(rb'E[0-9a-fA-F]{18}\n',raw): raise RuntimeError('FFN fatal error in capture')
+            capture_stream(port,proto.load_frame(1,manifest['doorbell']['byte_address'],payload),
+                           raw,run_id,temperature)
     finally:
         (out/'capture.txt').write_bytes(raw)
-    if not complete: raise TimeoutError('no FFN completion')
     # Loader acknowledgement is a separate CRC-checked protocol line. J is the
     # FFN a-high tag, so the acknowledgement cannot alias a numerical result.
     acked=fv.doorbell_acknowledged(bytes(raw))

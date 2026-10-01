@@ -10,6 +10,10 @@ on:
       - 'tests/test_gf16_ffn.py'
       - 'tests/tb_gf16_ffn.v'
       - 'tests/test_gf16_scalar.py'
+      - 'tests/test_ffn_capture.py'
+      - 'tests/test_ffn_boot.py'
+      - 'tools/fpga-ffn-run.py'
+      - 'tools/fpga-matvec-boot.py'
       - 't27/rtl/gf16_wide_norm.t27'
       - 't27/rtl/gf16_scalar.t27'
       - 't27/rtl/ffn_wide.t27'
@@ -79,7 +83,7 @@ jobs:
           sh tools/build-t27.sh
           python tools/fetch-fixtures.py --jobs 4
       - name: Arithmetic, bounds, rounding, sanitizers and RTL protocol
-        run: python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_bitnet_runtime -v
+        run: python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_bitnet_runtime tests.test_ffn_boot tests.test_ffn_capture -v
       - name: Capture and require exact BF16 calibration
         run: python tools/capture_bitnet_layer0.py --fetch --output build/bitnet-capture/linux-report.json
       - name: Compare all 45 rows and replay five complete FFNs through RTL
