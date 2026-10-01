@@ -57,6 +57,23 @@ def capture_stream(port, payload, raw, run_id, temperature, timeout=180):
         if reader.is_alive(): raise RuntimeError('UART reader did not stop; use a finite serial timeout')
 
 
+def trace_runs(reference, payload, paired=False):
+    """Plan a fresh full run and optional result run using unchanged DDR inputs."""
+    run = reference.get('run', 1)
+    first = ('', reference, run, payload)
+    if not paired:
+        return [first]
+    if (reference.get('profile') != 'gf16-ffn-v1' or
+            reference.get('trace', 'full') != 'full' or not 0 < run < 2**32-1):
+        raise ValueError('trace pair requires full GF16 vectors and a spare run ID')
+    magic = 0x47464631
+    if payload != (run | (magic << 32)).to_bytes(16, 'little'):
+        raise ValueError('trace pair initial descriptor differs')
+    following = {**reference, 'run':run+1, 'trace':'result'}
+    descriptor = ((run+1) | (magic << 32) | (1 << 64)).to_bytes(16, 'little')
+    return [first, ('result-only', following, run+1, descriptor)]
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--vectors',type=Path,required=True)
@@ -67,8 +84,11 @@ def main():
     ap.add_argument('--design-hz',type=int,default=60000000)
     ap.add_argument('--capture-baud',type=int,choices=(115200,230400,460800,921600),default=460800,
                     help='continuous result stream baud; verified uploads still use921600 (default460800)')
+    ap.add_argument('--trace-pair',action='store_true',help='GF16: run full then result-only on the same newly uploaded/readback-verified inputs')
     ap.add_argument('--gf16-ffn',action='store_true',help='require GF16 boot, vectors and stage protocol')
-    args=ap.parse_args(); out=args.output; out.mkdir(parents=True,exist_ok=False)
+    args=ap.parse_args()
+    if args.trace_pair and not args.gf16_ffn:ap.error('--trace-pair requires --gf16-ffn')
+    out=args.output; out.mkdir(parents=True,exist_ok=False)
     boot=json.loads(args.boot.read_text())
     header='gf16_ffn_header' if args.gf16_ffn else 'ffn_header'
     if not boot['checks'].get(header) or not all(boot['checks'].values()):
@@ -85,6 +105,8 @@ def main():
         data=(args.vectors/region['file']).read_bytes()
         if len(data)!=region['bytes'] or hashlib.sha256(data).hexdigest()!=region['sha256']:
             raise ValueError('input payload hash mismatch')
+    payload=(args.vectors/manifest['doorbell']['file']).read_bytes()
+    planned=trace_runs(ref,payload,args.trace_pair)
     (out/'command.json').write_text(json.dumps({'argv':sys.argv,'bitstream_sha256':boot['bitstream_sha256'],
         'vectors':str(args.vectors.resolve()),'boot':str(args.boot.resolve()),
         'tool_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -157,24 +179,41 @@ def main():
     if args.capture_baud!=921600:
         rate(921600,args.capture_baud,'uart-capture')
     import serial
-    raw=bytearray(); acked=False
-    payload=(args.vectors/manifest['doorbell']['file']).read_bytes()
+    results=[]
     try:
-        with serial.Serial(args.port,args.capture_baud,timeout=0.05) as port:
-            capture_stream(port,proto.load_frame(1,manifest['doorbell']['byte_address'],payload),
-                           raw,run_id,temperature)
+        for name,reference,current_run,descriptor in planned:
+            folder=out/name;folder.mkdir(exist_ok=True)
+            if name:
+                # Only the descriptor changes. No intervening upload, reset or
+                # FPGA reconfiguration occurs between the two captures.
+                (folder/'reference.json').write_text(json.dumps(reference,indent=1)+'\n')
+                (folder/'doorbell.bin').write_bytes(descriptor)
+            temperature(True)
+            raw=bytearray()
+            try:
+                with serial.Serial(args.port,args.capture_baud,timeout=0.05) as port:
+                    capture_stream(port,proto.load_frame(1,manifest['doorbell']['byte_address'],descriptor),
+                                   raw,current_run,temperature)
+            finally:
+                (folder/'capture.txt').write_bytes(raw)
+            if not fv.doorbell_acknowledged(bytes(raw)):
+                raise RuntimeError('doorbell load acknowledgement absent')
+            result=(gf_vectors.validate(bytes(raw),reference,current_run) if args.gf16_ffn else
+                    fv.validate(bytes(raw),reference['expected'],reference['saturations'],current_run))
+            result.update(bitstream_sha256=boot['bitstream_sha256'],doorbell_ack=True,capture_baud=args.capture_baud)
+            if name:
+                result['input_reuse']={'source':'../', 'first_run':run_id,
+                    'manifest_sha256':hashlib.sha256((args.vectors/'inputs.json').read_bytes()).hexdigest(),
+                    'doorbell_sha256':hashlib.sha256(descriptor).hexdigest(),
+                    'scope':'same freshly uploaded/readback-verified inputs; only descriptor changed'}
+            if not args.gf16_ffn:result['f64_error']=ref['f64_error']
+            results.append((folder,result))
     finally:
-        (out/'capture.txt').write_bytes(raw)
-    # Loader acknowledgement is a separate CRC-checked protocol line. J is the
-    # FFN a-high tag, so the acknowledgement cannot alias a numerical result.
-    acked=fv.doorbell_acknowledged(bytes(raw))
-    if not acked: raise RuntimeError('doorbell load acknowledgement absent')
-    result=(gf_vectors.validate(bytes(raw),ref,run_id) if args.gf16_ffn else
-            fv.validate(bytes(raw),ref['expected'],ref['saturations'],run_id))
-    rate(args.capture_baud,115200,'uart-restored'); temperature(True)
-    result.update(bitstream_sha256=boot['bitstream_sha256'],doorbell_ack=True,capture_baud=args.capture_baud)
-    if not args.gf16_ffn:result['f64_error']=ref['f64_error']
-    (out/'result.json').write_text(json.dumps(result,indent=2)+'\n'); print(json.dumps(result)); return 0
+        rate(args.capture_baud,115200,'uart-restored')
+    temperature(True)
+    for folder,result in results:
+        (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result),flush=True)
+    return 0
 
 
 if __name__=='__main__':
