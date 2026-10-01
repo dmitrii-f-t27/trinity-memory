@@ -346,15 +346,18 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     } else if (state == 83) { state = 74;
     } else if (state == 74) {
         term0 = trit0; term1 = trit1; state = 75;
+        // Advance the read address now. While this term passes through the
+        // two-stage signed128 accumulator, vr and its Q39 magnitude fetch
+        // the next lane. Startup states73/83 are needed only after a DDR word.
+        weight0 = (weight0 >> 2) | (weight1 << 62); weight1 = weight1 >> 2; col = col+1;
         if ((weight0 & 3) == 3) { error_code = 3; state = 900; }
     } else if (state == 75) {
         add0 = acc0+term0; add1 = acc1+term1; add_carry = carry(acc0,term0); state = 76;
     } else if (state == 76) {
         acc0 = add0; acc1 = add1+add_carry;
-        weight0 = (weight0 >> 2) | (weight1 << 62); weight1 = weight1 >> 2; col = col+1;
-        if (col+1 == ncols) { weight_addr = weight_addr+1; state = 77; }
-        else if ((col & 63) == 63) { weight_addr = weight_addr+1; state = 71; }
-        else { state = 73; }
+        if (col == ncols) { weight_addr = weight_addr+1; state = 77; }
+        else if ((col & 63) == 0) { weight_addr = weight_addr+1; state = 71; }
+        else { state = 74; }
     } else if (state == 77) { state = 78;
     } else if (state == 78) {
         scalar_mode = 3; scalar_x = dot_m0; scalar_y = dot_m1; scalar_r0 = 0; scalar_r1 = 0;
