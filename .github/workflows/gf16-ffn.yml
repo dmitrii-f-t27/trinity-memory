@@ -7,6 +7,8 @@ on:
       - 'rtl/t27/gf16_ffn.v'
       - 'tools/gf16_ffn_*.py'
       - 'tools/replay_gf16_ffn.py'
+      - 'tools/measure_gf16_ffn.py'
+      - 'tools/fpga-ffn.py'
       - 'tests/test_gf16_ffn.py'
       - 'tests/tb_gf16_ffn.v'
       - 'tests/test_gf16_scalar.py'
@@ -95,12 +97,20 @@ jobs:
           python tools/replay_gf16_ffn.py --rtl selected
           --capture-report build/bitnet-capture/linux-report.json
           --output build/gf16-ffn/linux-report.json
+      - name: Measure full and result-only clocks on the same BOS input
+        run: >-
+          python tools/measure_gf16_ffn.py
+          --vectors build/gf16-ffn/replay/prompt-0-token-0
+          --output build/gf16-ffn/performance
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: gf16-full-ffn
           path: |
             build/gf16-ffn/linux-report.json
+            build/gf16-ffn/performance/result.json
+            build/gf16-ffn/performance/*/capture.txt
+            build/gf16-ffn/performance/*/simulation.log
             build/gf16-ffn/replay/prompt-*/capture.txt
             build/gf16-ffn/replay/prompt-*/rtl.log
             build/bitnet-capture/linux-report.json

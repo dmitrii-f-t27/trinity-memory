@@ -19,6 +19,7 @@ def main():
     prep=sub.add_parser('prepare'); prep.add_argument('--output',type=Path,required=True)
     prep.add_argument('--seed',type=int,default=27); prep.add_argument('--zero',action='store_true')
     prep.add_argument('--run',type=int,default=1)
+    prep.add_argument('--trace',choices=('full','result'),default='full',help='GF16 result mode buffers y until computation ends')
     prep.add_argument('--gf16-ffn',action='store_true',help='prepare the exact gf16-ffn-v1 profile')
     sim=sub.add_parser('simulate'); sim.add_argument('--vectors',type=Path,required=True)
     sim.add_argument('--output',type=Path,required=True)
@@ -26,6 +27,8 @@ def main():
     check.add_argument('--capture',type=Path,required=True); check.add_argument('--output',type=Path,required=True)
     args=ap.parse_args()
     if args.action=='prepare':
+        if args.trace != 'full' and not args.gf16_ffn:
+            ap.error('--trace=result requires --gf16-ffn')
         args.output.mkdir(parents=True,exist_ok=False)
         from trinity_memory.matvec import activations
         model=fv.fr.load_ffn(); x8=[0]*2560 if args.zero else list(activations(2560,args.seed))
@@ -35,9 +38,9 @@ def main():
                 model[name]=[codec.encode(codec.f32_bits(v)) for v in model[name]]
             model['scales']={k:codec.encode(codec.f32_bits(v)) for k,v in model['scales'].items()}
             x=[codec.encode(codec.f32_bits(v)) for v in x8]
-            gfv.write_inputs(args.output,model,x,args.run)
+            gfv.write_inputs(args.output,model,x,args.run,args.trace)
             ref=gfref.evaluate(model,x)
-            ref.update(run=args.run,seed=args.seed,zero=args.zero,shape=[2560,6912,2560],
+            ref.update(run=args.run,trace=args.trace,seed=args.seed,zero=args.zero,shape=[2560,6912,2560],
                        packed_sha256=model['packed_sha256'])
             (args.output/'reference.json').write_text(json.dumps(ref,indent=1)+'\n')
             print('Prepared GF16',args.output);return 0
