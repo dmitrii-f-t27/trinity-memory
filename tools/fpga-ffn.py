@@ -19,6 +19,7 @@ def main():
     prep=sub.add_parser('prepare'); prep.add_argument('--output',type=Path,required=True)
     prep.add_argument('--seed',type=int,default=27); prep.add_argument('--zero',action='store_true')
     prep.add_argument('--run',type=int,default=1)
+    prep.add_argument('--gf16-ffn',action='store_true',help='prepare the exact gf16-ffn-v1 profile')
     sim=sub.add_parser('simulate'); sim.add_argument('--vectors',type=Path,required=True)
     sim.add_argument('--output',type=Path,required=True)
     check=sub.add_parser('check'); check.add_argument('--vectors',type=Path,required=True)
@@ -28,6 +29,18 @@ def main():
         args.output.mkdir(parents=True,exist_ok=False)
         from trinity_memory.matvec import activations
         model=fv.fr.load_ffn(); x8=[0]*2560 if args.zero else list(activations(2560,args.seed))
+        if args.gf16_ffn:
+            from tools import gf16_ffn_reference as gfref, gf16_ffn_vectors as gfv, gf16_reference as codec
+            for name in ('w_post','w_sub'):
+                model[name]=[codec.encode(codec.f32_bits(v)) for v in model[name]]
+            model['scales']={k:codec.encode(codec.f32_bits(v)) for k,v in model['scales'].items()}
+            x=[codec.encode(codec.f32_bits(v)) for v in x8]
+            gfv.write_inputs(args.output,model,x,args.run)
+            ref=gfref.evaluate(model,x)
+            ref.update(run=args.run,seed=args.seed,zero=args.zero,shape=[2560,6912,2560],
+                       packed_sha256=model['packed_sha256'])
+            (args.output/'reference.json').write_text(json.dumps(ref,indent=1)+'\n')
+            print('Prepared GF16',args.output);return 0
         x=[v<<16 for v in x8]
         fv.write_inputs(args.output,model,x,args.run)
         expected,sats=fv.fr.fpga_q16(model,x)
@@ -37,6 +50,23 @@ def main():
         (args.output/'reference.json').write_text(json.dumps(ref,indent=1)+'\n')
         print('Prepared',args.output); return 0
     ref=json.loads((args.vectors/'reference.json').read_text())
+    if ref.get('profile')=='gf16-ffn-v1':
+        from tools import gf16_ffn_vectors as gfv, gf16_ffn_build as gfb
+        if args.action=='check':
+            if args.output.exists():raise ValueError('preserve earlier report: output exists')
+            result=gfv.validate(args.capture.read_bytes(),ref,ref.get('run',1))
+        else:
+            args.output.mkdir(parents=True,exist_ok=False);work=args.output.resolve()
+            rtl,_=gfb.generate(work/'generated')
+            shape=tuple(len(ref['stages'][s]) for s in ('h','g','y'))
+            command=gfb.compile_sim(work,rtl,shape,'verilator')
+            # Keep the run ID in the transport expectation, including run 2.
+            raw=work/'capture.txt'
+            log=gfb.base.run([*command,'+input='+str((args.vectors/'input.mem').resolve()),'+output='+str(raw)],timeout=1800)
+            (work/'simulation.log').write_text(log)
+            result=gfv.validate(raw.read_bytes(),ref,ref.get('run',1))
+            args.output=work/'result.json'
+        args.output.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result));return 0
     if args.action=='check':
         if args.output.exists(): raise ValueError('preserve earlier report: output exists')
         result=fv.validate(args.capture.read_bytes(),ref['expected'],ref['saturations'],ref['run'])
