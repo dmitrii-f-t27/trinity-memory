@@ -64,7 +64,9 @@ python3 -m unittest tests.test_gf16_codec -v
 ```
 
 `T27_ROOT` may select the pinned compiler checkout (default `build/compiler`).
-Missing tools fail this gate. `tools/test-t27.sh` also invokes it in native CI.
+With `T27_ROOT` set, missing tools fail this gate. `tools/test-t27.sh` invokes
+it this way in native CI. Generic Python adapter discovery without a compiler
+checkout skips the generated-code class; its value-oracle tests still run.
 [`tools/gf16_reference.py`](../tools/gf16_reference.py) decodes via the value
 formula and encodes by searching a sorted table of representable values.
 It does not duplicate the RTL shift-and-mask encoder. All input binary32
