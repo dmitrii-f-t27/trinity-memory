@@ -1,0 +1,82 @@
+name: GF16 wide normalization
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 't27/rtl/gf16_wide_norm.t27'
+      - 't27/rtl/ffn_wide.t27'
+      - 'rtl/t27/gf16_wide_norm.v'
+      - 'tools/gf16_wide_*.py'
+      - 'tools/replay_gf16_wide.py'
+      - 'tests/test_gf16_wide.py'
+      - 'tools/capture_bitnet_layer0.py'
+      - 'tools/bitnet_ffn_runtime.py'
+      - 'tools/bitnet-capture-requirements.txt'
+      - 'fixtures/bitnet-layer0-capture.json'
+      - 'native/compiler.lock'
+      - '.github/workflows/gf16-wide-normalization.yml'
+permissions:
+  contents: read
+jobs:
+  wide-kernel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+      TORCH_COMPILE_DISABLE: '1'
+      TRINITY_REQUIRE_CAPTURE_RUNTIME: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+          cache-dependency-path: tools/bitnet-capture-requirements.txt
+      - name: Fetch pinned compiler and tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y iverilog verilator yosys clang
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build pinned compiler and optional capture runtime
+        run: |
+          (cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target)
+          python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r tools/bitnet-capture-requirements.txt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/bitnet-capture/metadata
+            build/bitnet-capture/ranges
+            ~/.cache/huggingface/hub
+          key: bitnet-capture-${{ hashFiles('fixtures/bitnet-layer0-capture.json') }}
+      - name: Arithmetic, bounds, rounding, sanitizers and RTL protocol
+        run: python -m unittest tests.test_gf16_wide tests.test_bitnet_runtime -v
+      - name: Capture and require exact BF16 calibration
+        run: python tools/capture_bitnet_layer0.py --fetch --output build/bitnet-capture/linux-report.json
+      - name: Replay all 45 real rows through generated RTL
+        run: >-
+          python tools/replay_gf16_wide.py --rtl all
+          --capture-report build/bitnet-capture/linux-report.json
+          --output build/gf16-wide/linux-report.json
+      - name: Check standalone Xilinx mapping and record resources
+        run: python -m tools.gf16_wide_build --output build/gf16-wide/linux-synthesis.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gf16-wide-normalization
+          path: |
+            build/gf16-wide/linux-report.json
+            build/gf16-wide/linux-synthesis.json
+            build/gf16-wide/replay/rtl*.log
+            build/bitnet-capture/linux-report.json

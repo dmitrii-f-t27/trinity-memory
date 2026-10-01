@@ -1,0 +1,126 @@
+{
+  "schema": "trinity.gf16-wide-synthesis.v1",
+  "scope": "standalone out-of-context mapping; no placement, routing, timing or board measurement",
+  "compiler": "bff21b85b206a0dd367876343e56dcd8312d81ba",
+  "yosys": "Yosys 0.68+post (git sha1 c12172fbae8af5e20f6fb52e3d4e92d56ed587b6, Release, AppleClang clang++ 21.0.0.21000101)",
+  "source_sha256": {
+    "t27/rtl/gf16_wide_norm.t27": "45f529debe83125fa280571f2ba38be6107ca91800c570a05388fcfdc59cd343",
+    "t27/rtl/ffn_wide.t27": "b65bfcdfdc63db4be82f2d24d81b7c6508c8e374c6794fb08a18a2031f600ed0",
+    "rtl/t27/gf16_wide_norm.v": "6dc6f4d5d29d21f201d5f54cfa4fddc919ce155e5ded1edfe8bf688aabbd54cd",
+    "tools/gf16_wide_build.py": "7c4f7459ca5e467492832356e9f167cb3fd24a7c6c1561c2c889958609f2045f"
+  },
+  "generic": {
+    "creator": "Yosys 0.68+post (git sha1 c12172fbae8af5e20f6fb52e3d4e92d56ed587b6, Release, AppleClang clang++ 21.0.0.21000101)",
+    "invocation": "stat -json ",
+    "modules": {
+      "\\TrinityFfnWideT27": {
+        "num_wires": 1847,
+        "num_wire_bits": 11549,
+        "num_pub_wires": 76,
+        "num_pub_wire_bits": 3130,
+        "num_ports": 38,
+        "num_port_bits": 1643,
+        "num_memories": 0,
+        "num_memory_bits": 0,
+        "num_processes": 0,
+        "num_cells": 8679,
+        "num_submodules": 0,
+        "num_cells_by_type": {
+          "$_AND_": 1739,
+          "$_DFFE_PN0P_": 966,
+          "$_MUX_": 3554,
+          "$_NOT_": 311,
+          "$_OR_": 1187,
+          "$_XOR_": 922
+        }
+      },
+      "\\TrinityGf16WideNormT27": {
+        "num_wires": 9254,
+        "num_wire_bits": 72980,
+        "num_pub_wires": 200,
+        "num_pub_wire_bits": 6465,
+        "num_ports": 63,
+        "num_port_bits": 2415,
+        "num_memories": 0,
+        "num_memory_bits": 0,
+        "num_processes": 0,
+        "num_cells": 34784,
+        "num_submodules": 0,
+        "num_cells_by_type": {
+          "$_AND_": 8994,
+          "$_DFFE_PN0P_": 1215,
+          "$_DFFE_PN1P_": 10,
+          "$_MUX_": 13340,
+          "$_NOT_": 2187,
+          "$_OR_": 5275,
+          "$_XOR_": 3761,
+          "$mem_v2": 2
+        }
+      }
+    }
+  },
+  "xilinx_xc7": {
+    "creator": "Yosys 0.68+post (git sha1 c12172fbae8af5e20f6fb52e3d4e92d56ed587b6, Release, AppleClang clang++ 21.0.0.21000101)",
+    "invocation": "stat -json ",
+    "modules": {
+      "\\gf16_wide_norm": {
+        "num_wires": 7877,
+        "num_wire_bits": 37574,
+        "num_pub_wires": 253,
+        "num_pub_wire_bits": 9256,
+        "num_ports": 22,
+        "num_port_bits": 395,
+        "num_memories": 0,
+        "num_memory_bits": 0,
+        "num_processes": 0,
+        "num_cells": 14139,
+        "num_submodules": 0,
+        "num_cells_by_type": {
+          "$scopeinfo": 2,
+          "CARRY4": 826,
+          "FDCE": 2084,
+          "FDPE": 28,
+          "INV": 2737,
+          "LUT1": 268,
+          "LUT2": 2492,
+          "LUT3": 1088,
+          "LUT4": 1084,
+          "LUT5": 843,
+          "LUT6": 2018,
+          "MUXF7": 499,
+          "MUXF8": 158,
+          "RAMB36E1": 12
+        }
+      }
+    },
+    "design": {
+      "num_wires": 7877,
+      "num_wire_bits": 37574,
+      "num_pub_wires": 253,
+      "num_pub_wire_bits": 9256,
+      "num_ports": 22,
+      "num_port_bits": 395,
+      "num_memories": 0,
+      "num_memory_bits": 0,
+      "num_processes": 0,
+      "num_cells": 14139,
+      "num_submodules": 0,
+      "num_cells_by_type": {
+        "$scopeinfo": 2,
+        "CARRY4": 826,
+        "FDCE": 2084,
+        "FDPE": 28,
+        "INV": 2737,
+        "LUT1": 268,
+        "LUT2": 2492,
+        "LUT3": 1088,
+        "LUT4": 1084,
+        "LUT5": 843,
+        "LUT6": 2018,
+        "MUXF7": 499,
+        "MUXF8": 158,
+        "RAMB36E1": 12
+      }
+    }
+  }
+}
