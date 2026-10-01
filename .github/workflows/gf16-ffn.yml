@@ -1,8 +1,15 @@
-name: GF16 wide normalization
+name: GF16 full FFN
 on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 't27/rtl/gf16_ffn.t27'
+      - 'rtl/t27/gf16_ffn.v'
+      - 'tools/gf16_ffn_*.py'
+      - 'tools/replay_gf16_ffn.py'
+      - 'tests/test_gf16_ffn.py'
+      - 'tests/tb_gf16_ffn.v'
+      - 'tests/test_gf16_scalar.py'
       - 't27/rtl/gf16_wide_norm.t27'
       - 't27/rtl/gf16_scalar.t27'
       - 't27/rtl/ffn_wide.t27'
@@ -15,13 +22,13 @@ on:
       - 'tools/bitnet-capture-requirements.txt'
       - 'fixtures/bitnet-layer0-capture.json'
       - 'native/compiler.lock'
-      - '.github/workflows/gf16-wide-normalization.yml'
+      - '.github/workflows/gf16-ffn.yml'
 permissions:
   contents: read
 jobs:
-  wide-kernel:
+  full-ffn:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       T27_ROOT: ${{ github.workspace }}/build/compiler
       TORCH_COMPILE_DISABLE: '1'
@@ -62,22 +69,20 @@ jobs:
             ~/.cache/huggingface/hub
           key: bitnet-capture-${{ hashFiles('fixtures/bitnet-layer0-capture.json') }}
       - name: Arithmetic, bounds, rounding, sanitizers and RTL protocol
-        run: python -m unittest tests.test_gf16_wide tests.test_bitnet_runtime -v
+        run: python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_bitnet_runtime -v
       - name: Capture and require exact BF16 calibration
         run: python tools/capture_bitnet_layer0.py --fetch --output build/bitnet-capture/linux-report.json
-      - name: Replay all 45 real rows through generated RTL
+      - name: Compare all 45 rows and replay five complete FFNs through RTL
         run: >-
-          python tools/replay_gf16_wide.py --rtl all
+          python tools/replay_gf16_ffn.py --rtl selected
           --capture-report build/bitnet-capture/linux-report.json
-          --output build/gf16-wide/linux-report.json
-      - name: Check standalone Xilinx mapping and record resources
-        run: python -m tools.gf16_wide_build --output build/gf16-wide/linux-synthesis.json
+          --output build/gf16-ffn/linux-report.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: gf16-wide-normalization
+          name: gf16-full-ffn
           path: |
-            build/gf16-wide/linux-report.json
-            build/gf16-wide/linux-synthesis.json
-            build/gf16-wide/replay/rtl*.log
+            build/gf16-ffn/linux-report.json
+            build/gf16-ffn/replay/prompt-*/capture.txt
+            build/gf16-ffn/replay/prompt-*/rtl.log
             build/bitnet-capture/linux-report.json

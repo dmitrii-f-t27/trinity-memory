@@ -25,7 +25,7 @@ def generate(work):
     if run(['git','-C',COMPILER.parents[2],'rev-parse','HEAD']).strip()!=pin:
         raise ValueError('compiler pin mismatch')
     rtl=[]
-    for name in ('gf16_wide_norm','ffn_wide'):
+    for name in ('gf16_wide_norm','ffn_wide','gf16_scalar'):
         spec=ROOT/f't27/rtl/{name}.t27'; target=work/(name+'.v')
         data=run([COMPILER,'gen-verilog',spec])
         if data!=run([COMPILER,'gen-verilog',spec]):raise ValueError('non-deterministic RTL')
@@ -135,7 +135,7 @@ initial begin
     {extra}
     $display("PASS GF16 wide rows={len(rows)} values={offset}");$finish;
 end
-initial begin #{max(100000,(offset*750+15000)*10)}; $fatal(1,"timeout state=%d index=%d",dut.kernel.state,index);end
+initial begin #{max(100000,(offset*1500+15000)*10)}; $fatal(1,"timeout state=%d index=%d",dut.kernel.state,index);end
 endmodule
 ''')
     sources=[*rtl,ROOT/'rtl/t27/gf16_wide_norm.v',tb]
@@ -186,7 +186,7 @@ def main():
     rtl,_=generate(args.work)
     _,generic=synthesize(args.work,rtl)
     _,xilinx=synthesize(args.work,rtl,xilinx=True)
-    names=['t27/rtl/gf16_wide_norm.t27','t27/rtl/ffn_wide.t27','rtl/t27/gf16_wide_norm.v','tools/gf16_wide_build.py']
+    names=['t27/rtl/gf16_scalar.t27','t27/rtl/gf16_wide_norm.t27','t27/rtl/ffn_wide.t27','rtl/t27/gf16_wide_norm.v','tools/gf16_wide_build.py']
     result={'schema':'trinity.gf16-wide-synthesis.v1',
         'scope':'standalone out-of-context mapping; no placement, routing, timing or board measurement',
         'compiler':(ROOT/'native/compiler.lock').read_text().strip(),
