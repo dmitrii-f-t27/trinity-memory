@@ -155,17 +155,19 @@ endmodule
 
 
 def synthesize(work, rtl, xilinx=False):
-    work=Path(work);work.mkdir(parents=True,exist_ok=True)
+    work=Path(work).resolve();work.mkdir(parents=True,exist_ok=True)
     def quote(path):return '"'+str(path).replace('\\','\\\\').replace('"','\\"')+'"'
     prefix='xilinx' if xilinx else 'generic'
     mapped=work/(prefix+'.v');stats=work/(prefix+'.json')
-    sources=list(rtl)+([ROOT/'rtl/t27/gf16_wide_norm.v'] if xilinx else [])
+    sources=[Path(p).resolve() for p in rtl]+([ROOT/'rtl/t27/gf16_wide_norm.v'] if xilinx else [])
     # Required by the existing AX7203 flow too: retain clocked arrays as RAM.
     commands='read_verilog -nomem2reg '+' '.join(map(quote,sources))+'; '
     commands+=('synth_xilinx -family xc7 -top gf16_wide_norm -flatten -noiopad -noclkbuf; '
                if xilinx else 'proc; opt; memory -nomap; opt; techmap; opt; ')
-    commands+='check -assert; write_verilog -noattr '+quote(mapped)+'; tee -o '+quote(stats)+' stat -json'
-    log=run(['yosys','-Q','-T','-p',commands],timeout=180)
+    # Older Yosys tee treats filename quotes literally. Use a controlled basename
+    # and an OS-level cwd; all source/write_verilog paths remain fully quoted.
+    commands+='check -assert; write_verilog -noattr '+quote(mapped)+'; tee -o '+stats.name+' stat -json'
+    log=run(['yosys','-Q','-T','-p',commands],cwd=work,timeout=180)
     (work/(prefix+'.log')).write_text(log)
     if 'Found and reported 0 problems' not in log:raise ValueError('synthesis check missing')
     statistics=json.loads(stats.read_text())

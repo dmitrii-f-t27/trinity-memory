@@ -85,7 +85,7 @@ class Generated(unittest.TestCase):
         print(build.simulate(self.work,self.rtl,cases()).strip())
 
     def test_synthesized_rows_and_protocol(self):
-        mapped,_=build.synthesize(self.work,self.rtl)
+        mapped,_=build.synthesize(self.work/'path with spaces',self.rtl)
         print(build.simulate(self.work/'mapped',[mapped],cases()[:3]).strip())
 
     def test_generated_rtl_arithmetic(self):
