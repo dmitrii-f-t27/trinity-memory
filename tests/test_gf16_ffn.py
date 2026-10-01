@@ -168,7 +168,7 @@ class Generated(unittest.TestCase):
         self.assertLess(result['clock_split']['report_wait'],full['clock_split']['report_wait'])
         for record in (full,result):
             self.assertEqual(sum(record['phase_clocks'].values()),record['clock_split']['total'])
-            self.assertEqual(record['projection_loop_clocks'],5*(2*65*67+3*67))
+            self.assertEqual(record['projection_loop_clocks'],3*(2*65*67+3*67)+2*(2*67*2+3*2))
         raw=(self.work/'trace-result'/'capture.txt').read_bytes()
         expected={**r,'trace':'result'}
         for bad in (raw.replace(b't00000000',b't00000001'),

@@ -39,5 +39,19 @@ Q39 magnitude, signed term, low/high partial sum, carry update. There are
 loop therefore takes265,420,800 clocks. Phase counters measure the additional
 word fetch, scalar rounding and row/controller overhead separately.
 
+The new schedule advances the vector address and packed weight in the signed
+term state. During the low/high partial sum and carry update, the registered
+RAM read and Q39 conversion prepare the next term. Only the first trit in each
+DDR word needs the two startup states; later trits use three clocks each.
+This preserves the signed128 accumulator and both scalar GF16 rounding/fault
+boundaries. No approximate accumulation or early rounding is introduced.
+
+At full shape, the expected inner-loop count is
+`3 * 53,084,160 + 2 * 829,440 = 160,911,360` clocks. The ratio of loop counts is
+1.64948×; this is an arithmetic schedule ratio, not yet a board speed result.
+Word fetches, scalar rounding, norms and ActQuant still contribute to total
+latency. Small-shape RTL regression checks the exact cycle formula across
+partial words and the 64-trit boundary, as well as all numerical outputs.
+
 Implementation and qualification results are recorded after testing. No new
 board speed or timing result is claimed by this design note.
