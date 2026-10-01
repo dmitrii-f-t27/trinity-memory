@@ -185,7 +185,8 @@ var dot_sign: u32 = 0;
 var dot_word: u32 = 0;
 norm_out_ready = state == 20;
 s_idle = !sbuf;
-vec_addr = choose(projection_read,col,index);
+// Shape checks keep every live index below 8192; expose the physical RAM width.
+vec_addr = choose(projection_read,col & 8191,index & 8191);
 value40lo = magnitude0 << 1; value40hi = (magnitude1 << 1) | (magnitude0 >> 63);
 numerator0 = value40lo << 7; numerator1 = (value40hi << 7) | (value40lo >> 57);
 trit_negative = ((weight0 & 3) == 2) != ((vr & 32768) != 0);
@@ -199,7 +200,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             norm_index: u32, norm_done: bool, norm_fault: bool,
             scalar_done: bool, scalar_fault: bool, scalar_value: u64,
             line_idle: bool, s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
-    vr = vec[vec_addr]; gr = gate[index]; ur = up[index];
+    vr = vec[vec_addr]; gr = gate[index & 8191]; ur = up[index & 8191];
     magnitude0 = fixed0(vr); magnitude1 = fixed1(vr);
     done1 = math_done; done2 = done1; done3 = done2; result_ready = done3;
     rounded_code = (q0 & 127)+rne_inc(q0,r0,r1,b0,b1);
@@ -270,7 +271,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         }
     } else if (state == 20) {
         if (norm_out_valid) {
-            vec[index] = norm_value & 65535; emit_index = index; emit_value = norm_value; emit_product = norm_product;
+            vec[index & 8191] = norm_value & 65535; emit_index = index; emit_value = norm_value; emit_product = norm_product;
             emit_tag = choose(norm_kind == 0,104,115); after_emit = 21; state = choose(result_only,21,choose(norm_kind == 0,300,22));
             if (!finite(norm_value)) { error_code = 7; state = 900; }
             if (norm_index != index) { error_code = 8; state = 900; }
@@ -327,7 +328,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         }
     } else if (state == 62) {
         if (scalar_done) {
-            vec[index] = (scalar_value as u32) & 65535;
+            vec[index & 8191] = (scalar_value as u32) & 65535;
             emit_index = index; emit_value = (scalar_value as u32) | (((pick(negative,0-code,code) as u32) & 255) << 16);
             emit_tag = choose(norm_kind == 0,112,118); after_emit = 61; state = choose(result_only,61,300);
             if (!finite(scalar_value as u32)) { error_code = 7; state = 900; }
@@ -375,9 +376,9 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         scalar_start = true; state = 80;
     } else if (state == 80) {
         if (scalar_done) {
-        if (stage == 1) { gate[row] = (scalar_value as u32) & 65535; }
-        if (stage == 2) { up[row] = (scalar_value as u32) & 65535; }
-        if (stage == 5 && result_only) { gate[row] = (scalar_value as u32) & 65535; }
+        if (stage == 1) { gate[row & 8191] = (scalar_value as u32) & 65535; }
+        if (stage == 2) { up[row & 8191] = (scalar_value as u32) & 65535; }
+        if (stage == 5 && result_only) { gate[row & 8191] = (scalar_value as u32) & 65535; }
         emit_tag = output_tag(stage); emit_index = row; emit_value = scalar_value as u32; after_emit = 81; state = choose(result_only,81,300);
         if (!finite(scalar_value as u32)) { error_code = 7; state = 900; }
         }

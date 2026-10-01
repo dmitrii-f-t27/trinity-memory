@@ -49,6 +49,10 @@ The column/index read-address choice uses a registered projection flag, set at
 projection entry and cleared before normalization. The testbench checks its
 equivalence to the three projection phases on every clock; it removes a state
 range decoder from the RAM address path without changing the schedule.
+Internal RAM addresses are explicitly limited to 13 bits. Valid shapes cap
+all live indices below 8192; the testbench checks the unmasked selected index
+and row every active clock. This removes unnecessarily wide address logic
+without wrapping any legal access or changing the arithmetic schedule.
 
 At full shape, the expected inner-loop count is
 `3 * 53,084,160 + 2 * 829,440 = 160,911,360` clocks. The ratio of loop counts is
