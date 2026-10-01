@@ -80,8 +80,9 @@ def yosys_cells(text):
     cells = {}
     for match in re.finditer(r"^\s+(\d+)\s+([A-Z][A-Z0-9_]+)\s*$", text, re.M):
         cells[match.group(2)] = int(match.group(1))
-    total = re.search(r"Number of cells:\s+(\d+)", text)
-    return {"total": int(total.group(1)) if total else None, "by_type": cells}
+    # Recent Yosys prints the count before "cells" in its indented table.
+    total = re.search(r"Number of cells:\s+(\d+)|^\s+(\d+)\s+cells\s*$", text, re.M)
+    return {"total": int(total.group(1) or total.group(2)) if total else None, "by_type": cells}
 
 
 def nextpnr_summary(text):
