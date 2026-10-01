@@ -55,3 +55,21 @@ partial words and the 64-trit boundary, as well as all numerical outputs.
 
 Implementation and qualification results are recorded after testing. No new
 board speed or timing result is claimed by this design note.
+
+
+## Paired physical runs
+
+`tools/fpga-ffn-run.py --gf16-ffn --trace-pair ...` requires full-mode vectors.
+It freshly uploads and CRC-readback-verifies every region, records a full trace,
+then changes only descriptor/run ID to execute result mode with unchanged DDR
+inputs. No intervening reset, reconfiguration or weight write occurs. The
+second capture explicitly records this reuse; it is not a second fresh upload.
+Both traces must pass before the command succeeds, and UART baud is restored
+even when capture or validation fails. Run IDs must leave space for run+1.
+
+`tools/verify_gf16_ffn_board.py --run ... --vectors ... --boot ... --output ...`
+independently reconstructs all readback bytes from CRC-valid frames, verifies
+both captures and the single-descriptor change, and checks board identity,
+bitstream hash, temperature records and baud restoration. Full raw weight
+readback streams remain local; compact receipts/hashes and captures are the
+public evidence.
