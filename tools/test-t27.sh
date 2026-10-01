@@ -61,5 +61,6 @@ node tests/live_formats_wasm.mjs
 "${PYTHON:-python3}" -m unittest tests.test_ddr3_loader -v
 "${PYTHON:-python3}" -m unittest tests.test_ddr3_matvec -v
 "${PYTHON:-python3}" -m unittest tests.test_ffn_rtl -v
+"${PYTHON:-python3}" -m unittest tests.test_gf16_codec -v
 sh tools/check-specs.sh
 echo "PASS native C regeneration and reference/CLI parity"
