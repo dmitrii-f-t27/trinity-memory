@@ -17,10 +17,17 @@ from tools import capture_bitnet_layer0 as capture
 from tools import gf16_ffn_reference as ref, gf16_ffn_vectors as vectors, gf16_ffn_build as build
 
 
+SOURCES=['t27/rtl/gf16_scalar.t27','tools/gf16_wide_build.py','t27/rtl/gf16_ffn.t27','t27/rtl/gf16_wide_norm.t27','t27/rtl/ffn_wide.t27',
+       'rtl/t27/gf16_ffn.v','rtl/t27/gf16_wide_norm.v','tools/gf16_ffn_reference.py',
+       'tools/gf16_ffn_vectors.py','tools/gf16_ffn_build.py','tools/replay_gf16_ffn.py','tests/tb_gf16_ffn.v',
+ 'tools/gf16_reference.py','tools/gf16_wide_reference.py','tools/ffn_reference.py',
+ 'tools/ffn_vectors.py','tools/bitnet_ffn_runtime.py','tools/capture_bitnet_layer0.py']
+
 def sha(data):return hashlib.sha256(data).hexdigest()
 
 
 def replay(report_path, captures, work, rtl_mode):
+    source_hashes={p:sha((ROOT/p).read_bytes()) for p in SOURCES}
     import numpy as np
     import torch
     import transformers
@@ -112,12 +119,11 @@ def replay(report_path, captures, work, rtl_mode):
                 'actquant_changes_vs_previous':{k:int((torch.tensor(code_rows[k],dtype=torch.int8)[None]!=sw_codes[t]).sum())
                                               for k,t in (('h','g'),('s','y'))}})
     arrays.close()
-    names=['t27/rtl/gf16_scalar.t27','tools/gf16_wide_build.py','t27/rtl/gf16_ffn.t27','t27/rtl/gf16_wide_norm.t27','t27/rtl/ffn_wide.t27',
-           'rtl/t27/gf16_ffn.v','rtl/t27/gf16_wide_norm.v','tools/gf16_ffn_reference.py',
-           'tools/gf16_ffn_vectors.py','tools/gf16_ffn_build.py','tools/replay_gf16_ffn.py','tests/tb_gf16_ffn.v']
+    if source_hashes != {p:sha((ROOT/p).read_bytes()) for p in SOURCES}:
+        raise ValueError('source changed during GF16 FFN replay')
     return {'schema':'trinity.gf16-ffn.v1','profile':ref.PROFILE,
         'scope':'complete layer-0 FFN arithmetic; no attention, residual, later layers, logits or generation-quality claim',
-        'source_sha256':{p:sha((ROOT/p).read_bytes()) for p in names},
+        'source_sha256':source_hashes,
         'compiler':(ROOT/'native/compiler.lock').read_text().strip(),'runtime':capture.VERSIONS,'machine':platform.machine(),
         'capture_report_sha256':sha(report_path.read_bytes()),'input_lock_sha256':report['input_lock_sha256'],
         'cases':cases,'rtl_mode':rtl_mode,'rtl':rtl_results}
