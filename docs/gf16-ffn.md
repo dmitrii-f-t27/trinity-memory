@@ -111,16 +111,70 @@ FFN tests cover tiny shapes, the 64-trit boundary, stalls, output backpressure,
 calibration loss, invalid inputs/trits, unexpected ACK, reset and a second run.
 Host preflight checks profile, dimensions, fixed addresses, sizes, payload
 hashes and doorbell before UART/JTAG access. Old Q16 remains a separate mode.
+The host drains UART in a dedicated thread while XADC is checked; completion
+matching examines new bytes plus a partial line. A regression blocks the XADC
+callback while the UART reader receives a complete stream. Truncated or
+malformed captures still fail strictly.
 
 Board execution requires a hash-matching build report with **routed timing
 PASS**, fresh XADC and matching board DNA. Use `--gf16-ffn` for both
 `tools/fpga-matvec-boot.py` and `tools/fpga-ffn-run.py`, and `--max-temp 70`.
 Only SRAM configuration is used. Diagnostic timing-failed builds are never
 loaded. Functional RTL agreement alone is not evidence of working board timing.
+Uploads and CRC-checked readback use 921600 baud. The continuous result stream
+defaults to 460800 (`--capture-baud`), with a checked switch and restoration to
+115200. On this setup, 921600 dropped bytes in the unframed result stream,
+including after continuous-thread reception and in a repeat without JTAG.
+Those captures were rejected; none was repaired into a passing result.
 
 
-Implementation checkpoint: small/adversarial clocked simulations and scalar
-conformance pass. The first integrated combinational prototype also matched
-one full captured BOS input. Routed timing is still being closed; these
-checkpoints do not claim a qualified GF16 board run. Final source-bound replay
-and board reports will replace this checkpoint before hardware qualification.
+## Measured numerical result
+
+The [source-hashed report](../reports/numeric/gf16-ffn.json) contains all
+45 token rows. Five selected complete FFN simulations pass every value:
+163840 stage values and 47360 dequantized values/codes. A separate full zero
+vector with run ID 2 also passes. The five simulations require
+288579255–288749194 clocks in the variable-latency testbench; these are
+simulation counters, not board throughput measurements.
+
+| Captured text | New y NMSE vs FP32+ActQuant | BF16/new NMSE | Changed y words vs prior host GF16 |
+|---|---:|---:|---:|
+| English explanation (9 tokens) | 1.37214e-4 | 2.027× | 0 |
+| Arithmetic (8 tokens) | 2.06047e-4 | 2.385× | 0 |
+| Russian (17 tokens) | 1.57801e-4 | 2.314× | 3431 |
+| Code (11 tokens) | 1.28934e-4 | 2.593× | 2168 |
+
+Exact rational input ActQuant changes two and four integer codes in the last
+two prompts; downstream ActQuant changes fourteen and seven codes respectively.
+These measured differences follow the specified arithmetic boundaries. This
+small captured sample supports a comparison of this FFN against its FP32
+control, not a claim about whole-model accuracy or generation quality.
+
+The [Linux x86 report](../reports/numeric/gf16-ffn-linux.json) uses the same
+compiler and arithmetic source hashes. All 45 input, stage, ActQuant and code
+hashes match macOS ARM; all five complete RTL captures and clock counters
+also match. Host FP32 control metrics differ slightly between platforms.
+The updated standalone norm also passes all 45 rows / 311040 values on both
+[ARM](../reports/numeric/gf16-wide-iteration5.json) and
+[Linux](../reports/numeric/gf16-wide-iteration5-linux.json), with identical
+product, unit and output hashes.
+
+## AX7203 board result
+
+The complete FFN passes on the AX7203 at 60 MHz: routed fabric timing is
+62.64 MHz with 0.702 ns minimum slack. The
+[source-bound build and physical evidence](../reports/fpga/gf16-ffn-2026-10-01-24917fa7/README.md)
+record one SRAM load and two standard CLI runs with fresh DDR3 uploads and
+readback. Both the real BOS input (run 6) and zero input (run 7) match every
+32768 stage value and 9472 ActQuant value/code. Independent reconstruction
+checks all 13496368 readback bytes per run. The zero run rejects two damaged
+CRC frames and successfully re-requests them; the BOS run rejects none.
+
+Total execution takes 18.779 s and 18.775 s respectively, including the full
+stage trace at 460800 baud. Roughly 14 s is report backpressure; the remaining
+`controller_other` includes normalization waits and overlap with reporting,
+so it is not a pure compute counter or a production throughput measurement.
+The retained hardware temperature maximum is 52.87 °C, below the 70 °C gate.
+UART is restored to 115200. Failed timing prototypes were not loaded, and no
+flash writes were performed. This qualifies the layer-0 FFN on this board;
+attention, residuals and whole-model inference remain outside this result.
