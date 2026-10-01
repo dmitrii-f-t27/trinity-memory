@@ -41,3 +41,11 @@ word fetch, scalar rounding and row/controller overhead separately.
 
 Implementation and qualification results are recorded after testing. No new
 board speed or timing result is claimed by this design note.
+
+## Serial benchmark control
+
+This branch intentionally retains the original five-clock-per-trit loop. It
+only registers the vector address selection and bounds internal RAM addresses
+to 13 bits, to remove the same address-path timing obstacle as the accelerated
+branch. The testbench checks the unmasked live indices and projection flag.
+All arithmetic, report phases and serial cycle counts must match fd591b3.
