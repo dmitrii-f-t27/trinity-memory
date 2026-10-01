@@ -1,4 +1,6 @@
 module TrinityGf16WideNormT27;
+// Typed constant also avoids an unsized decimal literal in older Verilator.
+const MAX_U64: u64 = (0 as u64)-1;
 // Issue #109. gf16-wide-norm-v1: serial, bounded row arithmetic.
 // See docs/gf16-wide-normalization.md. All rounding is RNE.
 // External math ports connect to the existing generated ffn_wide.t27 engine.
@@ -243,7 +245,7 @@ fn on_clock(start: bool, row_length: u32, in_valid: bool, gate_in: u32, up_in: u
         }
     } else if (state == 41) {
         mean0 = q0+mean_increment;
-        mean1 = q1+pick(q0 == 18446744073709551615 && mean_increment != 0,1,0); state = 9;
+        mean1 = q1+pick(q0 == MAX_U64 && mean_increment != 0,1,0); state = 9;
     } else if (state == 9) {
         d0 = mean0+epsilon0; d_step1 = mean1+epsilon1; epsilon_carry = carry(mean0,epsilon0); state = 38;
     } else if (state == 38) {
