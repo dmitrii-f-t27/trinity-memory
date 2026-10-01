@@ -135,7 +135,7 @@ initial begin
     {extra}
     $display("PASS GF16 wide rows={len(rows)} values={offset}");$finish;
 end
-initial begin #{max(100000,(offset*1500+15000)*10)}; $fatal(1,"timeout state=%d index=%d",dut.kernel.state,index);end
+initial begin #(64'd{max(100000,(offset*1500+15000)*10)}); $fatal(1,"timeout state=%d index=%d",dut.kernel.state,index);end
 endmodule
 ''')
     sources=[*rtl,ROOT/'rtl/t27/gf16_wide_norm.v',tb]
