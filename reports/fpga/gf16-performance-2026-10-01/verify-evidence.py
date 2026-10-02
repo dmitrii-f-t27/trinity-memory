@@ -43,7 +43,11 @@ prior=json.loads((ROOT/'reports/numeric/gf16-ffn.json').read_text())
 assert [c['rows'] for c in replay['cases']]==[c['rows'] for c in prior['cases']]
 assert sum(len(c['rows']) for c in replay['cases'])==45
 assert len(replay['rtl'])==5
-for path,digest in replay['source_sha256'].items():
+current_path=ROOT/'reports/numeric/gf16-ffn-performance-bounded-replay.json'
+current=json.loads(current_path.read_text()) if current_path.exists() else replay
+assert [c['rows'] for c in current['cases']]==[c['rows'] for c in replay['cases']]
+assert current['rtl']==replay['rtl']
+for path,digest in current['source_sha256'].items():
     assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==digest,path
 for record in replay['rtl']:
     folder=BASE/'simulation/replay'/f"prompt-{record['prompt']}-token-{record['token']}"
@@ -71,3 +75,15 @@ if linux_path.exists():
         for key in ('clock_split','phase_clocks','projection_loop_clocks','stage_values','actquant_values'):
             assert measured['runs'][mode][key]==b['runs'][mode][key]
     print('Linux x86_64 / macOS arm64 exact replay and phase-counter parity PASS')
+
+bounded_path=ROOT/'reports/numeric/gf16-ffn-performance-bounded.json'
+if bounded_path.exists():
+    bounded=json.loads(bounded_path.read_text())
+    assert bounded['ratios']==report['ratios']
+    for variant,record in bounded['variants'].items():
+        previous=report['variants'][variant]
+        for key in ('runs','input_payloads','reference_sha256','shape','mem_base','out_base'):
+            assert record[key]==previous[key],(variant,key)
+    for path,digest in bounded['variants']['accelerated']['sources_sha256'].items():
+        assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==digest,path
+    print('Bounded-address serial/accelerated measurements reuse identical exact captures PASS')
