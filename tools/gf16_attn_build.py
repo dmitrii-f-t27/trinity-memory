@@ -51,23 +51,24 @@ def compile_sim(work, rtl, shape, simulator="iverilog", mem_base=2, out_base=1, 
     return command
 
 
-def run_sim(work, command, inp, stages):
+def run_sim(work, command, inp, stages, positions=1, result_only=False):
     work = Path(work).resolve(); work.mkdir(parents=True, exist_ok=True)
     capture = work / "capture.txt"
     log = base.run([*command, "+input=" + str(inp), "+output=" + str(capture)], timeout=1800)
     (work / "rtl.log").write_text(log)
-    return vectors.validate(capture.read_bytes(), stages)
+    return vectors.validate(capture.read_bytes(), stages, positions=positions, result_only=result_only)
 
 
-def simulate(work, model, xs, simulator="iverilog", mem_base=2, out_base=1):
-    """One-position attention run: stages come from the oracle datapath."""
+def simulate(work, model, xs, simulator="iverilog", mem_base=2, out_base=1, result=False):
+    """S-position attention run: stages come from the oracle datapath."""
     work = Path(work).resolve(); work.mkdir(parents=True, exist_ok=True)
     dims = model["dims"]
     tables_f64, tables_q16 = ar.rope_tables(len(xs), ar.ROPE_THETA, dims["head_dim"])
     stages, sat = ar.fpga_q16(model, [[t << ar.Q for t in x] for x in xs], tables_q16)
     if any(sat.values()):
         raise ValueError(f"attention datapath saturations: {sat}")
-    inp = vectors.write_inputs(work, model, [[t << ar.Q for t in x] for x in xs])
+    inp = vectors.write_inputs(work, model, [[t << ar.Q for t in x] for x in xs],
+                               tables_q16, result=result)
     shape = (dims["hidden"], dims["kv_dim"], dims["heads"], dims["head_dim"])
     command = compile_sim(work, generate(work)[0], shape, simulator, mem_base, out_base)
-    return run_sim(work, command, inp, stages)
+    return run_sim(work, command, inp, stages, positions=len(xs), result_only=result)
