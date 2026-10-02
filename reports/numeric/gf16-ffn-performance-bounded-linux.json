@@ -1,0 +1,139 @@
+{
+  "schema": "trinity.gf16-ffn-performance.v1",
+  "kind": "simulation",
+  "sources_sha256": {
+    "t27/rtl/gf16_ffn.t27": "54e6191f2cb7577bea4635fc829442cda6c65650f88d7adcbf54f2618fcf6048",
+    "t27/rtl/gf16_scalar.t27": "cd0238d9c9a38c0c564b3cc0625df6733843e8fe0c5d058d506f879124f6ca38",
+    "t27/rtl/gf16_wide_norm.t27": "83ff22d2c15eecf15fb01649a8bc29168162b8579a5069a211c0896e62dd4253",
+    "t27/rtl/ffn_wide.t27": "b65bfcdfdc63db4be82f2d24d81b7c6508c8e374c6794fb08a18a2031f600ed0",
+    "rtl/t27/gf16_ffn.v": "ee24082639759d7677b1fb71b906e455c26871c0f20fc974543bffc88094e2be",
+    "rtl/t27/gf16_wide_norm.v": "3ab95d07fc0db748a3ca3595548a36c09dff075907e8cccb1ed62abd522f7788",
+    "tests/tb_gf16_ffn.v": "063a8e8a77cb56c7fe15fe5e82ef47f2a72da2dd6305feeec004c604d67744c5",
+    "tools/gf16_ffn_build.py": "302d1fb3cf87207a5a9e108c68195fb3117b52f9ef327d93168feb4da941333d",
+    "tools/gf16_ffn_vectors.py": "18799d6e1744606fb4e47330c55bfa737bd5595dd94e6d2697ba8d9a58163c04",
+    "tools/gf16_wide_build.py": "2a08afc2481f9de6a57d3fd28a58e6a3ab4b54d8dd3a7619a85a8ba10c34014e",
+    "tools/measure_gf16_ffn.py": "2d7bcf9039088b54b4b036a7fc5c299d328528217d19fe3f0ebdc7d85e16f37c",
+    "native/compiler.lock": "33cf8dadd036536da00813b3e105a0ff67f3a2bce9ae201a0a9bb51b77175c06"
+  },
+  "reference_sha256": "8b700e02d3118860b3484bbc4290ff171f5aff070a2791405dc5fb10f380f6af",
+  "input_payloads": {
+    "doorbell": {
+      "word_address": 64,
+      "byte_address": 1024,
+      "file": "doorbell.bin",
+      "bytes": 16,
+      "sha256": "10fb031bf233d1653664cad2a9ee6969bddd04d1984a004f145ad48a83f956e4"
+    },
+    "scales": {
+      "word_address": 80,
+      "byte_address": 1280,
+      "file": "scales.bin",
+      "bytes": 48,
+      "sha256": "cfd3b259ded31011dd343783f4a6b5b9c1b2db200236df5649b9848ea85d9b1d"
+    },
+    "x": {
+      "word_address": 4096,
+      "byte_address": 65536,
+      "file": "x.bin",
+      "bytes": 40960,
+      "sha256": "1c10324e9a986eeca7ca066b99b35bd71f4c66bc723075f20988ea81f3d12f66"
+    },
+    "post": {
+      "word_address": 8192,
+      "byte_address": 131072,
+      "file": "post.bin",
+      "bytes": 40960,
+      "sha256": "6e688821b9a1a44da07454b6b814e11e57a18e8cfd335e44e9f740f94c80199b"
+    },
+    "sub": {
+      "word_address": 12288,
+      "byte_address": 196608,
+      "file": "sub.bin",
+      "bytes": 110592,
+      "sha256": "10f32461d265c8fdfc46978f5645d4467becff16c69ef32c6e347e71b5643df4"
+    },
+    "gate": {
+      "word_address": 65536,
+      "byte_address": 1048576,
+      "file": "gate.bin",
+      "bytes": 4423680,
+      "sha256": "9c7b2ca34e004e09ec771352d32c944688caee9fd84df3d7fb679e0cc355a4d6"
+    },
+    "up": {
+      "word_address": 393216,
+      "byte_address": 6291456,
+      "file": "up.bin",
+      "bytes": 4423680,
+      "sha256": "409285c771cef0aac907ed4c2d697e311a67a6330dffc7a65c5485bf08d53200"
+    },
+    "down": {
+      "word_address": 720896,
+      "byte_address": 11534336,
+      "file": "down.bin",
+      "bytes": 4423680,
+      "sha256": "d52c6ce20b57de40b6ea9c9e9a90ce26765b5a56c6363ddcddb472da20bb6b5a"
+    }
+  },
+  "shape": [
+    2560,
+    6912,
+    2560
+  ],
+  "mem_base": 2,
+  "out_base": 1,
+  "simulator": "Verilator 5.020 2024-01-01 rev (Debian 5.020-1)",
+  "runs": {
+    "full": {
+      "pass": true,
+      "run": 1,
+      "profile": "gf16-ffn-v1",
+      "trace": "full",
+      "stage_values": 32768,
+      "actquant_values": 9472,
+      "capture_sha256": "1b41a1e7bc261be8e42ddb5eb4c49cd02e147099e94178d3de1c780b1a1fcfba",
+      "clock_split": {
+        "total": 184069815,
+        "report_wait": 147467,
+        "memory_wait": 4671682,
+        "controller_other": 179250666
+      },
+      "phase_clocks": {
+        "setup": 26,
+        "input_norm": 1668096,
+        "input_actquant": 2794764,
+        "gate": 56220728,
+        "up": 56221156,
+        "subnorm": 3884016,
+        "sub_actquant": 7364384,
+        "down": 55916645
+      },
+      "projection_loop_clocks": 160911360
+    },
+    "result": {
+      "pass": true,
+      "run": 1,
+      "profile": "gf16-ffn-v1",
+      "trace": "result",
+      "stage_values": 2560,
+      "actquant_values": 0,
+      "capture_sha256": "8ac3b5ae8b4b9e6073fa7066907db697d493cd621a92dde98e5b6523f7f407f1",
+      "clock_split": {
+        "total": 183993318,
+        "report_wait": 1,
+        "memory_wait": 4672754,
+        "controller_other": 179320563
+      },
+      "phase_clocks": {
+        "setup": 26,
+        "input_norm": 1668093,
+        "input_actquant": 2787084,
+        "gate": 56200427,
+        "up": 56200867,
+        "subnorm": 3884003,
+        "sub_actquant": 7343648,
+        "down": 55909170
+      },
+      "projection_loop_clocks": 160911360
+    }
+  }
+}

@@ -87,3 +87,18 @@ if bounded_path.exists():
     for path,digest in bounded['variants']['accelerated']['sources_sha256'].items():
         assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==digest,path
     print('Bounded-address serial/accelerated measurements reuse identical exact captures PASS')
+
+linux_bounded=ROOT/'reports/numeric/gf16-ffn-performance-bounded-replay-linux.json'
+if linux_bounded.exists():
+    linux=json.loads(linux_bounded.read_text())
+    assert linux['machine']=='x86_64' and current['machine']=='arm64'
+    assert linux['source_sha256']==current['source_sha256']
+    assert [c['rows'] for c in linux['cases']]==[c['rows'] for c in current['cases']]
+    assert linux['rtl']==current['rtl']
+    measured=json.loads((ROOT/'reports/numeric/gf16-ffn-performance-bounded-linux.json').read_text())
+    accelerated=bounded['variants']['accelerated']
+    assert measured['sources_sha256']==accelerated['sources_sha256']
+    for mode in ('full','result'):
+        for key in ('clock_split','phase_clocks','projection_loop_clocks','stage_values','actquant_values'):
+            assert measured['runs'][mode][key]==accelerated['runs'][mode][key]
+    print('Current bounded source: Linux x86_64 / macOS arm64 exact parity PASS')

@@ -95,6 +95,8 @@ jobs:
         run: python reports/fpga/gf16-ffn-2026-10-01-24917fa7/verify-captures.py
       - name: Recheck committed performance evidence
         run: python reports/fpga/gf16-performance-2026-10-01/verify-evidence.py
+      - name: Recheck paired physical performance captures
+        run: python reports/fpga/gf16-performance-2026-10-01/verify-board-evidence.py
       - name: Capture and require exact BF16 calibration
         run: python tools/capture_bitnet_layer0.py --fetch --output build/bitnet-capture/linux-report.json
       - name: Compare all 45 rows and replay five complete FFNs through RTL

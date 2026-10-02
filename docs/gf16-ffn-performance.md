@@ -56,13 +56,19 @@ without wrapping any legal access or changing the arithmetic schedule.
 
 At full shape, the expected inner-loop count is
 `3 * 53,084,160 + 2 * 829,440 = 160,911,360` clocks. The ratio of loop counts is
-1.64948×; this is an arithmetic schedule ratio, not yet a board speed result.
+1.64948×; this is the projection schedule ratio. Measured whole-FFN active
+latency on the board is reported separately below.
 Word fetches, scalar rounding, norms and ActQuant still contribute to total
 latency. Small-shape RTL regression checks the exact cycle formula across
 partial words and the 64-trit boundary, as well as all numerical outputs.
 
-Implementation and qualification results are recorded after testing. No new
-board speed or timing result is claimed by this design note.
+Physical BOS qualification measures 4.873065 s →
+3.142136 s for the result-mode active window at 60 MHz
+(1.55088×). Both full traces and final results are exact, and a
+fresh zero-input pair also passes. The
+[retained evidence](../reports/fpga/gf16-performance-2026-10-01/README.md)
+contains the source revisions, input hashes, phase counts, timing, thermal
+readings, rejected/retried UART frames and standalone verification commands.
 
 
 ## Paired physical runs
@@ -81,3 +87,30 @@ both captures and the single-descriptor change, and checks board identity,
 bitstream hash, temperature records and baud restoration. Full raw weight
 readback streams remain local; compact receipts/hashes and captures are the
 public evidence.
+
+## Reproducing the hardware comparison
+
+The serial control is commit `fbe03f89a2242ed6bb0140e476eacce269a7d1d4` on
+`codex/gf16-serial-timing-baseline`; the accelerated RTL is
+`539dbb46d06f2873e9aa6b02078ea6f86d79606e`. Both contain the same RAM address
+selection and width cleanup. The control branch retains the five-clock loop
+for measurement and must not be merged into the accelerated implementation.
+
+Build and boot each variant at the same 60 MHz controller frequency. Recorded
+build and packing commands are saved with each build receipt. Require routed
+timing, the expected build ID and GF16 header before loading vectors. For
+each variant, use a fresh full-mode input directory and an unused output path:
+
+```sh
+python tools/fpga-ffn-run.py --gf16-ffn --trace-pair \
+  --vectors VECTORS --boot BOOT_JSON --output RUN_DIR \
+  --port /dev/cu.usbserial-10 --cable digilent_hs3 --max-temp 70
+python tools/verify_gf16_ffn_board.py \
+  --vectors VECTORS --boot BOOT_JSON --run RUN_DIR --output RAW_PROOF_JSON
+```
+
+The default transfer rate is 921600 baud and continuous capture is 460800.
+CRC-invalid readback frames may be retried; acceptance requires complete
+CRC-valid coverage and exact payload bytes. The compact published verifier
+checks numerical captures and hashed receipts; reconstructing every DDR byte
+requires the local payloads and raw readback streams.
