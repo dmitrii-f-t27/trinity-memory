@@ -28,8 +28,10 @@ class AttentionRtlTest(unittest.TestCase):
         import tempfile
         from tools import gf16_attn_build as build
         from tools import gf16_attn_vectors as vectors
+        simulator = os.environ.get("TRINITY_ATTN_SIMULATOR", "iverilog")
         with tempfile.TemporaryDirectory() as work:
-            return build.simulate(Path(work), vectors.tiny_model(7), xs, result=result)
+            return build.simulate(Path(work), vectors.tiny_model(7), xs,
+                                  simulator=simulator, result=result)
 
     def test_single_position_replay(self):
         out = self._simulate([[3, -5, 7, 1, -2, 4, 0, -8]])
