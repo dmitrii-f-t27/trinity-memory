@@ -17,6 +17,12 @@ def generate(work):
     data = base.run([base.COMPILER, "gen-verilog", source])
     if data != base.run([base.COMPILER, "gen-verilog", source]):
         raise ValueError("nondeterministic attention RTL")
+    # The compiler emits unsized decimal constants; iverilog widens them to
+    # 64 bits, verilator reads them as 32-bit and rejects or misinterprets
+    # everything >= 2**31. Size every unsized decimal of ten or more digits
+    # to 64'd so both simulators see the same 64-bit unsigned constants.
+    import re
+    data = re.sub(r"(?<![\w'\"])(?<!\d)(\d{10,20})(?![\w'\".])", r"64'd\1", data)
     work.mkdir(parents=True, exist_ok=True)
     path = work / "gf16_attn.v"
     path.write_text(data)
