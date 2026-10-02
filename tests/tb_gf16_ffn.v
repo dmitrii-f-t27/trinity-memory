@@ -3,7 +3,7 @@
 module tb_gf16_ffn;
     parameter H=8, I=6, O=4;
     // Minimum memory latency and report-line busy time; the clock split test
-    // varies them and expects identical compute clocks.
+    // varies them; phase clocks independently partition the active window.
     parameter MEM_BASE=2, OUT_BASE=1;
     parameter RESET_AT=0, CALIB_LOSS_AT=0, SPURIOUS_ACK_AT=0, EXPECT_ERROR=0, REPEATS=1;
     reg clk=0; always #5 clk=~clk;
@@ -14,6 +14,10 @@ module tb_gf16_ffn;
     reg [127:0] data=0;
     reg [127:0] mem[0:1048575];
     integer tick=0, wait_left=0, output_wait=0, fd, completed=0, j;
+    reg [63:0] observed_total=0, observed_report=0, observed_memory=0;
+    reg [63:0] observed_phase[0:7];
+    reg was_active=0;
+    integer p;
     reg [31:0] address=0, stalled_address=0;
     reg stalled_last=0;
     wire stall=(tick%7==0) || wait_left!=0;
@@ -27,6 +31,22 @@ module tb_gf16_ffn;
     always @(posedge clk) begin
         tick<=tick+1; ack<=0;
         if (rst_n) begin
+            if(dut.core.projection_read !== (dut.core.phase==3 || dut.core.phase==4 || dut.core.phase==7))
+                $fatal(1,"registered projection address selection differs from phase");
+            if(dut.core.active && ((dut.core.projection_read ? dut.core.col : dut.core.index)>=8192 || dut.core.row>=8192))
+                $fatal(1,"live GF16 RAM index exceeds physical address width");
+            was_active<=dut.core.active;
+            if (dut.core.active) begin
+                if (!was_active) begin
+                    observed_total=0;observed_report=0;observed_memory=0;
+                    for(p=0;p<8;p=p+1) observed_phase[p]=0;
+                end
+                observed_total=observed_total+1;
+                if (dut.core.phase>7) $fatal(1,"invalid phase");
+                observed_phase[dut.core.phase]=observed_phase[dut.core.phase]+1;
+                if(state==8 || state==22 || state==23 || state==300 || state==301) observed_report=observed_report+1;
+                if(state==200 || state==201) observed_memory=observed_memory+1;
+            end
             if (stalled_last && (!stb || addr!==stalled_address)) $fatal(1,"withdrawn request");
             stalled_last<=stb && stall; stalled_address<=addr;
             if (wait_left>0) begin
@@ -42,6 +62,11 @@ module tb_gf16_ffn;
                 if (output_wait!=0) $fatal(1,"output while busy");
                 output_wait<=OUT_BASE+(tick%5);
                 $fdisplay(fd,"%c%08x%010x",tag[7:0],a,b[39:0]);
+                if(tag==99 && b!==observed_total) $fatal(1,"total counter mismatch");
+                if(tag==107 && a==0 && b!==observed_report) $fatal(1,"report counter mismatch");
+                if(tag==107 && a==1 && b!==observed_memory) $fatal(1,"memory counter mismatch");
+                if(tag==116 && (a>7 || b!==observed_phase[a])) $fatal(1,"phase counter mismatch");
+                if(dut.core.result_only && tag==121 && dut.core.active) $fatal(1,"result drained while active");
                 if (tag==69) begin
                     if(EXPECT_ERROR!=0 && a==EXPECT_ERROR) begin
                         $display("PASS expected GF16 error %0d",a);$fclose(fd);$finish;
@@ -59,7 +84,7 @@ module tb_gf16_ffn;
             end
             if(tick>600000000) $fatal(1,"timeout state=%d",state);
         end else begin
-            wait_left<=0;ack<=0;output_wait<=0;stalled_last<=0;
+            wait_left<=0;ack<=0;output_wait<=0;stalled_last<=0;was_active<=0;
         end
         if(SPURIOUS_ACK_AT!=0 && tick==SPURIOUS_ACK_AT) ack<=1;
         if(RESET_AT!=0 && tick==RESET_AT) rst_n<=0;

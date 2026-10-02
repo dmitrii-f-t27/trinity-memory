@@ -1,5 +1,5 @@
 module TrinityGf16FfnT27;
-// Issue #111. gf16-ffn-v1: generated full FFN controller.
+// Issues #111/#113. gf16-ffn-v1: generated full FFN controller.
 // Clocked scalar arithmetic is shared with the wide norm via wiring adapters.
 // Exact signed128 Q39 ternary sums; rational ActQuant; both norms use that kernel.
 fn finite(v: u32) -> bool { return v <= 65535 && (v & 32256) != 32256; }
@@ -70,8 +70,22 @@ var active: bool = false;
 var cycles: u64 = 0;
 var report_cycles: u64 = 0;
 var memory_cycles: u64 = 0;
-var report_wait: bool = false;
-var memory_wait: bool = false;
+// Disjoint phase clocks count the same active window as cycles.
+// Full trace includes report backpressure; result-only drains y after active ends.
+var phase: u32 = 0;
+// Registered address selection: avoid a state-range decoder on the RAM path.
+var projection_read: bool = false;
+var phase0: u64 = 0;
+var phase1: u64 = 0;
+var phase2: u64 = 0;
+var phase3: u64 = 0;
+var phase4: u64 = 0;
+var phase5: u64 = 0;
+var phase6: u64 = 0;
+var phase7: u64 = 0;
+var projection_cycles: u64 = 0;
+var result_only: bool = false;
+var summary_index: u32 = 0;
 var error_code: u32 = 0;
 var vec: [8192]u32;
 var gate: [8192]u32;
@@ -171,7 +185,8 @@ var dot_sign: u32 = 0;
 var dot_word: u32 = 0;
 norm_out_ready = state == 20;
 s_idle = !sbuf;
-vec_addr = choose((state >= 73 && state <= 76) || state == 83,col,index);
+// Shape checks keep every live index below 8192; expose the physical RAM width.
+vec_addr = choose(projection_read,col & 8191,index & 8191);
 value40lo = magnitude0 << 1; value40hi = (magnitude1 << 1) | (magnitude0 >> 63);
 numerator0 = value40lo << 7; numerator1 = (value40hi << 7) | (value40lo >> 57);
 trit_negative = ((weight0 & 3) == 2) != ((vr & 32768) != 0);
@@ -185,7 +200,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             norm_index: u32, norm_done: bool, norm_fault: bool,
             scalar_done: bool, scalar_fault: bool, scalar_value: u64,
             line_idle: bool, s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
-    vr = vec[vec_addr]; gr = gate[index]; ur = up[index];
+    vr = vec[vec_addr]; gr = gate[index & 8191]; ur = up[index & 8191];
     magnitude0 = fixed0(vr); magnitude1 = fixed1(vr);
     done1 = math_done; done2 = done1; done3 = done2; result_ready = done3;
     rounded_code = (q0 & 127)+rne_inc(q0,r0,r1,b0,b1);
@@ -193,11 +208,20 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     dot_m0 = pick((acc1 >> 63) != 0,0-acc0,acc0);
     dot_m1 = pick((acc1 >> 63) != 0,(0 as u64)-acc1-pick(acc0 != 0,1,0),acc1);
     math_start = false; norm_start = false; scalar_start = false;
-    if (active) { cycles = cycles+1; }
-    if (report_wait) { report_cycles = report_cycles+1; }
-    if (memory_wait) { memory_cycles = memory_cycles+1; }
-    report_wait = active && (state == 8 || state == 22 || state == 23 || state == 300 || state == 301);
-    memory_wait = active && (state == 200 || state == 201);
+    if (active) {
+        cycles = cycles+1;
+        if (state == 8 || state == 22 || state == 23 || state == 300 || state == 301) { report_cycles = report_cycles+1; }
+        if (state == 200 || state == 201) { memory_cycles = memory_cycles+1; }
+        if (phase == 0) { phase0 = phase0+1; }
+        if (phase == 1) { phase1 = phase1+1; }
+        if (phase == 2) { phase2 = phase2+1; }
+        if (phase == 3) { phase3 = phase3+1; }
+        if (phase == 4) { phase4 = phase4+1; }
+        if (phase == 5) { phase5 = phase5+1; }
+        if (phase == 6) { phase6 = phase6+1; }
+        if (phase == 7) { phase7 = phase7+1; }
+        if (state == 73 || state == 83 || state == 74 || state == 75 || state == 76) { projection_cycles = projection_cycles+1; }
+    }
     if (state == 0) {
         if (calib) { wb_cyc = true; ptag = 71; pa = hidden; pb = inner as u64; pending = true; state = 1; }
     } else if (state == 1) {
@@ -208,10 +232,14 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if ((read0 >> 32) == 1195787825 && (read0 as u32) != 0 && (read0 as u32) != last_run) {
             last_run = read0 as u32; run_id = read0 as u32; index = 0; active = true;
             cycles = 0; report_cycles = 0; memory_cycles = 0; error_code = 0; state = 8;
+            projection_read = false; phase = 0; phase0 = 0; phase1 = 0; phase2 = 0; phase3 = 0;
+            phase4 = 0; phase5 = 0; phase6 = 0; phase7 = 0; projection_cycles = 0;
+            result_only = read1 == 1;
+            if (read1 > 1) { error_code = 10; state = 900; }
             if (hidden == 0 || hidden > 2560 || inner == 0 || inner > 6912 || output_rows == 0 || output_rows > 2560) { error_code = 1; state = 900; }
         }
     } else if (state == 8) {
-        if (!pending) { ptag = 100; pa = run_id; pb = 1; pending = true; state = 3; }
+        if (!pending) { ptag = 100; pa = run_id; pb = pick(result_only,2,1); pending = true; state = 3; }
     } else if (state == 3) {
         wb_addr = 80+index; wb_stb = true; response = 4; state = 200; quiet = 0;
     } else if (state == 4) {
@@ -221,7 +249,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         else { index = index+1; state = 3; }
         if (!valid_word(read0,read1)) { error_code = 6; state = 900; }
     } else if (state == 10) {
-        norm_kind = 0; norm_length = hidden; length = hidden; norm_start = true; index = 0; state = 11;
+        projection_read = false; phase = 1; norm_kind = 0; norm_length = hidden; length = hidden; norm_start = true; index = 0; state = 11;
     } else if (state == 11) {
         wb_addr = 4096+index; wb_stb = true; response = 12; state = 200; quiet = 0;
     } else if (state == 12) {
@@ -243,8 +271,8 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         }
     } else if (state == 20) {
         if (norm_out_valid) {
-            vec[index] = norm_value & 65535; emit_index = index; emit_value = norm_value; emit_product = norm_product;
-            emit_tag = choose(norm_kind == 0,104,115); after_emit = 21; state = choose(norm_kind == 0,300,22);
+            vec[index & 8191] = norm_value & 65535; emit_index = index; emit_value = norm_value; emit_product = norm_product;
+            emit_tag = choose(norm_kind == 0,104,115); after_emit = 21; state = choose(result_only,21,choose(norm_kind == 0,300,22));
             if (!finite(norm_value)) { error_code = 7; state = 900; }
             if (norm_index != index) { error_code = 8; state = 900; }
         }
@@ -256,9 +284,9 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (index+1 == length) { state = 50; }
         else { index = index+1; state = 20; }
     } else if (state == 40) {
-        norm_kind = 1; norm_length = inner; length = inner; norm_start = true; index = 0; state = 13;
+        projection_read = false; phase = 5; norm_kind = 1; norm_length = inner; length = inner; norm_start = true; index = 0; state = 13;
     } else if (state == 50) {
-        peak = 0; index = 0; state = 51;
+        phase = choose(norm_kind == 0,2,6); peak = 0; index = 0; state = 51;
     } else if (state == 51) { state = 52;
     } else if (state == 52) {
         if ((vr & 32767) > peak) { peak = vr & 32767; }
@@ -300,15 +328,16 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         }
     } else if (state == 62) {
         if (scalar_done) {
-            vec[index] = (scalar_value as u32) & 65535;
+            vec[index & 8191] = (scalar_value as u32) & 65535;
             emit_index = index; emit_value = (scalar_value as u32) | (((pick(negative,0-code,code) as u32) & 255) << 16);
-            emit_tag = choose(norm_kind == 0,112,118); after_emit = 61; state = 300;
+            emit_tag = choose(norm_kind == 0,112,118); after_emit = 61; state = choose(result_only,61,300);
             if (!finite(scalar_value as u32)) { error_code = 7; state = 900; }
         }
     } else if (state == 61) {
         if (index+1 == length) { stage = choose(norm_kind == 0,1,5); state = 70; }
         else { index = index+1; state = 55; }
     } else if (state == 70) {
+        projection_read = true; phase = choose(stage == 1,3,choose(stage == 2,4,7));
         row = 0; col = 0; acc0 = 0; acc1 = 0;
         ncols = choose(stage == 5,inner,hidden); nrows = choose(stage == 5,output_rows,inner);
         weight_addr = choose(stage == 1,65536,choose(stage == 2,393216,720896)); state = 71;
@@ -320,15 +349,18 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     } else if (state == 83) { state = 74;
     } else if (state == 74) {
         term0 = trit0; term1 = trit1; state = 75;
+        // Advance the read address now. While this term passes through the
+        // two-stage signed128 accumulator, vr and its Q39 magnitude fetch
+        // the next lane. Startup states73/83 are needed only after a DDR word.
+        weight0 = (weight0 >> 2) | (weight1 << 62); weight1 = weight1 >> 2; col = col+1;
         if ((weight0 & 3) == 3) { error_code = 3; state = 900; }
     } else if (state == 75) {
         add0 = acc0+term0; add1 = acc1+term1; add_carry = carry(acc0,term0); state = 76;
     } else if (state == 76) {
         acc0 = add0; acc1 = add1+add_carry;
-        weight0 = (weight0 >> 2) | (weight1 << 62); weight1 = weight1 >> 2; col = col+1;
-        if (col+1 == ncols) { weight_addr = weight_addr+1; state = 77; }
-        else if ((col & 63) == 63) { weight_addr = weight_addr+1; state = 71; }
-        else { state = 73; }
+        if (col == ncols) { weight_addr = weight_addr+1; state = 77; }
+        else if ((col & 63) == 0) { weight_addr = weight_addr+1; state = 71; }
+        else { state = 74; }
     } else if (state == 77) { state = 78;
     } else if (state == 78) {
         scalar_mode = 3; scalar_x = dot_m0; scalar_y = dot_m1; scalar_r0 = 0; scalar_r1 = 0;
@@ -344,9 +376,10 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         scalar_start = true; state = 80;
     } else if (state == 80) {
         if (scalar_done) {
-        if (stage == 1) { gate[row] = (scalar_value as u32) & 65535; }
-        if (stage == 2) { up[row] = (scalar_value as u32) & 65535; }
-        emit_tag = output_tag(stage); emit_index = row; emit_value = scalar_value as u32; after_emit = 81; state = 300;
+        if (stage == 1) { gate[row & 8191] = (scalar_value as u32) & 65535; }
+        if (stage == 2) { up[row & 8191] = (scalar_value as u32) & 65535; }
+        if (stage == 5 && result_only) { gate[row & 8191] = (scalar_value as u32) & 65535; }
+        emit_tag = output_tag(stage); emit_index = row; emit_value = scalar_value as u32; after_emit = 81; state = choose(result_only,81,300);
         if (!finite(scalar_value as u32)) { error_code = 7; state = 900; }
         }
     } else if (state == 81) {
@@ -354,7 +387,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (row+1 == nrows) {
             if (stage == 1) { stage = 2; state = 70; }
             else if (stage == 2) { state = 40; }
-            else { active = false; state = 600; }
+            else { active = false; index = 0; state = choose(result_only,610,600); }
         } else { row = row+1; state = 71; }
     } else if (state == 200) {
         quiet = quiet+1;
@@ -369,12 +402,29 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (!pending) { ptag = emit_tag; pa = emit_index; pb = emit_value as u64; pending = true; state = 301; }
     } else if (state == 301) {
         if (!pending) { state = after_emit; }
+    } else if (state == 610) { state = 611;
+    } else if (state == 611) {
+        emit_tag = 121; emit_index = index; emit_value = gr; after_emit = 612; state = 300;
+    } else if (state == 612) {
+        if (index+1 == output_rows) { state = 600; }
+        else { index = index+1; state = 610; }
     } else if (state == 600) {
         if (!pending) { ptag = 99; pa = run_id; pb = cycles; pending = true; state = 601; }
     } else if (state == 601) {
         if (!pending) { ptag = 107; pa = 0; pb = report_cycles; pending = true; state = 602; }
     } else if (state == 602) {
-        if (!pending) { ptag = 107; pa = 1; pb = memory_cycles; pending = true; state = 603; }
+        if (!pending) { ptag = 107; pa = 1; pb = memory_cycles; pending = true; state = 604; }
+    } else if (state == 604) {
+        if (!pending) { ptag = 107; pa = 2; pb = projection_cycles; pending = true; summary_index = 0; state = 605; }
+    } else if (state == 605) {
+        if (!pending) {
+            ptag = 116; pa = summary_index;
+            pb = pick(summary_index == 0,phase0,pick(summary_index == 1,phase1,pick(summary_index == 2,phase2,
+                 pick(summary_index == 3,phase3,pick(summary_index == 4,phase4,pick(summary_index == 5,phase5,
+                 pick(summary_index == 6,phase6,phase7)))))));
+            pending = true;
+            if (summary_index == 7) { state = 603; } else { summary_index = summary_index+1; }
+        }
     } else if (state == 603) {
         if (!pending) { ptag = 122; pa = run_id; pb = 0; pending = true; state = 1; poll = 8192; }
     } else if (state == 900) {
