@@ -178,7 +178,7 @@ jobs:
         run: |
           node tests/matrix_wasm.mjs
           node tests/matvec_wasm.mjs
-          python -m unittest tests.test_ternary_check tests.test_matvec tests.test_ffn_reference tests.test_ffn_quantization -v
+          python -m unittest tests.test_ternary_check tests.test_matvec tests.test_ffn_reference tests.test_ffn_quantization tests.test_attn_reference -v
       - name: GF16 and BF16 FFN boundary-precision report replay
         run: python3 tools/ffn_quantization.py --check
       - uses: actions/upload-artifact@v4
