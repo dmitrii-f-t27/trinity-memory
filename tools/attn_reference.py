@@ -85,11 +85,14 @@ ONE_Q16 = 1 << Q
 # The shared integer softmax exponential. exp_q16(delta) rounds 65536*exp(delta/65536)
 # to Q16.16 with one RNE; delta <= 0. The same constants and steps must run in
 # the RTL exp unit, so the board, the sim and this datapath model agree exactly.
-# All products stay inside 64 bits: z*L < 2**53, the Horner p*g < 2**60 and the
-# segment product T*p <= (2**32-1)**2. 65536*exp(-z/65536) < 0.5 for
-# z >= 65536*ln(131072): those entries round to 0.
+# The 2**-g polynomial is split into even/odd parts so every Horner intermediate
+# stays positive and every product stays below 2**64 (the t27 backends differ
+# above that). 65536*exp(-z/65536) < 0.5 for z >= 65536*ln(131072): those
+# entries round to 0. In the RTL the u32 two's-complement pattern of delta is
+# negated and masked to its low 32 bits to recover z.
 EXP_L = 6196328019                                              # log2(e), Q32.32
-EXP_C = [4294967296, -2977044472, 1031764991, -238388332, 41309550, -5726720, 661577]
+EXP_C_EVEN = [4294967296, 1031764991, 41309550, 661577]         # +g**0,+g**2,+g**4,+g**6
+EXP_C_ODD = [2977044472, 238388332, 5726720]                    # |g**1|,|g**3|,|g**5|
 EXP_T = [round(2 ** (-j / 16) * (1 << 32)) for j in range(16)]  # segment table, Q32.32
 EXP_THRESH = 772244
 
@@ -104,10 +107,14 @@ def exp_q16(delta: int) -> int:
     f = u & ((1 << 48) - 1)
     j = f >> 44                         # 16-segment index
     g = (f & ((1 << 44) - 1)) >> 16     # Q32.32 remainder in [0, 1/16), < 2**28
-    p = EXP_C[6]
-    for k in range(5, -1, -1):
-        p = ((p * g) >> 32) + EXP_C[k]  # Horner, Q32.32
-    y = (EXP_T[j] * p) >> 32            # 2**-f, Q32.32
+    h = (g * g) >> 32                   # g**2, Q32.32
+    a2 = ((EXP_C_EVEN[3] * h) >> 32) + EXP_C_EVEN[2]
+    a1 = ((a2 * h) >> 32) + EXP_C_EVEN[1]
+    even = ((a1 * h) >> 32) + EXP_C_EVEN[0]
+    b1 = ((EXP_C_ODD[2] * h) >> 32) + EXP_C_ODD[1]
+    odd = ((b1 * h) >> 32) + EXP_C_ODD[0]
+    p = even - ((g * odd) >> 32)        # 2**-g, Q32.32 (wraps: |p| < 2**64)
+    y = p if j == 0 else (EXP_T[j] * p) >> 32   # 2**-f, Q32.32
     return rne(y, 16 + m)
 EPS = 1e-5                                                # config.json rms_norm_eps
 ROPE_THETA = 500000.0                                     # config.json rope_theta
@@ -116,9 +123,10 @@ SEED, POSITIONS = 27, 8                                   # house seed, causal p
 ORACLE_SCOPE = "unquantized-activation attention/residual math; no ActQuant or bf16 execution rounding"
 RMSNORM_CONTRACT = "sqrt(mean(x*x) + epsilon)"
 EXP_CONTRACT = ("e_i = exp_q16(s_i - row_max), the shared integer exponential "
-               "(EXP_L/EXP_C/EXP_T constants, 16-segment degree-6 Q32.32 polynomial, "
-               "one RNE, every product inside 64 bits); exact integer denominator, one "
-               "division per context element; the same constants and steps run in the RTL exp unit")
+               "(EXP_L/EXP_C_EVEN/EXP_C_ODD/EXP_T constants, 16-segment degree-6 Q32.32 "
+               "even/odd-split polynomial, one RNE, every product inside 64 bits); exact "
+               "integer denominator, one division per context element; the same constants "
+               "and steps run in the RTL exp unit")
 UPSTREAM_SOURCES = {
     "attention": "https://github.com/huggingface/transformers/blob/7cd73d9df0c14b151c684b708a9f27d8d0349dfe/src/transformers/models/bitnet/modeling_bitnet.py",
     "autobitlinear": "https://github.com/huggingface/transformers/blob/d6abd1333078195535f461589b64f112b53688b2/src/transformers/integrations/bitnet.py",
