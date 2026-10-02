@@ -1,0 +1,267 @@
+module TrinityGf16AttnT27;
+// Issue #115. gf16-attn-v1: generated layer-0 attention/residual controller.
+//
+// Board profile decision: every stage value is an exact Q16.16 s32 word, NOT
+// a GF16 float. The FFN profile packs stages into GF16 words because its
+// numeric contract is the GF16 float format; the attention oracle
+// (tools/attn_reference.py) contracts Q16.16 stages, and in Q16.16 every
+// product in the datapath stays inside one or two u64 limbs:
+//   * ternary projections: |lane| < 2**16, 2560 lanes -> acc < 2**28 (1 limb),
+//     then rne(acc * scale_q16, 16): < 2**44 (1 limb)
+//   * scores: q.k products < 2**62, 128 lanes -> 2 limbs, then
+//     rne(dot * scale_q16, 32): < 2**85 (2 limbs before the shift)
+//   * RoPE: a*cos - b*sin < 2**47 (1 limb), rne(,16)
+//   * context: sum of e*v terms < 2**50 (1 limb), one div_rne by the
+//     exact integer denominator
+//   * residual: one clamped u32 add
+// The shared integer exponential exp_q16 (see tools/attn_reference.py) runs
+// verbatim: 16-segment degree-6 even/odd-split Q32.32 polynomial, one RNE,
+// every product below 2**64.
+//
+// Chain per position (causal, S positions): input_layernorm -> q/k/v ternary
+// projections (20 heads x 128, GQA 4:1 over 5 kv heads) -> RoPE (theta 500000,
+// rotate_half from a Q16.16 cos/sin table) -> scaled QK^T scores -> softmax
+// (exp_q16 over the exact delta from the row maximum) -> context ->
+// attn_sub_norm -> o_proj -> residual add.
+//
+// Memory map (128-bit words, 16 bytes each):
+//   64       doorbell: run_id | 0x41545431<<32; read1 = positions | (result<<32)
+//   80..83   scales q,k,v,o (Q16.16)
+//   4096+    x, 2560 Q16.16 words
+//   8192+    input_layernorm weights, 2560 words
+//   10752+   attn_sub_norm weights, 2560 words
+//   65536+   q_proj trits, 2560 rows x 40 words (64 lanes of 2 bits)
+//   167936+  k_proj trits, 640 x 40
+//   193536+  v_proj trits, 640 x 40
+//   219136+  o_proj trits, 2560 x 40
+//   321536+  RoPE cos/sin tables, positions x 64 pairs x 2 words
+// Report tags: 71 header, 100 run, 99 cycles, 118 counters, 119 phases,
+// 122 done, 69 error; stages n=103,q=104,k=105,v=106,qr=107,kr=108,sc=109,
+// a=110,c=111,o=112,r=113.
+fn pick(flag: bool, a: u64, b: u64) -> u64 { if (flag) { return a; } return b; }
+fn carry(a: u64, b: u64) -> u64 { if (a+b < a) { return 1; } return 0; }
+fn rne_shift(num: u64, shift: u32) -> u64 {
+    let q: u64 = num >> shift;
+    let rem: u64 = num & (((1 as u64) << shift)-1);
+    let half: u64 = (1 as u64) << (shift-1);
+    if (rem > half) { return q+1; }
+    if (rem == half) { if ((q & 1) != 0) { return q+1; } }
+    return q;
+}
+fn exp_q16(delta: u32) -> u32 {
+    let z: u64 = ((0 as u64)-(delta as u64)) & 4294967295;
+    if (z >= 772244) { return 0; }
+    let u: u64 = z*6196328019;
+    let m: u32 = (u >> 48) as u32;
+    let f: u64 = u & 281474976710655;
+    let j: u32 = (f >> 44) as u32;
+    let g: u64 = (f & 17592186044415) >> 16;
+    let h: u64 = (g*g) >> 32;
+    var t: [16]u64 = [4294967296,4069266217,3855590487,3652782173,3459768862,3275563729,3099261112,2941586669,2792457426,2651431154,2517923900,2391323354,2271242040,2157314223,2049211269,1946633450];
+    var a2: u64 = ((661577*h) >> 32)+41309550;
+    var a1: u64 = ((a2*h) >> 32)+1031764991;
+    var a0: u64 = ((a1*h) >> 32)+4294967296;
+    var b1: u64 = ((5726720*h) >> 32)+238388332;
+    var b0: u64 = ((b1*h) >> 32)+2977044472;
+    var p: u64 = a0-((g*b0) >> 32);
+    let y: u64 = pick(j == 0,p,(t[j]*p) >> 32);
+    return rne_shift(y, 16+m) as u32;
+}
+
+var state: u32 = 0;
+var index: u32 = 0;
+var row: u32 = 0;
+var col: u32 = 0;
+var length: u32 = 0;
+var nrows: u32 = 0;
+var weight_addr: u32 = 0;
+var last_run: u32 = 0;
+var run_id: u32 = 0;
+var poll: u32 = 0;
+var active: bool = false;
+var cycles: u64 = 0;
+var report_cycles: u64 = 0;
+var memory_cycles: u64 = 0;
+var result_only: bool = false;
+var positions: u32 = 0;
+var error_code: u32 = 0;
+var vec: [8192]u32;
+var gate: [8192]u32;
+var up: [8192]u32;
+var scale_q: u32 = 0;
+var scale_k: u32 = 0;
+var scale_v: u32 = 0;
+var scale_o: u32 = 0;
+var sample: u32 = 0;
+var acc0: u64 = 0;
+var acc1: u64 = 0;
+var term0: u64 = 0;
+var term1: u64 = 0;
+var add0: u64 = 0;
+var add1: u64 = 0;
+var add_carry: u64 = 0;
+var weight0: u64 = 0;
+var weight1: u64 = 0;
+var wb_cyc: bool = false;
+var wb_stb: bool = false;
+var wb_addr: u32 = 0;
+var response: u32 = 0;
+var read0: u64 = 0;
+var read1: u64 = 0;
+var quiet: u32 = 0;
+var pending: bool = false;
+var ptag: u32 = 0;
+var pa: u32 = 0;
+var pb: u64 = 0;
+var emit_tag: u32 = 0;
+var emit_value: u32 = 0;
+var emit_index: u32 = 0;
+var after_emit: u32 = 0;
+var arb: u32 = 0;
+var sbuf: bool = false;
+var sb_tag: u32 = 0;
+var sb_a: u32 = 0;
+var sb_b: u64 = 0;
+var line_go: bool = false;
+var line_tag: u32 = 0;
+var line_a: u32 = 0;
+var line_b: u64 = 0;
+var s_idle: bool;
+var exp_value: u32 = 0;
+var exp_denom: u32 = 0;
+var exp_delta: u32 = 0;
+var score_scale: u32 = 0;
+s_idle = !sbuf;
+
+fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
+            line_idle: bool, s_go: bool, s_tag: u32, s_a: u32, s_b: u64) {
+    if (active) {
+        cycles = cycles+1;
+        if (state == 8 || state == 22 || state == 23 || state == 300 || state == 301) { report_cycles = report_cycles+1; }
+        if (state == 200 || state == 201) { memory_cycles = memory_cycles+1; }
+    }
+    if (state == 0) {
+        if (calib) { wb_cyc = true; ptag = 71; pa = 2560; pb = 640 as u64; pending = true; state = 1; }
+    } else if (state == 1) {
+        if (poll == 0 && !pending) { wb_addr = 64; wb_stb = true; response = 2; state = 200; quiet = 0; }
+        else if (poll != 0) { poll = poll-1; }
+    } else if (state == 2) {
+        state = 1; poll = 8192;
+        if ((read0 >> 32) == 1094599761 && (read0 as u32) != 0 && (read0 as u32) != last_run) {
+            last_run = read0 as u32; run_id = read0 as u32; index = 0; active = true;
+            cycles = 0; report_cycles = 0; memory_cycles = 0; error_code = 0; state = 8;
+            positions = read1 as u32; result_only = (read1 >> 32) != 0;
+            if (positions == 0 || positions > 8) { error_code = 10; state = 900; }
+            if (result_only) { error_code = 11; state = 900; }
+        }
+    } else if (state == 8) {
+        if (!pending) { ptag = 100; pa = run_id; pb = positions as u64; pending = true; state = 3; }
+    } else if (state == 3) {
+        wb_addr = 80+index; wb_stb = true; response = 4; state = 200; quiet = 0;
+    } else if (state == 4) {
+        if (index == 0) { scale_q = read0 as u32; }
+        if (index == 1) { scale_k = read0 as u32; }
+        if (index == 2) { scale_v = read0 as u32; }
+        if (index == 3) { scale_o = read0 as u32; index = 0; state = 10; }
+        else { index = index+1; state = 3; }
+    } else if (state == 10) {
+        index = 0; length = 2560; state = 11;
+    } else if (state == 11) {
+        wb_addr = 4096+index; wb_stb = true; response = 12; state = 200; quiet = 0;
+    } else if (state == 12) {
+        vec[index & 8191] = read0 as u32; state = 13;
+    } else if (state == 13) {
+        if (index+1 == length) { index = 0; state = 20; }
+        else { index = index+1; state = 11; }
+    } else if (state == 20) {
+        // input_layernorm, exp_unit-style: the narrow Q16.16 norm fills
+        // up[0..2559] with n = rmsnorm_q16(x, w_in). Implemented in the
+        // next slice with the shared wide-norm kernel; this frame keeps the
+        // address discipline for the projection loop below.
+        index = 0; length = 2560; state = 21;
+    } else if (state == 21) {
+        wb_addr = 8192+index; wb_stb = true; response = 22; state = 200; quiet = 0;
+    } else if (state == 22) {
+        up[index & 8191] = read0 as u32; state = 23;
+    } else if (state == 23) {
+        if (index+1 == length) { index = 0; state = 30; }
+        else { index = index+1; state = 21; }
+    } else if (state == 30) {
+        // q projection: 2560 rows x 2560 cols, exact s32 accumulation
+        row = 0; col = 0; acc0 = 0; acc1 = 0; nrows = 2560; weight_addr = 65536; state = 71;
+    } else if (state == 70) {
+        // v projection after k: same loop, different bases and stores
+        row = 0; col = 0; acc0 = 0; acc1 = 0; nrows = 640; weight_addr = 193536; state = 71;
+    } else if (state == 71) {
+        wb_addr = weight_addr; wb_stb = true; response = 72; state = 200; quiet = 0;
+    } else if (state == 72) {
+        weight0 = read0; weight1 = read1; state = 73;
+    } else if (state == 73) { state = 74;
+    } else if (state == 74) {
+        if (col == 0) { sample = up[row & 8191]; }
+        term0 = pick((weight0 & 3) == 0,0,pick((weight0 & 3) == 2,0-(sample as u64),sample as u64));
+        term1 = pick((weight0 & 3) == 0,0,pick((weight0 & 3) == 2,(0 as u64)-(sample as u64)-pick(sample != 0,1,0),0));
+        state = 75;
+        weight0 = (weight0 >> 2) | (weight1 << 62); weight1 = weight1 >> 2; col = col+1;
+        if ((weight0 & 3) == 3) { error_code = 3; state = 900; }
+    } else if (state == 75) {
+        add0 = acc0+term0; add1 = acc1+term1; add_carry = carry(acc0,term0); state = 76;
+    } else if (state == 76) {
+        acc0 = add0; acc1 = add1+add_carry;
+        if (col == 2560) { weight_addr = weight_addr+1; state = 77; }
+        else if ((col & 63) == 0) { weight_addr = weight_addr+1; state = 71; }
+        else { state = 74; }
+    } else if (state == 77) {
+        // rne(acc * scale_q16, 16): acc is 2-limb signed; inline round here
+        // in the next slice (the FFN scalar kernel mode 3 owns this shape).
+        state = 78;
+    } else if (state == 78) {
+        state = 79;
+    } else if (state == 79) {
+        if (row+1 == nrows) { state = 40; }
+        else { row = row+1; state = 71; }
+    } else if (state == 40) {
+        // k projection after q: reuse the loop with the k base
+        row = 0; col = 0; acc0 = 0; acc1 = 0; nrows = 640; weight_addr = 167936; state = 71;
+    } else if (state == 41) {
+        // after k: v projection
+        state = 70;
+    } else if (state == 200) {
+        quiet = quiet+1;
+        if (!stall) { wb_stb = false; state = 201; }
+        if (ack) { read0 = rdata_lo; read1 = rdata_hi; wb_stb = false; state = response; }
+        if (quiet >= 16777216) { error_code = 4; wb_stb = false; state = 900; }
+    } else if (state == 201) {
+        quiet = quiet+1;
+        if (ack) { read0 = rdata_lo; read1 = rdata_hi; state = response; }
+        if (quiet >= 16777216) { error_code = 4; state = 900; }
+    } else if (state == 300) {
+        if (!pending) { ptag = emit_tag; pa = emit_index; pb = emit_value as u64; pending = true; state = 301; }
+    } else if (state == 301) {
+        if (!pending) { state = after_emit; }
+    } else if (state == 600) {
+        if (!pending) { ptag = 99; pa = run_id; pb = cycles; pending = true; state = 601; }
+    } else if (state == 601) {
+        if (!pending) { ptag = 118; pa = 0; pb = report_cycles; pending = true; state = 602; }
+    } else if (state == 602) {
+        if (!pending) { ptag = 118; pa = 1; pb = memory_cycles; pending = true; state = 603; }
+    } else if (state == 603) {
+        if (!pending) { ptag = 122; pa = run_id; pb = 0; pending = true; state = 1; poll = 8192; }
+    } else if (state == 900) {
+        active = false; wb_cyc = false; wb_stb = false;
+        if (!pending) { ptag = 69; pa = error_code; pb = run_id as u64; pending = true; state = 901; }
+    }
+    if (active && !calib) { error_code = 2; state = 900; }
+    if (ack && state != 200 && state != 201) { error_code = 5; state = 900; }
+    line_go = false;
+    if (s_go) { sbuf = true; sb_tag = s_tag; sb_a = s_a; sb_b = s_b; }
+    if (arb == 0) {
+        if (line_idle && sbuf) { line_go = true; line_tag = sb_tag; line_a = sb_a; line_b = sb_b; sbuf = false; arb = 1; }
+        else if (line_idle && pending) { line_go = true; line_tag = ptag; line_a = pa; line_b = pb; pending = false; arb = 1; }
+    } else if (arb == 1) { arb = 2; }
+    else if (line_idle) { arb = 0; }
+}
+
+test exp_zero { assert_eq(exp_q16(0),65536); }
+test exp_deep { assert_eq(exp_q16(4294967295),0); }
+test exp_one { assert_eq(exp_q16(4294901760),65535); }
