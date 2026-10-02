@@ -6,16 +6,23 @@ import re
 from tools import gf16_wide_reference as wide
 
 MAGIC = 0x47464631
+PHASES = ("setup", "input_norm", "input_actquant", "gate", "up", "subnorm", "sub_actquant", "down")
 
 
-def regions(model, x, run=1):
+def trace_flag(trace):
+    if trace not in ("full", "result"):
+        raise ValueError("GF16 trace must be full or result")
+    return int(trace == "result")
+
+
+def regions(model, x, run=1, trace="full"):
     inner, hidden = model['shapes']['gate']
     output, dc = model['shapes']['down']
     if (not 1 <= hidden <= 2560 or not 1 <= inner <= 6912 or not 1 <= output <= 2560 or
             dc != inner or model['shapes']['up'] != [inner, hidden] or len(x) != hidden or
             len(model['w_post']) != hidden or len(model['w_sub']) != inner or not 0 < run < 2**32):
         raise ValueError('GF16 FFN shape/run mismatch')
-    result = {'doorbell': (64, [run | (MAGIC << 32)]),
+    result = {'doorbell': (64, [run | (MAGIC << 32) | (trace_flag(trace) << 64)]),
               'scales': (80, [model['scales'][s] for s in ('gate','up','down')]),
               'x': (4096, x), 'post': (8192, model['w_post']), 'sub': (12288, model['w_sub'])}
     for name, (_, words) in result.items():
@@ -40,11 +47,11 @@ def regions(model, x, run=1):
     return result
 
 
-def write_inputs(work, model, x, run=1):
+def write_inputs(work, model, x, run=1, trace="full"):
     work = Path(work); work.mkdir(parents=True, exist_ok=True)
     manifest = {}
     with (work/'input.mem').open('w') as memory:
-        for name, (base, words) in regions(model,x,run).items():
+        for name, (base, words) in regions(model,x,run,trace).items():
             payload = b''.join(int(v).to_bytes(16,'little') for v in words)
             path = work/(name+'.bin'); path.write_bytes(payload)
             manifest[name] = {'word_address':base,'byte_address':base*16,'file':path.name,
@@ -56,7 +63,10 @@ def write_inputs(work, model, x, run=1):
 
 
 def expected_lines(result, run=1):
-    s = result['stages']; sequence = [('d',run,1)]
+    s = result['stages']; flag = trace_flag(result.get('trace', 'full'))
+    sequence = [('d',run,1+flag)]
+    if flag:
+        return sequence + [('y', i, v) for i, v in enumerate(s['y'])]
     for stage in ('h','p','g','u','sub','v','y'):
         if stage == 'sub':
             for i, (a,b) in enumerate(zip(s['a'],s['s'])):
@@ -90,19 +100,35 @@ def validate(raw, result, run=1):
                 raise ValueError(f'GF16 trace item {i}: {got} != {want}')
         raise ValueError('incomplete GF16 trace')
     summary = data[len(wanted):]
-    if (len(summary) != 4 or [v[:2] for v in summary] !=
-            [('c',run),('k',0),('k',1),('z',run)] or summary[-1][2] != 0):
+    legacy = len(summary) == 4
+    keys = [('c',run),('k',0),('k',1)]
+    if not legacy:
+        keys += [('k',2)] + [('t',i) for i in range(8)]
+    keys += [('z',run)]
+    if [v[:2] for v in summary] != keys or summary[-1][2] != 0:
         raise ValueError('GF16 completion/counters missing, duplicated or out of order')
+    result_only = result.get('trace', 'full') == 'result'
+    if legacy and result_only:
+        raise ValueError('result-only capture requires phase counters')
     total, report, memory = [v[2] for v in summary[:3]]
-    if report+memory > total:
-        raise ValueError('clock accounting exceeds total')
+    if not total or report+memory > total:
+        raise ValueError('clock accounting exceeds total or is empty')
+    extra = {}
+    if not legacy:
+        phases = dict(zip(PHASES, (v[2] for v in summary[4:12])))
+        projection = summary[3][2]
+        if sum(phases.values()) != total or projection > sum(phases[s] for s in ('gate','up','down')):
+            raise ValueError('phase/projection accounting differs from total')
+        extra = {'phase_clocks': phases, 'projection_loop_clocks': projection}
     return {'pass':True,'run':run,'profile':'gf16-ffn-v1',
-            'stage_values':sum(map(len,result['stages'].values())),
-            'actquant_values':sum(map(len,result['actquant'].values())),
+            **({} if legacy else {'trace': 'result' if result_only else 'full'}),
+            'stage_values':len(result['stages']['y']) if result_only else sum(map(len,result['stages'].values())),
+            'actquant_values':0 if result_only else sum(map(len,result['actquant'].values())),
             'capture_sha256':hashlib.sha256(raw).hexdigest(),
-            # The norm engine overlaps its next lane with UART reporting.
-            # This residual includes waiting for that engine, not pure work.
-            'clock_split':{'total':total,'report_wait':report,'memory_wait':memory,'controller_other':total-report-memory}}
+            # Full trace overlaps norm work with UART. In result mode, output
+            # draining happens AFTER the measured active computation window.
+            'clock_split':{'total':total,'report_wait':report,'memory_wait':memory,'controller_other':total-report-memory},
+            **extra}
 
 
 def validate_board_inputs(folder, manifest, result, run=1):
@@ -125,7 +151,7 @@ def validate_board_inputs(folder, manifest, result, run=1):
         if len(data) != region['bytes'] or hashlib.sha256(data).hexdigest() != region['sha256']:
             raise ValueError('GF16 input payload hash mismatch: '+name)
         if name == 'doorbell':
-            if int.from_bytes(data,'little') != (run | (MAGIC << 32)):
+            if int.from_bytes(data,'little') != (run | (MAGIC << 32) | (trace_flag(result.get("trace", "full")) << 64)):
                 raise ValueError('GF16 doorbell differs')
         elif name in ('x','scales','post','sub'):
             if any(not wide.finite(int.from_bytes(data[i:i+16],'little')) for i in range(0,len(data),16)):

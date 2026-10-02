@@ -1,0 +1,116 @@
+# GF16 FFN performance — iteration 6
+
+Issue [#113](https://github.com/dmitrii-f-t27/trinity-memory/issues/113).
+This iteration measures and accelerates the qualified layer-0 `gf16-ffn-v1`
+FFN. Attention, residuals, later layers, logits and generation remain outside
+its scope. The arithmetic contract in [gf16-ffn.md](gf16-ffn.md) is unchanged.
+
+## Measurement contract
+
+Full mode emits every stage and ActQuant code; result mode checks the same
+arithmetic faults but buffers final y until the active window ends. A capture
+in result mode proves the returned y words, not unreported intermediate words.
+Both modes must pass against the same saved integer oracle. The clocked
+regressions also compare full traces and independently count the eight phases.
+
+Phase counters include controller overhead and memory waits. Full-mode clocks
+also include UART backpressure; subtracting report time does not isolate work
+because normalization may overlap it. Result-mode total is the active FFN
+window, including input/weight memory access and the initial start report, but
+excluding host upload/readback and output draining. End-to-end time is larger.
+
+Run the source-hashed paired simulation with existing verified full-shape
+vectors (for example the prior BOS fixture):
+
+```sh
+python tools/measure_gf16_ffn.py --vectors build/gf16-ffn/bos-run6-vectors --output build/gf16-performance/baseline
+```
+
+The driver verifies the binary payload hashes and descriptor, reconstructs its
+memory image, runs both modes against the same reference, and rejects source
+changes during measurement. Its configurable report delay is a simulation
+parameter, not a model of physical UART throughput.
+
+## Projection schedule
+
+The previous loop uses five clocks per trit: registered vector read, registered
+Q39 magnitude, signed term, low/high partial sum, carry update. There are
+53,084,160 trits across gate/up/down at shape2560→6912→2560; the original inner
+loop therefore takes265,420,800 clocks. Phase counters measure the additional
+word fetch, scalar rounding and row/controller overhead separately.
+
+The new schedule advances the vector address and packed weight in the signed
+term state. During the low/high partial sum and carry update, the registered
+RAM read and Q39 conversion prepare the next term. Only the first trit in each
+DDR word needs the two startup states; later trits use three clocks each.
+This preserves the signed128 accumulator and both scalar GF16 rounding/fault
+boundaries. No approximate accumulation or early rounding is introduced.
+The column/index read-address choice uses a registered projection flag, set at
+projection entry and cleared before normalization. The testbench checks its
+equivalence to the three projection phases on every clock; it removes a state
+range decoder from the RAM address path without changing the schedule.
+Internal RAM addresses are explicitly limited to 13 bits. Valid shapes cap
+all live indices below 8192; the testbench checks the unmasked selected index
+and row every active clock. This removes unnecessarily wide address logic
+without wrapping any legal access or changing the arithmetic schedule.
+
+At full shape, the expected inner-loop count is
+`3 * 53,084,160 + 2 * 829,440 = 160,911,360` clocks. The ratio of loop counts is
+1.64948×; this is the projection schedule ratio. Measured whole-FFN active
+latency on the board is reported separately below.
+Word fetches, scalar rounding, norms and ActQuant still contribute to total
+latency. Small-shape RTL regression checks the exact cycle formula across
+partial words and the 64-trit boundary, as well as all numerical outputs.
+
+Physical BOS qualification measures 4.873065 s →
+3.142136 s for the result-mode active window at 60 MHz
+(1.55088×). Both full traces and final results are exact, and a
+fresh zero-input pair also passes. The
+[retained evidence](../reports/fpga/gf16-performance-2026-10-01/README.md)
+contains the source revisions, input hashes, phase counts, timing, thermal
+readings, rejected/retried UART frames and standalone verification commands.
+
+
+## Paired physical runs
+
+`tools/fpga-ffn-run.py --gf16-ffn --trace-pair ...` requires full-mode vectors.
+It freshly uploads and CRC-readback-verifies every region, records a full trace,
+then changes only descriptor/run ID to execute result mode with unchanged DDR
+inputs. No intervening reset, reconfiguration or weight write occurs. The
+second capture explicitly records this reuse; it is not a second fresh upload.
+Both traces must pass before the command succeeds, and UART baud is restored
+even when capture or validation fails. Run IDs must leave space for run+1.
+
+`tools/verify_gf16_ffn_board.py --run ... --vectors ... --boot ... --output ...`
+independently reconstructs all readback bytes from CRC-valid frames, verifies
+both captures and the single-descriptor change, and checks board identity,
+bitstream hash, temperature records and baud restoration. Full raw weight
+readback streams remain local; compact receipts/hashes and captures are the
+public evidence.
+
+## Reproducing the hardware comparison
+
+The serial control is commit `fbe03f89a2242ed6bb0140e476eacce269a7d1d4` on
+`codex/gf16-serial-timing-baseline`; the accelerated RTL is
+`539dbb46d06f2873e9aa6b02078ea6f86d79606e`. Both contain the same RAM address
+selection and width cleanup. The control branch retains the five-clock loop
+for measurement and must not be merged into the accelerated implementation.
+
+Build and boot each variant at the same 60 MHz controller frequency. Recorded
+build and packing commands are saved with each build receipt. Require routed
+timing, the expected build ID and GF16 header before loading vectors. For
+each variant, use a fresh full-mode input directory and an unused output path:
+
+```sh
+python tools/fpga-ffn-run.py --gf16-ffn --trace-pair \
+  --vectors VECTORS --boot BOOT_JSON --output RUN_DIR \
+  --port /dev/cu.usbserial-10 --cable digilent_hs3 --max-temp 70
+python tools/verify_gf16_ffn_board.py \
+  --vectors VECTORS --boot BOOT_JSON --run RUN_DIR --output RAW_PROOF_JSON
+```
+
+The default transfer rate is 921600 baud and continuous capture is 460800.
+CRC-invalid readback frames may be retried; acceptance requires complete
+CRC-valid coverage and exact payload bytes. The compact published verifier
+checks numerical captures and hashed receipts; reconstructing every DDR byte
+requires the local payloads and raw readback streams.

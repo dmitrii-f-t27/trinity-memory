@@ -47,6 +47,18 @@ class Oracle(unittest.TestCase):
                     raw.replace(b'G000000080000000006',b'F000000080000000006')):
             with self.assertRaises(ValueError):vectors.validate(bad,r)
 
+    def test_phase_protocol_rejects_bad_totals(self):
+        r=ref.evaluate(model(),[0]*8)
+        tail=[('c',1,100),('k',0,20),('k',1,30),('k',2,20)]
+        tail += [('t',i,10 if i<7 else 30) for i in range(8)]
+        tail += [('z',1,0)]
+        def raw(items):
+            return ''.join(f'{t}{i:08x}{v:010x}\n' for t,i,v in vectors.expected_lines(r)+items).encode()
+        self.assertEqual(sum(vectors.validate(raw(tail),r)['phase_clocks'].values()),100)
+        for index,value in ((0,99),(1,90),(3,51),(4,9),(11,31)):
+            bad=tail[:];tag,i,_=bad[index];bad[index]=(tag,i,value)
+            with self.subTest(index=index),self.assertRaises(ValueError):vectors.validate(raw(bad),r)
+
     def test_board_payload_preflight(self):
         import hashlib
         import json
@@ -72,6 +84,15 @@ class Oracle(unittest.TestCase):
                     vectors.validate_board_inputs(folder,bad,r)
             for run in (0,2,2**32):
                 with self.assertRaises(ValueError):vectors.validate_board_inputs(folder,manifest,r,run)
+            r['trace']='result'
+            with self.assertRaises(ValueError):vectors.validate_board_inputs(folder,manifest,r)
+            data=(1 | (vectors.MAGIC<<32) | (1<<64)).to_bytes(16,'little')
+            (folder/'doorbell.bin').write_bytes(data)
+            manifest['doorbell']['sha256']=hashlib.sha256(data).hexdigest()
+            vectors.validate_board_inputs(folder,manifest,r)
+            r['trace']='unexpected'
+            with self.assertRaises(ValueError):vectors.validate_board_inputs(folder,manifest,r)
+            r['trace']='result'
             r['profile']='q16'
             with self.assertRaises(ValueError):vectors.validate_board_inputs(folder,manifest,r)
             r['profile']=ref.PROFILE
@@ -123,13 +144,48 @@ class Generated(unittest.TestCase):
         self.assertGreater(slow['clock_split']['memory_wait'],fast['clock_split']['memory_wait'])
         self.assertGreater(slow['clock_split']['report_wait'],fast['clock_split']['report_wait'])
 
+    def test_large_signed_prefix_cancellation(self):
+        # Q39 terms reach bit 70, so both carry and sign-extension matter.
+        # Large prefixes cancel exactly before the single GF16 dot rounding.
+        m=model(64,4,2)
+        m['w_post']=[0x7dff]*64
+        m['gate']=[1]*32+[-1]*32 + [-1]*32+[1]*32 + [0]*64 + [1,-1]*32
+        m['up']=m['gate'][:]
+        x=[ref.ONE]*64;r=ref.evaluate(m,x)
+        self.assertEqual(r['stages']['g'],[0]*4)
+        for mode in ('full','result'):
+            self.assertTrue(build.simulate(self.work/('cancel-'+mode),self.rtl,m,x,r,trace=mode)['pass'])
+
+    def test_result_only_and_phase_partition(self):
+        m=model(65,67,3);x=[ref.ONE if i%3 else (ref.ONE|0x8000) for i in range(65)]
+        r=ref.evaluate(m,x)
+        full=build.simulate(self.work/'trace-full',self.rtl,m,x,r,out_base=200)
+        result=build.simulate(self.work/'trace-result',self.rtl,m,x,r,out_base=200,trace='result')
+        self.assertEqual(result['stage_values'],3)
+        self.assertEqual(result['actquant_values'],0)
+        self.assertEqual(result['trace'],'result')
+        self.assertLess(result['clock_split']['total'],full['clock_split']['total'])
+        self.assertLess(result['clock_split']['report_wait'],full['clock_split']['report_wait'])
+        for record in (full,result):
+            self.assertEqual(sum(record['phase_clocks'].values()),record['clock_split']['total'])
+            self.assertEqual(record['projection_loop_clocks'],3*(2*65*67+3*67)+2*(2*67*2+3*2))
+        raw=(self.work/'trace-result'/'capture.txt').read_bytes()
+        expected={**r,'trace':'result'}
+        for bad in (raw.replace(b't00000000',b't00000001'),
+                    raw.replace(b'k00000002',b'k00000003'),
+                    b''.join(line for line in raw.splitlines(keepends=True) if not line.startswith(b't')),
+                    raw.replace(b'd000000010000000002',b'd000000010000000001')):
+            with self.assertRaises(ValueError):vectors.validate(bad,expected)
+        with self.assertRaises(ValueError):vectors.validate(raw,r)
+
     def test_faults_reset_and_second_vector(self):
         m=model();x=[ref.ONE,ref.ONE|0x8000]*4;r=ref.evaluate(m,x)
         probes=[({'CALIB_LOSS_AT':1000,'EXPECT_ERROR':2},None),
                 ({'SPURIOUS_ACK_AT':1000,'EXPECT_ERROR':5},None),
                 ({'EXPECT_ERROR':6},(4096,0x7e00)),
                 ({'EXPECT_ERROR':6},(80,1<<100)),
-                ({'EXPECT_ERROR':3},(65536,3))]
+                ({'EXPECT_ERROR':3},(65536,3)),
+                ({'EXPECT_ERROR':10},(64,(2<<64)|(vectors.MAGIC<<32)|1))]
         for i,(params,patch) in enumerate(probes):
             work=self.work/f'fault-{i}';inp=vectors.write_inputs(work,m,x)
             if patch:

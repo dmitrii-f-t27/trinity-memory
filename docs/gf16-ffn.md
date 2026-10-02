@@ -72,16 +72,37 @@ The header is `G(2560,6912)` and the run start is `d(run,1)`, distinct from Q16.
 One UART line contains a tag, eight hex index digits and ten hex value digits.
 The order is h, p, g, u, interleaved a/s, v, y. Here p/v contain the dequantized
 GF16 word plus the signed 8-bit ActQuant code in bits 16..23. Product a is FP32;
-all other stage values are GF16. The capture ends with c, k0, k1, z.
+all other stage values are GF16. The capture ends with c, k0, k1, k2, t0…t7, z. Legacy captures ending
+with c, k0, k1, z remain verifiable as historical full traces.
 
-`c` is total active clocks, `k0` time attributed to UART reporting, and `k1`
-time attributed to memory wait. The remaining `controller_other` includes
-norm-engine waits. It is not an isolated compute measurement: the norm engine
-can compute its next lane while the controller reports the previous one.
+Descriptor bit 64 selects `trace=result`; all other upper bits must be zero.
+The run start reports `d(run,2)` for this mode (full trace remains `d(run,1)`).
+It skips intermediate UART records, buffers all final y words in the now-unused
+gate RAM and stops the active timer before draining them. It still checks every
+arithmetic fault and validates every y word. Prepare it with
+`python tools/fpga-ffn.py prepare --gf16-ffn --trace result ...`.
+The selected mode is saved in `reference.json` and checked against the doorbell
+before any hardware access; a full trace cannot silently satisfy result mode.
+
+`c` is total active clocks, `k0` time in reporting states, `k1` time in memory
+wait states, and `k2` clocks in the projection inner loop. The remaining
+`controller_other` includes norm-engine waits. Full trace permits norm work to
+overlap reporting; subtracting k0 does not isolate compute. Result mode moves
+all y output outside the active window; the initial start record is still in
+setup. Active clocks include input/weight memory transfers and normalization.
+They exclude host uploads/readback and the final UART drain.
+
+The disjoint t counters partition exactly the c window: setup (0), input norm
+(1), input ActQuant (2), gate (3), up (4), product/subnorm (5), sub ActQuant (6),
+and down (7). Phase transitions occur on registered controller boundaries;
+per-phase numbers include memory/report waits and controller overhead. They
+are elapsed phase times, not mutually exclusive resource-utilization counters.
+The testbench independently counts active, phase, report and memory clocks.
 
 Errors stop the controller until reset: E1 shape, E2 calibration/arithmetic
 fault, E3 invalid trit, E4 memory timeout, E5 unexpected acknowledgment,
-E6 invalid GF16 word, E7 scalar overflow, E8 norm index, E9 ActQuant bound.
+E6 invalid GF16 word, E7 scalar overflow, E8 norm index, E9 ActQuant bound,
+E10 unsupported descriptor flags.
 
 ## Reproduction and evidence
 

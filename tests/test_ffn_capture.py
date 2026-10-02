@@ -35,6 +35,22 @@ class Capture(unittest.TestCase):
         self.assertEqual(raw,body+b'z000000010000000000\n')
         self.assertEqual(port.sent,b'doorbell')
 
+    def test_trace_pair_requires_full_profile_and_distinct_descriptor(self):
+        ref={'profile':'gf16-ffn-v1','run':8,'stages':{'y':[1,2]}}
+        payload=(8 | (0x47464631<<32)).to_bytes(16,'little')
+        plans=runner.trace_runs(ref,payload,True)
+        self.assertEqual(plans[0],('',ref,8,payload))
+        name,following,run,descriptor=plans[1]
+        self.assertEqual((name,run,following['trace']),('result-only',9,'result'))
+        self.assertEqual(int.from_bytes(descriptor,'little'),9 | (0x47464631<<32) | (1<<64))
+        self.assertEqual(following['stages'],ref['stages'])
+        self.assertNotIn('trace',ref)
+        for bad in ({**ref,'trace':'result'},{**ref,'run':2**32-1},
+                    {**ref,'profile':'q16'},{**ref,'run':0}):
+            with self.assertRaises(ValueError):runner.trace_runs(bad,payload,True)
+        with self.assertRaises(ValueError):runner.trace_runs(ref,bytes(16),True)
+        self.assertEqual(len(runner.trace_runs({'run':1},b'legacy',False)),1)
+
     def test_device_and_serial_errors_preserve_received_bytes(self):
         for failure in (b'E000000020000000001\n',OSError('disconnected')):
             port=Port();raw=bytearray();port.parts.put(b'prefix');port.parts.put(failure)
