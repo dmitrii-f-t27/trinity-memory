@@ -126,7 +126,13 @@ module TrinityGf16AttnT27 (
     output reg [63:0] term2,
     output reg [63:0] term3,
     output reg [31:0] max_score,
-    output reg [31:0] sc_index
+    output reg [31:0] sc_index,
+    output reg [31:0] va,
+    output reg [31:0] ga,
+    output reg [31:0] ua,
+    output reg [31:0] vr2,
+    output reg [31:0] gr2,
+    output reg [31:0] ur2
 );
 
     // -------------------------------------------------------
@@ -635,6 +641,36 @@ module TrinityGf16AttnT27 (
         sc_index = 0;
     end
 
+    // va exposed as output reg port
+    initial begin
+        va = 0;
+    end
+
+    // ga exposed as output reg port
+    initial begin
+        ga = 0;
+    end
+
+    // ua exposed as output reg port
+    initial begin
+        ua = 0;
+    end
+
+    // vr2 exposed as output reg port
+    initial begin
+        vr2 = 0;
+    end
+
+    // gr2 exposed as output reg port
+    initial begin
+        gr2 = 0;
+    end
+
+    // ur2 exposed as output reg port
+    initial begin
+        ur2 = 0;
+    end
+
 
     // -------------------------------------------------------
     // R-SI-1: multiplication helper (no `*` operator)
@@ -935,6 +971,12 @@ module TrinityGf16AttnT27 (
             term3 <= 0;
             max_score <= 0;
             sc_index <= 0;
+            va <= 0;
+            ga <= 0;
+            ua <= 0;
+            vr2 <= 0;
+            gr2 <= 0;
+            ur2 <= 0;
         end else if (en) begin
             if (active) begin
                 cycles <= (cycles + 1);
@@ -1070,7 +1112,7 @@ module TrinityGf16AttnT27 (
                 sumsq1 <= 0;
                 state <= 21;
             end else if ((state == 21)) begin
-                sample_q <= pick((norm_pass == 0), vec[(index & 8191)], up[((kvcount + index) & 8191)]);
+                sample_q <= pick((norm_pass == 0), vr2, ur2);
                 state <= 22;
             end else if ((state == 22)) begin
                 lane <= mag64(sample_q);
@@ -1164,8 +1206,8 @@ module TrinityGf16AttnT27 (
                 index <= 0;
                 state <= 40;
             end else if ((state == 40)) begin
-                sample_q <= pick((norm_pass == 0), vec[(index & 8191)], up[((kvcount + index) & 8191)]);
-                weight_q <= pick((norm_pass == 0), gate[((__mul_noop(2, hidden) + index) & 8191)], gate[(index & 8191)]);
+                sample_q <= pick((norm_pass == 0), vr2, ur2);
+                weight_q <= gr2;
                 state <= 41;
             end else if ((state == 41)) begin
                 num_sign <= (sign64(sample_q) != sign64(weight_q));
@@ -1268,7 +1310,7 @@ module TrinityGf16AttnT27 (
             end else if ((state == 73)) begin
                 state <= 74;
             end else if ((state == 74)) begin
-                term0 <= pick(((weight0 & 3) == 0), 0, pick(((weight0 & 3) == 2), (0 - extend(gate[(col & 8191)])), extend(gate[(col & 8191)])));
+                term0 <= pick(((weight0 & 3) == 0), 0, pick(((weight0 & 3) == 2), (0 - extend(gr2)), extend(gr2)));
                 state <= 75;
                 weight0 <= ((weight0 >> 2) | (weight1 << 62));
                 weight1 <= (weight1 >> 2);
@@ -1367,10 +1409,10 @@ module TrinityGf16AttnT27 (
                 sin_q <= (read0 & {32{1'b1}});
                 state <= 95;
             end else if ((state == 95)) begin
-                sample_q <= gate[(((hidden + __mul_noop(head, head_dim)) + pair) & 8191)];
+                sample_q <= gr2;
                 state <= 96;
             end else if ((state == 96)) begin
-                lane <= gate[((((hidden + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)];
+                lane <= gr2;
                 state <= 97;
             end else if ((state == 97)) begin
                 term0 <= __mul_noop(extend(sample_q), extend(cos_q));
@@ -1449,7 +1491,7 @@ module TrinityGf16AttnT27 (
             end else if ((state == 110)) begin
                 emit_tag <= 107;
                 emit_index <= index;
-                emit_value <= gate[((hidden + index) & 8191)];
+                emit_value <= gr2;
                 after_emit <= 111;
                 state <= pick(result_only, 111, 300);
             end else if ((state == 111)) begin
@@ -1484,10 +1526,10 @@ module TrinityGf16AttnT27 (
                 sin_q <= (read0 & {32{1'b1}});
                 state <= 120;
             end else if ((state == 120)) begin
-                sample_q <= up[(((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) & 8191)];
+                sample_q <= ur2;
                 state <= 121;
             end else if ((state == 121)) begin
-                lane <= up[((((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)];
+                lane <= ur2;
                 state <= 122;
             end else if ((state == 122)) begin
                 term0 <= __mul_noop(extend(sample_q), extend(cos_q));
@@ -1566,7 +1608,7 @@ module TrinityGf16AttnT27 (
             end else if ((state == 135)) begin
                 emit_tag <= 108;
                 emit_index <= index;
-                emit_value <= up[((__mul_noop(pos, kv) + index) & 8191)];
+                emit_value <= ur2;
                 after_emit <= 136;
                 state <= pick(result_only, 136, 300);
             end else if ((state == 136)) begin
@@ -1584,7 +1626,7 @@ module TrinityGf16AttnT27 (
                 acc1 <= 0;
                 state <= 141;
             end else if ((state == 141)) begin
-                lane <= __mul_noop(extend(gate[(((hidden + __mul_noop(head, head_dim)) + col) & 8191)]), extend(up[(((__mul_noop(jj, kv) + __mul_noop((head / group), head_dim)) + col) & 8191)]));
+                lane <= __mul_noop(extend(gr2), extend(ur2));
                 state <= 142;
             end else if ((state == 142)) begin
                 add0 <= (acc0 + lane);
@@ -1650,7 +1692,7 @@ module TrinityGf16AttnT27 (
                     state <= 150;
                 end
             end else if ((state == 150)) begin
-                max_score <= vec[(((hidden + kvcount) + jj) & 8191)];
+                max_score <= vr2;
                 state <= 151;
             end else if ((state == 151)) begin
                 if ((jj < pos)) begin
@@ -1662,12 +1704,12 @@ module TrinityGf16AttnT27 (
                     state <= 154;
                 end
             end else if ((state == 152)) begin
-                if (sgt(extend(vec[(((hidden + kvcount) + jj) & 8191)]), extend(max_score))) begin
-                    max_score <= vec[(((hidden + kvcount) + jj) & 8191)];
+                if (sgt(extend(vr2), extend(max_score))) begin
+                    max_score <= vr2;
                 end
                 state <= 151;
             end else if ((state == 154)) begin
-                exp_value <= exp_q16((vec[(((hidden + kvcount) + jj) & 8191)] - max_score));
+                exp_value <= exp_q16((vr2 - max_score));
                 state <= 155;
             end else if ((state == 155)) begin
                 vec[(((hidden + kvcount) + jj) & 8191)] <= exp_value;
@@ -1686,7 +1728,10 @@ module TrinityGf16AttnT27 (
                 acc0 <= 0;
                 state <= 161;
             end else if ((state == 161)) begin
-                lane <= __mul_noop(extend(vec[((((hidden + __mul_noop(jj, kv)) + __mul_noop((head / group), head_dim)) + dd) & 8191)]), vec[(((hidden + kvcount) + jj) & 8191)]);
+                sample_q <= vr2;
+                state <= 157;
+            end else if ((state == 157)) begin
+                lane <= __mul_noop(extend(sample_q), vr2);
                 state <= 162;
             end else if ((state == 162)) begin
                 acc0 <= (acc0 + lane);
@@ -1785,7 +1830,7 @@ module TrinityGf16AttnT27 (
                 weight_addr <= 219136;
                 state <= 71;
             end else if ((state == 180)) begin
-                lane <= (extend(vec[(index & 8191)]) + extend(gate[((hidden + index) & 8191)]));
+                lane <= (extend(vr2) + extend(gr2));
                 state <= 181;
             end else if ((state == 181)) begin
                 if (((lane >> 63) != 0)) begin
@@ -1948,6 +1993,12 @@ module TrinityGf16AttnT27 (
     // Module-level statements
     // -------------------------------------------------------
     always @(*) begin
+        va = pick((((state == 21) || (state == 40)) || (state == 180)), index, pick(((((state == 150) || (state == 152)) || (state == 154)) || (state == 157)), ((hidden + kvcount) + jj), pick((state == 161), (((hidden + __mul_noop(jj, kv)) + __mul_noop((head / group), head_dim)) + dd), 0)));
+        ga = pick((state == 40), pick((norm_pass == 0), (__mul_noop(2, hidden) + index), index), pick((state == 74), col, pick((state == 95), ((hidden + __mul_noop(head, head_dim)) + pair), pick((state == 96), (((hidden + __mul_noop(head, head_dim)) + pair) + pairs), pick(((state == 110) || (state == 180)), (hidden + index), pick((state == 141), ((hidden + __mul_noop(head, head_dim)) + col), 0))))));
+        ua = pick(((state == 21) || (state == 40)), (kvcount + index), pick((state == 120), ((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair), pick((state == 121), (((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs), pick((state == 135), (__mul_noop(pos, kv) + index), pick((state == 141), ((__mul_noop(jj, kv) + __mul_noop((head / group), head_dim)) + col), 0)))));
+        vr2 = vec[(va & 8191)];
+        gr2 = gate[(ga & 8191)];
+        ur2 = up[(ua & 8191)];
         s_idle = !sbuf;
     end
 

@@ -194,6 +194,26 @@ var term3: u64 = 0;
 // Softmax internals.
 var max_score: u32 = 0;
 var sc_index: u32 = 0;
+// Single combinational read port per RAM, FFN style: every state reads its
+// lane through one address expression, so memory_libmap can keep the three
+// arrays as LUTRAM instead of unrolling them to registers (77k cells).
+var va: u32 = 0; var ga: u32 = 0; var ua: u32 = 0;
+var vr2: u32 = 0; var gr2: u32 = 0; var ur2: u32 = 0;
+va = pick(state == 21 || state == 40 || state == 180, index,
+    pick(state == 150 || state == 152 || state == 154 || state == 157, hidden+kvcount+jj,
+    pick(state == 161, hidden+jj*kv+(head / group) * head_dim+dd, 0)));
+ga = pick(state == 40, pick(norm_pass == 0,2*hidden+index,index),
+    pick(state == 74, col,
+    pick(state == 95, hidden+head*head_dim+pair,
+    pick(state == 96, hidden+head*head_dim+pair+pairs,
+    pick(state == 110 || state == 180, hidden+index,
+    pick(state == 141, hidden+head*head_dim+col, 0))))));
+ua = pick(state == 21 || state == 40, kvcount+index,
+    pick(state == 120, pos*kv+head*head_dim+pair,
+    pick(state == 121, pos*kv+head*head_dim+pair+pairs,
+    pick(state == 135, pos*kv+index,
+    pick(state == 141, jj*kv+(head / group) * head_dim+col, 0)))));
+vr2 = vec[va & 8191]; gr2 = gate[ga & 8191]; ur2 = up[ua & 8191];
 s_idle = !sbuf;
 
 fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
@@ -253,7 +273,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     } else if (state == 20) {
         index = 0; sumsq0 = 0; sumsq1 = 0; state = 21;
     } else if (state == 21) {
-        sample_q = pick(norm_pass == 0, vec[index & 8191], up[(kvcount+index) & 8191]);
+        sample_q = pick(norm_pass == 0, vr2, ur2);
         state = 22;
     } else if (state == 22) {
         lane = mag64(sample_q);
@@ -310,8 +330,8 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         rms = root; index = 0; state = 40;
     } else if (state == 40) {
         // Per lane: q = div_rne(mag(t)*mag(w) << 16, rms), sign of t xor w.
-        sample_q = pick(norm_pass == 0, vec[index & 8191], up[(kvcount+index) & 8191]);
-        weight_q = pick(norm_pass == 0, gate[(2*hidden+index) & 8191], gate[index & 8191]);
+        sample_q = pick(norm_pass == 0, vr2, ur2);
+        weight_q = gr2;
         state = 41;
     } else if (state == 41) {
         num_sign = sign64(sample_q) != sign64(weight_q);
@@ -363,7 +383,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         weight0 = read0; weight1 = read1; state = 73;
     } else if (state == 73) { state = 74;
     } else if (state == 74) {
-        term0 = pick((weight0 & 3) == 0,0,pick((weight0 & 3) == 2,(0 as u64)-extend(gate[col & 8191]),extend(gate[col & 8191])));
+        term0 = pick((weight0 & 3) == 0,0,pick((weight0 & 3) == 2,(0 as u64)-extend(gr2),extend(gr2)));
         state = 75;
         weight0 = (weight0 >> 2) | (weight1 << 62); weight1 = weight1 >> 2; col = col+1;
         if ((weight0 & 3) == 3) { error_code = 3; state = 900; }
@@ -409,10 +429,10 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     } else if (state == 94) {
         sin_q = read0 as u32; state = 95;
     } else if (state == 95) {
-        sample_q = gate[(hidden+head*head_dim+pair) & 8191];
+        sample_q = gr2;
         state = 96;
     } else if (state == 96) {
-        lane = gate[(hidden+head*head_dim+pair+pairs) & 8191];
+        lane = gr2;
         state = 97;
     } else if (state == 97) {
         term0 = extend(sample_q)*extend(cos_q);
@@ -474,7 +494,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         } else { head = head+1; state = 95; }
     } else if (state == 110) {
         // qr = rotated q, emitted lane by lane.
-        emit_tag = 107; emit_index = index; emit_value = gate[(hidden+index) & 8191]; after_emit = 111; state = pick(result_only,111,300);
+        emit_tag = 107; emit_index = index; emit_value = gr2; after_emit = 111; state = pick(result_only,111,300);
     } else if (state == 111) {
         if (index+1 == hidden) { index = 0; pair = 0; head = 0; state = 115; }
         else { index = index+1; state = 110; }
@@ -490,10 +510,10 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     } else if (state == 119) {
         sin_q = read0 as u32; state = 120;
     } else if (state == 120) {
-        sample_q = up[(pos*kv+head*head_dim+pair) & 8191];
+        sample_q = ur2;
         state = 121;
     } else if (state == 121) {
-        lane = up[(pos*kv+head*head_dim+pair+pairs) & 8191];
+        lane = ur2;
         state = 122;
     } else if (state == 122) {
         term0 = extend(sample_q)*extend(cos_q);
@@ -554,7 +574,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         } else { head = head+1; state = 120; }
     } else if (state == 135) {
         // kr = rotated k of this position, emitted from the cache slot.
-        emit_tag = 108; emit_index = index; emit_value = up[(pos*kv+index) & 8191]; after_emit = 136; state = pick(result_only,136,300);
+        emit_tag = 108; emit_index = index; emit_value = ur2; after_emit = 136; state = pick(result_only,136,300);
     } else if (state == 136) {
         if (index+1 == kv) { head = 0; state = 140; }
         else { index = index+1; state = 135; }
@@ -562,7 +582,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         // Scores of head h over cached keys j <= pos.
         jj = 0; col = 0; acc0 = 0; acc1 = 0; state = 141;
     } else if (state == 141) {
-        lane = extend(gate[(hidden+head*head_dim+col) & 8191])*extend(up[(jj*kv+(head / group) * head_dim+col) & 8191]);
+        lane = extend(gr2)*extend(ur2);
         state = 142;
     } else if (state == 142) {
         add0 = acc0+lane;
@@ -604,18 +624,18 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         else { jj = 0; state = 150; }
     } else if (state == 150) {
         // Row maximum over the stored scores.
-        max_score = vec[(hidden+kvcount+jj) & 8191];
+        max_score = vr2;
         state = 151;
     } else if (state == 151) {
         if (jj < pos) { jj = jj+1; state = 152; }
         else { jj = 0; exp_denom = 0; state = 154; }
     } else if (state == 152) {
         // signed maximum: u32 patterns of negative scores would win unsigned
-        if (sgt(extend(vec[(hidden+kvcount+jj) & 8191]),extend(max_score))) { max_score = vec[(hidden+kvcount+jj) & 8191]; }
+        if (sgt(extend(vr2),extend(max_score))) { max_score = vr2; }
         state = 151;
     } else if (state == 154) {
         // e_j = exp_q16(score_j - max), accumulate the exact denominator.
-        exp_value = exp_q16(vec[(hidden+kvcount+jj) & 8191]-max_score);
+        exp_value = exp_q16(vr2-max_score);
         state = 155;
     } else if (state == 155) {
         vec[(hidden+kvcount+jj) & 8191] = exp_value;
@@ -626,9 +646,14 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         else { jj = 0; dd = 0; state = 160; }
     } else if (state == 160) {
         // Context lane d of head h: sum of e_j * v_j[d], one division.
+        // The v lane and its exp weight read the same RAM in different
+        // states so the single read port serves both.
         acc0 = 0; state = 161;
     } else if (state == 161) {
-        lane = extend(vec[(hidden+jj*kv+(head / group) * head_dim+dd) & 8191])*vec[(hidden+kvcount+jj) & 8191] as u64;
+        sample_q = vr2;
+        state = 157;
+    } else if (state == 157) {
+        lane = extend(sample_q)*vr2 as u64;
         state = 162;
     } else if (state == 162) {
         acc0 = acc0+lane;
@@ -681,7 +706,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         row = 0; col = 0; acc0 = 0; nrows = hidden; weight_addr = 219136; state = 71;
     } else if (state == 180) {
         // residual: r = clamp_s32(x + o).
-        lane = extend(vec[index & 8191])+extend(gate[(hidden+index) & 8191]);
+        lane = extend(vr2)+extend(gr2);
         state = 181;
     } else if (state == 181) {
         if ((lane >> 63) != 0) {
