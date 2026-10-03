@@ -170,6 +170,9 @@ def validate_board_inputs(folder, manifest, stages, run=1, positions=1, result_o
                 raise ValueError("weight word out of Q16.16 range: " + name)
     if (hidden, kv, heads) != (2560, 640, 20):
         raise ValueError("attention board dimensions differ from the qualified layer")
+    descriptor = (run | (MAGIC << 32) | (positions << 64) | (int(result_only) << 96))
+    if (Path(folder) / 'doorbell.bin').read_bytes() != descriptor.to_bytes(16, 'little'):
+        raise ValueError("attention doorbell differs from reference")
 
 
 def write_reference(path, stages, run=1, positions=1, trace="full"):

@@ -75,20 +75,29 @@ class Capture(unittest.TestCase):
 
 
 class BaudCleanup(unittest.TestCase):
+    runner=runner
+    region_names=('doorbell','gate','up','down','scales','post','sub','x')
+    attention=False
+
     def exercise_main(self, failure=None):
         """Run the real CLI orchestration with stateful, fault-injected devices."""
+        runner=self.runner
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); vectors=root/'vectors'; vectors.mkdir()
             out=root/'capture'; manifest={}
-            for i,name in enumerate(('doorbell','gate','up','down','scales','post','sub','x')):
+            for i,name in enumerate(self.region_names):
                 data=bytes([i])*16; (vectors/(name+'.bin')).write_bytes(data)
                 manifest[name]={'file':name+'.bin','bytes':len(data),
                                 'sha256':hashlib.sha256(data).hexdigest(),'byte_address':i*16}
+            if self.attention:
+                descriptor=(1 | (0x41545431<<32) | (1<<64)).to_bytes(16,'little')
+                (vectors/'doorbell.bin').write_bytes(descriptor)
             (vectors/'inputs.json').write_text(json.dumps(manifest))
             (vectors/'reference.json').write_text(json.dumps(
-                {'run':1,'expected':{},'saturations':{},'f64_error':{}}))
+                {'profile':'gf16-attn-v1' if self.attention else 'gf16-ffn-v1',
+                 'run':1,'expected':{},'saturations':{},'f64_error':{},'positions':1,'stages':{}}))
             boot=root/'boot.json'; boot.write_text(json.dumps(
-                {'checks':{'ffn_header':True},'bitstream_sha256':'test-hash','run':{'dna':'TEST-DNA'}}))
+                {'checks':{'gf16_attn_header' if self.attention else 'ffn_header':True},'bitstream_sha256':'test-hash','run':{'dna':'TEST-DNA'}}))
             device=SimpleNamespace(baud=115200,links=[],capture_open=False)
             outer=self
 
@@ -127,11 +136,11 @@ class BaudCleanup(unittest.TestCase):
                 def __enter__(self): device.capture_open=True; return self
                 def __exit__(self,*args): device.capture_open=False
 
-            def capture(*args):
+            def capture(*args,**kwargs):
                 if failure=='capture':raise TimeoutError('capture')
                 args[2].extend(b'captured bytes')
 
-            def validate(*args):
+            def validate(*args,**kwargs):
                 if failure=='validate':raise ValueError('validate')
                 return {'pass':True}
 
@@ -150,8 +159,10 @@ class BaudCleanup(unittest.TestCase):
                     (runner.subprocess,'Popen',Child),
                     (runner,'capture_stream',capture),
                     (runner.fv,'doorbell_acknowledged',lambda raw:True),
-                    (runner.fv,'validate',validate)):
+                    (runner.av if self.attention else runner.fv,'validate',validate)):
                     stack.enter_context(mock.patch.object(target,attr,value))
+                if self.attention:
+                    stack.enter_context(mock.patch.object(runner.av,'validate_board_inputs'))
                 stack.enter_context(mock.patch.dict(sys.modules,{'serial':SimpleNamespace(Serial=Serial)}))
                 stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
                 if failure:
@@ -171,8 +182,9 @@ class BaudCleanup(unittest.TestCase):
                 self.assertTrue((out/'capture.txt').exists())
 
     def test_success_and_early_failures_restore_baud_and_close_ports(self):
-        for failure in (None,'qualification','load-gate','load-up','load-down','load-scales',
-                        'load-post','load-sub','load-x','receipt','switch-before','switch-after',
+        for failure in (None,'qualification',
+                        *('load-'+name for name in self.region_names if name!='doorbell'),
+                        'receipt','switch-before','switch-after',
                         'open','capture','validate','interrupt'):
             with self.subTest(failure=failure):self.exercise_main(failure)
 
