@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 import uart_loader_protocol as proto  # noqa: E402
 import ffn_vectors as fv  # noqa: E402
 from tools import gf16_attn_vectors as av  # noqa: E402
+from uart_session import restoring_baud  # noqa: E402
 
 
 def capture_stream(port, payload, raw, run_id, temperature, timeout=180):
@@ -65,15 +66,19 @@ def trace_runs(reference, payload, paired=False):
     """Plan a fresh full run and optional result run on unchanged DDR inputs."""
     run = reference.get('run', 1)
     positions = reference['positions']
+    trace = reference.get('trace', 'full')
+    if (reference.get('profile') != 'gf16-attn-v1' or trace not in ('full', 'result')
+            or not 0 < run < 2**32 or not 1 <= positions <= 8):
+        raise ValueError('invalid attention reference profile/run/positions/trace')
+    magic = 0x41545431
+    expected = run | (magic << 32) | (positions << 64) | ((trace == 'result') << 96)
+    if payload != expected.to_bytes(16, 'little'):
+        raise ValueError('attention descriptor differs from reference')
     first = ('', reference, run, payload)
     if not paired:
         return [first]
-    if (reference.get('profile') != 'gf16-attn-v1' or reference.get('trace', 'full') != 'full'
-            or not 0 < run < 2**32 - 1):
+    if trace != 'full' or run == 2**32 - 1:
         raise ValueError('trace pair requires full attention vectors and a spare run ID')
-    magic = 0x41545431
-    if payload != (run | (magic << 32) | (positions << 64)).to_bytes(16, 'little'):
-        raise ValueError('trace pair initial descriptor differs')
     following = {**reference, 'run': run + 1, 'trace': 'result'}
     descriptor = ((run + 1) | (magic << 32) | (positions << 64) | (1 << 96)).to_bytes(16, 'little')
     return [first, ('result-only', following, run + 1, descriptor)]
@@ -100,7 +105,8 @@ def main():
     ref = json.loads((args.vectors / 'reference.json').read_text())
     run_id = ref.get('run', 1)
     positions = ref['positions']
-    av.validate_board_inputs(args.vectors, manifest, ref['stages'], run_id, positions)
+    av.validate_board_inputs(args.vectors, manifest, ref['stages'], run_id, positions,
+                             result_only=ref.get('trace') == 'result')
     payload = (args.vectors / manifest['doorbell']['file']).read_bytes()
     planned = trace_runs(ref, payload, args.trace_pair)
     (out / 'command.json').write_text(json.dumps({'argv': sys.argv,
@@ -175,17 +181,17 @@ def main():
         receipt = json.loads((out / (name + '.json')).read_text())
         if not receipt['pass'] or not all(receipt['checks'].values()):
             raise RuntimeError('invalid readback receipt')
-    rate(115200, 921600, 'uart-fast')
-    qualify = out / 'qualification.bin'; qualify.write_bytes(bytes(range(256)) * 128)
-    load(qualify, 0x2000000, 'qualification', 32)
-    for name in ('scales', 'w_in', 'w_sub', 'x', 'rope', 'q', 'k', 'v', 'o'):
-        region = manifest[name]; print('Loading', name, region['bytes'], flush=True)
-        load(args.vectors / region['file'], region['byte_address'], 'load-' + name)
-    if args.capture_baud != 921600:
-        rate(921600, args.capture_baud, 'uart-capture')
-    import serial
-    results = []
-    try:
+    with restoring_baud(rate) as switch:
+        switch(115200, 921600, 'uart-fast')
+        qualify = out / 'qualification.bin'; qualify.write_bytes(bytes(range(256)) * 128)
+        load(qualify, 0x2000000, 'qualification', 32)
+        for name in ('scales', 'w_in', 'w_sub', 'x', 'rope', 'q', 'k', 'v', 'o'):
+            region = manifest[name]; print('Loading', name, region['bytes'], flush=True)
+            load(args.vectors / region['file'], region['byte_address'], 'load-' + name)
+        if args.capture_baud != 921600:
+            switch(921600, args.capture_baud, 'uart-capture')
+        import serial
+        results = []
         for name, reference, current_run, descriptor in planned:
             folder = out / name; folder.mkdir(exist_ok=True)
             if name:
@@ -214,8 +220,6 @@ def main():
                     'doorbell_sha256': hashlib.sha256(descriptor).hexdigest(),
                     'scope': 'same freshly uploaded/readback-verified inputs; only descriptor changed'}
             results.append((folder, result))
-    finally:
-        rate(args.capture_baud, 115200, 'uart-restored')
     temperature(True)
     for folder, result in results:
         (folder / 'result.json').write_text(json.dumps(result, indent=2) + '\n'); print(json.dumps(result), flush=True)
