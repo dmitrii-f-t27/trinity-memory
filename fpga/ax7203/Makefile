@@ -734,7 +734,8 @@ else
 # The loader (#63 part 2): its t27 cores with -nomem2reg (block RAM for the receive FIFO and the
 # staging buffer), every memory in the RAMB36 1K x 36 configuration (brams_x36.txt), as part 1.
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach c,$(DDR3_CORES),$(call REL,$(RTL)/$(c).v)); \
-	  read_verilog $(DDR3_MATVEC_DEFINE)$(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_FFN_ADAPTERS),$(call REL,$(s))) $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
+	  read_verilog $(if $(DDR3_GF16_ATTN),-nomem2reg )$(DDR3_MATVEC_DEFINE)$(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_FFN_ADAPTERS),$(call REL,$(s))); \
+	  read_verilog $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_MATVEC_CHPARAM)$(DDR3_TOP); \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :map_memory; \
