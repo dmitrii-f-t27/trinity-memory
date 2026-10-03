@@ -142,7 +142,7 @@ class AttentionRtlTest(unittest.TestCase):
         pairs += [(rng.getrandbits(64),rng.getrandbits(64)) for _ in range(32)]
         with tempfile.TemporaryDirectory() as tmp:
             work=Path(tmp);rtl=build.generate(work)[0]
-            calls='\n'.join(f"check_product(64'h{a:016x},64'h{b:016x},64'h{(a*b)&(2**64-1):016x});"
+            calls='\n'.join(f"check_product(64'h{a:016x},64'h{b:016x},64'h{(a*b)&(2**64-1):016x},64'd{(a+b)>>64});"
                             for a,b in pairs)
             tb=work/'tb_mul.v';tb.write_text('''`timescale 1ns/1ps
 module tb_mul;
@@ -151,9 +151,11 @@ TrinityGf16AttnT27 dut(.clk(clk),.rst_n(rst_n),.en(1'b1),.calib(1'b1),
  .stall(1'b0),.ack(1'b0),.rdata_lo(64'd0),.rdata_hi(64'd0),
  .hidden(32'd8),.kv(32'd4),.heads(32'd2),.kv_heads(32'd1),.head_dim(32'd4),
  .line_idle(1'b1),.s_go(1'b0),.s_tag(32'd0),.s_a(32'd0),.s_b(64'd0));
-task check_product(input [63:0] a,b,wanted);
+task check_product(input [63:0] a,b,wanted,wanted_carry);
 integer clocks;
 begin
+ if(dut.carry(a,b)!==wanted_carry)
+  $fatal(1,"carry %h + %h got %h want %h",a,b,dut.carry(a,b),wanted_carry);
  @(negedge clk);dut.mul_a=a;dut.mul_b=b;dut.mul_return=999;dut.state=400;
  clocks=0;
  while(dut.state!=999 && clocks<67) begin @(negedge clk);#1;clocks=clocks+1;end
