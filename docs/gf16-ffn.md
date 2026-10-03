@@ -106,6 +106,16 @@ E10 unsupported descriptor flags.
 
 ## Reproduction and evidence
 
+`fpga-ffn-run.py` keeps baud recovery active from the first UART rate switch
+through qualification, input upload/readback and capture. On an unconfirmed
+switch it probes the destination and previous baud, retaining separate raw
+receipts for recovery attempts. Successful cleanup verifies 115200 baud; an
+unrecoverable disconnect is reported explicitly and preserves the original
+run failure. It does not reset or reconfigure the board. The reusable
+`tools/uart_session.py` helper requires each rate callback to close its link
+and verify status. Fault-injected CLI tests cover early failures and ambiguous
+switches; they are host tests, not a new physical qualification.
+
 Use the pinned compiler from `native/compiler.lock`. Tests require Icarus,
 Verilator, Yosys and a C compiler. The real-input replay additionally uses the
 pinned optional runtime in `tools/bitnet-capture-requirements.txt` and verified
