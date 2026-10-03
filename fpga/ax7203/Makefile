@@ -704,7 +704,7 @@ $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp:
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
 # the four PLL outputs by net name. The loader's uart_rx pin reaches the reader
 # and matvec builds too: they synthesize the loader top with its receive port.
-DDR3_LOADER_XDC := $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),$(DDR3_DIR)/tms_ddr3_loader.xdc)
+DDR3_LOADER_XDC := $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),$(DDR3_DIR)/tms_ddr3_loader.xdc)
 $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_ddr3_x32.xdc $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_LOADER_XDC)
 	cat $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(if $(filter 32,$(DDR3_WIDTH)),$(DDR3_DIR)/tms_ddr3_x32.xdc)$(if $(DDR3_LOADER_XDC), $(DDR3_DIR)/tms_ddr3_loader.xdc) > $@.tmp
 	printf '%s\n' "# PLL outputs (DDR3_PLL_MULT=$(DDR3_PLL_MULT), DDR3_DDR_DIV=$(DDR3_DDR_DIV)), written by fpga/ax7203/Makefile" \
@@ -717,11 +717,11 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 # Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
 # and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),$(CURDIR)/brams_x36.txt)
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),$(CURDIR)/brams_x36.txt)
 	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
 	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
-ifeq ($(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),)
+ifeq ($(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),)
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),-DUART_DEBUG_BIST )$(DDR3_READER_DEFINE)$(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) \
