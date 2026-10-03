@@ -71,8 +71,8 @@ module tb_gf16_attn;
                     completed=completed+1;
                     if(completed==REPEATS) begin $display("PASS attention clocks=%0d",tick); $fclose(fd); $finish; end
                     // A second zero vector exercises state/RAM reuse without reset.
-                    for(j=0;j<H;j=j+1) mem[4096+j]=0;
-                    mem[64][31:0]=completed+1;
+                    for(j=0;j<H*mem[64][95:64];j=j+1) mem[32768+j]=0;
+                    mem[64][31:0]=mem[64][31:0]+1;
                 end
             end
             if(tick>600000000) $fatal(1,"timeout state=%d",state);

@@ -111,6 +111,27 @@ class AttentionRtlTest(unittest.TestCase):
             mixed=raw.replace(b'z00000025',b'z00000001',1)
             with self.assertRaises(ValueError):vectors.validate(mixed,stages,run=37)
 
+    def test_repeated_run_replaces_kv_cache_without_reset(self):
+        import tempfile
+        from tools import attn_reference as ar
+        from tools import gf16_attn_build as build
+        from tools import gf16_attn_vectors as vectors
+        model=vectors.tiny_model(7)
+        xs=[[v << ar.Q for v in x] for x in ((3,-5,7,1,-2,4,0,-8),(1,2,3,4,5,6,7,8))]
+        tables=ar.rope_tables(2,ar.ROPE_THETA,4)[1]
+        stages,_=ar.fpga_q16(model,xs,tables)
+        zero,_=ar.fpga_q16(model,[[0]*8 for _ in range(2)],tables)
+        with tempfile.TemporaryDirectory() as tmp:
+            work=Path(tmp); inp=vectors.write_inputs(work,model,xs,tables,run=37)
+            command=build.compile_sim(work,build.generate(work)[0],(8,4,2,4,1),
+                    os.environ.get('TRINITY_ATTN_SIMULATOR','iverilog'),test_params={'REPEATS':2})
+            capture=work/'capture.txt'
+            base.run([*command,'+input='+str(inp),'+output='+str(capture)],timeout=120)
+            first,end,second=capture.read_bytes().partition(b'z000000250000000000\n')
+            self.assertTrue(end)
+            self.assertTrue(vectors.validate(first+end,stages,run=37,positions=2)['pass'])
+            self.assertTrue(vectors.validate(second,zero,run=38,positions=2)['pass'])
+
 
 if __name__ == "__main__":
     unittest.main()
