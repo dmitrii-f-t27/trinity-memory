@@ -76,12 +76,12 @@ def write_inputs(work, model, xs, tables_q16, run=1, result=False):
     return work / "input.mem"
 
 
-def expected_lines(stages, positions, result_only=False):
+def expected_lines(stages, positions, result_only=False, run=1):
     """Per-position interleave matching the controller's emission order."""
     hidden = len(stages["r"]) // positions
     kv = len(stages["k"]) // positions
     heads = len(stages["sc"]) // sum(p + 1 for p in range(positions))
-    sequence = [("d", 1, positions)]
+    sequence = [("d", run, positions)]
     sc_at = 0
     for t in range(positions):
         base, kvbase = t * hidden, t * kv
@@ -117,7 +117,7 @@ def validate(raw, stages, run=1, positions=1, result_only=False):
     if any(t == "E" for t, _, _ in lines):
         raise ValueError("attention device reported error")
     data = [v for v in lines if v[0] not in ("G", "A")]
-    wanted = expected_lines(stages, positions, result_only)
+    wanted = expected_lines(stages, positions, result_only, run)
     if data[:len(wanted)] != wanted:
         for i, (got, want) in enumerate(zip(data, wanted)):
             if got != want:
