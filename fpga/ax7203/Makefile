@@ -580,6 +580,14 @@ DDR3_APP_VARIANT := GF16_ATTN (issue 115$(comma) gf16-attn-v1$(comma) exact Q16.
 endif
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
 DDR3_YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -arch xc7
+# Attention has explicit finite continuation targets. Recode only its state
+# register before the normal synthesis passes to avoid deep binary decode/CE
+# paths. The board's app_reset asserts the controller's asynchronous reset;
+# FSM extraction identifies state 0 as that reset state.
+ifneq ($(DDR3_GF16_ATTN),)
+DDR3_ATTN_FSM_PREPARE = $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :prepare; proc; flatten; opt -nosdff -nodffe; setattr -set fsm_encoding \"one-hot\" w:ffn.state; fsm; opt;
+DDR3_SYNTH_START := prepare
+endif
 ifeq ($(DDR3_PNR_LINE),image)
 override NEXTPNR_DDR3_REV := 45a986b8
 DDR3_NEXTPNR   ?= $(NEXTPNR)
@@ -738,7 +746,7 @@ else
 	  read_verilog $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_MATVEC_CHPARAM)$(DDR3_TOP); \
-	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :map_memory; \
+	  $(DDR3_ATTN_FSM_PREPARE) $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run $(DDR3_SYNTH_START):map_memory; \
 	  memory_libmap $(if $(DDR3_NO_LUTRAM),,-lib +/xilinx/lutrams_xc5v.txt) -lib $(call REL,$(CURDIR))/brams_x36.txt; \
 	  techmap $(if $(DDR3_NO_LUTRAM),,-map +/xilinx/lutrams_xc5v_map.v) -map +/xilinx/brams_xc6v_map.v; \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run map_ffram:; \
