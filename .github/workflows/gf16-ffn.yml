@@ -39,6 +39,7 @@ on:
       - 'fixtures/bitnet-layer0-capture.json'
       - 'reports/fpga/gf16-ffn-2026-10-01-24917fa7/**'
       - 'reports/fpga/gf16-performance-2026-10-01/**'
+      - 'reports/fpga/attn-2026-10-03/**'
       - 'reports/numeric/gf16-ffn.json'
       - 'reports/numeric/gf16-ffn-performance*.json'
       - 'native/compiler.lock'
@@ -112,6 +113,8 @@ jobs:
         run: python reports/fpga/gf16-performance-2026-10-01/verify-evidence.py
       - name: Recheck paired physical performance captures
         run: python reports/fpga/gf16-performance-2026-10-01/verify-board-evidence.py
+      - name: Recheck attention simulations and physical raw CRC evidence offline
+        run: python reports/fpga/attn-2026-10-03/verify-evidence.py
       - name: Capture and require exact BF16 calibration
         run: python tools/capture_bitnet_layer0.py --fetch --output build/bitnet-capture/linux-report.json
       - name: Compare all 45 rows and replay five complete FFNs through RTL
