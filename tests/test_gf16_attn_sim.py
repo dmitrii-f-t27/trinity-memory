@@ -144,6 +144,15 @@ class AttentionRtlTest(unittest.TestCase):
             work=Path(tmp);rtl=build.generate(work)[0]
             calls='\n'.join(f"check_product(64'h{a:016x},64'h{b:016x},64'h{(a*b)&(2**64-1):016x},64'd{(a+b)>>64});"
                             for a,b in pairs)
+            rounding=[(0,16),(32767,16),(32768,16),(32769,16),(98304,16),
+                      (163840,16),(2**64-1,1),(2**64-1,63)]
+            rounding += [(rng.getrandbits(64),rng.randrange(1,64)) for _ in range(128)]
+            round_calls=[]
+            for num,shift in rounding:
+                q,rem=divmod(num,1<<shift);half=1<<(shift-1)
+                wanted=q+int(rem>half or (rem==half and q&1))
+                round_calls.append(f"check_round(64'h{num:016x},32'd{shift},64'h{wanted:016x});")
+            calls += '\n'+'\n'.join(round_calls)
             tb=work/'tb_mul.v';tb.write_text('''`timescale 1ns/1ps
 module tb_mul;
 reg clk=0,rst_n=0; always #5 clk=~clk;
@@ -163,16 +172,26 @@ begin
   $fatal(1,"product %h * %h got %h want %h",a,b,dut.mul_product,wanted);
 end
 endtask
+task check_round(input [63:0] num,input [31:0] shift,input [63:0] wanted);
+integer clocks;
+begin
+ @(negedge clk);dut.rne_num=num;dut.rne_bits=shift;dut.rne_return=999;dut.state=500;
+ clocks=0;
+ while(dut.state!=999 && clocks<6) begin @(negedge clk);#1;clocks=clocks+1;end
+ if(dut.state!=999 || dut.rne_result!==wanted)
+  $fatal(1,"round %h >> %d got %h want %h",num,shift,dut.rne_result,wanted);
+end
+endtask
 initial begin
  repeat(3) @(negedge clk);rst_n=1;
 '''+calls+'''
- $display("PASS exact shared multiplier");$finish;
+ $display("PASS exact shared arithmetic");$finish;
 end
 endmodule
 ''')
             exe=work/'mul.vvp'
             base.run(['iverilog','-g2012','-s','tb_mul','-o',exe,*rtl,tb],timeout=60)
-            self.assertIn('PASS exact shared multiplier',base.run(['vvp',exe],timeout=60))
+            self.assertIn('PASS exact shared arithmetic',base.run(['vvp',exe],timeout=60))
 
 
 if __name__ == "__main__":
