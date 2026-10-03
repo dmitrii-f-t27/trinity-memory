@@ -642,19 +642,10 @@ module TrinityGf16AttnT27 (
     end
 
     // va exposed as output reg port
-    initial begin
-        va = 0;
-    end
 
     // ga exposed as output reg port
-    initial begin
-        ga = 0;
-    end
 
     // ua exposed as output reg port
-    initial begin
-        ua = 0;
-    end
 
     // vr2 exposed as output reg port
     initial begin
@@ -971,13 +962,13 @@ module TrinityGf16AttnT27 (
             term3 <= 0;
             max_score <= 0;
             sc_index <= 0;
-            va <= 0;
-            ga <= 0;
-            ua <= 0;
             vr2 <= 0;
             gr2 <= 0;
             ur2 <= 0;
         end else if (en) begin
+            vr2 <= vec[(va & 8191)];
+            gr2 <= gate[(ga & 8191)];
+            ur2 <= up[(ua & 8191)];
             if (active) begin
                 cycles <= (cycles + 1);
                 if ((((state == 8) || (state == 300)) || (state == 301))) begin
@@ -990,898 +981,909 @@ module TrinityGf16AttnT27 (
             group <= (heads / kv_heads);
             pairs <= (head_dim / 2);
             kvcount <= __mul_noop(positions, kv);
-            if ((state == 0)) begin
-                if (calib) begin
-                    wb_cyc <= 1'b1;
-                    ptag <= 71;
-                    pa <= hidden;
-                    pb <= kv;
-                    pending <= 1'b1;
-                    state <= 1;
-                end
-            end else if ((state == 1)) begin
-                if (((poll == 0) && !pending)) begin
-                    wb_addr <= 64;
-                    wb_stb <= 1'b1;
-                    response <= 2;
-                    state <= 200;
-                    quiet <= 0;
-                end else if ((poll != 0)) begin
-                    poll <= (poll - 1);
-                end
-            end else if ((state == 2)) begin
-                state <= 1;
-                poll <= 8192;
-                if (((((read0 >> 32) == 64'd1096045617) && ((read0 & {32{1'b1}}) != 0)) && ((read0 & {32{1'b1}}) != last_run))) begin
-                    last_run <= (read0 & {32{1'b1}});
-                    run_id <= (read0 & {32{1'b1}});
-                    index <= 0;
-                    active <= 1'b1;
-                    cycles <= 0;
-                    report_cycles <= 0;
-                    memory_cycles <= 0;
-                    error_code <= 0;
-                    state <= 8;
-                    positions <= (read1 & {32{1'b1}});
-                    result_only <= ((read1 >> 32) != 0);
-                    if ((((read1 & {32{1'b1}}) == 0) || ($signed({1'b0, (read1 & {32{1'b1}})}) > $signed(8)))) begin
-                        error_code <= 10;
-                        state <= 900;
+            if (((((((((((((((((state == 1021) || (state == 1040)) || (state == 1074)) || (state == 1095)) || (state == 1096)) || (state == 1110)) || (state == 1120)) || (state == 1121)) || (state == 1135)) || (state == 1141)) || (state == 1150)) || (state == 1152)) || (state == 1154)) || (state == 1157)) || (state == 1161)) || (state == 1180))) begin
+                state <= (state - 1000);
+            end else if (($signed({1'b0, state}) < $signed(115))) begin
+                if (($signed({1'b0, state}) < $signed(60))) begin
+                    if (($signed({1'b0, state}) < $signed(25))) begin
+                        if (($signed({1'b0, state}) < $signed(12))) begin
+                            if ((state == 0)) begin
+                                if (calib) begin
+                                    wb_cyc <= 1'b1;
+                                    ptag <= 71;
+                                    pa <= hidden;
+                                    pb <= kv;
+                                    pending <= 1'b1;
+                                    state <= 1;
+                                end
+                            end else if ((state == 1)) begin
+                                if (((poll == 0) && !pending)) begin
+                                    wb_addr <= 64;
+                                    wb_stb <= 1'b1;
+                                    response <= 2;
+                                    state <= 200;
+                                    quiet <= 0;
+                                end else if ((poll != 0)) begin
+                                    poll <= (poll - 1);
+                                end
+                            end else if ((state == 2)) begin
+                                state <= 1;
+                                poll <= 8192;
+                                if (((((read0 >> 32) == 64'd1096045617) && ((read0 & {32{1'b1}}) != 0)) && ((read0 & {32{1'b1}}) != last_run))) begin
+                                    last_run <= (read0 & {32{1'b1}});
+                                    run_id <= (read0 & {32{1'b1}});
+                                    index <= 0;
+                                    active <= 1'b1;
+                                    cycles <= 0;
+                                    report_cycles <= 0;
+                                    memory_cycles <= 0;
+                                    error_code <= 0;
+                                    state <= 8;
+                                    positions <= (read1 & {32{1'b1}});
+                                    result_only <= ((read1 >> 32) != 0);
+                                    if ((((read1 & {32{1'b1}}) == 0) || ($signed({1'b0, (read1 & {32{1'b1}})}) > $signed(8)))) begin
+                                        error_code <= 10;
+                                        state <= 900;
+                                    end
+                                    if ((($signed({1'b0, (__mul_noop((read1 & {32{1'b1}}), kv) + hidden)}) > $signed(8192)) || ($signed(((__mul_noop((read1 & {32{1'b1}}), kv) + hidden) + 8)) > $signed(8192)))) begin
+                                        error_code <= 13;
+                                        state <= 900;
+                                    end
+                                end
+                            end else if ((state == 3)) begin
+                                wb_addr <= (80 + index);
+                                wb_stb <= 1'b1;
+                                response <= 4;
+                                state <= 200;
+                                quiet <= 0;
+                            end else if ((state == 4)) begin
+                                if ((index == 0)) begin
+                                    scale_q <= (read0 & {32{1'b1}});
+                                end
+                                if ((index == 1)) begin
+                                    scale_k <= (read0 & {32{1'b1}});
+                                end
+                                if ((index == 2)) begin
+                                    scale_v <= (read0 & {32{1'b1}});
+                                end
+                                if ((index == 3)) begin
+                                    scale_o <= (read0 & {32{1'b1}});
+                                end
+                                if ((index == 4)) begin
+                                    scale_attn <= (read0 & {32{1'b1}});
+                                    index <= 0;
+                                    state <= 10;
+                                end else begin
+                                    index <= (index + 1);
+                                    state <= 3;
+                                end
+                            end else if ((state == 8)) begin
+                                if (!pending) begin
+                                    ptag <= 100;
+                                    pa <= run_id;
+                                    pb <= positions;
+                                    pending <= 1'b1;
+                                    state <= 3;
+                                end
+                            end else if ((state == 10)) begin
+                                index <= 0;
+                                state <= 11;
+                            end else if ((state == 11)) begin
+                                wb_addr <= (4096 + index);
+                                wb_stb <= 1'b1;
+                                response <= 12;
+                                state <= 200;
+                                quiet <= 0;
+                            end
+                        end else if ((state == 12)) begin
+                            gate[((__mul_noop(2, hidden) + index) & 8191)] <= (read0 & {32{1'b1}});
+                            if (((index + 1) == hidden)) begin
+                                pos <= 0;
+                                state <= 16;
+                            end else begin
+                                index <= (index + 1);
+                                state <= 11;
+                            end
+                        end else if ((state == 16)) begin
+                            index <= 0;
+                            sc_index <= 0;
+                            state <= 17;
+                        end else if ((state == 17)) begin
+                            wb_addr <= ((32768 + __mul_noop(pos, hidden)) + index);
+                            wb_stb <= 1'b1;
+                            response <= 18;
+                            state <= 200;
+                            quiet <= 0;
+                        end else if ((state == 18)) begin
+                            vec[(index & 8191)] <= (read0 & {32{1'b1}});
+                            if (((index + 1) == hidden)) begin
+                                index <= 0;
+                                norm_pass <= 0;
+                                state <= 20;
+                            end else begin
+                                index <= (index + 1);
+                                state <= 17;
+                            end
+                        end else if ((state == 20)) begin
+                            index <= 0;
+                            sumsq0 <= 0;
+                            sumsq1 <= 0;
+                            state <= 1021;
+                        end else if ((state == 21)) begin
+                            sample_q <= pick((norm_pass == 0), vr2, ur2);
+                            state <= 22;
+                        end else if ((state == 22)) begin
+                            lane <= mag64(sample_q);
+                            state <= 23;
+                        end else if ((state == 23)) begin
+                            add0 <= (sumsq0 + __mul_noop(lane, lane));
+                            add_carry <= carry(sumsq0, __mul_noop(lane, lane));
+                            state <= 24;
+                        end else if ((state == 24)) begin
+                            sumsq0 <= add0;
+                            sumsq1 <= (sumsq1 + add_carry);
+                            if (((index + 1) == hidden)) begin
+                                state <= 25;
+                            end else begin
+                                index <= (index + 1);
+                                state <= 1021;
+                            end
+                        end
+                    end else if (($signed({1'b0, state}) < $signed(40))) begin
+                        if ((state == 25)) begin
+                            rem0 <= 0;
+                            rem1 <= 0;
+                            quo0 <= 0;
+                            quo1 <= 0;
+                            divisor <= hidden;
+                            bitpos <= 73;
+                            state <= 26;
+                        end else if ((state == 26)) begin
+                            if (($signed({1'b0, bitpos}) >= $signed(64))) begin
+                                rem0 <= ((rem0 << 1) | pick((((sumsq1 >> (bitpos - 64)) & 1) != 0), 1, 0));
+                            end else begin
+                                rem0 <= ((rem0 << 1) | pick((((sumsq0 >> bitpos) & 1) != 0), 1, 0));
+                            end
+                            rem1 <= ((rem1 << 1) | (rem0 >> 63));
+                            state <= 27;
+                        end else if ((state == 27)) begin
+                            if (((rem1 != 0) || (rem0 >= divisor))) begin
+                                if ((rem0 < divisor)) begin
+                                    rem1 <= (rem1 - 1);
+                                end
+                                rem0 <= (rem0 - divisor);
+                                if (($signed({1'b0, bitpos}) >= $signed(64))) begin
+                                    quo1 <= (quo1 | (1 << (bitpos - 64)));
+                                end else begin
+                                    quo0 <= (quo0 | (1 << bitpos));
+                                end
+                            end
+                            if ((bitpos == 0)) begin
+                                state <= 28;
+                            end else begin
+                                bitpos <= (bitpos - 1);
+                                state <= 26;
+                            end
+                        end else if ((state == 28)) begin
+                            add0 <= (quo0 + pick((((rem0 << 1) > divisor) || (((rem0 << 1) == divisor) && ((quo0 & 1) != 0))), 1, 0));
+                            add_carry <= carry(quo0, pick((((rem0 << 1) > divisor) || (((rem0 << 1) == divisor) && ((quo0 & 1) != 0))), 1, 0));
+                            state <= 30;
+                        end else if ((state == 30)) begin
+                            quo0 <= add0;
+                            quo1 <= (quo1 + add_carry);
+                            state <= 31;
+                        end else if ((state == 31)) begin
+                            rem1 <= (((quo1 + carry(quo0, 42950)) << 32) | ((quo0 + 42950) >>> 32));
+                            rem0 <= ((quo0 + 42950) << 32);
+                            root <= 0;
+                            bitpos <= 94;
+                            state <= 32;
+                        end else if ((state == 32)) begin
+                            if (($signed({1'b0, bitpos}) >= $signed(64))) begin
+                                cmp1 <= (((root << 2) | 1) << (bitpos - 64));
+                                cmp0 <= 0;
+                            end else begin
+                                cmp1 <= (((root << 2) | 1) >>> (64 - bitpos));
+                                cmp0 <= (((root << 2) | 1) << bitpos);
+                            end
+                            state <= 33;
+                        end else if ((state == 33)) begin
+                            if (((rem1 > cmp1) || ((rem1 == cmp1) && (rem0 >= cmp0)))) begin
+                                rem1 <= ((rem1 - cmp1) - pick((rem0 < cmp0), 1, 0));
+                                rem0 <= (rem0 - cmp0);
+                                root <= ((root << 1) | 1);
+                            end else begin
+                                root <= (root << 1);
+                            end
+                            if ((bitpos == 0)) begin
+                                state <= 34;
+                            end else begin
+                                bitpos <= (bitpos - 2);
+                                state <= 32;
+                            end
+                        end else if ((state == 34)) begin
+                            rms <= root;
+                            index <= 0;
+                            state <= 1040;
+                        end
+                    end else if ((state == 40)) begin
+                        sample_q <= pick((norm_pass == 0), vr2, ur2);
+                        weight_q <= gr2;
+                        state <= 41;
+                    end else if ((state == 41)) begin
+                        num_sign <= (sign64(sample_q) != sign64(weight_q));
+                        num_mag <= (__mul_noop(mag64(sample_q), mag64(weight_q)) << 16);
+                        rem0 <= 0;
+                        quo0 <= 0;
+                        bitpos <= 63;
+                        state <= 42;
+                    end else if ((state == 42)) begin
+                        rem0 <= ((rem0 << 1) | pick((((num_mag >> bitpos) & 1) != 0), 1, 0));
+                        state <= 43;
+                    end else if ((state == 43)) begin
+                        if ((rem0 >= rms)) begin
+                            rem0 <= (rem0 - rms);
+                            quo0 <= (quo0 | (1 << bitpos));
+                        end
+                        if ((bitpos == 0)) begin
+                            state <= 44;
+                        end else begin
+                            bitpos <= (bitpos - 1);
+                            state <= 42;
+                        end
+                    end else if ((state == 44)) begin
+                        out_mag <= (quo0 + pick((((rem0 << 1) > rms) || (((rem0 << 1) == rms) && ((quo0 & 1) != 0))), 1, 0));
+                        state <= 45;
+                    end else if ((state == 45)) begin
+                        if (num_sign) begin
+                            if (($signed({1'b0, out_mag}) > $signed(64'd2147483648))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= (0 - out_mag);
+                            end
+                        end else if (($signed({1'b0, out_mag}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
+                        end else begin
+                            quant <= out_mag;
+                        end
+                        state <= 47;
+                    end else if ((state == 46)) begin
+                        if (((index + 1) == hidden)) begin
+                            if ((norm_pass == 0)) begin
+                                state <= 50;
+                            end else begin
+                                state <= 170;
+                            end
+                        end else begin
+                            index <= (index + 1);
+                            state <= 1040;
+                        end
+                    end else if ((state == 47)) begin
+                        gate[(index & 8191)] <= (quant & {32{1'b1}});
+                        emit_tag <= pick((norm_pass == 0), 103, 111);
+                        emit_index <= index;
+                        emit_value <= (quant & {32{1'b1}});
+                        after_emit <= 46;
+                        state <= pick(result_only, 46, 300);
+                    end else if ((state == 50)) begin
+                        projection_stage <= 0;
+                        store_base <= hidden;
+                        proj_scale <= scale_q;
+                        proj_tag <= 104;
+                        row <= 0;
+                        col <= 0;
+                        acc0 <= 0;
+                        nrows <= hidden;
+                        weight_addr <= 65536;
+                        state <= 71;
                     end
-                    if ((($signed({1'b0, (__mul_noop((read1 & {32{1'b1}}), kv) + hidden)}) > $signed(8192)) || ($signed(((__mul_noop((read1 & {32{1'b1}}), kv) + hidden) + 8)) > $signed(8192)))) begin
-                        error_code <= 13;
-                        state <= 900;
+                end else if (($signed({1'b0, state}) < $signed(96))) begin
+                    if (($signed({1'b0, state}) < $signed(77))) begin
+                        if ((state == 60)) begin
+                            projection_stage <= 1;
+                            store_base <= __mul_noop(pos, kv);
+                            proj_scale <= scale_k;
+                            proj_tag <= 105;
+                            row <= 0;
+                            col <= 0;
+                            acc0 <= 0;
+                            nrows <= kv;
+                            weight_addr <= 167936;
+                            state <= 71;
+                        end else if ((state == 70)) begin
+                            projection_stage <= 2;
+                            store_base <= (hidden + __mul_noop(pos, kv));
+                            proj_scale <= scale_v;
+                            proj_tag <= 106;
+                            row <= 0;
+                            col <= 0;
+                            acc0 <= 0;
+                            nrows <= kv;
+                            weight_addr <= 193536;
+                            state <= 71;
+                        end else if ((state == 71)) begin
+                            wb_addr <= weight_addr;
+                            wb_stb <= 1'b1;
+                            response <= 72;
+                            state <= 200;
+                            quiet <= 0;
+                        end else if ((state == 72)) begin
+                            weight0 <= read0;
+                            weight1 <= read1;
+                            state <= 73;
+                        end else if ((state == 73)) begin
+                            state <= 1074;
+                        end else if ((state == 74)) begin
+                            term0 <= pick(((weight0 & 3) == 0), 0, pick(((weight0 & 3) == 2), (0 - extend(gr2)), extend(gr2)));
+                            state <= 75;
+                            weight0 <= ((weight0 >> 2) | (weight1 << 62));
+                            weight1 <= (weight1 >> 2);
+                            col <= (col + 1);
+                            if (((weight0 & 3) == 3)) begin
+                                error_code <= 3;
+                                state <= 900;
+                            end
+                        end else if ((state == 75)) begin
+                            add0 <= (acc0 + term0);
+                            add_carry <= carry(acc0, term0);
+                            state <= 76;
+                        end else if ((state == 76)) begin
+                            acc0 <= add0;
+                            if ((col == hidden)) begin
+                                weight_addr <= (weight_addr + 1);
+                                state <= 77;
+                            end else if (((col & 63) == 0)) begin
+                                weight_addr <= (weight_addr + 1);
+                                state <= 71;
+                            end else begin
+                                state <= 1074;
+                            end
+                        end
+                    end else if ((state == 77)) begin
+                        quant <= rne_shift(__mul_noop(pick(((acc0 >> 63) != 0), (0 - acc0), acc0), proj_scale), 16);
+                        state <= 78;
+                    end else if ((state == 78)) begin
+                        if (((acc0 >> 63) != 0)) begin
+                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= (0 - quant);
+                            end
+                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
+                        end
+                        state <= 79;
+                    end else if ((state == 79)) begin
+                        if ((projection_stage == 0)) begin
+                            gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        if ((projection_stage == 1)) begin
+                            up[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        if ((projection_stage == 2)) begin
+                            vec[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        if ((projection_stage == 3)) begin
+                            gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        emit_tag <= proj_tag;
+                        emit_index <= row;
+                        emit_value <= (quant & {32{1'b1}});
+                        after_emit <= 800;
+                        state <= pick(result_only, 800, 300);
+                    end else if ((state == 90)) begin
+                        ropebase <= ((321536 + __mul_noop(pos, head_dim)) + __mul_noop(2, pair));
+                        state <= 91;
+                    end else if ((state == 91)) begin
+                        wb_addr <= ropebase;
+                        wb_stb <= 1'b1;
+                        response <= 92;
+                        state <= 200;
+                        quiet <= 0;
+                    end else if ((state == 92)) begin
+                        cos_q <= (read0 & {32{1'b1}});
+                        state <= 93;
+                    end else if ((state == 93)) begin
+                        wb_addr <= (ropebase + 1);
+                        wb_stb <= 1'b1;
+                        response <= 94;
+                        state <= 200;
+                        quiet <= 0;
+                    end else if ((state == 94)) begin
+                        sin_q <= (read0 & {32{1'b1}});
+                        state <= 1095;
+                    end else if ((state == 95)) begin
+                        sample_q <= gr2;
+                        state <= 1096;
                     end
-                end
-            end else if ((state == 8)) begin
-                if (!pending) begin
-                    ptag <= 100;
-                    pa <= run_id;
-                    pb <= positions;
-                    pending <= 1'b1;
-                    state <= 3;
-                end
-            end else if ((state == 3)) begin
-                wb_addr <= (80 + index);
-                wb_stb <= 1'b1;
-                response <= 4;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 4)) begin
-                if ((index == 0)) begin
-                    scale_q <= (read0 & {32{1'b1}});
-                end
-                if ((index == 1)) begin
-                    scale_k <= (read0 & {32{1'b1}});
-                end
-                if ((index == 2)) begin
-                    scale_v <= (read0 & {32{1'b1}});
-                end
-                if ((index == 3)) begin
-                    scale_o <= (read0 & {32{1'b1}});
-                end
-                if ((index == 4)) begin
-                    scale_attn <= (read0 & {32{1'b1}});
-                    index <= 0;
-                    state <= 10;
-                end else begin
-                    index <= (index + 1);
-                    state <= 3;
-                end
-            end else if ((state == 10)) begin
-                index <= 0;
-                state <= 11;
-            end else if ((state == 11)) begin
-                wb_addr <= (4096 + index);
-                wb_stb <= 1'b1;
-                response <= 12;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 12)) begin
-                gate[((__mul_noop(2, hidden) + index) & 8191)] <= (read0 & {32{1'b1}});
-                if (((index + 1) == hidden)) begin
-                    pos <= 0;
-                    state <= 16;
-                end else begin
-                    index <= (index + 1);
-                    state <= 11;
-                end
-            end else if ((state == 16)) begin
-                index <= 0;
-                sc_index <= 0;
-                state <= 17;
-            end else if ((state == 17)) begin
-                wb_addr <= ((32768 + __mul_noop(pos, hidden)) + index);
-                wb_stb <= 1'b1;
-                response <= 18;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 18)) begin
-                vec[(index & 8191)] <= (read0 & {32{1'b1}});
-                if (((index + 1) == hidden)) begin
-                    index <= 0;
-                    norm_pass <= 0;
-                    state <= 20;
-                end else begin
-                    index <= (index + 1);
-                    state <= 17;
-                end
-            end else if ((state == 20)) begin
-                index <= 0;
-                sumsq0 <= 0;
-                sumsq1 <= 0;
-                state <= 21;
-            end else if ((state == 21)) begin
-                sample_q <= pick((norm_pass == 0), vr2, ur2);
-                state <= 22;
-            end else if ((state == 22)) begin
-                lane <= mag64(sample_q);
-                state <= 23;
-            end else if ((state == 23)) begin
-                add0 <= (sumsq0 + __mul_noop(lane, lane));
-                add_carry <= carry(sumsq0, __mul_noop(lane, lane));
-                state <= 24;
-            end else if ((state == 24)) begin
-                sumsq0 <= add0;
-                sumsq1 <= (sumsq1 + add_carry);
-                if (((index + 1) == hidden)) begin
-                    state <= 25;
-                end else begin
-                    index <= (index + 1);
-                    state <= 21;
-                end
-            end else if ((state == 25)) begin
-                rem0 <= 0;
-                rem1 <= 0;
-                quo0 <= 0;
-                quo1 <= 0;
-                divisor <= hidden;
-                bitpos <= 73;
-                state <= 26;
-            end else if ((state == 26)) begin
-                if (($signed({1'b0, bitpos}) >= $signed(64))) begin
-                    rem0 <= ((rem0 << 1) | pick((((sumsq1 >> (bitpos - 64)) & 1) != 0), 1, 0));
-                end else begin
-                    rem0 <= ((rem0 << 1) | pick((((sumsq0 >> bitpos) & 1) != 0), 1, 0));
-                end
-                rem1 <= ((rem1 << 1) | (rem0 >> 63));
-                state <= 27;
-            end else if ((state == 27)) begin
-                if (((rem1 != 0) || (rem0 >= divisor))) begin
-                    if ((rem0 < divisor)) begin
-                        rem1 <= (rem1 - 1);
+                end else if (($signed({1'b0, state}) < $signed(105))) begin
+                    if ((state == 96)) begin
+                        lane <= gr2;
+                        state <= 97;
+                    end else if ((state == 97)) begin
+                        term0 <= __mul_noop(extend(sample_q), extend(cos_q));
+                        state <= 98;
+                    end else if ((state == 98)) begin
+                        term1 <= __mul_noop(extend(lane), extend(sin_q));
+                        state <= 99;
+                    end else if ((state == 99)) begin
+                        num_mag <= (term0 - term1);
+                        state <= 100;
+                    end else if ((state == 100)) begin
+                        num_sign <= ((num_mag >> 63) != 0);
+                        state <= 109;
+                    end else if ((state == 101)) begin
+                        quant <= rne_shift(out_mag, 16);
+                        state <= 102;
+                    end else if ((state == 102)) begin
+                        if (num_sign) begin
+                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= (0 - quant);
+                            end
+                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
+                        end
+                        state <= 112;
+                    end else if ((state == 103)) begin
+                        term3 <= __mul_noop(extend(sample_q), extend(sin_q));
+                        state <= 104;
+                    end else if ((state == 104)) begin
+                        num_mag <= (term2 + term3);
+                        state <= 105;
                     end
-                    rem0 <= (rem0 - divisor);
-                    if (($signed({1'b0, bitpos}) >= $signed(64))) begin
-                        quo1 <= (quo1 | (1 << (bitpos - 64)));
+                end else if ((state == 105)) begin
+                    num_sign <= ((num_mag >> 63) != 0);
+                    state <= 106;
+                end else if ((state == 106)) begin
+                    out_mag <= pick(num_sign, (0 - num_mag), num_mag);
+                    state <= 107;
+                end else if ((state == 107)) begin
+                    quant <= rne_shift(out_mag, 16);
+                    state <= 113;
+                end else if ((state == 108)) begin
+                    gate[((((hidden + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)] <= (quant & {32{1'b1}});
+                    if (((head + 1) == heads)) begin
+                        if (((pair + 1) == pairs)) begin
+                            index <= 0;
+                            state <= 1110;
+                        end else begin
+                            pair <= (pair + 1);
+                            head <= 0;
+                            state <= 90;
+                        end
                     end else begin
-                        quo0 <= (quo0 | (1 << bitpos));
+                        head <= (head + 1);
+                        state <= 1095;
                     end
-                end
-                if ((bitpos == 0)) begin
-                    state <= 28;
-                end else begin
-                    bitpos <= (bitpos - 1);
-                    state <= 26;
-                end
-            end else if ((state == 28)) begin
-                add0 <= (quo0 + pick((((rem0 << 1) > divisor) || (((rem0 << 1) == divisor) && ((quo0 & 1) != 0))), 1, 0));
-                add_carry <= carry(quo0, pick((((rem0 << 1) > divisor) || (((rem0 << 1) == divisor) && ((quo0 & 1) != 0))), 1, 0));
-                state <= 30;
-            end else if ((state == 30)) begin
-                quo0 <= add0;
-                quo1 <= (quo1 + add_carry);
-                state <= 31;
-            end else if ((state == 31)) begin
-                rem1 <= (((quo1 + carry(quo0, 42950)) << 32) | ((quo0 + 42950) >>> 32));
-                rem0 <= ((quo0 + 42950) << 32);
-                root <= 0;
-                bitpos <= 94;
-                state <= 32;
-            end else if ((state == 32)) begin
-                if (($signed({1'b0, bitpos}) >= $signed(64))) begin
-                    cmp1 <= (((root << 2) | 1) << (bitpos - 64));
-                    cmp0 <= 0;
-                end else begin
-                    cmp1 <= (((root << 2) | 1) >>> (64 - bitpos));
-                    cmp0 <= (((root << 2) | 1) << bitpos);
-                end
-                state <= 33;
-            end else if ((state == 33)) begin
-                if (((rem1 > cmp1) || ((rem1 == cmp1) && (rem0 >= cmp0)))) begin
-                    rem1 <= ((rem1 - cmp1) - pick((rem0 < cmp0), 1, 0));
-                    rem0 <= (rem0 - cmp0);
-                    root <= ((root << 1) | 1);
-                end else begin
-                    root <= (root << 1);
-                end
-                if ((bitpos == 0)) begin
-                    state <= 34;
-                end else begin
-                    bitpos <= (bitpos - 2);
-                    state <= 32;
-                end
-            end else if ((state == 34)) begin
-                rms <= root;
-                index <= 0;
-                state <= 40;
-            end else if ((state == 40)) begin
-                sample_q <= pick((norm_pass == 0), vr2, ur2);
-                weight_q <= gr2;
-                state <= 41;
-            end else if ((state == 41)) begin
-                num_sign <= (sign64(sample_q) != sign64(weight_q));
-                num_mag <= (__mul_noop(mag64(sample_q), mag64(weight_q)) << 16);
-                rem0 <= 0;
-                quo0 <= 0;
-                bitpos <= 63;
-                state <= 42;
-            end else if ((state == 42)) begin
-                rem0 <= ((rem0 << 1) | pick((((num_mag >> bitpos) & 1) != 0), 1, 0));
-                state <= 43;
-            end else if ((state == 43)) begin
-                if ((rem0 >= rms)) begin
-                    rem0 <= (rem0 - rms);
-                    quo0 <= (quo0 | (1 << bitpos));
-                end
-                if ((bitpos == 0)) begin
-                    state <= 44;
-                end else begin
-                    bitpos <= (bitpos - 1);
-                    state <= 42;
-                end
-            end else if ((state == 44)) begin
-                out_mag <= (quo0 + pick((((rem0 << 1) > rms) || (((rem0 << 1) == rms) && ((quo0 & 1) != 0))), 1, 0));
-                state <= 45;
-            end else if ((state == 45)) begin
-                if (num_sign) begin
-                    if (($signed({1'b0, out_mag}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
-                    end else begin
-                        quant <= (0 - out_mag);
-                    end
-                end else if (($signed({1'b0, out_mag}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end else begin
-                    quant <= out_mag;
-                end
-                state <= 47;
-            end else if ((state == 47)) begin
-                gate[(index & 8191)] <= (quant & {32{1'b1}});
-                emit_tag <= pick((norm_pass == 0), 103, 111);
-                emit_index <= index;
-                emit_value <= (quant & {32{1'b1}});
-                after_emit <= 46;
-                state <= pick(result_only, 46, 300);
-            end else if ((state == 46)) begin
-                if (((index + 1) == hidden)) begin
-                    if ((norm_pass == 0)) begin
-                        state <= 50;
-                    end else begin
-                        state <= 170;
-                    end
-                end else begin
-                    index <= (index + 1);
-                    state <= 40;
-                end
-            end else if ((state == 50)) begin
-                projection_stage <= 0;
-                store_base <= hidden;
-                proj_scale <= scale_q;
-                proj_tag <= 104;
-                row <= 0;
-                col <= 0;
-                acc0 <= 0;
-                nrows <= hidden;
-                weight_addr <= 65536;
-                state <= 71;
-            end else if ((state == 60)) begin
-                projection_stage <= 1;
-                store_base <= __mul_noop(pos, kv);
-                proj_scale <= scale_k;
-                proj_tag <= 105;
-                row <= 0;
-                col <= 0;
-                acc0 <= 0;
-                nrows <= kv;
-                weight_addr <= 167936;
-                state <= 71;
-            end else if ((state == 70)) begin
-                projection_stage <= 2;
-                store_base <= (hidden + __mul_noop(pos, kv));
-                proj_scale <= scale_v;
-                proj_tag <= 106;
-                row <= 0;
-                col <= 0;
-                acc0 <= 0;
-                nrows <= kv;
-                weight_addr <= 193536;
-                state <= 71;
-            end else if ((state == 71)) begin
-                wb_addr <= weight_addr;
-                wb_stb <= 1'b1;
-                response <= 72;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 72)) begin
-                weight0 <= read0;
-                weight1 <= read1;
-                state <= 73;
-            end else if ((state == 73)) begin
-                state <= 74;
-            end else if ((state == 74)) begin
-                term0 <= pick(((weight0 & 3) == 0), 0, pick(((weight0 & 3) == 2), (0 - extend(gr2)), extend(gr2)));
-                state <= 75;
-                weight0 <= ((weight0 >> 2) | (weight1 << 62));
-                weight1 <= (weight1 >> 2);
-                col <= (col + 1);
-                if (((weight0 & 3) == 3)) begin
-                    error_code <= 3;
-                    state <= 900;
-                end
-            end else if ((state == 75)) begin
-                add0 <= (acc0 + term0);
-                add_carry <= carry(acc0, term0);
-                state <= 76;
-            end else if ((state == 76)) begin
-                acc0 <= add0;
-                if ((col == hidden)) begin
-                    weight_addr <= (weight_addr + 1);
-                    state <= 77;
-                end else if (((col & 63) == 0)) begin
-                    weight_addr <= (weight_addr + 1);
-                    state <= 71;
-                end else begin
-                    state <= 74;
-                end
-            end else if ((state == 77)) begin
-                quant <= rne_shift(__mul_noop(pick(((acc0 >> 63) != 0), (0 - acc0), acc0), proj_scale), 16);
-                state <= 78;
-            end else if ((state == 78)) begin
-                if (((acc0 >> 63) != 0)) begin
-                    if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
-                    end else begin
-                        quant <= (0 - quant);
-                    end
-                end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end
-                state <= 79;
-            end else if ((state == 79)) begin
-                if ((projection_stage == 0)) begin
-                    gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                end
-                if ((projection_stage == 1)) begin
-                    up[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                end
-                if ((projection_stage == 2)) begin
-                    vec[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                end
-                if ((projection_stage == 3)) begin
-                    gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                end
-                emit_tag <= proj_tag;
-                emit_index <= row;
-                emit_value <= (quant & {32{1'b1}});
-                after_emit <= 800;
-                state <= pick(result_only, 800, 300);
-            end else if ((state == 800)) begin
-                acc0 <= 0;
-                col <= 0;
-                if (((row + 1) == nrows)) begin
-                    if ((projection_stage == 0)) begin
-                        state <= 60;
-                    end else if ((projection_stage == 1)) begin
-                        state <= 70;
-                    end else if ((projection_stage == 2)) begin
+                end else if ((state == 109)) begin
+                    out_mag <= pick(num_sign, (0 - num_mag), num_mag);
+                    state <= 101;
+                end else if ((state == 110)) begin
+                    emit_tag <= 107;
+                    emit_index <= index;
+                    emit_value <= gr2;
+                    after_emit <= 111;
+                    state <= pick(result_only, 111, 300);
+                end else if ((state == 111)) begin
+                    if (((index + 1) == hidden)) begin
                         index <= 0;
                         pair <= 0;
                         head <= 0;
-                        state <= 90;
-                    end else begin
-                        index <= 0;
-                        state <= 180;
-                    end
-                end else begin
-                    row <= (row + 1);
-                    state <= 71;
-                end
-            end else if ((state == 90)) begin
-                ropebase <= ((321536 + __mul_noop(pos, head_dim)) + __mul_noop(2, pair));
-                state <= 91;
-            end else if ((state == 91)) begin
-                wb_addr <= ropebase;
-                wb_stb <= 1'b1;
-                response <= 92;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 92)) begin
-                cos_q <= (read0 & {32{1'b1}});
-                state <= 93;
-            end else if ((state == 93)) begin
-                wb_addr <= (ropebase + 1);
-                wb_stb <= 1'b1;
-                response <= 94;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 94)) begin
-                sin_q <= (read0 & {32{1'b1}});
-                state <= 95;
-            end else if ((state == 95)) begin
-                sample_q <= gr2;
-                state <= 96;
-            end else if ((state == 96)) begin
-                lane <= gr2;
-                state <= 97;
-            end else if ((state == 97)) begin
-                term0 <= __mul_noop(extend(sample_q), extend(cos_q));
-                state <= 98;
-            end else if ((state == 98)) begin
-                term1 <= __mul_noop(extend(lane), extend(sin_q));
-                state <= 99;
-            end else if ((state == 99)) begin
-                num_mag <= (term0 - term1);
-                state <= 100;
-            end else if ((state == 100)) begin
-                num_sign <= ((num_mag >> 63) != 0);
-                state <= 109;
-            end else if ((state == 109)) begin
-                out_mag <= pick(num_sign, (0 - num_mag), num_mag);
-                state <= 101;
-            end else if ((state == 101)) begin
-                quant <= rne_shift(out_mag, 16);
-                state <= 102;
-            end else if ((state == 102)) begin
-                if (num_sign) begin
-                    if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
-                    end else begin
-                        quant <= (0 - quant);
-                    end
-                end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end
-                state <= 112;
-            end else if ((state == 112)) begin
-                gate[(((hidden + __mul_noop(head, head_dim)) + pair) & 8191)] <= (quant & {32{1'b1}});
-                term2 <= __mul_noop(extend(lane), extend(cos_q));
-                state <= 103;
-            end else if ((state == 103)) begin
-                term3 <= __mul_noop(extend(sample_q), extend(sin_q));
-                state <= 104;
-            end else if ((state == 104)) begin
-                num_mag <= (term2 + term3);
-                state <= 105;
-            end else if ((state == 105)) begin
-                num_sign <= ((num_mag >> 63) != 0);
-                state <= 106;
-            end else if ((state == 106)) begin
-                out_mag <= pick(num_sign, (0 - num_mag), num_mag);
-                state <= 107;
-            end else if ((state == 107)) begin
-                quant <= rne_shift(out_mag, 16);
-                state <= 113;
-            end else if ((state == 113)) begin
-                if (num_sign) begin
-                    if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
-                    end else begin
-                        quant <= (0 - quant);
-                    end
-                end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end
-                state <= 108;
-            end else if ((state == 108)) begin
-                gate[((((hidden + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)] <= (quant & {32{1'b1}});
-                if (((head + 1) == heads)) begin
-                    if (((pair + 1) == pairs)) begin
-                        index <= 0;
-                        state <= 110;
-                    end else begin
-                        pair <= (pair + 1);
-                        head <= 0;
-                        state <= 90;
-                    end
-                end else begin
-                    head <= (head + 1);
-                    state <= 95;
-                end
-            end else if ((state == 110)) begin
-                emit_tag <= 107;
-                emit_index <= index;
-                emit_value <= gr2;
-                after_emit <= 111;
-                state <= pick(result_only, 111, 300);
-            end else if ((state == 111)) begin
-                if (((index + 1) == hidden)) begin
-                    index <= 0;
-                    pair <= 0;
-                    head <= 0;
-                    state <= 115;
-                end else begin
-                    index <= (index + 1);
-                    state <= 110;
-                end
-            end else if ((state == 115)) begin
-                ropebase <= ((321536 + __mul_noop(pos, head_dim)) + __mul_noop(2, pair));
-                state <= 116;
-            end else if ((state == 116)) begin
-                wb_addr <= ropebase;
-                wb_stb <= 1'b1;
-                response <= 117;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 117)) begin
-                cos_q <= (read0 & {32{1'b1}});
-                state <= 118;
-            end else if ((state == 118)) begin
-                wb_addr <= (ropebase + 1);
-                wb_stb <= 1'b1;
-                response <= 119;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 119)) begin
-                sin_q <= (read0 & {32{1'b1}});
-                state <= 120;
-            end else if ((state == 120)) begin
-                sample_q <= ur2;
-                state <= 121;
-            end else if ((state == 121)) begin
-                lane <= ur2;
-                state <= 122;
-            end else if ((state == 122)) begin
-                term0 <= __mul_noop(extend(sample_q), extend(cos_q));
-                state <= 123;
-            end else if ((state == 123)) begin
-                term1 <= __mul_noop(extend(lane), extend(sin_q));
-                state <= 124;
-            end else if ((state == 124)) begin
-                num_mag <= (term0 - term1);
-                state <= 125;
-            end else if ((state == 125)) begin
-                num_sign <= ((num_mag >> 63) != 0);
-                state <= 134;
-            end else if ((state == 134)) begin
-                out_mag <= pick(num_sign, (0 - num_mag), num_mag);
-                state <= 126;
-            end else if ((state == 126)) begin
-                quant <= rne_shift(out_mag, 16);
-                state <= 127;
-            end else if ((state == 127)) begin
-                if (num_sign) begin
-                    if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
-                    end else begin
-                        quant <= (0 - quant);
-                    end
-                end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end
-                state <= 137;
-            end else if ((state == 137)) begin
-                up[(((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) & 8191)] <= (quant & {32{1'b1}});
-                term2 <= __mul_noop(extend(lane), extend(cos_q));
-                state <= 128;
-            end else if ((state == 128)) begin
-                term3 <= __mul_noop(extend(sample_q), extend(sin_q));
-                state <= 129;
-            end else if ((state == 129)) begin
-                num_mag <= (term2 + term3);
-                state <= 130;
-            end else if ((state == 130)) begin
-                num_sign <= ((num_mag >> 63) != 0);
-                state <= 131;
-            end else if ((state == 131)) begin
-                out_mag <= pick(num_sign, (0 - num_mag), num_mag);
-                state <= 132;
-            end else if ((state == 132)) begin
-                quant <= rne_shift(out_mag, 16);
-                state <= 138;
-            end else if ((state == 138)) begin
-                if (num_sign) begin
-                    if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
-                    end else begin
-                        quant <= (0 - quant);
-                    end
-                end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end
-                state <= 133;
-            end else if ((state == 133)) begin
-                up[((((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)] <= (quant & {32{1'b1}});
-                if (((head + 1) == kv_heads)) begin
-                    if (((pair + 1) == pairs)) begin
-                        index <= 0;
-                        state <= 135;
-                    end else begin
-                        pair <= (pair + 1);
-                        head <= 0;
                         state <= 115;
-                    end
-                end else begin
-                    head <= (head + 1);
-                    state <= 120;
-                end
-            end else if ((state == 135)) begin
-                emit_tag <= 108;
-                emit_index <= index;
-                emit_value <= ur2;
-                after_emit <= 136;
-                state <= pick(result_only, 136, 300);
-            end else if ((state == 136)) begin
-                if (((index + 1) == kv)) begin
-                    head <= 0;
-                    state <= 140;
-                end else begin
-                    index <= (index + 1);
-                    state <= 135;
-                end
-            end else if ((state == 140)) begin
-                jj <= 0;
-                col <= 0;
-                acc0 <= 0;
-                acc1 <= 0;
-                state <= 141;
-            end else if ((state == 141)) begin
-                lane <= __mul_noop(extend(gr2), extend(ur2));
-                state <= 142;
-            end else if ((state == 142)) begin
-                add0 <= (acc0 + lane);
-                add1 <= ((acc1 + pick(((lane >> 63) != 0), 64'd18446744073709551615, 0)) + carry(acc0, lane));
-                state <= 143;
-            end else if ((state == 143)) begin
-                acc0 <= add0;
-                acc1 <= add1;
-                if (((col + 1) == head_dim)) begin
-                    state <= 144;
-                end else begin
-                    col <= (col + 1);
-                    state <= 141;
-                end
-            end else if ((state == 144)) begin
-                if (((acc1 >> 63) != 0)) begin
-                    out_mag <= (0 - acc0);
-                    rem1 <= ((0 - acc1) - pick((acc0 != 0), 1, 0));
-                end else begin
-                    out_mag <= acc0;
-                    rem1 <= acc1;
-                end
-                state <= 145;
-            end else if ((state == 145)) begin
-                rem0 <= (__mul_noop(scale_attn, (out_mag & 64'd4294967295)) & 64'd4294967295);
-                add0 <= ((__mul_noop(scale_attn, (out_mag >> 32)) + (__mul_noop(scale_attn, (out_mag & 64'd4294967295)) >>> 32)) & 64'd4294967295);
-                add1 <= (__mul_noop(scale_attn, rem1) + ((__mul_noop(scale_attn, (out_mag >> 32)) + (__mul_noop(scale_attn, (out_mag & 64'd4294967295)) >>> 32)) >>> 32));
-                state <= 146;
-            end else if ((state == 146)) begin
-                quant <= (((add1 << 32) | add0) + pick((($signed({1'b0, rem0}) > $signed(64'd2147483648)) || ((rem0 == 64'd2147483648) && ((((add1 << 32) | add0) & 1) != 0))), 1, 0));
-                state <= 147;
-            end else if ((state == 147)) begin
-                if (((acc1 >> 63) != 0)) begin
-                    if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
                     end else begin
-                        quant <= (0 - quant);
+                        index <= (index + 1);
+                        state <= 1110;
                     end
-                end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
+                end else if ((state == 112)) begin
+                    gate[(((hidden + __mul_noop(head, head_dim)) + pair) & 8191)] <= (quant & {32{1'b1}});
+                    term2 <= __mul_noop(extend(lane), extend(cos_q));
+                    state <= 103;
+                end else if ((state == 113)) begin
+                    if (num_sign) begin
+                        if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                            quant <= 64'd2147483648;
+                        end else begin
+                            quant <= (0 - quant);
+                        end
+                    end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                        quant <= 64'd2147483647;
+                    end
+                    state <= 108;
                 end
-                state <= 148;
-            end else if ((state == 148)) begin
-                sample_q <= (quant & {32{1'b1}});
-                state <= 169;
-            end else if ((state == 169)) begin
-                vec[(((hidden + kvcount) + jj) & 8191)] <= sample_q;
-                emit_tag <= 109;
-                emit_index <= sc_index;
-                emit_value <= sample_q;
-                after_emit <= 149;
-                state <= pick(result_only, 149, 300);
-            end else if ((state == 149)) begin
-                sc_index <= (sc_index + 1);
-                if ((jj < pos)) begin
-                    jj <= (jj + 1);
+            end else if (($signed({1'b0, state}) < $signed(151))) begin
+                if (($signed({1'b0, state}) < $signed(132))) begin
+                    if (($signed({1'b0, state}) < $signed(123))) begin
+                        if ((state == 115)) begin
+                            ropebase <= ((321536 + __mul_noop(pos, head_dim)) + __mul_noop(2, pair));
+                            state <= 116;
+                        end else if ((state == 116)) begin
+                            wb_addr <= ropebase;
+                            wb_stb <= 1'b1;
+                            response <= 117;
+                            state <= 200;
+                            quiet <= 0;
+                        end else if ((state == 117)) begin
+                            cos_q <= (read0 & {32{1'b1}});
+                            state <= 118;
+                        end else if ((state == 118)) begin
+                            wb_addr <= (ropebase + 1);
+                            wb_stb <= 1'b1;
+                            response <= 119;
+                            state <= 200;
+                            quiet <= 0;
+                        end else if ((state == 119)) begin
+                            sin_q <= (read0 & {32{1'b1}});
+                            state <= 1120;
+                        end else if ((state == 120)) begin
+                            sample_q <= ur2;
+                            state <= 1121;
+                        end else if ((state == 121)) begin
+                            lane <= ur2;
+                            state <= 122;
+                        end else if ((state == 122)) begin
+                            term0 <= __mul_noop(extend(sample_q), extend(cos_q));
+                            state <= 123;
+                        end
+                    end else if ((state == 123)) begin
+                        term1 <= __mul_noop(extend(lane), extend(sin_q));
+                        state <= 124;
+                    end else if ((state == 124)) begin
+                        num_mag <= (term0 - term1);
+                        state <= 125;
+                    end else if ((state == 125)) begin
+                        num_sign <= ((num_mag >> 63) != 0);
+                        state <= 134;
+                    end else if ((state == 126)) begin
+                        quant <= rne_shift(out_mag, 16);
+                        state <= 127;
+                    end else if ((state == 127)) begin
+                        if (num_sign) begin
+                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= (0 - quant);
+                            end
+                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
+                        end
+                        state <= 137;
+                    end else if ((state == 128)) begin
+                        term3 <= __mul_noop(extend(sample_q), extend(sin_q));
+                        state <= 129;
+                    end else if ((state == 129)) begin
+                        num_mag <= (term2 + term3);
+                        state <= 130;
+                    end else if ((state == 130)) begin
+                        num_sign <= ((num_mag >> 63) != 0);
+                        state <= 131;
+                    end else if ((state == 131)) begin
+                        out_mag <= pick(num_sign, (0 - num_mag), num_mag);
+                        state <= 132;
+                    end
+                end else if (($signed({1'b0, state}) < $signed(142))) begin
+                    if ((state == 132)) begin
+                        quant <= rne_shift(out_mag, 16);
+                        state <= 138;
+                    end else if ((state == 133)) begin
+                        up[((((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)] <= (quant & {32{1'b1}});
+                        if (((head + 1) == kv_heads)) begin
+                            if (((pair + 1) == pairs)) begin
+                                index <= 0;
+                                state <= 1135;
+                            end else begin
+                                pair <= (pair + 1);
+                                head <= 0;
+                                state <= 115;
+                            end
+                        end else begin
+                            head <= (head + 1);
+                            state <= 1120;
+                        end
+                    end else if ((state == 134)) begin
+                        out_mag <= pick(num_sign, (0 - num_mag), num_mag);
+                        state <= 126;
+                    end else if ((state == 135)) begin
+                        emit_tag <= 108;
+                        emit_index <= index;
+                        emit_value <= ur2;
+                        after_emit <= 136;
+                        state <= pick(result_only, 136, 300);
+                    end else if ((state == 136)) begin
+                        if (((index + 1) == kv)) begin
+                            head <= 0;
+                            state <= 140;
+                        end else begin
+                            index <= (index + 1);
+                            state <= 1135;
+                        end
+                    end else if ((state == 137)) begin
+                        up[(((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) & 8191)] <= (quant & {32{1'b1}});
+                        term2 <= __mul_noop(extend(lane), extend(cos_q));
+                        state <= 128;
+                    end else if ((state == 138)) begin
+                        if (num_sign) begin
+                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= (0 - quant);
+                            end
+                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
+                        end
+                        state <= 133;
+                    end else if ((state == 140)) begin
+                        jj <= 0;
+                        col <= 0;
+                        acc0 <= 0;
+                        acc1 <= 0;
+                        state <= 1141;
+                    end else if ((state == 141)) begin
+                        lane <= __mul_noop(extend(gr2), extend(ur2));
+                        state <= 142;
+                    end
+                end else if ((state == 142)) begin
+                    add0 <= (acc0 + lane);
+                    add1 <= ((acc1 + pick(((lane >> 63) != 0), 64'd18446744073709551615, 0)) + carry(acc0, lane));
+                    state <= 143;
+                end else if ((state == 143)) begin
+                    acc0 <= add0;
+                    acc1 <= add1;
+                    if (((col + 1) == head_dim)) begin
+                        state <= 144;
+                    end else begin
+                        col <= (col + 1);
+                        state <= 1141;
+                    end
+                end else if ((state == 144)) begin
+                    if (((acc1 >> 63) != 0)) begin
+                        out_mag <= (0 - acc0);
+                        rem1 <= ((0 - acc1) - pick((acc0 != 0), 1, 0));
+                    end else begin
+                        out_mag <= acc0;
+                        rem1 <= acc1;
+                    end
+                    state <= 145;
+                end else if ((state == 145)) begin
+                    rem0 <= (__mul_noop(scale_attn, (out_mag & 64'd4294967295)) & 64'd4294967295);
+                    add0 <= ((__mul_noop(scale_attn, (out_mag >> 32)) + (__mul_noop(scale_attn, (out_mag & 64'd4294967295)) >>> 32)) & 64'd4294967295);
+                    add1 <= (__mul_noop(scale_attn, rem1) + ((__mul_noop(scale_attn, (out_mag >> 32)) + (__mul_noop(scale_attn, (out_mag & 64'd4294967295)) >>> 32)) >>> 32));
+                    state <= 146;
+                end else if ((state == 146)) begin
+                    quant <= (((add1 << 32) | add0) + pick((($signed({1'b0, rem0}) > $signed(64'd2147483648)) || ((rem0 == 64'd2147483648) && ((((add1 << 32) | add0) & 1) != 0))), 1, 0));
+                    state <= 147;
+                end else if ((state == 147)) begin
+                    if (((acc1 >> 63) != 0)) begin
+                        if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                            quant <= 64'd2147483648;
+                        end else begin
+                            quant <= (0 - quant);
+                        end
+                    end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                        quant <= 64'd2147483647;
+                    end
+                    state <= 148;
+                end else if ((state == 148)) begin
+                    sample_q <= (quant & {32{1'b1}});
+                    state <= 169;
+                end else if ((state == 149)) begin
+                    sc_index <= (sc_index + 1);
+                    if ((jj < pos)) begin
+                        jj <= (jj + 1);
+                        col <= 0;
+                        acc0 <= 0;
+                        acc1 <= 0;
+                        state <= 1141;
+                    end else begin
+                        jj <= 0;
+                        state <= 1150;
+                    end
+                end else if ((state == 150)) begin
+                    max_score <= vr2;
+                    state <= 151;
+                end
+            end else if (($signed({1'b0, state}) < $signed(172))) begin
+                if (($signed({1'b0, state}) < $signed(162))) begin
+                    if ((state == 151)) begin
+                        if ((jj < pos)) begin
+                            jj <= (jj + 1);
+                            state <= 1152;
+                        end else begin
+                            jj <= 0;
+                            exp_denom <= 0;
+                            state <= 1154;
+                        end
+                    end else if ((state == 152)) begin
+                        if (sgt(extend(vr2), extend(max_score))) begin
+                            max_score <= vr2;
+                        end
+                        state <= 151;
+                    end else if ((state == 154)) begin
+                        exp_value <= exp_q16((vr2 - max_score));
+                        state <= 155;
+                    end else if ((state == 155)) begin
+                        vec[(((hidden + kvcount) + jj) & 8191)] <= exp_value;
+                        exp_denom <= (exp_denom + exp_value);
+                        state <= 156;
+                    end else if ((state == 156)) begin
+                        if ((jj < pos)) begin
+                            jj <= (jj + 1);
+                            state <= 1154;
+                        end else begin
+                            jj <= 0;
+                            dd <= 0;
+                            state <= 160;
+                        end
+                    end else if ((state == 157)) begin
+                        lane <= __mul_noop(extend(sample_q), vr2);
+                        state <= 162;
+                    end else if ((state == 158)) begin
+                        up[(((kvcount + __mul_noop(head, head_dim)) + dd) & 8191)] <= (quant & {32{1'b1}});
+                        emit_tag <= 110;
+                        emit_index <= (__mul_noop(head, head_dim) + dd);
+                        emit_value <= (quant & {32{1'b1}});
+                        after_emit <= 168;
+                        state <= pick(result_only, 168, 300);
+                    end else if ((state == 160)) begin
+                        acc0 <= 0;
+                        state <= 1161;
+                    end else if ((state == 161)) begin
+                        sample_q <= vr2;
+                        state <= 1157;
+                    end
+                end else if ((state == 162)) begin
+                    acc0 <= (acc0 + lane);
+                    if ((jj < pos)) begin
+                        jj <= (jj + 1);
+                        state <= 1161;
+                    end else begin
+                        jj <= 0;
+                        state <= 163;
+                    end
+                end else if ((state == 163)) begin
+                    num_sign <= ((acc0 >> 63) != 0);
+                    num_mag <= pick(((acc0 >> 63) != 0), (0 - acc0), acc0);
+                    rem0 <= 0;
+                    quo0 <= 0;
+                    bitpos <= 63;
+                    state <= 164;
+                end else if ((state == 164)) begin
+                    rem0 <= ((rem0 << 1) | pick((((num_mag >> bitpos) & 1) != 0), 1, 0));
+                    state <= 165;
+                end else if ((state == 165)) begin
+                    if ((rem0 >= exp_denom)) begin
+                        rem0 <= (rem0 - exp_denom);
+                        quo0 <= (quo0 | (1 << bitpos));
+                    end
+                    if ((bitpos == 0)) begin
+                        state <= 166;
+                    end else begin
+                        bitpos <= (bitpos - 1);
+                        state <= 164;
+                    end
+                end else if ((state == 166)) begin
+                    out_mag <= (quo0 + pick((((rem0 << 1) > exp_denom) || (((rem0 << 1) == exp_denom) && ((quo0 & 1) != 0))), 1, 0));
+                    state <= 167;
+                end else if ((state == 167)) begin
+                    if (num_sign) begin
+                        if (($signed({1'b0, out_mag}) > $signed(64'd2147483648))) begin
+                            quant <= 64'd2147483648;
+                        end else begin
+                            quant <= (0 - out_mag);
+                        end
+                    end else if (($signed({1'b0, out_mag}) > $signed(64'd2147483647))) begin
+                        quant <= 64'd2147483647;
+                    end else begin
+                        quant <= out_mag;
+                    end
+                    state <= 158;
+                end else if ((state == 168)) begin
+                    if (((dd + 1) == head_dim)) begin
+                        if (((head + 1) == heads)) begin
+                            index <= 0;
+                            state <= 172;
+                        end else begin
+                            head <= (head + 1);
+                            state <= 140;
+                        end
+                    end else begin
+                        dd <= (dd + 1);
+                        state <= 160;
+                    end
+                end else if ((state == 169)) begin
+                    vec[(((hidden + kvcount) + jj) & 8191)] <= sample_q;
+                    emit_tag <= 109;
+                    emit_index <= sc_index;
+                    emit_value <= sample_q;
+                    after_emit <= 149;
+                    state <= pick(result_only, 149, 300);
+                end else if ((state == 170)) begin
+                    projection_stage <= 3;
+                    store_base <= hidden;
+                    proj_scale <= scale_o;
+                    proj_tag <= 112;
+                    row <= 0;
                     col <= 0;
                     acc0 <= 0;
-                    acc1 <= 0;
-                    state <= 141;
-                end else begin
-                    jj <= 0;
-                    state <= 150;
+                    nrows <= hidden;
+                    weight_addr <= 219136;
+                    state <= 71;
                 end
-            end else if ((state == 150)) begin
-                max_score <= vr2;
-                state <= 151;
-            end else if ((state == 151)) begin
-                if ((jj < pos)) begin
-                    jj <= (jj + 1);
-                    state <= 152;
-                end else begin
-                    jj <= 0;
-                    exp_denom <= 0;
-                    state <= 154;
-                end
-            end else if ((state == 152)) begin
-                if (sgt(extend(vr2), extend(max_score))) begin
-                    max_score <= vr2;
-                end
-                state <= 151;
-            end else if ((state == 154)) begin
-                exp_value <= exp_q16((vr2 - max_score));
-                state <= 155;
-            end else if ((state == 155)) begin
-                vec[(((hidden + kvcount) + jj) & 8191)] <= exp_value;
-                exp_denom <= (exp_denom + exp_value);
-                state <= 156;
-            end else if ((state == 156)) begin
-                if ((jj < pos)) begin
-                    jj <= (jj + 1);
-                    state <= 154;
-                end else begin
-                    jj <= 0;
-                    dd <= 0;
-                    state <= 160;
-                end
-            end else if ((state == 160)) begin
-                acc0 <= 0;
-                state <= 161;
-            end else if ((state == 161)) begin
-                sample_q <= vr2;
-                state <= 157;
-            end else if ((state == 157)) begin
-                lane <= __mul_noop(extend(sample_q), vr2);
-                state <= 162;
-            end else if ((state == 162)) begin
-                acc0 <= (acc0 + lane);
-                if ((jj < pos)) begin
-                    jj <= (jj + 1);
-                    state <= 161;
-                end else begin
-                    jj <= 0;
-                    state <= 163;
-                end
-            end else if ((state == 163)) begin
-                num_sign <= ((acc0 >> 63) != 0);
-                num_mag <= pick(((acc0 >> 63) != 0), (0 - acc0), acc0);
-                rem0 <= 0;
-                quo0 <= 0;
-                bitpos <= 63;
-                state <= 164;
-            end else if ((state == 164)) begin
-                rem0 <= ((rem0 << 1) | pick((((num_mag >> bitpos) & 1) != 0), 1, 0));
-                state <= 165;
-            end else if ((state == 165)) begin
-                if ((rem0 >= exp_denom)) begin
-                    rem0 <= (rem0 - exp_denom);
-                    quo0 <= (quo0 | (1 << bitpos));
-                end
-                if ((bitpos == 0)) begin
-                    state <= 166;
-                end else begin
-                    bitpos <= (bitpos - 1);
-                    state <= 164;
-                end
-            end else if ((state == 166)) begin
-                out_mag <= (quo0 + pick((((rem0 << 1) > exp_denom) || (((rem0 << 1) == exp_denom) && ((quo0 & 1) != 0))), 1, 0));
-                state <= 167;
-            end else if ((state == 167)) begin
-                if (num_sign) begin
-                    if (($signed({1'b0, out_mag}) > $signed(64'd2147483648))) begin
-                        quant <= 64'd2147483648;
-                    end else begin
-                        quant <= (0 - out_mag);
-                    end
-                end else if (($signed({1'b0, out_mag}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end else begin
-                    quant <= out_mag;
-                end
-                state <= 158;
-            end else if ((state == 158)) begin
-                up[(((kvcount + __mul_noop(head, head_dim)) + dd) & 8191)] <= (quant & {32{1'b1}});
-                emit_tag <= 110;
-                emit_index <= (__mul_noop(head, head_dim) + dd);
-                emit_value <= (quant & {32{1'b1}});
-                after_emit <= 168;
-                state <= pick(result_only, 168, 300);
-            end else if ((state == 168)) begin
-                if (((dd + 1) == head_dim)) begin
-                    if (((head + 1) == heads)) begin
-                        index <= 0;
-                        state <= 172;
-                    end else begin
-                        head <= (head + 1);
-                        state <= 140;
-                    end
-                end else begin
-                    dd <= (dd + 1);
-                    state <= 160;
-                end
-            end else if ((state == 172)) begin
-                index <= 0;
-                state <= 173;
-            end else if ((state == 173)) begin
-                wb_addr <= (8192 + index);
-                wb_stb <= 1'b1;
-                response <= 174;
-                state <= 200;
-                quiet <= 0;
-            end else if ((state == 174)) begin
-                gate[(index & 8191)] <= (read0 & {32{1'b1}});
-                if (((index + 1) == hidden)) begin
+            end else if (($signed({1'b0, state}) < $signed(201))) begin
+                if ((state == 172)) begin
                     index <= 0;
-                    norm_pass <= 1;
-                    state <= 20;
-                end else begin
-                    index <= (index + 1);
                     state <= 173;
-                end
-            end else if ((state == 170)) begin
-                projection_stage <= 3;
-                store_base <= hidden;
-                proj_scale <= scale_o;
-                proj_tag <= 112;
-                row <= 0;
-                col <= 0;
-                acc0 <= 0;
-                nrows <= hidden;
-                weight_addr <= 219136;
-                state <= 71;
-            end else if ((state == 180)) begin
-                lane <= (extend(vr2) + extend(gr2));
-                state <= 181;
-            end else if ((state == 181)) begin
-                if (((lane >> 63) != 0)) begin
-                    if (($signed({1'b0, lane}) < $signed(64'd18446744071562067968))) begin
-                        quant <= 64'd2147483648;
+                end else if ((state == 173)) begin
+                    wb_addr <= (8192 + index);
+                    wb_stb <= 1'b1;
+                    response <= 174;
+                    state <= 200;
+                    quiet <= 0;
+                end else if ((state == 174)) begin
+                    gate[(index & 8191)] <= (read0 & {32{1'b1}});
+                    if (((index + 1) == hidden)) begin
+                        index <= 0;
+                        norm_pass <= 1;
+                        state <= 20;
+                    end else begin
+                        index <= (index + 1);
+                        state <= 173;
+                    end
+                end else if ((state == 180)) begin
+                    lane <= (extend(vr2) + extend(gr2));
+                    state <= 181;
+                end else if ((state == 181)) begin
+                    if (((lane >> 63) != 0)) begin
+                        if (($signed({1'b0, lane}) < $signed(64'd18446744071562067968))) begin
+                            quant <= 64'd2147483648;
+                        end else begin
+                            quant <= lane;
+                        end
+                    end else if (($signed({1'b0, lane}) > $signed(64'd2147483647))) begin
+                        quant <= 64'd2147483647;
                     end else begin
                         quant <= lane;
                     end
-                end else if (($signed({1'b0, lane}) > $signed(64'd2147483647))) begin
-                    quant <= 64'd2147483647;
-                end else begin
-                    quant <= lane;
-                end
-                state <= 182;
-            end else if ((state == 182)) begin
-                emit_tag <= 113;
-                emit_index <= index;
-                emit_value <= (quant & {32{1'b1}});
-                after_emit <= 183;
-                state <= 300;
-            end else if ((state == 183)) begin
-                if (((index + 1) == hidden)) begin
-                    state <= 184;
-                end else begin
-                    index <= (index + 1);
-                    state <= 180;
-                end
-            end else if ((state == 184)) begin
-                if (((pos + 1) == positions)) begin
-                    active <= 1'b0;
-                    state <= 600;
-                end else begin
-                    pos <= (pos + 1);
-                    state <= 16;
-                end
-            end else if ((state == 200)) begin
-                quiet <= (quiet + 1);
-                if (!stall) begin
-                    wb_stb <= 1'b0;
-                    state <= 201;
-                end
-                if (ack) begin
-                    read0 <= rdata_lo;
-                    read1 <= rdata_hi;
-                    wb_stb <= 1'b0;
-                    state <= response;
-                end
-                if (($signed({1'b0, quiet}) >= $signed(16777216))) begin
-                    error_code <= 4;
-                    wb_stb <= 1'b0;
-                    state <= 900;
+                    state <= 182;
+                end else if ((state == 182)) begin
+                    emit_tag <= 113;
+                    emit_index <= index;
+                    emit_value <= (quant & {32{1'b1}});
+                    after_emit <= 183;
+                    state <= 300;
+                end else if ((state == 183)) begin
+                    if (((index + 1) == hidden)) begin
+                        state <= 184;
+                    end else begin
+                        index <= (index + 1);
+                        state <= 1180;
+                    end
+                end else if ((state == 184)) begin
+                    if (((pos + 1) == positions)) begin
+                        active <= 1'b0;
+                        state <= 600;
+                    end else begin
+                        pos <= (pos + 1);
+                        state <= 16;
+                    end
+                end else if ((state == 200)) begin
+                    quiet <= (quiet + 1);
+                    if (!stall) begin
+                        wb_stb <= 1'b0;
+                        state <= 201;
+                    end
+                    if (ack) begin
+                        read0 <= rdata_lo;
+                        read1 <= rdata_hi;
+                        wb_stb <= 1'b0;
+                        state <= response;
+                    end
+                    if (($signed({1'b0, quiet}) >= $signed(16777216))) begin
+                        error_code <= 4;
+                        wb_stb <= 1'b0;
+                        state <= 900;
+                    end
                 end
             end else if ((state == 201)) begin
                 quiet <= (quiet + 1);
@@ -1939,6 +1941,27 @@ module TrinityGf16AttnT27 (
                     state <= 1;
                     poll <= 8192;
                 end
+            end else if ((state == 800)) begin
+                acc0 <= 0;
+                col <= 0;
+                if (((row + 1) == nrows)) begin
+                    if ((projection_stage == 0)) begin
+                        state <= 60;
+                    end else if ((projection_stage == 1)) begin
+                        state <= 70;
+                    end else if ((projection_stage == 2)) begin
+                        index <= 0;
+                        pair <= 0;
+                        head <= 0;
+                        state <= 90;
+                    end else begin
+                        index <= 0;
+                        state <= 1180;
+                    end
+                end else begin
+                    row <= (row + 1);
+                    state <= 71;
+                end
             end else if ((state == 900)) begin
                 active <= 1'b0;
                 wb_cyc <= 1'b0;
@@ -1993,12 +2016,9 @@ module TrinityGf16AttnT27 (
     // Module-level statements
     // -------------------------------------------------------
     always @(*) begin
-        va = pick((((state == 21) || (state == 40)) || (state == 180)), index, pick(((((state == 150) || (state == 152)) || (state == 154)) || (state == 157)), ((hidden + kvcount) + jj), pick((state == 161), (((hidden + __mul_noop(jj, kv)) + __mul_noop((head / group), head_dim)) + dd), 0)));
-        ga = pick((state == 40), pick((norm_pass == 0), (__mul_noop(2, hidden) + index), index), pick((state == 74), col, pick((state == 95), ((hidden + __mul_noop(head, head_dim)) + pair), pick((state == 96), (((hidden + __mul_noop(head, head_dim)) + pair) + pairs), pick(((state == 110) || (state == 180)), (hidden + index), pick((state == 141), ((hidden + __mul_noop(head, head_dim)) + col), 0))))));
-        ua = pick(((state == 21) || (state == 40)), (kvcount + index), pick((state == 120), ((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair), pick((state == 121), (((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs), pick((state == 135), (__mul_noop(pos, kv) + index), pick((state == 141), ((__mul_noop(jj, kv) + __mul_noop((head / group), head_dim)) + col), 0)))));
-        vr2 = vec[(va & 8191)];
-        gr2 = gate[(ga & 8191)];
-        ur2 = up[(ua & 8191)];
+        va = pick((((state == 1021) || (state == 1040)) || (state == 1180)), index, pick(((((state == 1150) || (state == 1152)) || (state == 1154)) || (state == 1157)), ((hidden + kvcount) + jj), pick((state == 1161), (((hidden + __mul_noop(jj, kv)) + __mul_noop((head / group), head_dim)) + dd), 0)));
+        ga = pick((state == 1040), pick((norm_pass == 0), (__mul_noop(2, hidden) + index), index), pick((state == 1074), col, pick((state == 1095), ((hidden + __mul_noop(head, head_dim)) + pair), pick((state == 1096), (((hidden + __mul_noop(head, head_dim)) + pair) + pairs), pick(((state == 1110) || (state == 1180)), (hidden + index), pick((state == 1141), ((hidden + __mul_noop(head, head_dim)) + col), 0))))));
+        ua = pick(((state == 1021) || (state == 1040)), (kvcount + index), pick((state == 1120), ((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair), pick((state == 1121), (((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs), pick((state == 1135), (__mul_noop(pos, kv) + index), pick((state == 1141), ((__mul_noop(jj, kv) + __mul_noop((head / group), head_dim)) + col), 0)))));
         s_idle = !sbuf;
     end
 
