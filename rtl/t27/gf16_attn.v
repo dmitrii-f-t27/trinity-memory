@@ -834,13 +834,8 @@ module TrinityGf16AttnT27 (
         begin : carry_body
             reg __t27_ret;
             __t27_ret = 1'b0;
-            if (((a + b) < a)) begin
-                carry = 1;
-                __t27_ret = 1'b1;
-            end else begin
-                carry = 0;
-                __t27_ret = 1'b1;
-            end
+            carry = (((a & b) | ((a | b) & ((a + b) ^ 64'd18446744073709551615))) >>> 63);
+            __t27_ret = 1'b1;
         end
     endfunction
 
@@ -1792,10 +1787,10 @@ module TrinityGf16AttnT27 (
                     state <= 400;
                 end else if ((state == 142)) begin
                     add0 <= (acc0 + lane);
-                    add1 <= ((acc1 + pick(((lane >> 63) != 0), 64'd18446744073709551615, 0)) + carry(acc0, lane));
-                    state <= 143;
+                    add_carry <= carry(acc0, lane);
+                    state <= 3142;
                 end
-            end else if (($signed({1'b0, state}) < $signed(704))) begin
+            end else if (($signed({1'b0, state}) < $signed(705))) begin
                 if (($signed({1'b0, state}) < $signed(169))) begin
                     if (($signed({1'b0, state}) < $signed(156))) begin
                         if ((state == 143)) begin
@@ -2066,48 +2061,50 @@ module TrinityGf16AttnT27 (
                             state <= 900;
                         end
                     end
-                end else if ((state == 300)) begin
-                    if (!pending) begin
-                        ptag <= emit_tag;
-                        pa <= emit_index;
-                        pb <= emit_value;
-                        pending <= 1'b1;
-                        state <= 301;
-                    end
-                end else if ((state == 301)) begin
-                    if (!pending) begin
-                        state <= after_emit;
-                    end
-                end else if ((state == 400)) begin
-                    mul_product <= 0;
-                    mul_left <= mul_a;
-                    mul_right <= mul_b;
-                    mul_bit <= 0;
-                    state <= 401;
-                end else if ((state == 401)) begin
-                    mul_product <= (mul_product + pick(((mul_right & 1) != 0), mul_left, 0));
-                    mul_left <= (mul_left << 1);
-                    mul_right <= (mul_right >> 1);
-                    if ((mul_bit == 63)) begin
-                        state <= mul_return;
-                    end else begin
-                        mul_bit <= (mul_bit + 1);
-                    end
-                end else if ((state == 600)) begin
-                    if (!pending) begin
-                        ptag <= 99;
-                        pa <= run_id;
-                        pb <= cycles;
-                        pending <= 1'b1;
-                        state <= 601;
-                    end
-                end else if ((state == 601)) begin
-                    if (!pending) begin
-                        ptag <= 118;
-                        pa <= 0;
-                        pb <= report_cycles;
-                        pending <= 1'b1;
-                        state <= 602;
+                end else if (($signed({1'b0, state}) < $signed(602))) begin
+                    if ((state == 300)) begin
+                        if (!pending) begin
+                            ptag <= emit_tag;
+                            pa <= emit_index;
+                            pb <= emit_value;
+                            pending <= 1'b1;
+                            state <= 301;
+                        end
+                    end else if ((state == 301)) begin
+                        if (!pending) begin
+                            state <= after_emit;
+                        end
+                    end else if ((state == 400)) begin
+                        mul_product <= 0;
+                        mul_left <= mul_a;
+                        mul_right <= mul_b;
+                        mul_bit <= 0;
+                        state <= 401;
+                    end else if ((state == 401)) begin
+                        mul_product <= (mul_product + pick(((mul_right & 1) != 0), mul_left, 0));
+                        mul_left <= (mul_left << 1);
+                        mul_right <= (mul_right >> 1);
+                        if ((mul_bit == 63)) begin
+                            state <= mul_return;
+                        end else begin
+                            mul_bit <= (mul_bit + 1);
+                        end
+                    end else if ((state == 600)) begin
+                        if (!pending) begin
+                            ptag <= 99;
+                            pa <= run_id;
+                            pb <= cycles;
+                            pending <= 1'b1;
+                            state <= 601;
+                        end
+                    end else if ((state == 601)) begin
+                        if (!pending) begin
+                            ptag <= 118;
+                            pa <= 0;
+                            pb <= report_cycles;
+                            pending <= 1'b1;
+                            state <= 602;
+                        end
                     end
                 end else if ((state == 602)) begin
                     if (!pending) begin
@@ -2149,15 +2146,15 @@ module TrinityGf16AttnT27 (
                 end else if ((state == 703)) begin
                     exp_h <= (mul_product >> 32);
                     state <= 704;
+                end else if ((state == 704)) begin
+                    mul_a <= 661577;
+                    mul_b <= exp_h;
+                    mul_return <= 705;
+                    state <= 400;
                 end
-            end else if (($signed({1'b0, state}) < $signed(1121))) begin
-                if (($signed({1'b0, state}) < $signed(716))) begin
-                    if ((state == 704)) begin
-                        mul_a <= 661577;
-                        mul_b <= exp_h;
-                        mul_return <= 705;
-                        state <= 400;
-                    end else if ((state == 705)) begin
+            end else if (($signed({1'b0, state}) < $signed(1135))) begin
+                if (($signed({1'b0, state}) < $signed(717))) begin
+                    if ((state == 705)) begin
                         exp_a2 <= ((mul_product >> 32) + 41309550);
                         state <= 706;
                     end else if ((state == 706)) begin
@@ -2200,16 +2197,16 @@ module TrinityGf16AttnT27 (
                     end else if ((state == 715)) begin
                         exp_p <= (exp_a0 - (mul_product >> 32));
                         state <= 716;
-                    end
-                end else if ((state == 716)) begin
-                    if ((exp_j == 0)) begin
-                        exp_y <= exp_p;
-                        state <= 718;
-                    end else begin
-                        mul_a <= exp_lut(exp_j);
-                        mul_b <= exp_p;
-                        mul_return <= 717;
-                        state <= 400;
+                    end else if ((state == 716)) begin
+                        if ((exp_j == 0)) begin
+                            exp_y <= exp_p;
+                            state <= 718;
+                        end else begin
+                            mul_a <= exp_lut(exp_j);
+                            mul_b <= exp_p;
+                            mul_return <= 717;
+                            state <= 400;
+                        end
                     end
                 end else if ((state == 717)) begin
                     exp_y <= (mul_product >> 32);
@@ -2263,11 +2260,11 @@ module TrinityGf16AttnT27 (
                     state <= 110;
                 end else if ((state == 1120)) begin
                     state <= 120;
-                end
-            end else if (($signed({1'b0, state}) < $signed(2097))) begin
-                if ((state == 1121)) begin
+                end else if ((state == 1121)) begin
                     state <= 121;
-                end else if ((state == 1135)) begin
+                end
+            end else if (($signed({1'b0, state}) < $signed(2098))) begin
+                if ((state == 1135)) begin
                     state <= 135;
                 end else if ((state == 1141)) begin
                     state <= 141;
@@ -2296,12 +2293,12 @@ module TrinityGf16AttnT27 (
                 end else if ((state == 2077)) begin
                     quant <= rne_shift(mul_product, 16);
                     state <= 78;
-                end
-            end else if (($signed({1'b0, state}) < $signed(2128))) begin
-                if ((state == 2097)) begin
+                end else if ((state == 2097)) begin
                     term0 <= mul_product;
                     state <= 98;
-                end else if ((state == 2098)) begin
+                end
+            end else if (($signed({1'b0, state}) < $signed(2137))) begin
+                if ((state == 2098)) begin
                     term1 <= mul_product;
                     state <= 99;
                 end else if ((state == 2103)) begin
@@ -2316,10 +2313,10 @@ module TrinityGf16AttnT27 (
                 end else if ((state == 2123)) begin
                     term1 <= mul_product;
                     state <= 124;
+                end else if ((state == 2128)) begin
+                    term3 <= mul_product;
+                    state <= 129;
                 end
-            end else if ((state == 2128)) begin
-                term3 <= mul_product;
-                state <= 129;
             end else if ((state == 2137)) begin
                 term2 <= mul_product;
                 state <= 128;
@@ -2346,6 +2343,9 @@ module TrinityGf16AttnT27 (
             end else if ((state == 2157)) begin
                 lane <= mul_product;
                 state <= 162;
+            end else if ((state == 3142)) begin
+                add1 <= ((acc1 + pick(((lane >> 63) != 0), 64'd18446744073709551615, 0)) + add_carry);
+                state <= 143;
             end
             if ((active && !calib)) begin
                 error_code <= 2;

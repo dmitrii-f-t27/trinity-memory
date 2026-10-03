@@ -39,7 +39,11 @@ module TrinityGf16AttnT27;
 // 69 error; stages n=103,q=104,k=105,v=106,qr=107,kr=108,sc=109,a=110,
 // c=111,o=112,r=113.
 fn pick(flag: bool, a: u64, b: u64) -> u64 { if (flag) { return a; } return b; }
-fn carry(a: u64, b: u64) -> u64 { if (a+b < a) { return 1; } return 0; }
+fn carry(a: u64, b: u64) -> u64 {
+    // Carry-out from the sign bit of the wrapped sum. Reuse the adder;
+    // comparing the full sum with a would add another 64-bit carry chain.
+    return ((a & b) | ((a | b) & ((a+b) ^ 18446744073709551615))) >> 63;
+}
 fn rne_shift(num: u64, shift: u32) -> u64 {
     let q: u64 = num >> shift;
     let rem: u64 = num & (((1 as u64) << shift)-1);
@@ -613,16 +617,15 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                         } else if (state == 141) {
                             mul_a = extend(gr2); mul_b = extend(ur2); mul_return = 2141; state = 400;
                         } else if (state == 142) {
-                            add0 = acc0+lane;
-                            add1 = acc1+pick((lane >> 63) != 0,18446744073709551615,0)+carry(acc0,lane);
-                            state = 143;
+                            // Break low-sum/carry/high-sum into separate cycles.
+                            add0 = acc0+lane; add_carry = carry(acc0,lane); state = 3142;
                         }
                     }
                 }
             }
         }
     } else {
-        if (state < 704) {
+        if (state < 705) {
             if (state < 169) {
                 if (state < 156) {
                     if (state == 143) {
@@ -773,44 +776,48 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                         if (quiet >= 16777216) { error_code = 4; state = 900; }
                     }
                 } else {
-                    if (state == 300) {
-                        if (!pending) { ptag = emit_tag; pa = emit_index; pb = emit_value as u64; pending = true; state = 301; }
-                    } else if (state == 301) {
-                        if (!pending) { state = after_emit; }
-                    } else if (state == 400) {
-                        mul_product = 0; mul_left = mul_a; mul_right = mul_b; mul_bit = 0; state = 401;
-                    } else if (state == 401) {
-                        // Exact low64 product, including signed two's-complement operands.
-                        mul_product = mul_product+pick((mul_right & 1) != 0,mul_left,0);
-                        mul_left = mul_left << 1; mul_right = mul_right >> 1;
-                        if (mul_bit == 63) { state = mul_return; }
-                        else { mul_bit = mul_bit+1; }
-                    } else if (state == 600) {
-                        if (!pending) { ptag = 99; pa = run_id; pb = cycles; pending = true; state = 601; }
-                    } else if (state == 601) {
-                        if (!pending) { ptag = 118; pa = 0; pb = report_cycles; pending = true; state = 602; }
-                    } else if (state == 602) {
-                        if (!pending) { ptag = 118; pa = 1; pb = memory_cycles; pending = true; state = 603; }
-                    } else if (state == 603) {
-                        if (!pending) { ptag = 122; pa = run_id; pb = 0; pending = true; state = 1; poll = 8192; }
-                    } else if (state == 700) {
-                        if (exp_z >= 772244) { exp_value = 0; state = 155; }
-                        else { mul_a = exp_z; mul_b = 6196328019; mul_return = 701; state = 400; }
-                    } else if (state == 701) {
-                        exp_m = (mul_product >> 48) as u32; exp_j = ((mul_product >> 44) & 15) as u32; exp_g = (mul_product & 17592186044415) >> 16; state = 702;
-                    } else if (state == 702) {
-                        mul_a = exp_g; mul_b = exp_g; mul_return = 703; state = 400;
-                    } else if (state == 703) {
-                        exp_h = mul_product >> 32; state = 704;
+                    if (state < 602) {
+                        if (state == 300) {
+                            if (!pending) { ptag = emit_tag; pa = emit_index; pb = emit_value as u64; pending = true; state = 301; }
+                        } else if (state == 301) {
+                            if (!pending) { state = after_emit; }
+                        } else if (state == 400) {
+                            mul_product = 0; mul_left = mul_a; mul_right = mul_b; mul_bit = 0; state = 401;
+                        } else if (state == 401) {
+                            // Exact low64 product, including signed two's-complement operands.
+                            mul_product = mul_product+pick((mul_right & 1) != 0,mul_left,0);
+                            mul_left = mul_left << 1; mul_right = mul_right >> 1;
+                            if (mul_bit == 63) { state = mul_return; }
+                            else { mul_bit = mul_bit+1; }
+                        } else if (state == 600) {
+                            if (!pending) { ptag = 99; pa = run_id; pb = cycles; pending = true; state = 601; }
+                        } else if (state == 601) {
+                            if (!pending) { ptag = 118; pa = 0; pb = report_cycles; pending = true; state = 602; }
+                        }
+                    } else {
+                        if (state == 602) {
+                            if (!pending) { ptag = 118; pa = 1; pb = memory_cycles; pending = true; state = 603; }
+                        } else if (state == 603) {
+                            if (!pending) { ptag = 122; pa = run_id; pb = 0; pending = true; state = 1; poll = 8192; }
+                        } else if (state == 700) {
+                            if (exp_z >= 772244) { exp_value = 0; state = 155; }
+                            else { mul_a = exp_z; mul_b = 6196328019; mul_return = 701; state = 400; }
+                        } else if (state == 701) {
+                            exp_m = (mul_product >> 48) as u32; exp_j = ((mul_product >> 44) & 15) as u32; exp_g = (mul_product & 17592186044415) >> 16; state = 702;
+                        } else if (state == 702) {
+                            mul_a = exp_g; mul_b = exp_g; mul_return = 703; state = 400;
+                        } else if (state == 703) {
+                            exp_h = mul_product >> 32; state = 704;
+                        } else if (state == 704) {
+                            mul_a = 661577; mul_b = exp_h; mul_return = 705; state = 400;
+                        }
                     }
                 }
             }
         } else {
-            if (state < 1121) {
-                if (state < 716) {
-                    if (state == 704) {
-                        mul_a = 661577; mul_b = exp_h; mul_return = 705; state = 400;
-                    } else if (state == 705) {
+            if (state < 1135) {
+                if (state < 717) {
+                    if (state == 705) {
                         exp_a2 = (mul_product >> 32)+41309550; state = 706;
                     } else if (state == 706) {
                         mul_a = exp_a2; mul_b = exp_h; mul_return = 707; state = 400;
@@ -832,12 +839,12 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                         mul_a = exp_g; mul_b = exp_b0; mul_return = 715; state = 400;
                     } else if (state == 715) {
                         exp_p = exp_a0-(mul_product >> 32); state = 716;
-                    }
-                } else {
-                    if (state == 716) {
+                    } else if (state == 716) {
                         if (exp_j == 0) { exp_y = exp_p; state = 718; }
                         else { mul_a = exp_lut(exp_j); mul_b = exp_p; mul_return = 717; state = 400; }
-                    } else if (state == 717) {
+                    }
+                } else {
+                    if (state == 717) {
                         exp_y = mul_product >> 32; state = 718;
                     } else if (state == 718) {
                         exp_value = rne_shift(exp_y,16+exp_m) as u32; state = 155;
@@ -866,13 +873,13 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                         state = 110;
                     } else if (state == 1120) {
                         state = 120;
+                    } else if (state == 1121) {
+                        state = 121;
                     }
                 }
             } else {
-                if (state < 2097) {
-                    if (state == 1121) {
-                        state = 121;
-                    } else if (state == 1135) {
+                if (state < 2098) {
+                    if (state == 1135) {
                         state = 135;
                     } else if (state == 1141) {
                         state = 141;
@@ -894,13 +901,13 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                         num_mag = mul_product << 16; rem0 = 0; quo0 = 0; bitpos = 63; state = 42;
                     } else if (state == 2077) {
                         quant = rne_shift(mul_product,16); state = 78;
+                    } else if (state == 2097) {
+                        term0 = mul_product;
+                        state = 98;
                     }
                 } else {
-                    if (state < 2128) {
-                        if (state == 2097) {
-                            term0 = mul_product;
-                            state = 98;
-                        } else if (state == 2098) {
+                    if (state < 2137) {
+                        if (state == 2098) {
                             term1 = mul_product;
                             state = 99;
                         } else if (state == 2103) {
@@ -915,12 +922,12 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                         } else if (state == 2123) {
                             term1 = mul_product;
                             state = 124;
-                        }
-                    } else {
-                        if (state == 2128) {
+                        } else if (state == 2128) {
                             term3 = mul_product;
                             state = 129;
-                        } else if (state == 2137) {
+                        }
+                    } else {
+                        if (state == 2137) {
                             term2 = mul_product;
                             state = 128;
                         } else if (state == 2141) {
@@ -938,6 +945,8 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                         } else if (state == 2157) {
                             lane = mul_product;
                             state = 162;
+                        } else if (state == 3142) {
+                            add1 = acc1+pick((lane >> 63) != 0,18446744073709551615,0)+add_carry; state = 143;
                         }
                     }
                 }
