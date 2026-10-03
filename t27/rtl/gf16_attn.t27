@@ -737,5 +737,6 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
 }
 
 test exp_zero { assert_eq(exp_q16(0),65536); }
-test exp_deep { assert_eq(exp_q16(4294967295),0); }
+test exp_unit { assert_eq(exp_q16(4294967295),65535); }
+test exp_deep { assert_eq(exp_q16(4293918720),0); }
 test exp_one { assert_eq(exp_q16(4294901760),24109); }
