@@ -436,20 +436,21 @@ DDR3_SRC       := $(ROOT)/build/uberddr3
 DDR3_SUFFIX    := $(if $(filter image,$(DDR3_PNR_LINE)),-nextpnr-45a986b8)
 DDR3_APP       ?= pattern
 override DDR3_APP := $(strip $(DDR3_APP))
-ifneq ($(words $(DDR3_APP)) $(filter pattern reader loader matvec ffn gf16-ffn,$(DDR3_APP)),1 $(DDR3_APP))
-$(error DDR3_APP must be pattern, reader, loader, matvec, ffn or gf16-ffn, not '$(DDR3_APP)')
+ifneq ($(words $(DDR3_APP)) $(filter pattern reader loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),1 $(DDR3_APP))
+$(error DDR3_APP must be pattern, reader, loader, matvec, ffn, gf16-ffn or gf16-attn, not '$(DDR3_APP)')
 endif
 DDR3_READER    := $(filter reader,$(DDR3_APP))
 DDR3_LOADER    := $(filter loader,$(DDR3_APP))
 DDR3_MATVEC    := $(filter matvec,$(DDR3_APP))
 DDR3_FFN       := $(filter ffn,$(DDR3_APP))
 DDR3_GF16_FFN  := $(filter gf16-ffn,$(DDR3_APP))
-DDR3_FFN_ADAPTERS := $(if $(DDR3_FFN),$(ROOT)/rtl/t27/ffn.v) $(if $(DDR3_GF16_FFN),$(ROOT)/rtl/t27/gf16_wide_norm.v $(ROOT)/rtl/t27/gf16_ffn.v)
-DDR3_APP_SUFFIX := $(if $(DDR3_READER),-reader)$(if $(DDR3_LOADER),-loader)$(if $(DDR3_MATVEC),-matvec)$(if $(DDR3_FFN),-ffn)$(if $(DDR3_GF16_FFN),-gf16-ffn)
+DDR3_GF16_ATTN := $(filter gf16-attn,$(DDR3_APP))
+DDR3_FFN_ADAPTERS := $(if $(DDR3_FFN),$(ROOT)/rtl/t27/ffn.v) $(if $(DDR3_GF16_FFN),$(ROOT)/rtl/t27/gf16_wide_norm.v $(ROOT)/rtl/t27/gf16_ffn.v) $(if $(DDR3_GF16_ATTN),$(ROOT)/rtl/t27/gf16_attn.v)
+DDR3_APP_SUFFIX := $(if $(DDR3_READER),-reader)$(if $(DDR3_LOADER),-loader)$(if $(DDR3_MATVEC),-matvec)$(if $(DDR3_FFN),-ffn)$(if $(DDR3_GF16_FFN),-gf16-ffn)$(if $(DDR3_GF16_ATTN),-gf16-attn)
 DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)$(DDR3_APP_SUFFIX)
-DDR3_TOP       := $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),tms_ddr3_loader_ax7203,tms_ddr3_ax7203)
+DDR3_TOP       := $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),tms_ddr3_loader_ax7203,tms_ddr3_ax7203)
 DDR3_LOADER_CORES := fpga_reset fpga_uart_tx fpga_uart_rx fpga_line_emitter fpga_ddr3_loader fpga_loader_wb fpga_wb_arbiter
-DDR3_CORES     := $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),$(DDR3_LOADER_CORES)$(if $(DDR3_MATVEC), fpga_ddr3_matvec)$(if $(DDR3_FFN), fpga_ffn ffn_wide)$(if $(DDR3_GF16_FFN), gf16_ffn gf16_wide_norm gf16_scalar ffn_wide),fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status $(if $(DDR3_READER),fpga_ddr3_reader,fpga_ddr3_pattern))
+DDR3_CORES     := $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),$(DDR3_LOADER_CORES)$(if $(DDR3_MATVEC), fpga_ddr3_matvec)$(if $(DDR3_FFN), fpga_ffn ffn_wide)$(if $(DDR3_GF16_FFN), gf16_ffn gf16_wide_norm gf16_scalar ffn_wide)$(if $(DDR3_GF16_ATTN), gf16_attn),fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status $(if $(DDR3_READER),fpga_ddr3_reader,fpga_ddr3_pattern))
 DDR3_PATTERN   ?= 1
 DDR3_PATTERN_BURSTS ?= 33554432
 DDR3_PATTERN_HOLD   ?= 0
@@ -505,7 +506,7 @@ $(error DDR3_READER_TRITS (1 .. 2^31-1), DDR3_READER_CAP (1 .. 2^24-1), DDR3_REA
 endif
 endif
 # The loader (#63 part 2): x16 only, no pattern test, no UberDDR3 debug UART.
-ifneq ($(filter loader ffn gf16-ffn,$(DDR3_APP)),)
+ifneq ($(filter loader ffn gf16-ffn gf16-attn,$(DDR3_APP)),)
 ifneq ($(DDR3_WIDTH),16)
 $(error DDR3_APP=loader is built for x16 only (a 128-bit Wishbone word), not DDR3_WIDTH=$(DDR3_WIDTH))
 endif
@@ -521,7 +522,7 @@ endif
 endif
 DDR3_READER_TAG := $(if $(DDR3_READER),$(DDR3_READER_TRITS)-$(DDR3_READER_SEED)-$(DDR3_READER_CAP)-$(DDR3_READER_RUNS))
 DDR3_READER_DEFINE := $(if $(DDR3_READER),-DDDR3_READER )
-DDR3_MATVEC_DEFINE := $(if $(filter matvec ffn gf16-ffn,$(DDR3_APP)),-DDDR3_LOADER_MATVEC )$(if $(filter ffn gf16-ffn,$(DDR3_APP)),-DDDR3_LOADER_FFN )$(if $(DDR3_GF16_FFN),-DDDR3_LOADER_GF16_FFN )
+DDR3_MATVEC_DEFINE := $(if $(filter matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),-DDDR3_LOADER_MATVEC )$(if $(filter ffn gf16-ffn,$(DDR3_APP)),-DDDR3_LOADER_FFN )$(if $(DDR3_GF16_FFN),-DDDR3_LOADER_GF16_FFN )$(if $(DDR3_GF16_ATTN),-DDDR3_LOADER_GF16_ATTN )
 DDR3_MATVEC_COLS   ?= 2560
 DDR3_MATVEC_ROWS   ?= 8
 DDR3_MATVEC_FMT    ?= 1
@@ -573,6 +574,9 @@ DDR3_APP_VARIANT := FFN (issue 92$(comma) Q16.16/Q32.32$(comma) baseline2$(comma
 endif
 ifneq ($(DDR3_GF16_FFN),)
 DDR3_APP_VARIANT := GF16_FFN (issue 111$(comma) gf16-ffn-v1$(comma) rational ActQuant$(comma) exact Q39 ternary sums$(comma) hidden 2560$(comma) intermediate 6912$(comma) output 2560$(comma) UART stage reports)
+endif
+ifneq ($(DDR3_GF16_ATTN),)
+DDR3_APP_VARIANT := GF16_ATTN (issue 115$(comma) gf16-attn-v1$(comma) exact Q16.16 stages$(comma) causal 1..8 positions$(comma) KV cache in RAM$(comma) RoPE theta 500000$(comma) GQA 20x128 over 5 kv heads$(comma) integer exp softmax$(comma) result-only mode)
 endif
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
 DDR3_YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -arch xc7
