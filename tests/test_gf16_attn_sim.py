@@ -43,6 +43,33 @@ class AttentionRtlTest(unittest.TestCase):
         out = self._simulate([[3, -5, 7, 1, -2, 4, 0, -8], [1, 2, 3, 4, 5, 6, 7, 8]])
         self.assertEqual(out["positions"], 2)
 
+    def test_multi_group_gqa_scores(self):
+        # heads 4 over kv_heads 2: heads 2,3 must read the second kv group.
+        # A signed-comparison bug in the row maximum only fires when a row's
+        # true maximum is negative, which the one-kv-head fixtures never hit.
+        import random
+        from tools import gf16_attn_build as build
+        from tools import gf16_attn_vectors as vectors
+        import tempfile
+        rng = random.Random(21)
+        dims = {"hidden": 32, "heads": 4, "kv_heads": 2, "head_dim": 8,
+                "kv_dim": 16, "group": 2, "pairs": 4}
+        model = {
+            "q": [rng.choice((-1, 0, 1)) for _ in range(32 * 32)],
+            "k": [rng.choice((-1, 0, 1)) for _ in range(16 * 32)],
+            "v": [rng.choice((-1, 0, 1)) for _ in range(16 * 32)],
+            "o": [rng.choice((-1, 0, 1)) for _ in range(32 * 32)],
+            "dims": dims,
+            "w_in": [rng.uniform(-2, 2) for _ in range(32)],
+            "w_sub": [rng.uniform(-2, 2) for _ in range(32)],
+            "scales": {"q": 0.05, "k": 0.07, "v": 0.11, "o": 0.03},
+            "packed_sha256": {},
+        }
+        xs = [[rng.randrange(-128, 128) for _ in range(32)] for _ in range(2)]
+        with tempfile.TemporaryDirectory() as work:
+            out = build.simulate(Path(work), model, xs)
+        self.assertEqual(out["positions"], 2)
+
     def test_eight_positions_kv_cache(self):
         import random
         rng = random.Random(3)
