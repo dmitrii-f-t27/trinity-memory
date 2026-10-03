@@ -19,6 +19,7 @@ from types import SimpleNamespace
 
 import ffn_vectors as fv
 import uart_loader_protocol as proto
+from uart_session import restoring_baud
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -170,17 +171,17 @@ def main():
                     except subprocess.TimeoutExpired: child.kill(); child.wait()
         receipt=json.loads((out/(name+'.json')).read_text())
         if not receipt['pass'] or not all(receipt['checks'].values()): raise RuntimeError('invalid readback receipt')
-    rate(115200,921600,'uart-fast')
-    qualify=out/'qualification.bin'; qualify.write_bytes(bytes(range(256))*128)
-    load(qualify,0x2000000,'qualification',32)
-    for name in ('gate','up','down','scales','post','sub','x'):
-        region=manifest[name]; print('Loading',name,region['bytes'],flush=True)
-        load(args.vectors/region['file'],region['byte_address'],'load-'+name)
-    if args.capture_baud!=921600:
-        rate(921600,args.capture_baud,'uart-capture')
-    import serial
     results=[]
-    try:
+    with restoring_baud(rate) as switch:
+        switch(115200,921600,'uart-fast')
+        qualify=out/'qualification.bin'; qualify.write_bytes(bytes(range(256))*128)
+        load(qualify,0x2000000,'qualification',32)
+        for name in ('gate','up','down','scales','post','sub','x'):
+            region=manifest[name]; print('Loading',name,region['bytes'],flush=True)
+            load(args.vectors/region['file'],region['byte_address'],'load-'+name)
+        if args.capture_baud!=921600:
+            switch(921600,args.capture_baud,'uart-capture')
+        import serial
         for name,reference,current_run,descriptor in planned:
             folder=out/name;folder.mkdir(exist_ok=True)
             if name:
@@ -208,8 +209,6 @@ def main():
                     'scope':'same freshly uploaded/readback-verified inputs; only descriptor changed'}
             if not args.gf16_ffn:result['f64_error']=ref['f64_error']
             results.append((folder,result))
-    finally:
-        rate(args.capture_baud,115200,'uart-restored')
     temperature(True)
     for folder,result in results:
         (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result),flush=True)
