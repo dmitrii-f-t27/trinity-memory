@@ -1136,12 +1136,10 @@ module TrinityGf16AttnT27 (
             end
             pairs <= (head_dim / 2);
             kvcount <= __mul_noop(positions, kv);
-            if (((((((((((((((((state == 1021) || (state == 1040)) || (state == 1074)) || (state == 1095)) || (state == 1096)) || (state == 1110)) || (state == 1120)) || (state == 1121)) || (state == 1135)) || (state == 1141)) || (state == 1150)) || (state == 1152)) || (state == 1154)) || (state == 1157)) || (state == 1161)) || (state == 1180))) begin
-                state <= (state - 1000);
-            end else if (($signed({1'b0, state}) < $signed(134))) begin
-                if (($signed({1'b0, state}) < $signed(78))) begin
-                    if (($signed({1'b0, state}) < $signed(31))) begin
-                        if (($signed({1'b0, state}) < $signed(18))) begin
+            if (($signed({1'b0, state}) < $signed(143))) begin
+                if (($signed({1'b0, state}) < $signed(92))) begin
+                    if (($signed({1'b0, state}) < $signed(33))) begin
+                        if (($signed({1'b0, state}) < $signed(20))) begin
                             if ((state == 0)) begin
                                 if (calib) begin
                                     wb_cyc <= 1'b1;
@@ -1248,16 +1246,16 @@ module TrinityGf16AttnT27 (
                                 response <= 18;
                                 state <= 200;
                                 quiet <= 0;
-                            end
-                        end else if ((state == 18)) begin
-                            vec[(index & 8191)] <= (read0 & {32{1'b1}});
-                            if (((index + 1) == hidden)) begin
-                                index <= 0;
-                                norm_pass <= 0;
-                                state <= 20;
-                            end else begin
-                                index <= (index + 1);
-                                state <= 17;
+                            end else if ((state == 18)) begin
+                                vec[(index & 8191)] <= (read0 & {32{1'b1}});
+                                if (((index + 1) == hidden)) begin
+                                    index <= 0;
+                                    norm_pass <= 0;
+                                    state <= 20;
+                                end else begin
+                                    index <= (index + 1);
+                                    state <= 17;
+                                end
                             end
                         end else if ((state == 20)) begin
                             index <= 0;
@@ -1326,9 +1324,7 @@ module TrinityGf16AttnT27 (
                             quo0 <= add0;
                             quo1 <= (quo1 + add_carry);
                             state <= 31;
-                        end
-                    end else if (($signed({1'b0, state}) < $signed(47))) begin
-                        if ((state == 31)) begin
+                        end else if ((state == 31)) begin
                             rem1 <= (((quo1 + carry(quo0, 42950)) << 32) | ((quo0 + 42950) >>> 32));
                             rem0 <= ((quo0 + 42950) << 32);
                             root <= 0;
@@ -1343,7 +1339,9 @@ module TrinityGf16AttnT27 (
                                 cmp0 <= (((root << 2) | 1) << bitpos);
                             end
                             state <= 33;
-                        end else if ((state == 33)) begin
+                        end
+                    end else if (($signed({1'b0, state}) < $signed(70))) begin
+                        if ((state == 33)) begin
                             if (((rem1 > cmp1) || ((rem1 == cmp1) && (rem0 >= cmp0)))) begin
                                 rem1 <= ((rem1 - cmp1) - pick((rem0 < cmp0), 1, 0));
                                 rem0 <= (rem0 - cmp0);
@@ -1412,36 +1410,36 @@ module TrinityGf16AttnT27 (
                                 index <= (index + 1);
                                 state <= 1040;
                             end
+                        end else if ((state == 47)) begin
+                            gate[(index & 8191)] <= (quant & {32{1'b1}});
+                            emit_tag <= pick((norm_pass == 0), 103, 111);
+                            emit_index <= index;
+                            emit_value <= (quant & {32{1'b1}});
+                            after_emit <= 46;
+                            state <= pick(result_only, 46, 300);
+                        end else if ((state == 50)) begin
+                            projection_stage <= 0;
+                            store_base <= hidden;
+                            proj_scale <= scale_q;
+                            proj_tag <= 104;
+                            row <= 0;
+                            col <= 0;
+                            acc0 <= 0;
+                            nrows <= hidden;
+                            weight_addr <= 65536;
+                            state <= 71;
+                        end else if ((state == 60)) begin
+                            projection_stage <= 1;
+                            store_base <= __mul_noop(pos, kv);
+                            proj_scale <= scale_k;
+                            proj_tag <= 105;
+                            row <= 0;
+                            col <= 0;
+                            acc0 <= 0;
+                            nrows <= kv;
+                            weight_addr <= 167936;
+                            state <= 71;
                         end
-                    end else if ((state == 47)) begin
-                        gate[(index & 8191)] <= (quant & {32{1'b1}});
-                        emit_tag <= pick((norm_pass == 0), 103, 111);
-                        emit_index <= index;
-                        emit_value <= (quant & {32{1'b1}});
-                        after_emit <= 46;
-                        state <= pick(result_only, 46, 300);
-                    end else if ((state == 50)) begin
-                        projection_stage <= 0;
-                        store_base <= hidden;
-                        proj_scale <= scale_q;
-                        proj_tag <= 104;
-                        row <= 0;
-                        col <= 0;
-                        acc0 <= 0;
-                        nrows <= hidden;
-                        weight_addr <= 65536;
-                        state <= 71;
-                    end else if ((state == 60)) begin
-                        projection_stage <= 1;
-                        store_base <= __mul_noop(pos, kv);
-                        proj_scale <= scale_k;
-                        proj_tag <= 105;
-                        row <= 0;
-                        col <= 0;
-                        acc0 <= 0;
-                        nrows <= kv;
-                        weight_addr <= 167936;
-                        state <= 71;
                     end else if ((state == 70)) begin
                         projection_stage <= 2;
                         store_base <= (hidden + __mul_noop(pos, kv));
@@ -1495,48 +1493,48 @@ module TrinityGf16AttnT27 (
                         mul_b <= proj_scale;
                         mul_return <= 2077;
                         state <= 400;
+                    end else if ((state == 78)) begin
+                        if (((acc0 >> 63) != 0)) begin
+                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= (0 - quant);
+                            end
+                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
+                        end
+                        state <= 79;
+                    end else if ((state == 79)) begin
+                        if ((projection_stage == 0)) begin
+                            gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        if ((projection_stage == 1)) begin
+                            up[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        if ((projection_stage == 2)) begin
+                            vec[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        if ((projection_stage == 3)) begin
+                            gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
+                        end
+                        emit_tag <= proj_tag;
+                        emit_index <= row;
+                        emit_value <= (quant & {32{1'b1}});
+                        after_emit <= 800;
+                        state <= pick(result_only, 800, 300);
+                    end else if ((state == 90)) begin
+                        ropebase <= ((321536 + __mul_noop(pos, head_dim)) + __mul_noop(2, pair));
+                        state <= 91;
+                    end else if ((state == 91)) begin
+                        wb_addr <= ropebase;
+                        wb_stb <= 1'b1;
+                        response <= 92;
+                        state <= 200;
+                        quiet <= 0;
                     end
-                end else if (($signed({1'b0, state}) < $signed(110))) begin
-                    if (($signed({1'b0, state}) < $signed(99))) begin
-                        if ((state == 78)) begin
-                            if (((acc0 >> 63) != 0)) begin
-                                if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                                    quant <= 64'd2147483648;
-                                end else begin
-                                    quant <= (0 - quant);
-                                end
-                            end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                                quant <= 64'd2147483647;
-                            end
-                            state <= 79;
-                        end else if ((state == 79)) begin
-                            if ((projection_stage == 0)) begin
-                                gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                            end
-                            if ((projection_stage == 1)) begin
-                                up[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                            end
-                            if ((projection_stage == 2)) begin
-                                vec[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                            end
-                            if ((projection_stage == 3)) begin
-                                gate[((store_base + row) & 8191)] <= (quant & {32{1'b1}});
-                            end
-                            emit_tag <= proj_tag;
-                            emit_index <= row;
-                            emit_value <= (quant & {32{1'b1}});
-                            after_emit <= 800;
-                            state <= pick(result_only, 800, 300);
-                        end else if ((state == 90)) begin
-                            ropebase <= ((321536 + __mul_noop(pos, head_dim)) + __mul_noop(2, pair));
-                            state <= 91;
-                        end else if ((state == 91)) begin
-                            wb_addr <= ropebase;
-                            wb_stb <= 1'b1;
-                            response <= 92;
-                            state <= 200;
-                            quiet <= 0;
-                        end else if ((state == 92)) begin
+                end else if (($signed({1'b0, state}) < $signed(117))) begin
+                    if (($signed({1'b0, state}) < $signed(104))) begin
+                        if ((state == 92)) begin
                             cos_q <= (read0 & {32{1'b1}});
                             state <= 93;
                         end else if ((state == 93)) begin
@@ -1564,32 +1562,32 @@ module TrinityGf16AttnT27 (
                             mul_b <= extend(sin_q);
                             mul_return <= 2098;
                             state <= 400;
-                        end
-                    end else if ((state == 99)) begin
-                        num_mag <= (term0 - term1);
-                        state <= 100;
-                    end else if ((state == 100)) begin
-                        num_sign <= ((num_mag >> 63) != 0);
-                        state <= 109;
-                    end else if ((state == 101)) begin
-                        quant <= rne_shift(out_mag, 16);
-                        state <= 102;
-                    end else if ((state == 102)) begin
-                        if (num_sign) begin
-                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                                quant <= 64'd2147483648;
-                            end else begin
-                                quant <= (0 - quant);
+                        end else if ((state == 99)) begin
+                            num_mag <= (term0 - term1);
+                            state <= 100;
+                        end else if ((state == 100)) begin
+                            num_sign <= ((num_mag >> 63) != 0);
+                            state <= 109;
+                        end else if ((state == 101)) begin
+                            quant <= rne_shift(out_mag, 16);
+                            state <= 102;
+                        end else if ((state == 102)) begin
+                            if (num_sign) begin
+                                if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                    quant <= 64'd2147483648;
+                                end else begin
+                                    quant <= (0 - quant);
+                                end
+                            end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                                quant <= 64'd2147483647;
                             end
-                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                            quant <= 64'd2147483647;
+                            state <= 112;
+                        end else if ((state == 103)) begin
+                            mul_a <= extend(sample_q);
+                            mul_b <= extend(sin_q);
+                            mul_return <= 2103;
+                            state <= 400;
                         end
-                        state <= 112;
-                    end else if ((state == 103)) begin
-                        mul_a <= extend(sample_q);
-                        mul_b <= extend(sin_q);
-                        mul_return <= 2103;
-                        state <= 400;
                     end else if ((state == 104)) begin
                         num_mag <= (term2 + term3);
                         state <= 105;
@@ -1620,9 +1618,7 @@ module TrinityGf16AttnT27 (
                     end else if ((state == 109)) begin
                         out_mag <= pick(num_sign, (0 - num_mag), num_mag);
                         state <= 101;
-                    end
-                end else if (($signed({1'b0, state}) < $signed(122))) begin
-                    if ((state == 110)) begin
+                    end else if ((state == 110)) begin
                         emit_tag <= 107;
                         emit_index <= index;
                         emit_value <= gr2;
@@ -1664,7 +1660,9 @@ module TrinityGf16AttnT27 (
                         response <= 117;
                         state <= 200;
                         quiet <= 0;
-                    end else if ((state == 117)) begin
+                    end
+                end else if (($signed({1'b0, state}) < $signed(129))) begin
+                    if ((state == 117)) begin
                         cos_q <= (read0 & {32{1'b1}});
                         state <= 118;
                     end else if ((state == 118)) begin
@@ -1682,27 +1680,95 @@ module TrinityGf16AttnT27 (
                     end else if ((state == 121)) begin
                         lane <= ur2;
                         state <= 122;
+                    end else if ((state == 122)) begin
+                        mul_a <= extend(sample_q);
+                        mul_b <= extend(cos_q);
+                        mul_return <= 2122;
+                        state <= 400;
+                    end else if ((state == 123)) begin
+                        mul_a <= extend(lane);
+                        mul_b <= extend(sin_q);
+                        mul_return <= 2123;
+                        state <= 400;
+                    end else if ((state == 124)) begin
+                        num_mag <= (term0 - term1);
+                        state <= 125;
+                    end else if ((state == 125)) begin
+                        num_sign <= ((num_mag >> 63) != 0);
+                        state <= 134;
+                    end else if ((state == 126)) begin
+                        quant <= rne_shift(out_mag, 16);
+                        state <= 127;
+                    end else if ((state == 127)) begin
+                        if (num_sign) begin
+                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= (0 - quant);
+                            end
+                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
+                        end
+                        state <= 137;
+                    end else if ((state == 128)) begin
+                        mul_a <= extend(sample_q);
+                        mul_b <= extend(sin_q);
+                        mul_return <= 2128;
+                        state <= 400;
                     end
-                end else if ((state == 122)) begin
-                    mul_a <= extend(sample_q);
-                    mul_b <= extend(cos_q);
-                    mul_return <= 2122;
-                    state <= 400;
-                end else if ((state == 123)) begin
+                end else if (($signed({1'b0, state}) < $signed(135))) begin
+                    if ((state == 129)) begin
+                        num_mag <= (term2 + term3);
+                        state <= 130;
+                    end else if ((state == 130)) begin
+                        num_sign <= ((num_mag >> 63) != 0);
+                        state <= 131;
+                    end else if ((state == 131)) begin
+                        out_mag <= pick(num_sign, (0 - num_mag), num_mag);
+                        state <= 132;
+                    end else if ((state == 132)) begin
+                        quant <= rne_shift(out_mag, 16);
+                        state <= 138;
+                    end else if ((state == 133)) begin
+                        up[((((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)] <= (quant & {32{1'b1}});
+                        if (((head + 1) == kv_heads)) begin
+                            if (((pair + 1) == pairs)) begin
+                                index <= 0;
+                                state <= 1135;
+                            end else begin
+                                pair <= (pair + 1);
+                                head <= 0;
+                                state <= 115;
+                            end
+                        end else begin
+                            head <= (head + 1);
+                            state <= 1120;
+                        end
+                    end else if ((state == 134)) begin
+                        out_mag <= pick(num_sign, (0 - num_mag), num_mag);
+                        state <= 126;
+                    end
+                end else if ((state == 135)) begin
+                    emit_tag <= 108;
+                    emit_index <= index;
+                    emit_value <= ur2;
+                    after_emit <= 136;
+                    state <= pick(result_only, 136, 300);
+                end else if ((state == 136)) begin
+                    if (((index + 1) == kv)) begin
+                        head <= 0;
+                        state <= 140;
+                    end else begin
+                        index <= (index + 1);
+                        state <= 1135;
+                    end
+                end else if ((state == 137)) begin
+                    up[(((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) & 8191)] <= (quant & {32{1'b1}});
                     mul_a <= extend(lane);
-                    mul_b <= extend(sin_q);
-                    mul_return <= 2123;
+                    mul_b <= extend(cos_q);
+                    mul_return <= 2137;
                     state <= 400;
-                end else if ((state == 124)) begin
-                    num_mag <= (term0 - term1);
-                    state <= 125;
-                end else if ((state == 125)) begin
-                    num_sign <= ((num_mag >> 63) != 0);
-                    state <= 134;
-                end else if ((state == 126)) begin
-                    quant <= rne_shift(out_mag, 16);
-                    state <= 127;
-                end else if ((state == 127)) begin
+                end else if ((state == 138)) begin
                     if (num_sign) begin
                         if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
                             quant <= 64'd2147483648;
@@ -1712,93 +1778,27 @@ module TrinityGf16AttnT27 (
                     end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
                         quant <= 64'd2147483647;
                     end
-                    state <= 137;
-                end else if ((state == 128)) begin
-                    mul_a <= extend(sample_q);
-                    mul_b <= extend(sin_q);
-                    mul_return <= 2128;
+                    state <= 133;
+                end else if ((state == 140)) begin
+                    jj <= 0;
+                    col <= 0;
+                    acc0 <= 0;
+                    acc1 <= 0;
+                    state <= 1141;
+                end else if ((state == 141)) begin
+                    mul_a <= extend(gr2);
+                    mul_b <= extend(ur2);
+                    mul_return <= 2141;
                     state <= 400;
-                end else if ((state == 129)) begin
-                    num_mag <= (term2 + term3);
-                    state <= 130;
-                end else if ((state == 130)) begin
-                    num_sign <= ((num_mag >> 63) != 0);
-                    state <= 131;
-                end else if ((state == 131)) begin
-                    out_mag <= pick(num_sign, (0 - num_mag), num_mag);
-                    state <= 132;
-                end else if ((state == 132)) begin
-                    quant <= rne_shift(out_mag, 16);
-                    state <= 138;
-                end else if ((state == 133)) begin
-                    up[((((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) + pairs) & 8191)] <= (quant & {32{1'b1}});
-                    if (((head + 1) == kv_heads)) begin
-                        if (((pair + 1) == pairs)) begin
-                            index <= 0;
-                            state <= 1135;
-                        end else begin
-                            pair <= (pair + 1);
-                            head <= 0;
-                            state <= 115;
-                        end
-                    end else begin
-                        head <= (head + 1);
-                        state <= 1120;
-                    end
+                end else if ((state == 142)) begin
+                    add0 <= (acc0 + lane);
+                    add1 <= ((acc1 + pick(((lane >> 63) != 0), 64'd18446744073709551615, 0)) + carry(acc0, lane));
+                    state <= 143;
                 end
-            end else if (($signed({1'b0, state}) < $signed(300))) begin
-                if (($signed({1'b0, state}) < $signed(158))) begin
-                    if (($signed({1'b0, state}) < $signed(146))) begin
-                        if ((state == 134)) begin
-                            out_mag <= pick(num_sign, (0 - num_mag), num_mag);
-                            state <= 126;
-                        end else if ((state == 135)) begin
-                            emit_tag <= 108;
-                            emit_index <= index;
-                            emit_value <= ur2;
-                            after_emit <= 136;
-                            state <= pick(result_only, 136, 300);
-                        end else if ((state == 136)) begin
-                            if (((index + 1) == kv)) begin
-                                head <= 0;
-                                state <= 140;
-                            end else begin
-                                index <= (index + 1);
-                                state <= 1135;
-                            end
-                        end else if ((state == 137)) begin
-                            up[(((__mul_noop(pos, kv) + __mul_noop(head, head_dim)) + pair) & 8191)] <= (quant & {32{1'b1}});
-                            mul_a <= extend(lane);
-                            mul_b <= extend(cos_q);
-                            mul_return <= 2137;
-                            state <= 400;
-                        end else if ((state == 138)) begin
-                            if (num_sign) begin
-                                if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                                    quant <= 64'd2147483648;
-                                end else begin
-                                    quant <= (0 - quant);
-                                end
-                            end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                                quant <= 64'd2147483647;
-                            end
-                            state <= 133;
-                        end else if ((state == 140)) begin
-                            jj <= 0;
-                            col <= 0;
-                            acc0 <= 0;
-                            acc1 <= 0;
-                            state <= 1141;
-                        end else if ((state == 141)) begin
-                            mul_a <= extend(gr2);
-                            mul_b <= extend(ur2);
-                            mul_return <= 2141;
-                            state <= 400;
-                        end else if ((state == 142)) begin
-                            add0 <= (acc0 + lane);
-                            add1 <= ((acc1 + pick(((lane >> 63) != 0), 64'd18446744073709551615, 0)) + carry(acc0, lane));
-                            state <= 143;
-                        end else if ((state == 143)) begin
+            end else if (($signed({1'b0, state}) < $signed(704))) begin
+                if (($signed({1'b0, state}) < $signed(169))) begin
+                    if (($signed({1'b0, state}) < $signed(156))) begin
+                        if ((state == 143)) begin
                             acc0 <= add0;
                             acc1 <= add1;
                             if (((col + 1) == head_dim)) begin
@@ -1821,60 +1821,60 @@ module TrinityGf16AttnT27 (
                             mul_b <= (out_mag & 64'd4294967295);
                             mul_return <= 2145;
                             state <= 400;
-                        end
-                    end else if ((state == 146)) begin
-                        quant <= (((add1 << 32) | add0) + pick((($signed({1'b0, rem0}) > $signed(64'd2147483648)) || ((rem0 == 64'd2147483648) && ((((add1 << 32) | add0) & 1) != 0))), 1, 0));
-                        state <= 147;
-                    end else if ((state == 147)) begin
-                        if (((acc1 >> 63) != 0)) begin
-                            if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
-                                quant <= 64'd2147483648;
-                            end else begin
-                                quant <= (0 - quant);
+                        end else if ((state == 146)) begin
+                            quant <= (((add1 << 32) | add0) + pick((($signed({1'b0, rem0}) > $signed(64'd2147483648)) || ((rem0 == 64'd2147483648) && ((((add1 << 32) | add0) & 1) != 0))), 1, 0));
+                            state <= 147;
+                        end else if ((state == 147)) begin
+                            if (((acc1 >> 63) != 0)) begin
+                                if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
+                                    quant <= 64'd2147483648;
+                                end else begin
+                                    quant <= (0 - quant);
+                                end
+                            end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
+                                quant <= 64'd2147483647;
                             end
-                        end else if (($signed({1'b0, quant}) > $signed(64'd2147483647))) begin
-                            quant <= 64'd2147483647;
-                        end
-                        state <= 148;
-                    end else if ((state == 148)) begin
-                        sample_q <= (quant & {32{1'b1}});
-                        state <= 169;
-                    end else if ((state == 149)) begin
-                        sc_index <= (sc_index + 1);
-                        if ((jj < pos)) begin
-                            jj <= (jj + 1);
-                            col <= 0;
-                            acc0 <= 0;
-                            acc1 <= 0;
-                            state <= 1141;
-                        end else begin
-                            jj <= 0;
-                            state <= 1150;
-                        end
-                    end else if ((state == 150)) begin
-                        max_score <= vr2;
-                        state <= 151;
-                    end else if ((state == 151)) begin
-                        if ((jj < pos)) begin
-                            jj <= (jj + 1);
-                            state <= 1152;
-                        end else begin
-                            jj <= 0;
-                            exp_denom <= 0;
-                            state <= 1154;
-                        end
-                    end else if ((state == 152)) begin
-                        if (sgt(extend(vr2), extend(max_score))) begin
+                            state <= 148;
+                        end else if ((state == 148)) begin
+                            sample_q <= (quant & {32{1'b1}});
+                            state <= 169;
+                        end else if ((state == 149)) begin
+                            sc_index <= (sc_index + 1);
+                            if ((jj < pos)) begin
+                                jj <= (jj + 1);
+                                col <= 0;
+                                acc0 <= 0;
+                                acc1 <= 0;
+                                state <= 1141;
+                            end else begin
+                                jj <= 0;
+                                state <= 1150;
+                            end
+                        end else if ((state == 150)) begin
                             max_score <= vr2;
+                            state <= 151;
+                        end else if ((state == 151)) begin
+                            if ((jj < pos)) begin
+                                jj <= (jj + 1);
+                                state <= 1152;
+                            end else begin
+                                jj <= 0;
+                                exp_denom <= 0;
+                                state <= 1154;
+                            end
+                        end else if ((state == 152)) begin
+                            if (sgt(extend(vr2), extend(max_score))) begin
+                                max_score <= vr2;
+                            end
+                            state <= 151;
+                        end else if ((state == 154)) begin
+                            exp_z <= ((0 - (vr2 - max_score)) & 64'd4294967295);
+                            state <= 700;
+                        end else if ((state == 155)) begin
+                            vec[(((hidden + kvcount) + jj) & 8191)] <= exp_value;
+                            exp_denom <= (exp_denom + exp_value);
+                            state <= 156;
                         end
-                        state <= 151;
-                    end else if ((state == 154)) begin
-                        exp_z <= ((0 - (vr2 - max_score)) & 64'd4294967295);
-                        state <= 700;
-                    end else if ((state == 155)) begin
-                        vec[(((hidden + kvcount) + jj) & 8191)] <= exp_value;
-                        exp_denom <= (exp_denom + exp_value);
-                        state <= 156;
                     end else if ((state == 156)) begin
                         if ((jj < pos)) begin
                             jj <= (jj + 1);
@@ -1889,9 +1889,7 @@ module TrinityGf16AttnT27 (
                         mul_b <= vr2;
                         mul_return <= 2157;
                         state <= 400;
-                    end
-                end else if (($signed({1'b0, state}) < $signed(170))) begin
-                    if ((state == 158)) begin
+                    end else if ((state == 158)) begin
                         up[(((kvcount + __mul_noop(head, head_dim)) + dd) & 8191)] <= (quant & {32{1'b1}});
                         emit_tag <= 110;
                         emit_index <= (__mul_noop(head, head_dim) + dd);
@@ -1963,246 +1961,246 @@ module TrinityGf16AttnT27 (
                             dd <= (dd + 1);
                             state <= 160;
                         end
-                    end else if ((state == 169)) begin
+                    end
+                end else if (($signed({1'b0, state}) < $signed(300))) begin
+                    if ((state == 169)) begin
                         vec[(((hidden + kvcount) + jj) & 8191)] <= sample_q;
                         emit_tag <= 109;
                         emit_index <= sc_index;
                         emit_value <= sample_q;
                         after_emit <= 149;
                         state <= pick(result_only, 149, 300);
-                    end
-                end else if ((state == 170)) begin
-                    projection_stage <= 3;
-                    store_base <= hidden;
-                    proj_scale <= scale_o;
-                    proj_tag <= 112;
-                    row <= 0;
-                    col <= 0;
-                    acc0 <= 0;
-                    nrows <= hidden;
-                    weight_addr <= 219136;
-                    state <= 71;
-                end else if ((state == 172)) begin
-                    index <= 0;
-                    state <= 173;
-                end else if ((state == 173)) begin
-                    wb_addr <= (8192 + index);
-                    wb_stb <= 1'b1;
-                    response <= 174;
-                    state <= 200;
-                    quiet <= 0;
-                end else if ((state == 174)) begin
-                    gate[(index & 8191)] <= (read0 & {32{1'b1}});
-                    if (((index + 1) == hidden)) begin
+                    end else if ((state == 170)) begin
+                        projection_stage <= 3;
+                        store_base <= hidden;
+                        proj_scale <= scale_o;
+                        proj_tag <= 112;
+                        row <= 0;
+                        col <= 0;
+                        acc0 <= 0;
+                        nrows <= hidden;
+                        weight_addr <= 219136;
+                        state <= 71;
+                    end else if ((state == 172)) begin
                         index <= 0;
-                        norm_pass <= 1;
-                        state <= 20;
-                    end else begin
-                        index <= (index + 1);
                         state <= 173;
-                    end
-                end else if ((state == 180)) begin
-                    lane <= (extend(vr2) + extend(gr2));
-                    state <= 181;
-                end else if ((state == 181)) begin
-                    if (((lane >> 63) != 0)) begin
-                        if (($signed({1'b0, lane}) < $signed(64'd18446744071562067968))) begin
-                            quant <= 64'd2147483648;
+                    end else if ((state == 173)) begin
+                        wb_addr <= (8192 + index);
+                        wb_stb <= 1'b1;
+                        response <= 174;
+                        state <= 200;
+                        quiet <= 0;
+                    end else if ((state == 174)) begin
+                        gate[(index & 8191)] <= (read0 & {32{1'b1}});
+                        if (((index + 1) == hidden)) begin
+                            index <= 0;
+                            norm_pass <= 1;
+                            state <= 20;
+                        end else begin
+                            index <= (index + 1);
+                            state <= 173;
+                        end
+                    end else if ((state == 180)) begin
+                        lane <= (extend(vr2) + extend(gr2));
+                        state <= 181;
+                    end else if ((state == 181)) begin
+                        if (((lane >> 63) != 0)) begin
+                            if (($signed({1'b0, lane}) < $signed(64'd18446744071562067968))) begin
+                                quant <= 64'd2147483648;
+                            end else begin
+                                quant <= lane;
+                            end
+                        end else if (($signed({1'b0, lane}) > $signed(64'd2147483647))) begin
+                            quant <= 64'd2147483647;
                         end else begin
                             quant <= lane;
                         end
-                    end else if (($signed({1'b0, lane}) > $signed(64'd2147483647))) begin
-                        quant <= 64'd2147483647;
-                    end else begin
-                        quant <= lane;
-                    end
-                    state <= 182;
-                end else if ((state == 182)) begin
-                    emit_tag <= 113;
-                    emit_index <= index;
-                    emit_value <= (quant & {32{1'b1}});
-                    after_emit <= 183;
-                    state <= 300;
-                end else if ((state == 183)) begin
-                    if (((index + 1) == hidden)) begin
-                        state <= 184;
-                    end else begin
-                        index <= (index + 1);
-                        state <= 1180;
-                    end
-                end else if ((state == 184)) begin
-                    if (((pos + 1) == positions)) begin
-                        active <= 1'b0;
-                        state <= 600;
-                    end else begin
-                        pos <= (pos + 1);
-                        state <= 16;
-                    end
-                end else if ((state == 200)) begin
-                    quiet <= (quiet + 1);
-                    if (!stall) begin
-                        wb_stb <= 1'b0;
-                        state <= 201;
-                    end
-                    if (ack) begin
-                        read0 <= rdata_lo;
-                        read1 <= rdata_hi;
-                        wb_stb <= 1'b0;
-                        state <= response;
-                    end
-                    if (($signed({1'b0, quiet}) >= $signed(16777216))) begin
-                        error_code <= 4;
-                        wb_stb <= 1'b0;
-                        state <= 900;
-                    end
-                end else if ((state == 201)) begin
-                    quiet <= (quiet + 1);
-                    if (ack) begin
-                        read0 <= rdata_lo;
-                        read1 <= rdata_hi;
-                        state <= response;
-                    end
-                    if (($signed({1'b0, quiet}) >= $signed(16777216))) begin
-                        error_code <= 4;
-                        state <= 900;
-                    end
-                end
-            end else if (($signed({1'b0, state}) < $signed(714))) begin
-                if (($signed({1'b0, state}) < $signed(703))) begin
-                    if ((state == 300)) begin
-                        if (!pending) begin
-                            ptag <= emit_tag;
-                            pa <= emit_index;
-                            pb <= emit_value;
-                            pending <= 1'b1;
-                            state <= 301;
-                        end
-                    end else if ((state == 301)) begin
-                        if (!pending) begin
-                            state <= after_emit;
-                        end
-                    end else if ((state == 400)) begin
-                        mul_product <= 0;
-                        mul_left <= mul_a;
-                        mul_right <= mul_b;
-                        mul_bit <= 0;
-                        state <= 401;
-                    end else if ((state == 401)) begin
-                        mul_product <= (mul_product + pick(((mul_right & 1) != 0), mul_left, 0));
-                        mul_left <= (mul_left << 1);
-                        mul_right <= (mul_right >> 1);
-                        if ((mul_bit == 63)) begin
-                            state <= mul_return;
+                        state <= 182;
+                    end else if ((state == 182)) begin
+                        emit_tag <= 113;
+                        emit_index <= index;
+                        emit_value <= (quant & {32{1'b1}});
+                        after_emit <= 183;
+                        state <= 300;
+                    end else if ((state == 183)) begin
+                        if (((index + 1) == hidden)) begin
+                            state <= 184;
                         end else begin
-                            mul_bit <= (mul_bit + 1);
+                            index <= (index + 1);
+                            state <= 1180;
                         end
-                    end else if ((state == 600)) begin
-                        if (!pending) begin
-                            ptag <= 99;
-                            pa <= run_id;
-                            pb <= cycles;
-                            pending <= 1'b1;
-                            state <= 601;
-                        end
-                    end else if ((state == 601)) begin
-                        if (!pending) begin
-                            ptag <= 118;
-                            pa <= 0;
-                            pb <= report_cycles;
-                            pending <= 1'b1;
-                            state <= 602;
-                        end
-                    end else if ((state == 602)) begin
-                        if (!pending) begin
-                            ptag <= 118;
-                            pa <= 1;
-                            pb <= memory_cycles;
-                            pending <= 1'b1;
-                            state <= 603;
-                        end
-                    end else if ((state == 603)) begin
-                        if (!pending) begin
-                            ptag <= 122;
-                            pa <= run_id;
-                            pb <= 0;
-                            pending <= 1'b1;
-                            state <= 1;
-                            poll <= 8192;
-                        end
-                    end else if ((state == 700)) begin
-                        if (($signed({1'b0, exp_z}) >= $signed(772244))) begin
-                            exp_value <= 0;
-                            state <= 155;
+                    end else if ((state == 184)) begin
+                        if (((pos + 1) == positions)) begin
+                            active <= 1'b0;
+                            state <= 600;
                         end else begin
-                            mul_a <= exp_z;
-                            mul_b <= 64'd6196328019;
-                            mul_return <= 701;
-                            state <= 400;
+                            pos <= (pos + 1);
+                            state <= 16;
                         end
-                    end else if ((state == 701)) begin
-                        exp_m <= ((mul_product >> 48) & {32{1'b1}});
-                        exp_j <= (((mul_product >> 44) & 15) & {32{1'b1}});
-                        exp_g <= ((mul_product & 64'd17592186044415) >>> 16);
-                        state <= 702;
-                    end else if ((state == 702)) begin
-                        mul_a <= exp_g;
-                        mul_b <= exp_g;
-                        mul_return <= 703;
+                    end else if ((state == 200)) begin
+                        quiet <= (quiet + 1);
+                        if (!stall) begin
+                            wb_stb <= 1'b0;
+                            state <= 201;
+                        end
+                        if (ack) begin
+                            read0 <= rdata_lo;
+                            read1 <= rdata_hi;
+                            wb_stb <= 1'b0;
+                            state <= response;
+                        end
+                        if (($signed({1'b0, quiet}) >= $signed(16777216))) begin
+                            error_code <= 4;
+                            wb_stb <= 1'b0;
+                            state <= 900;
+                        end
+                    end else if ((state == 201)) begin
+                        quiet <= (quiet + 1);
+                        if (ack) begin
+                            read0 <= rdata_lo;
+                            read1 <= rdata_hi;
+                            state <= response;
+                        end
+                        if (($signed({1'b0, quiet}) >= $signed(16777216))) begin
+                            error_code <= 4;
+                            state <= 900;
+                        end
+                    end
+                end else if ((state == 300)) begin
+                    if (!pending) begin
+                        ptag <= emit_tag;
+                        pa <= emit_index;
+                        pb <= emit_value;
+                        pending <= 1'b1;
+                        state <= 301;
+                    end
+                end else if ((state == 301)) begin
+                    if (!pending) begin
+                        state <= after_emit;
+                    end
+                end else if ((state == 400)) begin
+                    mul_product <= 0;
+                    mul_left <= mul_a;
+                    mul_right <= mul_b;
+                    mul_bit <= 0;
+                    state <= 401;
+                end else if ((state == 401)) begin
+                    mul_product <= (mul_product + pick(((mul_right & 1) != 0), mul_left, 0));
+                    mul_left <= (mul_left << 1);
+                    mul_right <= (mul_right >> 1);
+                    if ((mul_bit == 63)) begin
+                        state <= mul_return;
+                    end else begin
+                        mul_bit <= (mul_bit + 1);
+                    end
+                end else if ((state == 600)) begin
+                    if (!pending) begin
+                        ptag <= 99;
+                        pa <= run_id;
+                        pb <= cycles;
+                        pending <= 1'b1;
+                        state <= 601;
+                    end
+                end else if ((state == 601)) begin
+                    if (!pending) begin
+                        ptag <= 118;
+                        pa <= 0;
+                        pb <= report_cycles;
+                        pending <= 1'b1;
+                        state <= 602;
+                    end
+                end else if ((state == 602)) begin
+                    if (!pending) begin
+                        ptag <= 118;
+                        pa <= 1;
+                        pb <= memory_cycles;
+                        pending <= 1'b1;
+                        state <= 603;
+                    end
+                end else if ((state == 603)) begin
+                    if (!pending) begin
+                        ptag <= 122;
+                        pa <= run_id;
+                        pb <= 0;
+                        pending <= 1'b1;
+                        state <= 1;
+                        poll <= 8192;
+                    end
+                end else if ((state == 700)) begin
+                    if (($signed({1'b0, exp_z}) >= $signed(772244))) begin
+                        exp_value <= 0;
+                        state <= 155;
+                    end else begin
+                        mul_a <= exp_z;
+                        mul_b <= 64'd6196328019;
+                        mul_return <= 701;
                         state <= 400;
                     end
+                end else if ((state == 701)) begin
+                    exp_m <= ((mul_product >> 48) & {32{1'b1}});
+                    exp_j <= (((mul_product >> 44) & 15) & {32{1'b1}});
+                    exp_g <= ((mul_product & 64'd17592186044415) >>> 16);
+                    state <= 702;
+                end else if ((state == 702)) begin
+                    mul_a <= exp_g;
+                    mul_b <= exp_g;
+                    mul_return <= 703;
+                    state <= 400;
                 end else if ((state == 703)) begin
                     exp_h <= (mul_product >> 32);
                     state <= 704;
-                end else if ((state == 704)) begin
-                    mul_a <= 661577;
-                    mul_b <= exp_h;
-                    mul_return <= 705;
-                    state <= 400;
-                end else if ((state == 705)) begin
-                    exp_a2 <= ((mul_product >> 32) + 41309550);
-                    state <= 706;
-                end else if ((state == 706)) begin
-                    mul_a <= exp_a2;
-                    mul_b <= exp_h;
-                    mul_return <= 707;
-                    state <= 400;
-                end else if ((state == 707)) begin
-                    exp_a1 <= ((mul_product >> 32) + 64'd1031764991);
-                    state <= 708;
-                end else if ((state == 708)) begin
-                    mul_a <= exp_a1;
-                    mul_b <= exp_h;
-                    mul_return <= 709;
-                    state <= 400;
-                end else if ((state == 709)) begin
-                    exp_a0 <= ((mul_product >> 32) + 64'd4294967296);
-                    state <= 710;
-                end else if ((state == 710)) begin
-                    mul_a <= 5726720;
-                    mul_b <= exp_h;
-                    mul_return <= 711;
-                    state <= 400;
-                end else if ((state == 711)) begin
-                    exp_b1 <= ((mul_product >> 32) + 238388332);
-                    state <= 712;
-                end else if ((state == 712)) begin
-                    mul_a <= exp_b1;
-                    mul_b <= exp_h;
-                    mul_return <= 713;
-                    state <= 400;
-                end else if ((state == 713)) begin
-                    exp_b0 <= ((mul_product >> 32) + 64'd2977044472);
-                    state <= 714;
                 end
-            end else if (($signed({1'b0, state}) < $signed(2098))) begin
-                if ((state == 714)) begin
-                    mul_a <= exp_g;
-                    mul_b <= exp_b0;
-                    mul_return <= 715;
-                    state <= 400;
-                end else if ((state == 715)) begin
-                    exp_p <= (exp_a0 - (mul_product >> 32));
-                    state <= 716;
+            end else if (($signed({1'b0, state}) < $signed(1121))) begin
+                if (($signed({1'b0, state}) < $signed(716))) begin
+                    if ((state == 704)) begin
+                        mul_a <= 661577;
+                        mul_b <= exp_h;
+                        mul_return <= 705;
+                        state <= 400;
+                    end else if ((state == 705)) begin
+                        exp_a2 <= ((mul_product >> 32) + 41309550);
+                        state <= 706;
+                    end else if ((state == 706)) begin
+                        mul_a <= exp_a2;
+                        mul_b <= exp_h;
+                        mul_return <= 707;
+                        state <= 400;
+                    end else if ((state == 707)) begin
+                        exp_a1 <= ((mul_product >> 32) + 64'd1031764991);
+                        state <= 708;
+                    end else if ((state == 708)) begin
+                        mul_a <= exp_a1;
+                        mul_b <= exp_h;
+                        mul_return <= 709;
+                        state <= 400;
+                    end else if ((state == 709)) begin
+                        exp_a0 <= ((mul_product >> 32) + 64'd4294967296);
+                        state <= 710;
+                    end else if ((state == 710)) begin
+                        mul_a <= 5726720;
+                        mul_b <= exp_h;
+                        mul_return <= 711;
+                        state <= 400;
+                    end else if ((state == 711)) begin
+                        exp_b1 <= ((mul_product >> 32) + 238388332);
+                        state <= 712;
+                    end else if ((state == 712)) begin
+                        mul_a <= exp_b1;
+                        mul_b <= exp_h;
+                        mul_return <= 713;
+                        state <= 400;
+                    end else if ((state == 713)) begin
+                        exp_b0 <= ((mul_product >> 32) + 64'd2977044472);
+                        state <= 714;
+                    end else if ((state == 714)) begin
+                        mul_a <= exp_g;
+                        mul_b <= exp_b0;
+                        mul_return <= 715;
+                        state <= 400;
+                    end else if ((state == 715)) begin
+                        exp_p <= (exp_a0 - (mul_product >> 32));
+                        state <= 716;
+                    end
                 end else if ((state == 716)) begin
                     if ((exp_j == 0)) begin
                         exp_y <= exp_p;
@@ -2251,6 +2249,40 @@ module TrinityGf16AttnT27 (
                         pending <= 1'b1;
                         state <= 901;
                     end
+                end else if ((state == 1021)) begin
+                    state <= 21;
+                end else if ((state == 1040)) begin
+                    state <= 40;
+                end else if ((state == 1074)) begin
+                    state <= 74;
+                end else if ((state == 1095)) begin
+                    state <= 95;
+                end else if ((state == 1096)) begin
+                    state <= 96;
+                end else if ((state == 1110)) begin
+                    state <= 110;
+                end else if ((state == 1120)) begin
+                    state <= 120;
+                end
+            end else if (($signed({1'b0, state}) < $signed(2097))) begin
+                if ((state == 1121)) begin
+                    state <= 121;
+                end else if ((state == 1135)) begin
+                    state <= 135;
+                end else if ((state == 1141)) begin
+                    state <= 141;
+                end else if ((state == 1150)) begin
+                    state <= 150;
+                end else if ((state == 1152)) begin
+                    state <= 152;
+                end else if ((state == 1154)) begin
+                    state <= 154;
+                end else if ((state == 1157)) begin
+                    state <= 157;
+                end else if ((state == 1161)) begin
+                    state <= 161;
+                end else if ((state == 1180)) begin
+                    state <= 180;
                 end else if ((state == 2023)) begin
                     add0 <= (sumsq0 + mul_product);
                     add_carry <= carry(sumsq0, mul_product);
@@ -2264,25 +2296,27 @@ module TrinityGf16AttnT27 (
                 end else if ((state == 2077)) begin
                     quant <= rne_shift(mul_product, 16);
                     state <= 78;
-                end else if ((state == 2097)) begin
+                end
+            end else if (($signed({1'b0, state}) < $signed(2128))) begin
+                if ((state == 2097)) begin
                     term0 <= mul_product;
                     state <= 98;
+                end else if ((state == 2098)) begin
+                    term1 <= mul_product;
+                    state <= 99;
+                end else if ((state == 2103)) begin
+                    term3 <= mul_product;
+                    state <= 104;
+                end else if ((state == 2112)) begin
+                    term2 <= mul_product;
+                    state <= 103;
+                end else if ((state == 2122)) begin
+                    term0 <= mul_product;
+                    state <= 123;
+                end else if ((state == 2123)) begin
+                    term1 <= mul_product;
+                    state <= 124;
                 end
-            end else if ((state == 2098)) begin
-                term1 <= mul_product;
-                state <= 99;
-            end else if ((state == 2103)) begin
-                term3 <= mul_product;
-                state <= 104;
-            end else if ((state == 2112)) begin
-                term2 <= mul_product;
-                state <= 103;
-            end else if ((state == 2122)) begin
-                term0 <= mul_product;
-                state <= 123;
-            end else if ((state == 2123)) begin
-                term1 <= mul_product;
-                state <= 124;
             end else if ((state == 2128)) begin
                 term3 <= mul_product;
                 state <= 129;
