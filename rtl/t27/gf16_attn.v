@@ -154,6 +154,7 @@ module TrinityGf16AttnT27 (
     output reg [63:0] rne_q,
     output reg [63:0] rne_rem,
     output reg [63:0] rne_half,
+    output reg div_round_up,
     output reg rne_up,
     output reg [63:0] rne_result,
     output reg [31:0] va,
@@ -802,6 +803,11 @@ module TrinityGf16AttnT27 (
         rne_half = 0;
     end
 
+    // div_round_up exposed as output reg port
+    initial begin
+        div_round_up = 1'b0;
+    end
+
     // rne_up exposed as output reg port
     initial begin
         rne_up = 1'b0;
@@ -1167,6 +1173,7 @@ module TrinityGf16AttnT27 (
             rne_q <= 0;
             rne_rem <= 0;
             rne_half <= 0;
+            div_round_up <= 1'b0;
             rne_up <= 1'b0;
             rne_result <= 0;
             vr2 <= 0;
@@ -1377,19 +1384,16 @@ module TrinityGf16AttnT27 (
                                                     state <= 26;
                                                 end
                                             end else if ((state == 28)) begin
-                                                add0 <= (quo0 + pick((((rem0 << 1) > divisor) || (((rem0 << 1) == divisor) && ((quo0 & 1) != 0))), 1, 0));
-                                                add_carry <= carry(quo0, pick((((rem0 << 1) > divisor) || (((rem0 << 1) == divisor) && ((quo0 & 1) != 0))), 1, 0));
-                                                state <= 30;
+                                                div_round_up <= (((rem0 << 1) > divisor) || (((rem0 << 1) == divisor) && ((quo0 & 1) != 0)));
+                                                state <= 7028;
                                             end else if ((state == 30)) begin
                                                 quo0 <= add0;
                                                 quo1 <= (quo1 + add_carry);
                                                 state <= 31;
                                             end else if ((state == 31)) begin
-                                                rem1 <= (((quo1 + carry(quo0, 42950)) << 32) | ((quo0 + 42950) >>> 32));
-                                                rem0 <= ((quo0 + 42950) << 32);
-                                                root <= 0;
-                                                bitpos <= 94;
-                                                state <= 32;
+                                                add0 <= (quo0 + 42950);
+                                                add_carry <= carry(quo0, 42950);
+                                                state <= 7031;
                                             end
                                         end else if (((state & 16) == 0)) begin
                                             if (((state & 8) == 0)) begin
@@ -1446,8 +1450,8 @@ module TrinityGf16AttnT27 (
                                                     state <= 42;
                                                 end
                                             end else if ((state == 44)) begin
-                                                out_mag <= (quo0 + pick((((rem0 << 1) > rms) || (((rem0 << 1) == rms) && ((quo0 & 1) != 0))), 1, 0));
-                                                state <= 45;
+                                                div_round_up <= (((rem0 << 1) > rms) || (((rem0 << 1) == rms) && ((quo0 & 1) != 0)));
+                                                state <= 7044;
                                             end else if ((state == 45)) begin
                                                 if (num_sign) begin
                                                     if (($signed({1'b0, out_mag}) > $signed(64'd2147483648))) begin
@@ -1900,8 +1904,8 @@ module TrinityGf16AttnT27 (
                                                 mul_return <= 2145;
                                                 state <= 400;
                                             end else if ((state == 146)) begin
-                                                quant <= (((add1 << 32) | add0) + pick((($signed({1'b0, rem0}) > $signed(64'd2147483648)) || ((rem0 == 64'd2147483648) && ((((add1 << 32) | add0) & 1) != 0))), 1, 0));
-                                                state <= 147;
+                                                div_round_up <= (($signed({1'b0, rem0}) > $signed(64'd2147483648)) || ((rem0 == 64'd2147483648) && ((((add1 << 32) | add0) & 1) != 0)));
+                                                state <= 7146;
                                             end else if ((state == 147)) begin
                                                 if (((acc1 >> 63) != 0)) begin
                                                     if (($signed({1'b0, quant}) > $signed(64'd2147483648))) begin
@@ -2014,8 +2018,8 @@ module TrinityGf16AttnT27 (
                                                     state <= 164;
                                                 end
                                             end else if ((state == 166)) begin
-                                                out_mag <= (quo0 + pick((((rem0 << 1) > exp_denom) || (((rem0 << 1) == exp_denom) && ((quo0 & 1) != 0))), 1, 0));
-                                                state <= 167;
+                                                div_round_up <= (((rem0 << 1) > exp_denom) || (((rem0 << 1) == exp_denom) && ((quo0 & 1) != 0)));
+                                                state <= 7166;
                                             end else if ((state == 167)) begin
                                                 if (num_sign) begin
                                                     if (($signed({1'b0, out_mag}) > $signed(64'd2147483648))) begin
@@ -2461,24 +2465,45 @@ module TrinityGf16AttnT27 (
                     add1 <= ((acc1 + pick(((lane >> 63) != 0), 64'd18446744073709551615, 0)) + add_carry);
                     state <= 143;
                 end
-            end else if ((state == 4101)) begin
-                quant <= rne_result;
-                state <= 102;
-            end else if ((state == 4107)) begin
-                quant <= rne_result;
-                state <= 113;
-            end else if ((state == 4126)) begin
-                quant <= rne_result;
-                state <= 127;
-            end else if ((state == 4132)) begin
-                quant <= rne_result;
-                state <= 138;
-            end else if ((state == 4718)) begin
-                exp_value <= (rne_result & {32{1'b1}});
-                state <= 155;
-            end else if ((state == 6077)) begin
-                quant <= rne_result;
-                state <= 78;
+            end else if (((state & 2048) == 0)) begin
+                if ((state == 4101)) begin
+                    quant <= rne_result;
+                    state <= 102;
+                end else if ((state == 4107)) begin
+                    quant <= rne_result;
+                    state <= 113;
+                end else if ((state == 4126)) begin
+                    quant <= rne_result;
+                    state <= 127;
+                end else if ((state == 4132)) begin
+                    quant <= rne_result;
+                    state <= 138;
+                end else if ((state == 4718)) begin
+                    exp_value <= (rne_result & {32{1'b1}});
+                    state <= 155;
+                end else if ((state == 6077)) begin
+                    quant <= rne_result;
+                    state <= 78;
+                end
+            end else if ((state == 7028)) begin
+                add0 <= (quo0 + pick(div_round_up, 1, 0));
+                add_carry <= carry(quo0, pick(div_round_up, 1, 0));
+                state <= 30;
+            end else if ((state == 7031)) begin
+                rem1 <= (((quo1 + add_carry) << 32) | (add0 >> 32));
+                rem0 <= (add0 << 32);
+                root <= 0;
+                bitpos <= 94;
+                state <= 32;
+            end else if ((state == 7044)) begin
+                out_mag <= (quo0 + pick(div_round_up, 1, 0));
+                state <= 45;
+            end else if ((state == 7146)) begin
+                quant <= (((add1 << 32) | add0) + pick(div_round_up, 1, 0));
+                state <= 147;
+            end else if ((state == 7166)) begin
+                out_mag <= (quo0 + pick(div_round_up, 1, 0));
+                state <= 167;
             end
             if ((active && !calib)) begin
                 error_code <= 2;

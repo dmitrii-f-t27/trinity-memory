@@ -216,6 +216,7 @@ var exp_b1: u64 = 0; var exp_b0: u64 = 0; var exp_p: u64 = 0; var exp_y: u64 = 0
 // Shared exact round-to-nearest-even pipeline (call sites use shifts 16..33).
 var rne_num: u64 = 0; var rne_bits: u32 = 0; var rne_return: u32 = 0;
 var rne_q: u64 = 0; var rne_rem: u64 = 0; var rne_half: u64 = 0;
+var div_round_up: bool = false;
 var rne_up: bool = false; var rne_result: u64 = 0;
 
 // One registered read port per RAM. The 1000+consumer state presents
@@ -347,16 +348,12 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                                                 if (bitpos == 0) { state = 28; }
                                                 else { bitpos = bitpos-1; state = 26; }
                                             } else if (state == 28) {
-                                                add0 = quo0+pick((rem0 << 1) > divisor || ((rem0 << 1) == divisor && (quo0 & 1) != 0),1,0);
-                                                add_carry = carry(quo0,pick((rem0 << 1) > divisor || ((rem0 << 1) == divisor && (quo0 & 1) != 0),1,0));
-                                                state = 30;
+                                                div_round_up = (rem0 << 1) > divisor || ((rem0 << 1) == divisor && (quo0 & 1) != 0); state = 7028;
                                             } else if (state == 30) {
                                                 quo0 = add0; quo1 = quo1+add_carry; state = 31;
                                             } else if (state == 31) {
-                                                // rms = isqrt((mean + EPS_Q32) << 32), Q32.32: build the 2-limb value.
-                                                rem1 = ((quo1+carry(quo0,42950)) << 32) | ((quo0+42950) >> 32);
-                                                rem0 = (quo0+42950) << 32;
-                                                root = 0; bitpos = 94; state = 32;
+                                                // Add epsilon in the low limb before propagating its carry.
+                                                add0 = quo0+42950; add_carry = carry(quo0,42950); state = 7031;
                                             }
                                         }
                                     }
@@ -395,8 +392,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                                                 if (bitpos == 0) { state = 44; }
                                                 else { bitpos = bitpos-1; state = 42; }
                                             } else if (state == 44) {
-                                                out_mag = quo0+pick((rem0 << 1) > rms || ((rem0 << 1) == rms && (quo0 & 1) != 0),1,0);
-                                                state = 45;
+                                                div_round_up = (rem0 << 1) > rms || ((rem0 << 1) == rms && (quo0 & 1) != 0); state = 7044;
                                             } else if (state == 45) {
                                                 if (num_sign) {
                                                     if (out_mag > 2147483648) { quant = 2147483648; }
@@ -673,8 +669,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                                                 // Scale both magnitude limbs without a combinational multiplier.
                                                 mul_a = scale_attn as u64; mul_b = out_mag & 4294967295; mul_return = 2145; state = 400;
                                             } else if (state == 146) {
-                                                quant = ((add1 << 32) | add0)+pick(rem0 > 2147483648 || (rem0 == 2147483648 && ((((add1 << 32) | add0) & 1) != 0)),1,0);
-                                                state = 147;
+                                                div_round_up = rem0 > 2147483648 || (rem0 == 2147483648 && ((((add1 << 32) | add0) & 1) != 0)); state = 7146;
                                             } else if (state == 147) {
                                                 if ((acc1 >> 63) != 0) {
                                                     if (quant > 2147483648) { quant = 2147483648; }
@@ -747,8 +742,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
                                                 if (bitpos == 0) { state = 166; }
                                                 else { bitpos = bitpos-1; state = 164; }
                                             } else if (state == 166) {
-                                                out_mag = quo0+pick((rem0 << 1) > exp_denom as u64 || ((rem0 << 1) == exp_denom as u64 && (quo0 & 1) != 0),1,0);
-                                                state = 167;
+                                                div_round_up = (rem0 << 1) > exp_denom as u64 || ((rem0 << 1) == exp_denom as u64 && (quo0 & 1) != 0); state = 7166;
                                             } else if (state == 167) {
                                                 if (num_sign) {
                                                     if (out_mag > 2147483648) { quant = 2147483648; }
@@ -1032,18 +1026,38 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
             }
         }
     } else {
-        if (state == 4101) {
-            quant = rne_result; state = 102;
-        } else if (state == 4107) {
-            quant = rne_result; state = 113;
-        } else if (state == 4126) {
-            quant = rne_result; state = 127;
-        } else if (state == 4132) {
-            quant = rne_result; state = 138;
-        } else if (state == 4718) {
-            exp_value = rne_result as u32; state = 155;
-        } else if (state == 6077) {
-            quant = rne_result; state = 78;
+        if ((state & 2048) == 0) {
+            if (state == 4101) {
+                quant = rne_result; state = 102;
+            } else if (state == 4107) {
+                quant = rne_result; state = 113;
+            } else if (state == 4126) {
+                quant = rne_result; state = 127;
+            } else if (state == 4132) {
+                quant = rne_result; state = 138;
+            } else if (state == 4718) {
+                exp_value = rne_result as u32; state = 155;
+            } else if (state == 6077) {
+                quant = rne_result; state = 78;
+            }
+        } else {
+            if (state == 7028) {
+                add0 = quo0+pick(div_round_up,1,0);
+                add_carry = carry(quo0,pick(div_round_up,1,0));
+                state = 30;
+            } else if (state == 7031) {
+                rem1 = ((quo1+add_carry) << 32) | (add0 >> 32); rem0 = add0 << 32;
+                root = 0; bitpos = 94; state = 32;
+            } else if (state == 7044) {
+                out_mag = quo0+pick(div_round_up,1,0);
+                state = 45;
+            } else if (state == 7146) {
+                quant = ((add1 << 32) | add0)+pick(div_round_up,1,0);
+                state = 147;
+            } else if (state == 7166) {
+                out_mag = quo0+pick(div_round_up,1,0);
+                state = 167;
+            }
         }
     }
     if (active && !calib) { error_code = 2; state = 900; }
