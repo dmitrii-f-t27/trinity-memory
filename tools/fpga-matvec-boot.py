@@ -33,6 +33,7 @@ def main():
     profile = parser.add_mutually_exclusive_group()
     profile.add_argument("--ffn", action="store_true", help="check the Q16 full-layer FFN header")
     profile.add_argument("--gf16-ffn", action="store_true", help="check the gf16-ffn-v1 full-layer header")
+    profile.add_argument("--gf16-attn", action="store_true", help="check the gf16-attn-v1 layer-0 attention header")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("output already exists; use a fresh directory to preserve earlier evidence")
@@ -46,9 +47,12 @@ def main():
         parser.error('--ffn requires a declared FFN build')
     if args.gf16_ffn and not re.search(r'(?:^|, )GF16_FFN \(',report['ddr3']['variant']):
         parser.error('--gf16-ffn requires a declared GF16_FFN build')
-    if not args.ffn and not args.gf16_ffn and not re.search(r'(?:^|, )MATVEC \(',report['ddr3']['variant']):
+    if args.gf16_attn and not re.search(r'(?:^|, )GF16_ATTN \(',report['ddr3']['variant']):
+        parser.error('--gf16-attn requires a declared GF16_ATTN build')
+    if not args.ffn and not args.gf16_ffn and not args.gf16_attn and not re.search(r'(?:^|, )MATVEC \(',report['ddr3']['variant']):
         parser.error('matvec mode requires a declared MATVEC build; select the matching FFN option')
-    os.environ["DDR3_APP"] = "gf16-ffn" if args.gf16_ffn else "ffn" if args.ffn else "matvec"
+    os.environ["DDR3_APP"] = ("gf16-attn" if args.gf16_attn else
+                               "gf16-ffn" if args.gf16_ffn else "ffn" if args.ffn else "matvec")
     run_args = SimpleNamespace(loader="openFPGALoader", cable=args.cable,
         port=args.port, baud=115200, max_temp=args.max_temp,
         settle=1.0, seconds=args.seconds, no_load=False, bit=str(args.bit.resolve()))
@@ -77,6 +81,9 @@ def main():
     if args.gf16_ffn:
         checks.pop('matvec_header')
         checks['gf16_ffn_header'] = [line for line in lines if line[0] == 'G'] == [('G', 2560, 6912)]
+    if args.gf16_attn:
+        checks.pop('matvec_header')
+        checks['gf16_attn_header'] = [line for line in lines if line[0] == 'G'] == [('G', 2560, 640)]
     record = {"build_report": os.path.relpath(args.report.resolve(), ROOT),
               "bitstream_sha256": report["bitstream"]["sha256"], "checks": checks,
               "uart_sha256": hashlib.sha256(raw).hexdigest(), "lines": lines, "run": run}

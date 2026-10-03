@@ -136,6 +136,82 @@ def validate(raw, stages, run=1, positions=1, result_only=False):
                             "controller_other": total - report - memory}}
 
 
+def validate_board_inputs(folder, manifest, stages, run=1, positions=1, result_only=False):
+    """Reject profile/layout mistakes before opening UART or JTAG."""
+    if not 0 < run < 2**32 or not 1 <= positions <= 8:
+        raise ValueError("attention reference run/positions out of range")
+    hidden = len(stages["r"]) // positions
+    kv = len(stages["k"]) // positions
+    heads = len(stages["sc"]) // sum(p + 1 for p in range(positions))
+    words = {"doorbell": 1, "scales": 5, "w_in": hidden, "w_sub": hidden,
+             "x": positions * hidden, "rope": positions * (hidden // heads),
+             "q": hidden * ((hidden + 63) // 64), "k": kv * ((hidden + 63) // 64),
+             "v": kv * ((hidden + 63) // 64), "o": hidden * ((hidden + 63) // 64)}
+    bases = {"doorbell": 64, "scales": 80, "w_in": 4096, "w_sub": 8192, "x": 32768,
+             "rope": 321536, "q": 65536, "k": 167936, "v": 193536, "o": 219136}
+    if set(manifest) != set(bases):
+        raise ValueError("attention region manifest differs: " + str(sorted(manifest)))
+    for name, region in manifest.items():
+        if (region["word_address"] != bases[name] or region["byte_address"] != 16 * bases[name] or
+                region["bytes"] != 16 * words[name] or region["file"] != name + ".bin"):
+            raise ValueError("attention region layout differs: " + name)
+        data = (Path(folder) / region["file"]).read_bytes()
+        if len(data) != region["bytes"] or hashlib.sha256(data).hexdigest() != region["sha256"]:
+            raise ValueError("attention input payload hash mismatch: " + name)
+    for name in ("scales", "w_in", "w_sub"):
+        data = (Path(folder) / manifest[name]["file"]).read_bytes()
+        for i in range(0, len(data), 16):
+            word = int.from_bytes(data[i:i + 16], "little")
+            if not -(1 << 31) <= (word if word < 1 << 31 else word - (1 << 32)) < 1 << 31:
+                raise ValueError("weight word out of Q16.16 range: " + name)
+    if (hidden, kv, heads) != (2560, 640, 20):
+        raise ValueError("attention board dimensions differ from the qualified layer")
+
+
+def write_reference(path, stages, run=1, positions=1, trace="full"):
+    """The board driver's expected values: the oracle Q16.16 datapath."""
+    record = {"profile": "gf16-attn-v1", "run": run, "positions": positions,
+              "trace": trace, "stages": stages}
+    Path(path).write_text(json.dumps(record, indent=1) + "\n")
+
+
+def _cli():
+    """Build the full-scale board vector set from the real layer-0 fixtures.
+
+      python3 tools/gf16_attn_vectors.py --output DIR [--positions S]
+          [--seed N] [--run N] [--result]
+
+    x lanes come from the house int8 activation generator (position 0 is the
+    BOS seed); expected stages come from tools.attn_reference.fpga_q16.
+    """
+    import argparse
+    from tools import attn_reference as ar
+    from trinity_memory import matvec as mv
+    ap = argparse.ArgumentParser(description=_cli.__doc__)
+    ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--positions", type=int, default=1)
+    ap.add_argument("--seed", type=int, default=ar.SEED)
+    ap.add_argument("--run", type=int, default=1)
+    ap.add_argument("--result", action="store_true", help="result-only doorbell")
+    args = ap.parse_args()
+    model = ar.load_attn()
+    dims = model["dims"]
+    xs = [list(mv.activations(dims["hidden"], args.seed + t)) for t in range(args.positions)]
+    tables_f64, tables_q16 = ar.rope_tables(args.positions, ar.ROPE_THETA, dims["head_dim"])
+    stages, sat = ar.fpga_q16(model, [[t << ar.Q for t in x] for x in xs], tables_q16)
+    if any(sat.values()):
+        raise SystemExit(f"attention datapath saturations: {sat}")
+    args.output.mkdir(parents=True, exist_ok=False)
+    write_inputs(args.output, model, [[t << ar.Q for t in x] for x in xs],
+                  tables_q16, run=args.run, result=args.result)
+    write_reference(args.output / "reference.json", stages,
+                    run=args.run, positions=args.positions,
+                    trace="result" if args.result else "full")
+    print(json.dumps({"output": str(args.output), "positions": args.positions,
+                      "run": args.run, "trace": "result" if args.result else "full",
+                      "stage_values": sum(len(stages[s]) for s in stages)}))
+
+
 def tiny_model(seed=7):
     """Two heads x 4 over one kv head, hidden 8 — the oracle's tiny fixture."""
     import random
@@ -157,3 +233,7 @@ def tiny_model(seed=7):
         "scales": {"q": 0.125, "k": 0.0625, "v": 0.25, "o": 0.5},
         "packed_sha256": {},
     }
+
+
+if __name__ == "__main__":
+    _cli()
