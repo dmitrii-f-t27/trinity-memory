@@ -17,6 +17,10 @@ on:
       - 'tests/test_ffn_boot.py'
       - 'tools/fpga-ffn-run.py'
       - 'tools/fpga-matvec-boot.py'
+      - 't27/rtl/gf16_attn.t27'
+      - 'tools/gf16_attn_*.py'
+      - 'tests/tb_gf16_attn.v'
+      - 'tests/test_gf16_attn_sim.py'
       - 't27/rtl/gf16_wide_norm.t27'
       - 't27/rtl/gf16_scalar.t27'
       - 't27/rtl/ffn_wide.t27'
@@ -91,6 +95,12 @@ jobs:
           python tools/fetch-fixtures.py --jobs 4
       - name: Arithmetic, bounds, rounding, sanitizers and RTL protocol
         run: python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_bitnet_runtime tests.test_ffn_boot tests.test_ffn_capture -v
+      - name: Replay the attention controller against the oracle (iverilog)
+        run: python -m unittest tests.test_gf16_attn_sim -v
+      - name: Replay the attention controller against the oracle (verilator)
+        env:
+          TRINITY_ATTN_SIMULATOR: verilator
+        run: python -m unittest tests.test_gf16_attn_sim.AttentionRtlTest.test_two_positions_rope_and_softmax tests.test_gf16_attn_sim.AttentionRtlTest.test_result_only_mode -v
       - name: Recheck committed physical board captures
         run: python reports/fpga/gf16-ffn-2026-10-01-24917fa7/verify-captures.py
       - name: Recheck committed performance evidence
