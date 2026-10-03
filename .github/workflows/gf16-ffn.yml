@@ -15,7 +15,9 @@ on:
       - 'tests/test_gf16_scalar.py'
       - 'tests/test_ffn_capture.py'
       - 'tests/test_attn_capture.py'
+      - 'tests/test_attn_board_evidence.py'
       - 'tools/fpga-attn-run.py'
+      - 'tools/verify_gf16_attn_board.py'
       - 'tests/test_ffn_boot.py'
       - 'tools/fpga-ffn-run.py'
       - 'tools/uart_session.py'
@@ -97,7 +99,7 @@ jobs:
           sh tools/build-t27.sh
           python tools/fetch-fixtures.py --jobs 4
       - name: Arithmetic, bounds, rounding, sanitizers and RTL protocol
-        run: python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_bitnet_runtime tests.test_ffn_boot tests.test_ffn_capture tests.test_attn_capture -v
+        run: python -m unittest tests.test_gf16_scalar tests.test_gf16_ffn tests.test_bitnet_runtime tests.test_ffn_boot tests.test_ffn_capture tests.test_attn_capture tests.test_attn_board_evidence -v
       - name: Replay the attention controller against the oracle (iverilog)
         run: python -m unittest tests.test_gf16_attn_sim -v
       - name: Replay the attention controller against the oracle (verilator)
