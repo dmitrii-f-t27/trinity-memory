@@ -132,7 +132,7 @@ class AttentionRtlTest(unittest.TestCase):
             self.assertTrue(vectors.validate(first+end,stages,run=37,positions=2)['pass'])
             self.assertTrue(vectors.validate(second,zero,run=38,positions=2)['pass'])
 
-    def test_shared_multiplier_modulo_and_signed_patterns(self):
+    def test_shared_arithmetic_boundary_patterns(self):
         import tempfile
         import random
         from tools import gf16_attn_build as build
@@ -153,6 +153,16 @@ class AttentionRtlTest(unittest.TestCase):
                 wanted=q+int(rem>half or (rem==half and q&1))
                 round_calls.append(f"check_round(64'h{num:016x},32'd{shift},64'h{wanted:016x});")
             calls += '\n'+'\n'.join(round_calls)
+            # Independent wide-integer oracle for both limbs of the isqrt
+            # subtrahend. Include every shift reached by the restoring loop.
+            roots = [0, 1, 2**31, 2**63, 2**64-1]
+            roots += [rng.getrandbits(64) for _ in range(4)]
+            for root in roots:
+                for bitpos in range(0, 96, 2):
+                    wide = (((root << 2) | 1) & (2**64-1)) << bitpos
+                    calls += (f"\ncheck_sqrt(64'h{root:016x},32'd{bitpos},"
+                              f"64'h{(wide >> 64) & (2**64-1):016x},"
+                              f"64'h{wide & (2**64-1):016x});")
             tb=work/'tb_mul.v';tb.write_text('''`timescale 1ns/1ps
 module tb_mul;
 reg clk=0,rst_n=0; always #5 clk=~clk;
@@ -180,6 +190,17 @@ begin
  while(dut.state!=999 && clocks<6) begin @(negedge clk);#1;clocks=clocks+1;end
  if(dut.state!=999 || dut.rne_result!==wanted)
   $fatal(1,"round %h >> %d got %h want %h",num,shift,dut.rne_result,wanted);
+end
+endtask
+task check_sqrt(input [63:0] root,input [31:0] bitpos,input [63:0] hi,lo);
+integer clocks;
+begin
+ @(negedge clk);dut.root=root;dut.bitpos=bitpos;dut.state=32;
+ clocks=0;
+ while(dut.state!=33 && clocks<4) begin @(negedge clk);#1;clocks=clocks+1;end
+ if(dut.state!=33 || dut.cmp1!==hi || dut.cmp0!==lo)
+  $fatal(1,"sqrt subtrahend root=%h bitpos=%d got=%h:%h want=%h:%h",
+         root,bitpos,dut.cmp1,dut.cmp0,hi,lo);
 end
 endtask
 initial begin

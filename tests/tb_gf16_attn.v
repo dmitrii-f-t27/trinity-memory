@@ -63,8 +63,9 @@ module tb_gf16_attn;
                 if (tag==69) begin
                     if(EXPECT_ERROR!=0 && a==EXPECT_ERROR) begin
                         $display("PASS expected attention error %0d",a);$fclose(fd);$finish;
+                    end else begin
+                        $fatal(1,"attention error %d",a);
                     end
-                    $fatal(1,"attention error %d",a);
                 end
                 if (tag==122) begin
                     if(EXPECT_ERROR!=0) $fatal(1,"expected error missing");
