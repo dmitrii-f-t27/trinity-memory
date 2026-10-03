@@ -69,12 +69,10 @@ fn exp_q16(delta: u32) -> u32 {
 }
 fn sign64(word: u32) -> bool { return (word >> 31) != 0; }
 fn sgt(a: u64, b: u64) -> bool {
-    // signed greater-than over u64 two's complements (> is unsigned in t27)
-    if ((a >> 63) != 0) {
-        if ((b >> 63) == 0) { return false; }
-        return a < b;
-    }
-    if ((b >> 63) != 0) { return true; }
+    // signed greater-than over u64 two's complements. Sign extension adds
+    // the same 2**64 to every negative, so within equal signs the plain
+    // unsigned order IS the signed order; only mixed signs need the flip.
+    if (((a >> 63) != 0) != ((b >> 63) != 0)) { return (a >> 63) == 0; }
     return a > b;
 }
 fn extend(word: u32) -> u64 {

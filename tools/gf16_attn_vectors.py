@@ -8,6 +8,10 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from tools import attn_reference as ar
 
@@ -193,10 +197,15 @@ def _cli():
     ap.add_argument("--seed", type=int, default=ar.SEED)
     ap.add_argument("--run", type=int, default=1)
     ap.add_argument("--result", action="store_true", help="result-only doorbell")
+    ap.add_argument("--zero", action="store_true", help="all-zero x lanes")
     args = ap.parse_args()
     model = ar.load_attn()
     dims = model["dims"]
-    xs = [list(mv.activations(dims["hidden"], args.seed + t)) for t in range(args.positions)]
+    xs = ([0] * dims["hidden"] for _ in range(0)) if args.zero else None
+    if args.zero:
+        xs = [[0] * dims["hidden"] for _ in range(args.positions)]
+    else:
+        xs = [list(mv.activations(dims["hidden"], args.seed + t)) for t in range(args.positions)]
     tables_f64, tables_q16 = ar.rope_tables(args.positions, ar.ROPE_THETA, dims["head_dim"])
     stages, sat = ar.fpga_q16(model, [[t << ar.Q for t in x] for x in xs], tables_q16)
     if any(sat.values()):

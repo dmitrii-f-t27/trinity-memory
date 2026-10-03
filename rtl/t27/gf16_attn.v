@@ -789,22 +789,12 @@ module TrinityGf16AttnT27 (
         begin : sgt_body
             reg __t27_ret;
             __t27_ret = 1'b0;
-            if (((a >> 63) != 0)) begin
-                if (((b >> 63) == 0)) begin
-                    sgt = 1'b0;
-                    __t27_ret = 1'b1;
-                end else begin
-                    sgt = (a < b);
-                    __t27_ret = 1'b1;
-                end
+            if ((((a >> 63) != 0) != ((b >> 63) != 0))) begin
+                sgt = ((a >> 63) == 0);
+                __t27_ret = 1'b1;
             end else begin
-                if (((b >> 63) != 0)) begin
-                    sgt = 1'b1;
-                    __t27_ret = 1'b1;
-                end else begin
-                    sgt = (a > b);
-                    __t27_ret = 1'b1;
-                end
+                sgt = (a > b);
+                __t27_ret = 1'b1;
             end
         end
     endfunction
