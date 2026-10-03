@@ -40,11 +40,14 @@ claimed here:
   from plain libm cos/sin: a 1-2 ulp platform difference cannot flip a
   Q16.16 rounding here (boundary spacing 2**-16 versus a double ulp of
   ~2**-52 on [0, 1]), unlike the relu2 pow incident the FFN oracle recorded.
-* Softmax is the one transcendental of the Q datapath: e_i is defined as
-  the correctly rounded Q16.16 exp of the exact Q16.16 delta from the row
-  maximum, the denominator is the exact integer sum, and every context
-  element is one division. RTL must later implement an exp unit proven
-  inside the report guard band; the oracle does not model a polynomial.
+* Softmax is the one transcendental of the Q datapath. Its exponential is
+  NOT libm: exp_q16 shares one integer algorithm (16-segment Q32.32
+  2**-g polynomial of degree 6, single RNE, every product inside 64 bits)
+  between this datapath model and the RTL exp unit, so board, sim and
+  model agree bit for bit. The f64 reference keeps math.exp; the
+  polynomial error is far below the half-unit rounding boundary, and the
+  residual 1-unit boundary noise (four elements in two million random
+  deltas) is absorbed by the guard.
 * Position 0 is the untouched board case: RoPE is the identity there and
   the single-entry softmax returns v exactly, so the BOS vector exercises
   projections, norms and the residual only.
@@ -78,14 +81,52 @@ GROUP, PAIRS = HEADS // KV_HEADS, HEAD_DIM // 2          # 4:1 GQA, 64 rope pair
 KV_DIM = KV_HEADS * HEAD_DIM                              # 640
 Q, QQ = 16, 32                      # fraction bits of stage values / norm path
 ONE_Q16 = 1 << Q
+
+# The shared integer softmax exponential. exp_q16(delta) rounds 65536*exp(delta/65536)
+# to Q16.16 with one RNE; delta <= 0. The same constants and steps must run in
+# the RTL exp unit, so the board, the sim and this datapath model agree exactly.
+# The 2**-g polynomial is split into even/odd parts so every Horner intermediate
+# stays positive and every product stays below 2**64 (the t27 backends differ
+# above that). 65536*exp(-z/65536) < 0.5 for z >= 65536*ln(131072): those
+# entries round to 0. In the RTL the u32 two's-complement pattern of delta is
+# negated and masked to its low 32 bits to recover z.
+EXP_L = 6196328019                                              # log2(e), Q32.32
+EXP_C_EVEN = [4294967296, 1031764991, 41309550, 661577]         # +g**0,+g**2,+g**4,+g**6
+EXP_C_ODD = [2977044472, 238388332, 5726720]                    # |g**1|,|g**3|,|g**5|
+EXP_T = [round(2 ** (-j / 16) * (1 << 32)) for j in range(16)]  # segment table, Q32.32
+EXP_THRESH = 772244
+
+
+def exp_q16(delta: int) -> int:
+    """round(exp(delta / 2**16) * 2**16), nearest-even, integer arithmetic only."""
+    z = -delta
+    if z >= EXP_THRESH:
+        return 0
+    u = z * EXP_L                       # Q48.48; z < EXP_THRESH < 2**20, so u < 2**53
+    m = u >> 48                         # integer part of z*log2(e)
+    f = u & ((1 << 48) - 1)
+    j = f >> 44                         # 16-segment index
+    g = (f & ((1 << 44) - 1)) >> 16     # Q32.32 remainder in [0, 1/16), < 2**28
+    h = (g * g) >> 32                   # g**2, Q32.32
+    a2 = ((EXP_C_EVEN[3] * h) >> 32) + EXP_C_EVEN[2]
+    a1 = ((a2 * h) >> 32) + EXP_C_EVEN[1]
+    even = ((a1 * h) >> 32) + EXP_C_EVEN[0]
+    b1 = ((EXP_C_ODD[2] * h) >> 32) + EXP_C_ODD[1]
+    odd = ((b1 * h) >> 32) + EXP_C_ODD[0]
+    p = even - ((g * odd) >> 32)        # 2**-g, Q32.32 (wraps: |p| < 2**64)
+    y = p if j == 0 else (EXP_T[j] * p) >> 32   # 2**-f, Q32.32
+    return rne(y, 16 + m)
 EPS = 1e-5                                                # config.json rms_norm_eps
 ROPE_THETA = 500000.0                                     # config.json rope_theta
 ATTENTION_SCALING = HEAD_DIM ** -0.5                      # modeling_bitnet.py
 SEED, POSITIONS = 27, 8                                   # house seed, causal prefill length
 ORACLE_SCOPE = "unquantized-activation attention/residual math; no ActQuant or bf16 execution rounding"
 RMSNORM_CONTRACT = "sqrt(mean(x*x) + epsilon)"
-EXP_CONTRACT = ("e_i = round_q16(exp(s_i - row_max)); exact integer denominator, "
-               "one division per context element; the RTL exp unit must stay inside the guard band")
+EXP_CONTRACT = ("e_i = exp_q16(s_i - row_max), the shared integer exponential "
+               "(EXP_L/EXP_C_EVEN/EXP_C_ODD/EXP_T constants, 16-segment degree-6 Q32.32 "
+               "even/odd-split polynomial, one RNE, every product inside 64 bits); exact "
+               "integer denominator, one division per context element; the same constants "
+               "and steps run in the RTL exp unit")
 UPSTREAM_SOURCES = {
     "attention": "https://github.com/huggingface/transformers/blob/7cd73d9df0c14b151c684b708a9f27d8d0349dfe/src/transformers/models/bitnet/modeling_bitnet.py",
     "autobitlinear": "https://github.com/huggingface/transformers/blob/d6abd1333078195535f461589b64f112b53688b2/src/transformers/integrations/bitnet.py",
@@ -115,6 +156,9 @@ WIDTHS = {
     "score_acc_bits": (HEAD_DIM * (1 << 62)).bit_length(),        # 128-long q.k dot
     "score_scale_bits": (HEAD_DIM * (1 << 62)).bit_length() + Q,  # dot * Q16.16 scaling
     "softmax_num_bits": (POSITIONS * (1 << (Q + 31))).bit_length(),  # summed e*v products
+    "exp_delta_bits": (EXP_THRESH - 1).bit_length(),                  # |delta| inside the exp domain
+    "exp_u_bits": ((EXP_THRESH - 1) * EXP_L).bit_length(),            # delta * log2(e), Q48.48
+    "exp_prod_bits": 64,                                              # poly/segment products, Q32.32
 }
 
 
@@ -326,7 +370,7 @@ def fpga_q16(model: dict, xs_q16: list[list[int]], tables_q16) -> tuple[dict, di
                 # so the single rounding shifts by QQ, not Q.
                 scores.append(clamp("sc", rne(acc * scaling_q16, QQ)))
             peak = max(scores)
-            exps = [to_q(math.exp((s - peak) / ONE_Q16)) for s in scores]
+            exps = [exp_q16(s - peak) for s in scores]
             denom = sum(exps)
             stages["sc"].extend(scores)
             stages["p"].extend(div_rne(e << Q, denom) for e in exps)

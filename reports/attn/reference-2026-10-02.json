@@ -2,7 +2,7 @@
  "schema": "trinity.attn-reference.v1",
  "oracle_scope": "unquantized-activation attention/residual math; no ActQuant or bf16 execution rounding",
  "rmsnorm_contract": "sqrt(mean(x*x) + epsilon)",
- "exp_contract": "e_i = round_q16(exp(s_i - row_max)); exact integer denominator, one division per context element; the RTL exp unit must stay inside the guard band",
+ "exp_contract": "e_i = exp_q16(s_i - row_max), the shared integer exponential (EXP_L/EXP_C_EVEN/EXP_C_ODD/EXP_T constants, 16-segment degree-6 Q32.32 even/odd-split polynomial, one RNE, every product inside 64 bits); exact integer denominator, one division per context element; the same constants and steps run in the RTL exp unit",
  "upstream_sources": {
   "attention": "https://github.com/huggingface/transformers/blob/7cd73d9df0c14b151c684b708a9f27d8d0349dfe/src/transformers/models/bitnet/modeling_bitnet.py",
   "autobitlinear": "https://github.com/huggingface/transformers/blob/d6abd1333078195535f461589b64f112b53688b2/src/transformers/integrations/bitnet.py",
@@ -20514,6 +20514,9 @@
   "score_acc_bits": 70,
   "score_scale_bits": 86,
   "softmax_num_bits": 51,
+  "exp_delta_bits": 20,
+  "exp_u_bits": 53,
+  "exp_prod_bits": 64,
   "hidden": 2560,
   "heads": 20,
   "kv_heads": 5,
