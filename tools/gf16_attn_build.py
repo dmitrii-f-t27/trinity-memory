@@ -47,7 +47,7 @@ def compile_sim(work, rtl, shape, simulator="iverilog", mem_base=2, out_base=1, 
     sources = [*rtl, ROOT / "tests/tb_gf16_attn.v"]
     if simulator == "verilator":
         base.run(["verilator", "--binary", "--timing", "--top-module", "tb_gf16_attn",
-                  "-Wno-fatal", "-j", "4", "--Mdir", work / "obj_dir",
+                  "-Wno-fatal", "-Wno-BLKANDNBLK", "-j", "4", "--Mdir", work / "obj_dir",
                   *[f"-G{k}={v}" for k, v in params.items()], *sources], timeout=240)
         command = [work / "obj_dir/Vtb_gf16_attn"]
     else:
