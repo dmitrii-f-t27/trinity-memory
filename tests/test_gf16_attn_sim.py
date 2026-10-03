@@ -132,6 +132,46 @@ class AttentionRtlTest(unittest.TestCase):
             self.assertTrue(vectors.validate(first+end,stages,run=37,positions=2)['pass'])
             self.assertTrue(vectors.validate(second,zero,run=38,positions=2)['pass'])
 
+    def test_shared_multiplier_modulo_and_signed_patterns(self):
+        import tempfile
+        import random
+        from tools import gf16_attn_build as build
+        rng=random.Random(115)
+        pairs=[(0,0),(0,2**64-1),(2**64-1,2**64-1),(2**63,2),
+               (2**63,2**63),(2**64-65536,131072),(2**32-1,2**32-1)]
+        pairs += [(rng.getrandbits(64),rng.getrandbits(64)) for _ in range(32)]
+        with tempfile.TemporaryDirectory() as tmp:
+            work=Path(tmp);rtl=build.generate(work)[0]
+            calls='\n'.join(f"check_product(64'h{a:016x},64'h{b:016x},64'h{(a*b)&(2**64-1):016x});"
+                            for a,b in pairs)
+            tb=work/'tb_mul.v';tb.write_text('''`timescale 1ns/1ps
+module tb_mul;
+reg clk=0,rst_n=0; always #5 clk=~clk;
+TrinityGf16AttnT27 dut(.clk(clk),.rst_n(rst_n),.en(1'b1),.calib(1'b1),
+ .stall(1'b0),.ack(1'b0),.rdata_lo(64'd0),.rdata_hi(64'd0),
+ .hidden(32'd8),.kv(32'd4),.heads(32'd2),.kv_heads(32'd1),.head_dim(32'd4),
+ .line_idle(1'b1),.s_go(1'b0),.s_tag(32'd0),.s_a(32'd0),.s_b(64'd0));
+task check_product(input [63:0] a,b,wanted);
+integer clocks;
+begin
+ @(negedge clk);dut.mul_a=a;dut.mul_b=b;dut.mul_return=999;dut.state=400;
+ clocks=0;
+ while(dut.state!=999 && clocks<67) begin @(negedge clk);#1;clocks=clocks+1;end
+ if(dut.state!=999 || dut.mul_product!==wanted)
+  $fatal(1,"product %h * %h got %h want %h",a,b,dut.mul_product,wanted);
+end
+endtask
+initial begin
+ repeat(3) @(negedge clk);rst_n=1;
+'''+calls+'''
+ $display("PASS exact shared multiplier");$finish;
+end
+endmodule
+''')
+            exe=work/'mul.vvp'
+            base.run(['iverilog','-g2012','-s','tb_mul','-o',exe,*rtl,tb],timeout=60)
+            self.assertIn('PASS exact shared multiplier',base.run(['vvp',exe],timeout=60))
+
 
 if __name__ == "__main__":
     unittest.main()
