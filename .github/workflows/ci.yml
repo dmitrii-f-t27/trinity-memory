@@ -41,11 +41,17 @@ jobs:
         run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
       - name: Specification gate
         run: sh tools/check-specs.sh
+      - name: Replay sealed attention evidence and reject altered measurements
+        run: |
+          python -m unittest tests.test_attention_proof tests.test_attn_board_evidence -v
+          make attention-proof PYTHON=python
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: spec-evidence
-          path: build/t27/specs/
+          path: |
+            build/t27/specs/
+            build/attention-proof/result.json
   native:
     runs-on: ubuntu-latest
     timeout-minutes: 60
