@@ -107,6 +107,7 @@ if grep -q 'WARN' "$out/conformance.log"; then
     exit 1
 fi
 "${PYTHON:-python3}" tools/generate-spec-vectors.py --check
+"${PYTHON:-python3}" tools/attention-proof.py --vectors-only
 # A seal alone does not pass for the format contracts: each spec under
 # specs/formats needs its vectors (conformance/formats_<name>.json naming the
 # spec) and a differential harness that includes its header; after the
