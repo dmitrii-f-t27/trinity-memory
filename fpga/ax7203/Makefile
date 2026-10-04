@@ -436,20 +436,21 @@ DDR3_SRC       := $(ROOT)/build/uberddr3
 DDR3_SUFFIX    := $(if $(filter image,$(DDR3_PNR_LINE)),-nextpnr-45a986b8)
 DDR3_APP       ?= pattern
 override DDR3_APP := $(strip $(DDR3_APP))
-ifneq ($(words $(DDR3_APP)) $(filter pattern reader loader matvec ffn gf16-ffn,$(DDR3_APP)),1 $(DDR3_APP))
-$(error DDR3_APP must be pattern, reader, loader, matvec, ffn or gf16-ffn, not '$(DDR3_APP)')
+ifneq ($(words $(DDR3_APP)) $(filter pattern reader loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),1 $(DDR3_APP))
+$(error DDR3_APP must be pattern, reader, loader, matvec, ffn, gf16-ffn or gf16-attn, not '$(DDR3_APP)')
 endif
 DDR3_READER    := $(filter reader,$(DDR3_APP))
 DDR3_LOADER    := $(filter loader,$(DDR3_APP))
 DDR3_MATVEC    := $(filter matvec,$(DDR3_APP))
 DDR3_FFN       := $(filter ffn,$(DDR3_APP))
 DDR3_GF16_FFN  := $(filter gf16-ffn,$(DDR3_APP))
-DDR3_FFN_ADAPTERS := $(if $(DDR3_FFN),$(ROOT)/rtl/t27/ffn.v) $(if $(DDR3_GF16_FFN),$(ROOT)/rtl/t27/gf16_wide_norm.v $(ROOT)/rtl/t27/gf16_ffn.v)
-DDR3_APP_SUFFIX := $(if $(DDR3_READER),-reader)$(if $(DDR3_LOADER),-loader)$(if $(DDR3_MATVEC),-matvec)$(if $(DDR3_FFN),-ffn)$(if $(DDR3_GF16_FFN),-gf16-ffn)
+DDR3_GF16_ATTN := $(filter gf16-attn,$(DDR3_APP))
+DDR3_FFN_ADAPTERS := $(if $(DDR3_FFN),$(ROOT)/rtl/t27/ffn.v) $(if $(DDR3_GF16_FFN),$(ROOT)/rtl/t27/gf16_wide_norm.v $(ROOT)/rtl/t27/gf16_ffn.v) $(if $(DDR3_GF16_ATTN),$(ROOT)/rtl/t27/gf16_attn.v)
+DDR3_APP_SUFFIX := $(if $(DDR3_READER),-reader)$(if $(DDR3_LOADER),-loader)$(if $(DDR3_MATVEC),-matvec)$(if $(DDR3_FFN),-ffn)$(if $(DDR3_GF16_FFN),-gf16-ffn)$(if $(DDR3_GF16_ATTN),-gf16-attn)
 DDR3_BUILD     ?= $(BUILD)/ddr3-x$(DDR3_WIDTH)$(DDR3_SUFFIX)$(DDR3_APP_SUFFIX)
-DDR3_TOP       := $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),tms_ddr3_loader_ax7203,tms_ddr3_ax7203)
+DDR3_TOP       := $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),tms_ddr3_loader_ax7203,tms_ddr3_ax7203)
 DDR3_LOADER_CORES := fpga_reset fpga_uart_tx fpga_uart_rx fpga_line_emitter fpga_ddr3_loader fpga_loader_wb fpga_wb_arbiter
-DDR3_CORES     := $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),$(DDR3_LOADER_CORES)$(if $(DDR3_MATVEC), fpga_ddr3_matvec)$(if $(DDR3_FFN), fpga_ffn ffn_wide)$(if $(DDR3_GF16_FFN), gf16_ffn gf16_wide_norm gf16_scalar ffn_wide),fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status $(if $(DDR3_READER),fpga_ddr3_reader,fpga_ddr3_pattern))
+DDR3_CORES     := $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),$(DDR3_LOADER_CORES)$(if $(DDR3_MATVEC), fpga_ddr3_matvec)$(if $(DDR3_FFN), fpga_ffn ffn_wide)$(if $(DDR3_GF16_FFN), gf16_ffn gf16_wide_norm gf16_scalar ffn_wide),fpga_reset fpga_uart_tx fpga_line_emitter fpga_ddr3_status $(if $(DDR3_READER),fpga_ddr3_reader,fpga_ddr3_pattern))
 DDR3_PATTERN   ?= 1
 DDR3_PATTERN_BURSTS ?= 33554432
 DDR3_PATTERN_HOLD   ?= 0
@@ -505,7 +506,7 @@ $(error DDR3_READER_TRITS (1 .. 2^31-1), DDR3_READER_CAP (1 .. 2^24-1), DDR3_REA
 endif
 endif
 # The loader (#63 part 2): x16 only, no pattern test, no UberDDR3 debug UART.
-ifneq ($(filter loader ffn gf16-ffn,$(DDR3_APP)),)
+ifneq ($(filter loader ffn gf16-ffn gf16-attn,$(DDR3_APP)),)
 ifneq ($(DDR3_WIDTH),16)
 $(error DDR3_APP=loader is built for x16 only (a 128-bit Wishbone word), not DDR3_WIDTH=$(DDR3_WIDTH))
 endif
@@ -521,7 +522,7 @@ endif
 endif
 DDR3_READER_TAG := $(if $(DDR3_READER),$(DDR3_READER_TRITS)-$(DDR3_READER_SEED)-$(DDR3_READER_CAP)-$(DDR3_READER_RUNS))
 DDR3_READER_DEFINE := $(if $(DDR3_READER),-DDDR3_READER )
-DDR3_MATVEC_DEFINE := $(if $(filter matvec ffn gf16-ffn,$(DDR3_APP)),-DDDR3_LOADER_MATVEC )$(if $(filter ffn gf16-ffn,$(DDR3_APP)),-DDDR3_LOADER_FFN )$(if $(DDR3_GF16_FFN),-DDDR3_LOADER_GF16_FFN )
+DDR3_MATVEC_DEFINE := $(if $(filter matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),-DDDR3_LOADER_MATVEC )$(if $(filter ffn gf16-ffn,$(DDR3_APP)),-DDDR3_LOADER_FFN )$(if $(DDR3_GF16_FFN),-DDDR3_LOADER_GF16_FFN )$(if $(DDR3_GF16_ATTN),-DDDR3_LOADER_GF16_ATTN )
 DDR3_MATVEC_COLS   ?= 2560
 DDR3_MATVEC_ROWS   ?= 8
 DDR3_MATVEC_FMT    ?= 1
@@ -574,8 +575,19 @@ endif
 ifneq ($(DDR3_GF16_FFN),)
 DDR3_APP_VARIANT := GF16_FFN (issue 111$(comma) gf16-ffn-v1$(comma) rational ActQuant$(comma) exact Q39 ternary sums$(comma) hidden 2560$(comma) intermediate 6912$(comma) output 2560$(comma) UART stage reports)
 endif
+ifneq ($(DDR3_GF16_ATTN),)
+DDR3_APP_VARIANT := GF16_ATTN (issue 115$(comma) gf16-attn-v1$(comma) exact Q16.16 stages$(comma) causal 1..8 positions$(comma) KV cache in RAM$(comma) RoPE theta 500000$(comma) GQA 20x128 over 5 kv heads$(comma) integer exp softmax$(comma) result-only mode)
+endif
 # The synthesis of UberDDR3's openXC7 demos (carry chains and wide muxes allowed).
 DDR3_YOSYS_SYNTH ?= synth_xilinx -flatten -abc9 -arch xc7
+# Attention has explicit finite continuation targets. Recode only its state
+# register before the normal synthesis passes to avoid deep binary decode/CE
+# paths. The board's app_reset asserts the controller's asynchronous reset;
+# FSM extraction identifies state 0 as that reset state.
+ifneq ($(DDR3_GF16_ATTN),)
+DDR3_ATTN_FSM_PREPARE = $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :prepare; proc; flatten; opt -nosdff -nodffe; setattr -set fsm_encoding \"one-hot\" w:ffn.state; fsm; opt;
+DDR3_SYNTH_START := prepare
+endif
 ifeq ($(DDR3_PNR_LINE),image)
 override NEXTPNR_DDR3_REV := 45a986b8
 DDR3_NEXTPNR   ?= $(NEXTPNR)
@@ -700,7 +712,7 @@ $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp:
 # The XDC nextpnr reads: pins (x32 adds byte lanes 2-3) plus create_clock on
 # the four PLL outputs by net name. The loader's uart_rx pin reaches the reader
 # and matvec builds too: they synthesize the loader top with its receive port.
-DDR3_LOADER_XDC := $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),$(DDR3_DIR)/tms_ddr3_loader.xdc)
+DDR3_LOADER_XDC := $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),$(DDR3_DIR)/tms_ddr3_loader.xdc)
 $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_ddr3_x32.xdc $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_LOADER_XDC)
 	cat $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(if $(filter 32,$(DDR3_WIDTH)),$(DDR3_DIR)/tms_ddr3_x32.xdc)$(if $(DDR3_LOADER_XDC), $(DDR3_DIR)/tms_ddr3_loader.xdc) > $@.tmp
 	printf '%s\n' "# PLL outputs (DDR3_PLL_MULT=$(DDR3_PLL_MULT), DDR3_DDR_DIV=$(DDR3_DDR_DIV)), written by fpga/ax7203/Makefile" \
@@ -713,11 +725,11 @@ $(DDR3_BUILD)/$(DDR3_TOP).xdc: $(DDR3_DIR)/tms_ddr3_ax7203.xdc $(DDR3_DIR)/tms_d
 # Synthesis checks every UberDDR3 hash first (a locally edited file stops it)
 # and records the source tree it ran on (HEAD and tracked changes).
 ddr3-synth: $(DDR3_BUILD)/$(DDR3_TOP).json
-$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp $(if $(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),$(CURDIR)/brams_x36.txt)
+$(DDR3_BUILD)/$(DDR3_TOP).json: $(DDR3_SOURCES) $(DDR3_UBER) $(DDR3_BUILD)/pll-$(DDR3_PLL_MULT)-$(DDR3_DDR_DIV).stamp $(DDR3_BUILD)/build-id-$(BUILD_ID).stamp $(DDR3_BUILD)/pattern-$(DDR3_PATTERN_TAG).stamp $(DDR3_BUILD)/app-$(DDR3_APP)$(DDR3_READER_TAG)$(DDR3_MATVEC_TAG).stamp $(if $(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),$(CURDIR)/brams_x36.txt)
 	sh $(ROOT)/tools/fetch-uberddr3.sh --verify $(DDR3_LOCK) $(DDR3_SRC)
 	mkdir -p $(DDR3_BUILD)
 	{ git -C $(ROOT) rev-parse HEAD; git -C $(ROOT) status --porcelain --untracked-files=no; } > $(DDR3_BUILD)/source_tree.txt 2>/dev/null || true
-ifeq ($(filter loader matvec ffn gf16-ffn,$(DDR3_APP)),)
+ifeq ($(filter loader matvec ffn gf16-ffn gf16-attn,$(DDR3_APP)),)
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog $(if $(filter 1,$(DDR3_UART_DEBUG_BIST)),-DUART_DEBUG_BIST )$(DDR3_READER_DEFINE)$(foreach s,$(DDR3_SOURCES) $(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set BYTE_LANES $(DDR3_LANES) -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) \
@@ -730,10 +742,11 @@ else
 # The loader (#63 part 2): its t27 cores with -nomem2reg (block RAM for the receive FIFO and the
 # staging buffer), every memory in the RAMB36 1K x 36 configuration (brams_x36.txt), as part 1.
 	$(YOSYS) -q -l $(call REL,$(DDR3_BUILD))/yosys.log -p "read_verilog -nomem2reg $(foreach c,$(DDR3_CORES),$(call REL,$(RTL)/$(c).v)); \
-	  read_verilog $(DDR3_MATVEC_DEFINE)$(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_FFN_ADAPTERS),$(call REL,$(s))) $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
+	  read_verilog $(if $(DDR3_GF16_ATTN),-nomem2reg )$(DDR3_MATVEC_DEFINE)$(call REL,$(DDR3_DIR)/$(DDR3_TOP).v) $(foreach s,$(DDR3_FFN_ADAPTERS),$(call REL,$(s))); \
+	  read_verilog $(foreach s,$(DDR3_UBER),$(call REL,$(s))); \
 	  chparam -set NO_IOSERDES_LOOPBACK 1 ddr3_phy; \
 	  chparam -set PLL_MULT $(DDR3_PLL_MULT) -set DDR_DIV $(DDR3_DDR_DIV) -set BUILD_ID 32'h$(BUILD_ID) $(DDR3_MATVEC_CHPARAM)$(DDR3_TOP); \
-	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run :map_memory; \
+	  $(DDR3_ATTN_FSM_PREPARE) $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run $(DDR3_SYNTH_START):map_memory; \
 	  memory_libmap $(if $(DDR3_NO_LUTRAM),,-lib +/xilinx/lutrams_xc5v.txt) -lib $(call REL,$(CURDIR))/brams_x36.txt; \
 	  techmap $(if $(DDR3_NO_LUTRAM),,-map +/xilinx/lutrams_xc5v_map.v) -map +/xilinx/brams_xc6v_map.v; \
 	  $(DDR3_YOSYS_SYNTH) -top $(DDR3_TOP) -run map_ffram:; \

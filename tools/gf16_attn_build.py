@@ -38,15 +38,16 @@ def generate(work):
 
 def compile_sim(work, rtl, shape, simulator="iverilog", mem_base=2, out_base=1, test_params=None):
     work = Path(work).resolve(); work.mkdir(parents=True, exist_ok=True)
-    hidden, kv, heads, head_dim = shape
-    params = {"H": hidden, "KV": kv, "HEADS": heads, "HD": head_dim,
+    hidden, kv, heads, head_dim = shape[:4]
+    kv_heads = shape[4] if len(shape) > 4 else 1
+    params = {"H": hidden, "KV": kv, "HEADS": heads, "HD": head_dim, "KVH": kv_heads,
               "MEM_BASE": mem_base, "OUT_BASE": out_base}
     if test_params:
         params.update(test_params)
     sources = [*rtl, ROOT / "tests/tb_gf16_attn.v"]
     if simulator == "verilator":
         base.run(["verilator", "--binary", "--timing", "--top-module", "tb_gf16_attn",
-                  "-Wno-fatal", "-j", "4", "--Mdir", work / "obj_dir",
+                  "-Wno-fatal", "-Wno-BLKANDNBLK", "-j", "4", "--Mdir", work / "obj_dir",
                   *[f"-G{k}={v}" for k, v in params.items()], *sources], timeout=240)
         command = [work / "obj_dir/Vtb_gf16_attn"]
     else:
@@ -60,7 +61,7 @@ def compile_sim(work, rtl, shape, simulator="iverilog", mem_base=2, out_base=1, 
 def run_sim(work, command, inp, stages, positions=1, result_only=False):
     work = Path(work).resolve(); work.mkdir(parents=True, exist_ok=True)
     capture = work / "capture.txt"
-    log = base.run([*command, "+input=" + str(inp), "+output=" + str(capture)], timeout=1800)
+    log = base.run([*command, "+input=" + str(inp), "+output=" + str(capture)], timeout=14400)
     (work / "rtl.log").write_text(log)
     return vectors.validate(capture.read_bytes(), stages, positions=positions, result_only=result_only)
 
@@ -75,6 +76,6 @@ def simulate(work, model, xs, simulator="iverilog", mem_base=2, out_base=1, resu
         raise ValueError(f"attention datapath saturations: {sat}")
     inp = vectors.write_inputs(work, model, [[t << ar.Q for t in x] for x in xs],
                                tables_q16, result=result)
-    shape = (dims["hidden"], dims["kv_dim"], dims["heads"], dims["head_dim"])
+    shape = (dims["hidden"], dims["kv_dim"], dims["heads"], dims["head_dim"], dims["kv_heads"])
     command = compile_sim(work, generate(work)[0], shape, simulator, mem_base, out_base)
     return run_sim(work, command, inp, stages, positions=len(xs), result_only=result)

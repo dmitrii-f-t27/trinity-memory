@@ -17,7 +17,9 @@ boot=importlib.util.module_from_spec(spec);spec.loader.exec_module(boot)
 class BootProfiles(unittest.TestCase):
     def test_profiles_hash_and_timing(self):
         prefix='x16 BYTE_LANES 2, PLL CLKFBOUT_MULT 6, DDR3 clock VCO/5 (4.167 ns), controller 16.667 ns, '
-        for option,variant,tag in [('--ffn','FFN (issue 92)','F'),('--gf16-ffn','GF16_FFN (issue 111)','G')]:
+        for option,variant,tag,rows in [('--ffn','FFN (issue 92)','F',6912),
+                ('--gf16-ffn','GF16_FFN (issue 111)','G',6912),
+                ('--gf16-attn','GF16_ATTN (issue 115)','G',640)]:
             for failure in ('none','other-profile','hash','timing','missing-option'):
                 with self.subTest(option=option,failure=failure),tempfile.TemporaryDirectory() as tmp:
                     folder=Path(tmp);bit=folder/'test.bit';bit.write_bytes(b'not a real bitstream')
@@ -31,7 +33,7 @@ class BootProfiles(unittest.TestCase):
                     argv=['boot','--report',str(rp),'--bit',str(bit),'--output',str(folder/'result')]
                     if failure!='missing-option':argv.append(option)
                     run={'uart_raw':b'','uart_entries':[{'line':'H123456780000000000'},
-                        {'line':f'{tag}00000a000000001b00'}]}
+                        {'line':f'{tag}00000a00{rows:010x}'}]}
                     with patch.object(sys,'argv',argv),patch.object(boot.capture,'expectations',return_value={}),\
                          patch.object(boot.capture,'board_run',return_value=(run,0)) as device,\
                          patch.dict(os.environ),patch('builtins.print'):
