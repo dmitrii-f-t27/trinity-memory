@@ -2,7 +2,7 @@
 // gf16-attn-v1 controller, S=1 (position 0).
 `timescale 1ns/1ps
 module tb_gf16_attn;
-    parameter H=8, KV=4, HEADS=2, HD=4;
+    parameter H=8, KV=4, HEADS=2, HD=4, KVH=1;
     parameter MEM_BASE=2, OUT_BASE=1;
     parameter RESET_AT=0, CALIB_LOSS_AT=0, SPURIOUS_ACK_AT=0, EXPECT_ERROR=0, REPEATS=1;
     reg clk=0; always #5 clk=~clk;
@@ -24,7 +24,7 @@ module tb_gf16_attn;
     wire calib=rst_n && (CALIB_LOSS_AT==0 || tick<CALIB_LOSS_AT);
     TrinityGf16AttnT27 dut(.clk(clk),.rst_n(rst_n),.en(1'b1),.calib(calib),.stall(stall),.ack(ack),
         .rdata_lo(data[63:0]),.rdata_hi(data[127:64]),.hidden(H),.kv(KV),.heads(HEADS),
-        .kv_heads(1),.head_dim(HD),
+        .kv_heads(KVH),.head_dim(HD),
         .line_idle(output_wait==0),.s_go(1'b0),.s_tag(32'd0),.s_a(32'd0),.s_b(64'd0),
         .wb_cyc(cyc),.wb_stb(stb),.wb_addr(addr),.line_go(go),.line_tag(tag),.line_a(a),.line_b(b),
         .s_idle(s_idle),.state(state),.index(index),.row(row),.col(col),.active(active),.pending(pending));
@@ -63,16 +63,17 @@ module tb_gf16_attn;
                 if (tag==69) begin
                     if(EXPECT_ERROR!=0 && a==EXPECT_ERROR) begin
                         $display("PASS expected attention error %0d",a);$fclose(fd);$finish;
+                    end else begin
+                        $fatal(1,"attention error %d",a);
                     end
-                    $fatal(1,"attention error %d",a);
                 end
                 if (tag==122) begin
                     if(EXPECT_ERROR!=0) $fatal(1,"expected error missing");
                     completed=completed+1;
                     if(completed==REPEATS) begin $display("PASS attention clocks=%0d",tick); $fclose(fd); $finish; end
                     // A second zero vector exercises state/RAM reuse without reset.
-                    for(j=0;j<H;j=j+1) mem[4096+j]=0;
-                    mem[64][31:0]=completed+1;
+                    for(j=0;j<H*mem[64][95:64];j=j+1) mem[32768+j]=0;
+                    mem[64][31:0]=mem[64][31:0]+1;
                 end
             end
             if(tick>600000000) $fatal(1,"timeout state=%d",state);

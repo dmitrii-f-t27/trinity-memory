@@ -43,6 +43,33 @@ class AttentionRtlTest(unittest.TestCase):
         out = self._simulate([[3, -5, 7, 1, -2, 4, 0, -8], [1, 2, 3, 4, 5, 6, 7, 8]])
         self.assertEqual(out["positions"], 2)
 
+    def test_multi_group_gqa_scores(self):
+        # heads 4 over kv_heads 2: heads 2,3 must read the second kv group.
+        # A signed-comparison bug in the row maximum only fires when a row's
+        # true maximum is negative, which the one-kv-head fixtures never hit.
+        import random
+        from tools import gf16_attn_build as build
+        from tools import gf16_attn_vectors as vectors
+        import tempfile
+        rng = random.Random(21)
+        dims = {"hidden": 32, "heads": 4, "kv_heads": 2, "head_dim": 8,
+                "kv_dim": 16, "group": 2, "pairs": 4}
+        model = {
+            "q": [rng.choice((-1, 0, 1)) for _ in range(32 * 32)],
+            "k": [rng.choice((-1, 0, 1)) for _ in range(16 * 32)],
+            "v": [rng.choice((-1, 0, 1)) for _ in range(16 * 32)],
+            "o": [rng.choice((-1, 0, 1)) for _ in range(32 * 32)],
+            "dims": dims,
+            "w_in": [rng.uniform(-2, 2) for _ in range(32)],
+            "w_sub": [rng.uniform(-2, 2) for _ in range(32)],
+            "scales": {"q": 0.05, "k": 0.07, "v": 0.11, "o": 0.03},
+            "packed_sha256": {},
+        }
+        xs = [[rng.randrange(-128, 128) for _ in range(32)] for _ in range(2)]
+        with tempfile.TemporaryDirectory() as work:
+            out = build.simulate(Path(work), model, xs)
+        self.assertEqual(out["positions"], 2)
+
     def test_eight_positions_kv_cache(self):
         import random
         rng = random.Random(3)
@@ -83,6 +110,109 @@ class AttentionRtlTest(unittest.TestCase):
             with self.assertRaises(ValueError):vectors.validate(mixed,stages,run=37)
             mixed=raw.replace(b'z00000025',b'z00000001',1)
             with self.assertRaises(ValueError):vectors.validate(mixed,stages,run=37)
+
+    def test_repeated_run_replaces_kv_cache_without_reset(self):
+        import tempfile
+        from tools import attn_reference as ar
+        from tools import gf16_attn_build as build
+        from tools import gf16_attn_vectors as vectors
+        model=vectors.tiny_model(7)
+        xs=[[v << ar.Q for v in x] for x in ((3,-5,7,1,-2,4,0,-8),(1,2,3,4,5,6,7,8))]
+        tables=ar.rope_tables(2,ar.ROPE_THETA,4)[1]
+        stages,_=ar.fpga_q16(model,xs,tables)
+        zero,_=ar.fpga_q16(model,[[0]*8 for _ in range(2)],tables)
+        with tempfile.TemporaryDirectory() as tmp:
+            work=Path(tmp); inp=vectors.write_inputs(work,model,xs,tables,run=37)
+            command=build.compile_sim(work,build.generate(work)[0],(8,4,2,4,1),
+                    os.environ.get('TRINITY_ATTN_SIMULATOR','iverilog'),test_params={'REPEATS':2})
+            capture=work/'capture.txt'
+            base.run([*command,'+input='+str(inp),'+output='+str(capture)],timeout=120)
+            first,end,second=capture.read_bytes().partition(b'z000000250000000000\n')
+            self.assertTrue(end)
+            self.assertTrue(vectors.validate(first+end,stages,run=37,positions=2)['pass'])
+            self.assertTrue(vectors.validate(second,zero,run=38,positions=2)['pass'])
+
+    def test_shared_arithmetic_boundary_patterns(self):
+        import tempfile
+        import random
+        from tools import gf16_attn_build as build
+        rng=random.Random(115)
+        pairs=[(0,0),(0,2**64-1),(2**64-1,2**64-1),(2**63,2),
+               (2**63,2**63),(2**64-65536,131072),(2**32-1,2**32-1)]
+        pairs += [(rng.getrandbits(64),rng.getrandbits(64)) for _ in range(32)]
+        with tempfile.TemporaryDirectory() as tmp:
+            work=Path(tmp);rtl=build.generate(work)[0]
+            calls='\n'.join(f"check_product(64'h{a:016x},64'h{b:016x},64'h{(a*b)&(2**64-1):016x},64'd{(a+b)>>64});"
+                            for a,b in pairs)
+            rounding=[(0,16),(32767,16),(32768,16),(32769,16),(98304,16),
+                      (163840,16),(2**64-1,1),(2**64-1,63)]
+            rounding += [(rng.getrandbits(64),rng.randrange(1,64)) for _ in range(128)]
+            round_calls=[]
+            for num,shift in rounding:
+                q,rem=divmod(num,1<<shift);half=1<<(shift-1)
+                wanted=q+int(rem>half or (rem==half and q&1))
+                round_calls.append(f"check_round(64'h{num:016x},32'd{shift},64'h{wanted:016x});")
+            calls += '\n'+'\n'.join(round_calls)
+            # Independent wide-integer oracle for both limbs of the isqrt
+            # subtrahend. Include every shift reached by the restoring loop.
+            roots = [0, 1, 2**31, 2**63, 2**64-1]
+            roots += [rng.getrandbits(64) for _ in range(4)]
+            for root in roots:
+                for bitpos in range(0, 96, 2):
+                    wide = (((root << 2) | 1) & (2**64-1)) << bitpos
+                    calls += (f"\ncheck_sqrt(64'h{root:016x},32'd{bitpos},"
+                              f"64'h{(wide >> 64) & (2**64-1):016x},"
+                              f"64'h{wide & (2**64-1):016x});")
+            tb=work/'tb_mul.v';tb.write_text('''`timescale 1ns/1ps
+module tb_mul;
+reg clk=0,rst_n=0; always #5 clk=~clk;
+TrinityGf16AttnT27 dut(.clk(clk),.rst_n(rst_n),.en(1'b1),.calib(1'b1),
+ .stall(1'b0),.ack(1'b0),.rdata_lo(64'd0),.rdata_hi(64'd0),
+ .hidden(32'd8),.kv(32'd4),.heads(32'd2),.kv_heads(32'd1),.head_dim(32'd4),
+ .line_idle(1'b1),.s_go(1'b0),.s_tag(32'd0),.s_a(32'd0),.s_b(64'd0));
+task check_product(input [63:0] a,b,wanted,wanted_carry);
+integer clocks;
+begin
+ if(dut.carry(a,b)!==wanted_carry)
+  $fatal(1,"carry %h + %h got %h want %h",a,b,dut.carry(a,b),wanted_carry);
+ @(negedge clk);dut.mul_a=a;dut.mul_b=b;dut.mul_return=999;dut.state=400;
+ clocks=0;
+ while(dut.state!=999 && clocks<67) begin @(negedge clk);#1;clocks=clocks+1;end
+ if(dut.state!=999 || dut.mul_product!==wanted)
+  $fatal(1,"product %h * %h got %h want %h",a,b,dut.mul_product,wanted);
+end
+endtask
+task check_round(input [63:0] num,input [31:0] shift,input [63:0] wanted);
+integer clocks;
+begin
+ @(negedge clk);dut.rne_num=num;dut.rne_bits=shift;dut.rne_return=999;dut.state=500;
+ clocks=0;
+ while(dut.state!=999 && clocks<6) begin @(negedge clk);#1;clocks=clocks+1;end
+ if(dut.state!=999 || dut.rne_result!==wanted)
+  $fatal(1,"round %h >> %d got %h want %h",num,shift,dut.rne_result,wanted);
+end
+endtask
+task check_sqrt(input [63:0] root,input [31:0] bitpos,input [63:0] hi,lo);
+integer clocks;
+begin
+ @(negedge clk);dut.root=root;dut.bitpos=bitpos;dut.state=32;
+ clocks=0;
+ while(dut.state!=33 && clocks<4) begin @(negedge clk);#1;clocks=clocks+1;end
+ if(dut.state!=33 || dut.cmp1!==hi || dut.cmp0!==lo)
+  $fatal(1,"sqrt subtrahend root=%h bitpos=%d got=%h:%h want=%h:%h",
+         root,bitpos,dut.cmp1,dut.cmp0,hi,lo);
+end
+endtask
+initial begin
+ repeat(3) @(negedge clk);rst_n=1;
+'''+calls+'''
+ $display("PASS exact shared arithmetic");$finish;
+end
+endmodule
+''')
+            exe=work/'mul.vvp'
+            base.run(['iverilog','-g2012','-s','tb_mul','-o',exe,*rtl,tb],timeout=60)
+            self.assertIn('PASS exact shared arithmetic',base.run(['vvp',exe],timeout=60))
 
 
 if __name__ == "__main__":

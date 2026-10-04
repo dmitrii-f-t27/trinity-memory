@@ -37,8 +37,16 @@ labelled all six fixtures on the device in 7 ticks each
 also t27, stored one 1 013 760-trit tensor on the device in 55, 50 and 45 RAMB36E1
 (two bits per trit, dense5 bytes, dense5 plus a dense2 nibble in the parity bits:
 2.000, 1.800 and 1.636 bits per trit) and read every word back without error, 18, 20
-and 22 trits per read ([docs/hardware.md](docs/hardware.md)). DDR and power remain
-unmeasured.
+and 22 trits per read ([docs/hardware.md](docs/hardware.md)). Those packing
+measurements did not include DDR or power.
+
+On 2026-10-03, layer-0 attention plus its first residual passed AX7203
+qualification at 60 MHz controller / 240 MHz DDR. Four BOS/zero/S2/S8
+full/result pairs matched the Q16.16 oracle exactly, including a 159,440-value
+S8 full trace. All inputs were reconstructed from CRC-valid DDR readbacks.
+This uses pinned BitNet layer-0 weights and deterministic test activations;
+it does not run a complete model. See [attention scope and measurements](docs/gf16-attn.md)
+and the [portable raw evidence](reports/fpga/attn-2026-10-03/README.md).
 
 ## t27 Ternary Check (v0.4)
 

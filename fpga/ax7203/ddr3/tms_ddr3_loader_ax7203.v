@@ -240,7 +240,21 @@ module tms_ddr3_loader_ax7203 #(
     wire        mv_cyc, mv_stb, mv_line_go, mv_s_go, mv_s_idle;
     wire [31:0] mv_addr, mv_tag, mv_a, mv_s_tag, mv_s_a;
     wire [63:0] mv_b, mv_s_b;
-`ifdef DDR3_LOADER_FFN
+`ifdef DDR3_LOADER_GF16_ATTN
+    // Issue #115. The attention controller holds wb_cyc high from calibration
+    // like the FFN, so the arbiter gets its strobe as the want signal; the
+    // loader's ack/status lines ride its sbuf passthrough to the one UART.
+    // en must be tied high: the generated clocked block is en-gated and an
+    // unconnected input would park the whole FSM.
+    TrinityGf16AttnT27 ffn (
+        .clk(clk_ctrl), .rst_n(app_rst_n), .en(1'b1), .calib(calib_complete), .stall(m1_stall), .ack(m1_ack),
+        .rdata_lo(wb_rdata[63:0]), .rdata_hi(wb_rdata[127:64]),
+        .hidden(32'd2560), .kv(32'd640), .heads(32'd20), .kv_heads(32'd5), .head_dim(32'd128),
+        .line_idle(line_idle), .s_go(mv_s_go), .s_tag(mv_s_tag), .s_a(mv_s_a), .s_b(mv_s_b),
+        .line_go(mv_line_go), .line_tag(mv_tag), .line_a(mv_a), .line_b(mv_b), .s_idle(mv_s_idle),
+        .wb_cyc(mv_cyc), .wb_stb(mv_stb), .wb_addr(mv_addr)
+    );
+`elsif DDR3_LOADER_FFN
 `ifdef DDR3_LOADER_GF16_FFN
     trinity_gf16_ffn_t27 ffn (
 `else
