@@ -54,7 +54,7 @@ Python only moves bytes.
 runtime, whether their answer and the t27 reader's (`tlv_walk`'s `reader`: the loader's
 rules are not part of it) agree. A t27 walk with no verdict is counted apart, and so is a
 reader that crashes (an assertion ends it) or runs out of time. The report names the
-runtimes whose reader was built and replayed. The weekly workflow
+runtimes whose reader was built and replayed. The daily workflow
 `ternary-check-live.yml` does both; its log and step summary hold counts only.
 
 **Seeded differential fuzzing (issue #98).** After building the readers, run
@@ -69,7 +69,7 @@ binary hashes, accept/refuse counts, disagreements, no-verdicts, assertion
 crashes and timeouts. A disagreement saves the header and stops the run.
 Assertions count as refusals and separately as crashes; no-verdicts do not
 count as agreements. This checks the GGUF reader, not the full model loader
-or inference. The weekly/manual Live workflow runs it and saves its evidence.
+or inference. The daily/manual Live workflow runs it and saves its evidence.
 
 **Verdicts per runtime.** `accepts`: its reader and loader rules accept the model;
 `refuses` with a status token and, where it has one, the file and the record it names;

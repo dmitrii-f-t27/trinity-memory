@@ -1,5 +1,5 @@
 name: Ternary Check Live
-# Scheduled/manual runs scan public Hub headers and replay pinned readers.
+# Daily (05:41 UTC) and manual runs scan public Hub headers and replay pinned readers.
 # Pushes rebuild the checker and reuse the last published scan when available.
 # Range reads are anonymous and bounded; a prefix may include weight bytes.
 on:
@@ -26,7 +26,7 @@ on:
       - 'tests/live_formats_wasm.mjs'
       - 'tests/live_wasm_vectors.py'
   schedule:
-    - cron: '41 5 * * 1'
+    - cron: '41 5 * * *'
   workflow_dispatch:
     inputs:
       min_downloads:
