@@ -149,7 +149,7 @@ def counts(root):
 
 CLAIM = {
     'name': 'gguf_verdicts',
-    'issues': [50, 51],
+    'issues': [50],
     'scope': ('t27 verdict engine (t27/live.t27, t27/runtimes.t27) replayed as generated C over committed synthetic '
               'GGUF header fixtures, the runtime tables regenerated from specs/runtimes/*.json, and counts recomputed '
               'from the retained real-file replay of 2026-09-29; no network scan, no upstream reader re-run'),
