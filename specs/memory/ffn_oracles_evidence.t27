@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 // Issue: https://github.com/dmitrii-f-t27/trinity-memory/issues/125
-// Coverage: https://github.com/dmitrii-f-t27/trinity-memory/issues/91
 // Coverage: https://github.com/dmitrii-f-t27/trinity-memory/issues/103
 // NUMERIC ORACLES, NOT HARDWARE EVIDENCE. Nothing here ran on a board.
 // Replayed offline from committed files, with the pinned compiler:
@@ -14,7 +13,8 @@
 //        yosys-mapped RTL in iverilog.
 // NOT replayed: the real layer-0 BitNet FFN report (reports/ffn/reference-2026-09-28.json)
 // needs the HuggingFace fixture cache, which is not committed, so the real-fixture
-// part of #91 is not covered. #105 (FFN boundary quantization report) needs the same
+// part of #91 is not covered, so #91 is NOT claimed as covered here: the synthetic-layer
+// tests above are only the defect-fix checks. #105 (FFN boundary quantization report) needs the same
 // cache and is not covered. No ActQuant/AutoBitLinear replay, no GF16 arithmetic,
 // no board or performance claim. The counts come from the verifiers' own output.
 module TrinityMemoryFfnOraclesEvidence {
