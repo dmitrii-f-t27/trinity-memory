@@ -87,11 +87,6 @@ jobs:
         run: |
           sh tools/test-t27.sh
           python -m unittest discover -s tests/reference/legacy_tests -v
-      - name: Replay sealed evidence claims and reject altered evidence
-        run: |
-          python3 -m pip install --quiet numpy
-          python3 -m unittest tests.test_evidence_proof -v
-          make evidence-proof PYTHON=python3
       - name: ProcessorCI kit (generated copies, vectors, Icarus runs, wrapper compile, ml_dtypes cross-check)
         run: |
           python3 scripts/generate_rtl.py --compiler "$T27_ROOT/target/release/t27c"

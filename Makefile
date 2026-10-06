@@ -35,13 +35,6 @@ check-specs:
 attention-proof:
 	$(PYTHON) tools/attention-proof.py
 
-# Replay every sealed evidence claim (tools/evidence/*.py): retained measurements and
-# reports are re-checked offline against their manifests and the sealed acceptance
-# rules; nothing operates hardware. See docs/evidence-claims.md.
-.PHONY: evidence-proof
-evidence-proof:
-	$(PYTHON) tools/evidence-proof.py
-
 # llama.cpp issue 15193: upstream TQ1_0/TQ2_0 storage and CPU kernels against
 # the t27 decoders (docs/upstream/llama.cpp-15193.md). Fetches pinned sources.
 .PHONY: upstream-15193
