@@ -4,8 +4,8 @@ A closed issue counts as covered by `.t27` only when a sealed spec, committed
 vectors and an executed check back it (CLAUDE.md, "Правило цвета"). Where the
 work is a measurement or a report rather than a byte-level contract, the check
 is a claim: `tools/evidence/<name>.py` plus a spec, vectors and an evidence
-manifest. `tools/evidence-proof.py` replays every claim; `make evidence-proof`
-runs it in CI.
+manifest. `tools/evidence-proof.py` replays every claim, and
+`.github/workflows/evidence.yml` runs it on every push.
 
 ## Files of one claim `<name>`
 
