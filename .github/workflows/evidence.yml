@@ -41,6 +41,14 @@ jobs:
           key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
       - name: Build the pinned compiler
         run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
+      # Claims that replay real weights need the sha256-pinned byte ranges; the cache is the
+      # one job `fixtures` of ci.yml keeps, and tools/fetch-fixtures.py verifies every range.
+      - uses: actions/cache@v4
+        with:
+          path: build/fixtures
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+      - name: Fill and verify the pinned fixtures cache
+        run: python3 tools/fetch-fixtures.py --jobs 4
       - name: The registry rejects altered evidence, stale vectors and wrong counts
         run: python3 -m unittest tests.test_evidence_proof -v
       - name: Replay every sealed evidence claim
