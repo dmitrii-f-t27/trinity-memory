@@ -33,6 +33,9 @@ numbers it read from a report without recomputing them from the retained raw dat
 when the repository holds that data. If a number cannot be recomputed here, do
 not make it a count.
 
+Helper modules next to a claim must start with an underscore (`_replay.py`):
+`tools/evidence-proof.py` loads every other `tools/evidence/*.py` as a claim.
+
 ## Honesty rules
 
 - The spec header says exactly what is replayed and what is not (for example
