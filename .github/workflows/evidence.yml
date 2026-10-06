@@ -13,9 +13,10 @@ permissions:
 jobs:
   evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       CC: clang
+      CXX: clang++
       T27_ROOT: ${{ github.workspace }}/build/compiler
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +53,8 @@ jobs:
           key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
       - name: Fill and verify the pinned fixtures cache
         run: python3 tools/fetch-fixtures.py --jobs 4
+      - name: Fetch the pinned llama.cpp sources (every file sha256-checked)
+        run: sh tools/fetch-upstream.sh
       - name: Build the native t27 library the real-layer claims load
         run: sh tools/build-t27.sh
       - name: The registry rejects altered evidence, stale vectors and wrong counts
