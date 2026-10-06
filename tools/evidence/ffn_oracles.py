@@ -47,7 +47,7 @@ def counts(root):
 
 CLAIM = {
     'name': 'ffn_oracles',
-    'issues': [91, 103],
+    'issues': [103],
     'scope': 'numeric oracles replayed offline from committed files; synthetic FFN layer tests and '
              'the GF16 codec C/RTL conformance; not hardware evidence; real-layer FFN report and #105 '
              'need the uncommitted fixture cache and are not covered',
