@@ -59,16 +59,32 @@ def load_claims(directory=CLAIMS):
 
 
 def variants(expected):
-    return sorted({0, max(expected - 1, 0), expected, expected + 1, expected + 2 if expected < 3 else expected + 1})
+    return sorted({0, max(expected - 1, 0), expected, expected + 1, expected + 2})
 
 
 def vectors(claim, root=ROOT):
-    """The truth table of the acceptance rule, from an oracle independent of the spec."""
+    """The acceptance rule on its edges, from an oracle independent of the spec.
+
+    The rule is a conjunction, so the table holds: every flag combination at the
+    exact counts, and with all flags true each count altered on its own, all
+    counts zero and all counts one too high. The browser reads this file on every
+    check, so it stays small instead of growing with the product of the counts.
+    """
     expected = tuple(claim['expected'])
-    rows = []
-    for flags in itertools.product([False, True], repeat=FLAGS):
-        for counts in itertools.product(*[variants(e) for e in expected]):
-            rows.append({'input': [*flags, *counts], 'expected': bool(all(flags) and counts == expected)})
+    ok = (True,) * FLAGS
+
+    def row(flags, counts):
+        return {'input': [*flags, *counts], 'expected': bool(all(flags) and tuple(counts) == expected)}
+
+    rows = [row(flags, expected) for flags in itertools.product([False, True], repeat=FLAGS)]
+    for index, value in enumerate(expected):
+        for other in variants(value):
+            if other != value:
+                counts = list(expected)
+                counts[index] = other
+                rows.append(row(ok, counts))
+    rows.append(row(ok, [0] * len(expected)))
+    rows.append(row(ok, [e + 1 for e in expected]))
     spec = root / claim['spec']
     return {'spec_path': claim['spec'], 'spec_hash': 'sha256:' + sha(spec.read_bytes()), 'vectors': rows}
 
