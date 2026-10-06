@@ -1,0 +1,52 @@
+name: Sealed evidence claims
+# Replays every claim in tools/evidence (docs/evidence-claims.md): retained
+# measurements and reports are re-checked offline against their manifests and the
+# sealed acceptance rules. Nothing operates hardware or fetches fixtures. The
+# Queen reads a successful push run of this workflow at the repository head for
+# the issues these claims cover.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CC: clang
+      T27_ROOT: ${{ github.workspace }}/build/compiler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned compiler and install tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y iverilog yosys clang libssl-dev
+          python3 -m pip install --quiet numpy
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build the pinned compiler
+        run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
+      - name: The registry rejects altered evidence, stale vectors and wrong counts
+        run: python3 -m unittest tests.test_evidence_proof -v
+      - name: Replay every sealed evidence claim
+        run: python3 tools/evidence-proof.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evidence-proof
+          path: build/evidence-proof/
