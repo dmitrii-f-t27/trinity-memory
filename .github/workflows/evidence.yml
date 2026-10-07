@@ -13,15 +13,19 @@ permissions:
 jobs:
   evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       CC: clang
+      CXX: clang++
       T27_ROOT: ${{ github.workspace }}/build/compiler
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Fetch pinned compiler and install tools
         run: |
           git init "$T27_ROOT"
@@ -30,7 +34,7 @@ jobs:
           git -C "$T27_ROOT" checkout --detach FETCH_HEAD
           rustup toolchain install 1.94.0 --profile minimal
           sudo apt-get update
-          sudo apt-get install -y iverilog yosys clang libssl-dev
+          sudo apt-get install -y iverilog yosys clang lld libssl-dev
           python3 -m pip install --quiet numpy
       - uses: actions/cache@v4
         with:
@@ -41,6 +45,18 @@ jobs:
           key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
       - name: Build the pinned compiler
         run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
+      # Claims that replay real weights need the sha256-pinned byte ranges; the cache is the
+      # one job `fixtures` of ci.yml keeps, and tools/fetch-fixtures.py verifies every range.
+      - uses: actions/cache@v4
+        with:
+          path: build/fixtures
+          key: fixtures-${{ hashFiles('fixtures/manifest.json') }}
+      - name: Fill and verify the pinned fixtures cache
+        run: python3 tools/fetch-fixtures.py --jobs 4
+      - name: Fetch the pinned llama.cpp sources (every file sha256-checked)
+        run: sh tools/fetch-upstream.sh
+      - name: Build the native t27 library the real-layer claims load
+        run: sh tools/build-t27.sh
       - name: The registry rejects altered evidence, stale vectors and wrong counts
         run: python3 -m unittest tests.test_evidence_proof -v
       - name: Replay every sealed evidence claim
