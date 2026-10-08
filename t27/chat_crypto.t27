@@ -1,0 +1,510 @@
+// SPDX-License-Identifier: Apache-2.0
+// t27/chat_crypto.t27 -- sealed storage for the graph memory of chats (issue #136).
+//
+// The content rules are gHashTag/t27 specs/memory/graph/crypt.t27 (slice 3 of
+// epic gHashTag/t27#7828): a 32-byte data key per group, the "TGE1" envelope
+// (magic, version 1, algorithm 1, two zero bytes, key version u32, 12-byte
+// nonce, ciphertext, 16-byte tag), the "TGA1" associated data rebuilt from the
+// row's own scope, and the open status order header, destroyed key, key
+// version, KMS refusal, tag. This file is the executable side: ChaCha20 and
+// Poly1305 (RFC 8439), SHA-256 (FIPS 180-4), HMAC-SHA256 (RFC 2104/4231) and
+// HKDF-SHA256 (RFC 5869), built into the native library and called by
+// trinity_memory/chat_store.py. Caller-owned buffers, no allocation.
+// Nonces come from the caller (the OS random source); this file never invents
+// randomness.
+//
+// phi^2 + 1/phi^2 = 3 | TRINITY
+
+module TrinityChatCrypto;
+
+// ---------------------------------------------------------------------------
+// Byte order
+
+fn cm_load32(b: []u8, off: usize) -> u32 {
+    var v: u32 = b[off] as u32;
+    v = v | ((b[off + 1] as u32) << 8);
+    v = v | ((b[off + 2] as u32) << 16);
+    v = v | ((b[off + 3] as u32) << 24);
+    return v;
+}
+
+fn cm_store32(b: []u8, off: usize, v: u32) -> void {
+    b[off] = (v & 255) as u8;
+    b[off + 1] = ((v >> 8) & 255) as u8;
+    b[off + 2] = ((v >> 16) & 255) as u8;
+    b[off + 3] = ((v >> 24) & 255) as u8;
+}
+
+fn cm_store64(b: []u8, off: usize, v: u64) -> void {
+    var i: usize = 0;
+    var shift: u64 = 0;
+    while (i < 8) {
+        b[off + i] = ((v >> shift) & 255) as u8;
+        shift = shift + 8;
+        i = i + 1;
+    }
+}
+
+fn cm_store32_be(b: []u8, off: usize, v: u32) -> void {
+    b[off] = ((v >> 24) & 255) as u8;
+    b[off + 1] = ((v >> 16) & 255) as u8;
+    b[off + 2] = ((v >> 8) & 255) as u8;
+    b[off + 3] = (v & 255) as u8;
+}
+
+fn cm_load32_be(b: []u8, off: usize) -> u32 {
+    var v: u32 = (b[off] as u32) << 24;
+    v = v | ((b[off + 1] as u32) << 16);
+    v = v | ((b[off + 2] as u32) << 8);
+    v = v | (b[off + 3] as u32);
+    return v;
+}
+
+// ---------------------------------------------------------------------------
+// ChaCha20, RFC 8439 section 2.3
+
+fn cm_rotl(x: u32, n: u32) -> u32 {
+    return (x << n) | (x >> (32 - n));
+}
+
+fn cm_quarter(x: []u32, a: usize, b: usize, c: usize, d: usize) -> void {
+    x[a] = x[a] + x[b]; x[d] = cm_rotl(x[d] ^ x[a], 16);
+    x[c] = x[c] + x[d]; x[b] = cm_rotl(x[b] ^ x[c], 12);
+    x[a] = x[a] + x[b]; x[d] = cm_rotl(x[d] ^ x[a], 8);
+    x[c] = x[c] + x[d]; x[b] = cm_rotl(x[b] ^ x[c], 7);
+}
+
+// One 64-byte keystream block for (key[32], counter, nonce[12]) into out[64].
+fn cm_chacha20_block(key: []u8, counter: u32, nonce: []u8, out: []u8) -> void {
+    var s: [16]u32;
+    var x: [16]u32;
+    s[0] = 0x61707865; s[1] = 0x3320646e; s[2] = 0x79622d32; s[3] = 0x6b206574;
+    var i: usize = 0;
+    while (i < 8) { s[4 + i] = cm_load32(key, 4 * i); i = i + 1; }
+    s[12] = counter;
+    s[13] = cm_load32(nonce, 0);
+    s[14] = cm_load32(nonce, 4);
+    s[15] = cm_load32(nonce, 8);
+    i = 0;
+    while (i < 16) { x[i] = s[i]; i = i + 1; }
+    var round: u32 = 0;
+    while (round < 10) {
+        cm_quarter(x, 0, 4, 8, 12);
+        cm_quarter(x, 1, 5, 9, 13);
+        cm_quarter(x, 2, 6, 10, 14);
+        cm_quarter(x, 3, 7, 11, 15);
+        cm_quarter(x, 0, 5, 10, 15);
+        cm_quarter(x, 1, 6, 11, 12);
+        cm_quarter(x, 2, 7, 8, 13);
+        cm_quarter(x, 3, 4, 9, 14);
+        round = round + 1;
+    }
+    i = 0;
+    while (i < 16) { cm_store32(out, 4 * i, x[i] + s[i]); i = i + 1; }
+}
+
+// output[i] = input[i] ^ keystream, starting at block `counter` (RFC 8439 2.4).
+fn cm_chacha20_xor(key: []u8, counter: u32, nonce: []u8, input: []u8, output: []u8, count: usize) -> void {
+    var block: [64]u8;
+    var done: usize = 0;
+    var ctr: u32 = counter;
+    while (done < count) {
+        cm_chacha20_block(key, ctr, nonce, block);
+        var j: usize = 0;
+        while (j < 64 && done + j < count) {
+            output[done + j] = input[done + j] ^ block[j];
+            j = j + 1;
+        }
+        done = done + j;
+        ctr = ctr + 1;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Poly1305, RFC 8439 section 2.5, radix 2^26 (h[0..5], r[0..5] in one array:
+// st[0..5] = h, st[5..10] = r).
+
+fn cm_poly_init(st: []u32, key: []u8) -> void {
+    st[0] = 0; st[1] = 0; st[2] = 0; st[3] = 0; st[4] = 0;
+    st[5] = cm_load32(key, 0) & 0x3ffffff;
+    st[6] = (cm_load32(key, 3) >> 2) & 0x3ffff03;
+    st[7] = (cm_load32(key, 6) >> 4) & 0x3ffc0ff;
+    st[8] = (cm_load32(key, 9) >> 6) & 0x3f03fff;
+    st[9] = (cm_load32(key, 12) >> 8) & 0x00fffff;
+}
+
+// Absorb the 16 bytes m[off..off+16]; hibit is 2^24 for a full block, 0 for the
+// padded final block of a message whose length is not a multiple of 16.
+fn cm_poly_block(st: []u32, m: []u8, off: usize, hibit: u32) -> void {
+    var r0: u64 = st[5] as u64;
+    var r1: u64 = st[6] as u64;
+    var r2: u64 = st[7] as u64;
+    var r3: u64 = st[8] as u64;
+    var r4: u64 = st[9] as u64;
+    var s1: u64 = r1 * 5;
+    var s2: u64 = r2 * 5;
+    var s3: u64 = r3 * 5;
+    var s4: u64 = r4 * 5;
+    var h0: u64 = (st[0] + (cm_load32(m, off) & 0x3ffffff)) as u64;
+    var h1: u64 = (st[1] + ((cm_load32(m, off + 3) >> 2) & 0x3ffffff)) as u64;
+    var h2: u64 = (st[2] + ((cm_load32(m, off + 6) >> 4) & 0x3ffffff)) as u64;
+    var h3: u64 = (st[3] + ((cm_load32(m, off + 9) >> 6) & 0x3ffffff)) as u64;
+    var h4: u64 = (st[4] + ((cm_load32(m, off + 12) >> 8) | hibit)) as u64;
+    var d0: u64 = h0 * r0 + h1 * s4 + h2 * s3 + h3 * s2 + h4 * s1;
+    var d1: u64 = h0 * r1 + h1 * r0 + h2 * s4 + h3 * s3 + h4 * s2;
+    var d2: u64 = h0 * r2 + h1 * r1 + h2 * r0 + h3 * s4 + h4 * s3;
+    var d3: u64 = h0 * r3 + h1 * r2 + h2 * r1 + h3 * r0 + h4 * s4;
+    var d4: u64 = h0 * r4 + h1 * r3 + h2 * r2 + h3 * r1 + h4 * r0;
+    var c: u64 = d0 >> 26; var n0: u32 = (d0 & 0x3ffffff) as u32;
+    d1 = d1 + c; c = d1 >> 26; var n1: u32 = (d1 & 0x3ffffff) as u32;
+    d2 = d2 + c; c = d2 >> 26; var n2: u32 = (d2 & 0x3ffffff) as u32;
+    d3 = d3 + c; c = d3 >> 26; var n3: u32 = (d3 & 0x3ffffff) as u32;
+    d4 = d4 + c; c = d4 >> 26; var n4: u32 = (d4 & 0x3ffffff) as u32;
+    n0 = n0 + (c as u32) * 5;
+    var c32: u32 = n0 >> 26; n0 = n0 & 0x3ffffff;
+    n1 = n1 + c32;
+    st[0] = n0; st[1] = n1; st[2] = n2; st[3] = n3; st[4] = n4;
+}
+
+// Absorb count bytes; a final partial block is padded with 0x01 then zeros
+// (pad = false, RFC 8439 2.5) or with zeros as a full block (pad = true, the
+// AEAD construction of 2.8).
+fn cm_poly_absorb(st: []u32, m: []u8, count: usize, pad: bool) -> void {
+    var off: usize = 0;
+    while (off + 16 <= count) {
+        cm_poly_block(st, m, off, 16777216);
+        off = off + 16;
+    }
+    if (off < count) {
+        var last: [16]u8;
+        var j: usize = 0;
+        while (j < 16) { last[j] = 0; j = j + 1; }
+        j = 0;
+        while (off + j < count) { last[j] = m[off + j]; j = j + 1; }
+        if (pad) {
+            cm_poly_block(st, last, 0, 16777216);
+        } else {
+            last[j] = 1;
+            cm_poly_block(st, last, 0, 0);
+        }
+    }
+}
+
+// Final reduction mod 2^130 - 5, plus s = key[16..32], tag into out[16].
+fn cm_poly_finish(st: []u32, key: []u8, out: []u8) -> void {
+    var h0: u32 = st[0];
+    var h1: u32 = st[1];
+    var h2: u32 = st[2];
+    var h3: u32 = st[3];
+    var h4: u32 = st[4];
+    var c: u32 = h1 >> 26; h1 = h1 & 0x3ffffff;
+    h2 = h2 + c; c = h2 >> 26; h2 = h2 & 0x3ffffff;
+    h3 = h3 + c; c = h3 >> 26; h3 = h3 & 0x3ffffff;
+    h4 = h4 + c; c = h4 >> 26; h4 = h4 & 0x3ffffff;
+    h0 = h0 + c * 5; c = h0 >> 26; h0 = h0 & 0x3ffffff;
+    h1 = h1 + c;
+    var g0: u32 = h0 + 5; c = g0 >> 26; g0 = g0 & 0x3ffffff;
+    var g1: u32 = h1 + c; c = g1 >> 26; g1 = g1 & 0x3ffffff;
+    var g2: u32 = h2 + c; c = g2 >> 26; g2 = g2 & 0x3ffffff;
+    var g3: u32 = h3 + c; c = g3 >> 26; g3 = g3 & 0x3ffffff;
+    var g4: u32 = h4 + c - 67108864;
+    // g4 wrapped (top bit set) means h < p: keep h; otherwise take g = h - p.
+    var take: u32 = (g4 >> 31) - 1;
+    var keep: u32 = take ^ 0xffffffff;
+    h0 = (h0 & keep) | (g0 & take);
+    h1 = (h1 & keep) | (g1 & take);
+    h2 = (h2 & keep) | (g2 & take);
+    h3 = (h3 & keep) | (g3 & take);
+    h4 = (h4 & keep) | (g4 & take);
+    var w0: u32 = h0 | (h1 << 26);
+    var w1: u32 = (h1 >> 6) | (h2 << 20);
+    var w2: u32 = (h2 >> 12) | (h3 << 14);
+    var w3: u32 = (h3 >> 18) | (h4 << 8);
+    var f: u64 = (w0 as u64) + (cm_load32(key, 16) as u64);
+    cm_store32(out, 0, (f & 0xffffffff) as u32);
+    f = (w1 as u64) + (cm_load32(key, 20) as u64) + (f >> 32);
+    cm_store32(out, 4, (f & 0xffffffff) as u32);
+    f = (w2 as u64) + (cm_load32(key, 24) as u64) + (f >> 32);
+    cm_store32(out, 8, (f & 0xffffffff) as u32);
+    f = (w3 as u64) + (cm_load32(key, 28) as u64) + (f >> 32);
+    cm_store32(out, 12, (f & 0xffffffff) as u32);
+}
+
+// One-shot Poly1305 MAC of msg[count] under a 32-byte one-time key.
+fn cm_poly1305(key: []u8, msg: []u8, count: usize, out: []u8) -> void {
+    var st: [10]u32;
+    cm_poly_init(st, key);
+    cm_poly_absorb(st, msg, count, false);
+    cm_poly_finish(st, key, out);
+}
+
+// ---------------------------------------------------------------------------
+// ChaCha20-Poly1305 AEAD, RFC 8439 section 2.8
+
+fn cm_aead_tag(otk: []u8, aad: []u8, aad_len: usize, ct: []u8, ct_len: usize, tag: []u8) -> void {
+    var st: [10]u32;
+    var lens: [16]u8;
+    cm_poly_init(st, otk);
+    cm_poly_absorb(st, aad, aad_len, true);
+    cm_poly_absorb(st, ct, ct_len, true);
+    cm_store64(lens, 0, aad_len as u64);
+    cm_store64(lens, 8, ct_len as u64);
+    cm_poly_block(st, lens, 0, 16777216);
+    cm_poly_finish(st, otk, tag);
+}
+
+fn cm_aead_otk(key: []u8, nonce: []u8, otk: []u8) -> void {
+    var block: [64]u8;
+    cm_chacha20_block(key, 0, nonce, block);
+    var i: usize = 0;
+    while (i < 32) { otk[i] = block[i]; i = i + 1; }
+}
+
+// Encrypt plaintext[count] into ct[count] and write the 16-byte tag.
+fn cm_aead_seal(key: []u8, nonce: []u8, aad: []u8, aad_len: usize,
+                plaintext: []u8, count: usize, ct: []u8, tag: []u8) -> void {
+    var otk: [32]u8;
+    cm_aead_otk(key, nonce, otk);
+    cm_chacha20_xor(key, 1, nonce, plaintext, ct, count);
+    cm_aead_tag(otk, aad, aad_len, ct, count, tag);
+}
+
+// Constant-time comparison of two 16-byte tags.
+fn cm_tag_equal(a: []u8, a_off: usize, b: []u8) -> bool {
+    var diff: u32 = 0;
+    var i: usize = 0;
+    while (i < 16) { diff = diff | ((a[a_off + i] ^ b[i]) as u32); i = i + 1; }
+    return diff == 0;
+}
+
+// ---------------------------------------------------------------------------
+// SHA-256, FIPS 180-4. The message is up to four concatenated pieces, so HMAC
+// and HKDF need no scratch buffer.
+
+const CM_K256: [64]u32 = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+];
+
+fn cm_rotr(x: u32, n: u32) -> u32 {
+    return (x >> n) | (x << (32 - n));
+}
+
+fn cm_sha256_compress(h: []u32, block: []u8) -> void {
+    var w: [64]u32;
+    var t: usize = 0;
+    while (t < 16) { w[t] = cm_load32_be(block, 4 * t); t = t + 1; }
+    while (t < 64) {
+        var x: u32 = w[t - 15];
+        var y: u32 = w[t - 2];
+        var s0: u32 = cm_rotr(x, 7) ^ cm_rotr(x, 18) ^ (x >> 3);
+        var s1: u32 = cm_rotr(y, 17) ^ cm_rotr(y, 19) ^ (y >> 10);
+        w[t] = w[t - 16] + s0 + w[t - 7] + s1;
+        t = t + 1;
+    }
+    var a: u32 = h[0]; var b: u32 = h[1]; var c: u32 = h[2]; var d: u32 = h[3];
+    var e: u32 = h[4]; var f: u32 = h[5]; var g: u32 = h[6]; var k: u32 = h[7];
+    t = 0;
+    while (t < 64) {
+        var e1: u32 = cm_rotr(e, 6) ^ cm_rotr(e, 11) ^ cm_rotr(e, 25);
+        var ch: u32 = (e & f) ^ ((e ^ 0xffffffff) & g);
+        var t1: u32 = k + e1 + ch + CM_K256[t] + w[t];
+        var a0: u32 = cm_rotr(a, 2) ^ cm_rotr(a, 13) ^ cm_rotr(a, 22);
+        var maj: u32 = (a & b) ^ (a & c) ^ (b & c);
+        var t2: u32 = a0 + maj;
+        k = g; g = f; f = e; e = d + t1;
+        d = c; c = b; b = a; a = t1 + t2;
+        t = t + 1;
+    }
+    h[0] = h[0] + a; h[1] = h[1] + b; h[2] = h[2] + c; h[3] = h[3] + d;
+    h[4] = h[4] + e; h[5] = h[5] + f; h[6] = h[6] + g; h[7] = h[7] + k;
+}
+
+fn cm_piece_byte(i: usize, a: []u8, an: usize, b: []u8, bn: usize, c: []u8, cn: usize, d: []u8) -> u8 {
+    if (i < an) { return a[i]; }
+    if (i < an + bn) { return b[i - an]; }
+    if (i < an + bn + cn) { return c[i - an - bn]; }
+    return d[i - an - bn - cn];
+}
+
+// SHA-256 of a || b || c || d into out[32].
+fn cm_sha256_4(a: []u8, an: usize, b: []u8, bn: usize, c: []u8, cn: usize,
+               d: []u8, dn: usize, out: []u8) -> void {
+    var h: [8]u32;
+    h[0] = 0x6a09e667; h[1] = 0xbb67ae85; h[2] = 0x3c6ef372; h[3] = 0xa54ff53a;
+    h[4] = 0x510e527f; h[5] = 0x9b05688c; h[6] = 0x1f83d9ab; h[7] = 0x5be0cd19;
+    var total: usize = an + bn + cn + dn;
+    var block: [64]u8;
+    var fill: usize = 0;
+    var i: usize = 0;
+    while (i < total) {
+        block[fill] = cm_piece_byte(i, a, an, b, bn, c, cn, d);
+        fill = fill + 1;
+        if (fill == 64) { cm_sha256_compress(h, block); fill = 0; }
+        i = i + 1;
+    }
+    block[fill] = 128;
+    fill = fill + 1;
+    if (fill > 56) {
+        while (fill < 64) { block[fill] = 0; fill = fill + 1; }
+        cm_sha256_compress(h, block);
+        fill = 0;
+    }
+    while (fill < 56) { block[fill] = 0; fill = fill + 1; }
+    var bits: u64 = (total as u64) * 8;
+    cm_store32_be(block, 56, ((bits >> 32) & 0xffffffff) as u32);
+    cm_store32_be(block, 60, (bits & 0xffffffff) as u32);
+    cm_sha256_compress(h, block);
+    i = 0;
+    while (i < 8) { cm_store32_be(out, 4 * i, h[i]); i = i + 1; }
+}
+
+fn cm_sha256(msg: []u8, count: usize, out: []u8) -> void {
+    cm_sha256_4(msg, count, msg, 0, msg, 0, msg, 0, out);
+}
+
+// ---------------------------------------------------------------------------
+// HMAC-SHA256 over the message m1 || m2 || m3.
+
+fn cm_hmac3(key: []u8, key_len: usize, m1: []u8, n1: usize, m2: []u8, n2: usize,
+            m3: []u8, n3: usize, out: []u8) -> void {
+    var k0: [64]u8;
+    var i: usize = 0;
+    while (i < 64) { k0[i] = 0; i = i + 1; }
+    if (key_len > 64) {
+        cm_sha256(key, key_len, k0);
+    } else {
+        i = 0;
+        while (i < key_len) { k0[i] = key[i]; i = i + 1; }
+    }
+    var pad: [64]u8;
+    i = 0;
+    while (i < 64) { pad[i] = k0[i] ^ 0x36; i = i + 1; }
+    var inner: [32]u8;
+    cm_sha256_4(pad, 64, m1, n1, m2, n2, m3, n3, inner);
+    i = 0;
+    while (i < 64) { pad[i] = k0[i] ^ 0x5c; i = i + 1; }
+    cm_sha256_4(pad, 64, inner, 32, inner, 0, inner, 0, out);
+}
+
+fn cm_hmac_sha256(key: []u8, key_len: usize, msg: []u8, count: usize, out: []u8) -> void {
+    cm_hmac3(key, key_len, msg, count, msg, 0, msg, 0, out);
+}
+
+// HKDF-SHA256 (RFC 5869): extract with salt, expand with info into out[length].
+// Returns 0, or -1 when length exceeds 255 * 32.
+fn cm_hkdf_sha256(salt: []u8, salt_len: usize, ikm: []u8, ikm_len: usize,
+                  info: []u8, info_len: usize, out: []u8, length: usize) -> i32 {
+    if (length > 8160) { return -1; }
+    var prk: [32]u8;
+    var zero: [32]u8;
+    var i: usize = 0;
+    while (i < 32) { zero[i] = 0; i = i + 1; }
+    if (salt_len == 0) {
+        cm_hmac_sha256(zero, 32, ikm, ikm_len, prk);
+    } else {
+        cm_hmac_sha256(salt, salt_len, ikm, ikm_len, prk);
+    }
+    var t: [32]u8;
+    var t_len: usize = 0;
+    var counter: [1]u8;
+    var done: usize = 0;
+    var n: u32 = 1;
+    while (done < length) {
+        counter[0] = (n & 255) as u8;
+        cm_hmac3(prk, 32, t, t_len, info, info_len, counter, 1, t);
+        t_len = 32;
+        var j: usize = 0;
+        while (j < 32 && done < length) { out[done] = t[j]; done = done + 1; j = j + 1; }
+        n = n + 1;
+    }
+    return 0;
+}
+
+// ---------------------------------------------------------------------------
+// The graph-memory envelope of crypt.t27
+
+fn cm_env_overhead() -> usize { return 40; }
+
+// Write the 44-byte "TGA1" associated data of a record into out.
+fn cm_aad(kind: u8, owner: u64, user: u64, thread: u64, record: u64, key_version: u32, out: []u8) -> void {
+    out[0] = 0x54; out[1] = 0x47; out[2] = 0x41; out[3] = 0x31;
+    out[4] = kind; out[5] = 0; out[6] = 0; out[7] = 0;
+    cm_store64(out, 8, owner);
+    cm_store64(out, 16, user);
+    cm_store64(out, 24, thread);
+    cm_store64(out, 32, record);
+    cm_store32(out, 40, key_version);
+}
+
+// Seal plaintext[count] for a record. Returns the envelope length, or
+// -1 (key version 0, plaintext over 1 MiB) or -2 (capacity too small).
+fn cm_env_seal(key: []u8, key_version: u32, nonce: []u8, kind: u8, owner: u64, user: u64,
+               thread: u64, record: u64, plaintext: []u8, count: usize,
+               out: []u8, capacity: usize) -> i64 {
+    if (key_version == 0 || count > 1048576) { return -1; }
+    if (capacity < count + 40) { return -2; }
+    out[0] = 0x54; out[1] = 0x47; out[2] = 0x45; out[3] = 0x31;
+    out[4] = 1; out[5] = 1; out[6] = 0; out[7] = 0;
+    cm_store32(out, 8, key_version);
+    var i: usize = 0;
+    while (i < 12) { out[12 + i] = nonce[i]; i = i + 1; }
+    var aad: [44]u8;
+    cm_aad(kind, owner, user, thread, record, key_version, aad);
+    var tag: [16]u8;
+    cm_aead_seal(key, nonce, aad, 44, plaintext, count, &out[24], tag);
+    i = 0;
+    while (i < 16) { out[24 + count + i] = tag[i]; i = i + 1; }
+    return (count + 40) as i64;
+}
+
+// Key version written in an envelope's header (0 when it is too short).
+fn cm_env_key_version(env: []u8, env_len: usize) -> u32 {
+    if (env_len < 40) { return 0; }
+    return cm_load32(env, 8);
+}
+
+// Open an envelope stored in the row (kind, owner, user, thread, record).
+// key_state: 1 active, 2 retired, 3 destroyed (crypt.t27); held_version: the
+// version of the key passed in; kms_ok: the KMS released that key to this
+// caller. Returns the plaintext length or the crypt.t27 status: -1 header,
+// -2 key destroyed, -3 key version, -4 KMS denied, -5 tag; -6 capacity.
+fn cm_env_open(key: []u8, key_state: u8, held_version: u32, kms_ok: bool, kind: u8, owner: u64,
+               user: u64, thread: u64, record: u64, env: []u8, env_len: usize,
+               out: []u8, capacity: usize) -> i64 {
+    if (env_len < 40 || env_len - 40 > 1048576) { return -1; }
+    if (env[0] != 0x54 || env[1] != 0x47 || env[2] != 0x45 || env[3] != 0x31) { return -1; }
+    if (env[4] != 1 || env[5] != 1 || env[6] != 0 || env[7] != 0) { return -1; }
+    var version: u32 = cm_load32(env, 8);
+    if (version == 0) { return -1; }
+    if (key_state != 1 && key_state != 2) { return -2; }
+    if (version != held_version) { return -3; }
+    if (!kms_ok) { return -4; }
+    var count: usize = env_len - 40;
+    if (capacity < count) { return -6; }
+    var aad: [44]u8;
+    cm_aad(kind, owner, user, thread, record, version, aad);
+    var otk: [32]u8;
+    cm_aead_otk(key, &env[12], otk);
+    var tag: [16]u8;
+    cm_aead_tag(otk, aad, 44, &env[24], count, tag);
+    if (!cm_tag_equal(env, 24 + count, tag)) { return -5; }
+    cm_chacha20_xor(key, 1, &env[12], &env[24], out, count);
+    return count as i64;
+}
+
+// Search token: HMAC-SHA256(index_key, "TGT1" | field | term), first 16 bytes.
+fn cm_token(index_key: []u8, field: u8, term: []u8, term_len: usize, out: []u8) -> void {
+    var prefix: [5]u8;
+    prefix[0] = 0x54; prefix[1] = 0x47; prefix[2] = 0x54; prefix[3] = 0x31; prefix[4] = field;
+    var mac: [32]u8;
+    cm_hmac3(index_key, 32, prefix, 5, term, term_len, term, 0, mac);
+    var i: usize = 0;
+    while (i < 16) { out[i] = mac[i]; i = i + 1; }
+}

@@ -8,6 +8,14 @@ Dmitrii Vasilev) — contract layer for the executable memory stack: trit lane c
 geometry, TMEM/TTPK framing, Bridge protocol, stream ports, conformance schema and Edge
 Demo scoring. Roadmap: [epic #3](https://github.com/dmitrii-f-t27/trinity-memory/issues/3).
 
+## Vendored: `specs/memory/graph/`
+
+`scope.t27`, `crypt.t27` and `temporal.t27` are copied verbatim from gHashTag/t27
+(epic [t27#7828](https://github.com/gHashTag/t27/issues/7828)) and pinned by
+`specs/memory/graph/upstream.lock.json`. They keep the upstream naming (no `TMS_` prefix). The chat
+store of issue #136 runs the functions generated from them (`tools/build-t27.sh`), so change them
+upstream and re-vendor; `tests/test_chat_store.py` fails on any local edit.
+
 ## Dependencies
 
 - The compiler pinned by `native/compiler.lock` (`gHashTag/t27`).
