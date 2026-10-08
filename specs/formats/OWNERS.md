@@ -38,6 +38,18 @@ branch, full commit and the git blob SHA of every cited file.
   (the family is the spec's file name). `tools/check-specs.sh` fails when a spec under
   `specs/formats/` has no vectors file naming it, when no `tests/native_spec_*.c` includes
   its header, or when no harness prints `replayed conformance/formats_<family>.json: N vectors`.
+- `load_rules` in `conformance/formats_prismml.json` and `conformance/formats_llama_cpp.json`
+  ([#131](https://github.com/dmitrii-f-t27/trinity-memory/issues/131), delivers
+  [#98](https://github.com/dmitrii-f-t27/trinity-memory/issues/98)): the metadata load rules
+  that classes -65, -88 and -89 below describe. `prismml.t27` states the fork's rules for
+  `prism.hadamard.version` 1 or 2 and `prism.hadamard.tied_output`
+  (`tfs_prism_hadamard_tied_status`) and that the fork has no reader of
+  `general.tensor_extra.*`; `llama_cpp.t27` states stock llama.cpp's
+  (`tfs_llama_tensor_extra_status`). Each case holds a GGUF header and the facts the rule reads.
+  `tests/native_spec_formats.c` runs the facts through the spec functions and `tests/native_live.c`
+  runs the header through `t27/live.t27`; the `vectors` of those files and their count are unchanged.
+  Not stated: the rule that `tied_output` must be bound to the token embedding
+  (`src/llama-model.cpp:1997-2002`), which depends on the architecture's graph builder.
 
 ## Status classes
 
