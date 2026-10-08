@@ -79,10 +79,13 @@ LOG_EVERY = 25
 # ---- t27/live.t27 --------------------------------------------------------------------
 
 U64 = C.c_uint64
-LLAMA_CPP, PRISMML, BITNET_CPP, MORTAR_CPP = 1, 2, 3, 4
-RUNTIMES = {LLAMA_CPP: "llama.cpp", PRISMML: "prismml", BITNET_CPP: "bitnet.cpp", MORTAR_CPP: "mortar.cpp"}
+LLAMA_CPP, PRISMML, BITNET_CPP, MORTAR_CPP, LLAMA_CPP_GENIEX = 1, 2, 3, 4, 5
+# LLAMA_CPP_GENIEX: stock llama.cpp at the commit Qualcomm GenieX ships (a second pin of the same reader).
+RUNTIMES = {LLAMA_CPP: "llama.cpp", PRISMML: "prismml", BITNET_CPP: "bitnet.cpp", MORTAR_CPP: "mortar.cpp",
+            LLAMA_CPP_GENIEX: "llama.cpp-94256114"}
 # The specs/runtimes/<name>.json and gguf_replay_<name> of each runtime.
-SPEC_NAMES = {LLAMA_CPP: "llama_cpp", PRISMML: "prismml", BITNET_CPP: "bitnet_cpp", MORTAR_CPP: "mortar_cpp"}
+SPEC_NAMES = {LLAMA_CPP: "llama_cpp", PRISMML: "prismml", BITNET_CPP: "bitnet_cpp", MORTAR_CPP: "mortar_cpp",
+              LLAMA_CPP_GENIEX: "llama_cpp_94256114"}
 NATIVE = {0: "other", **RUNTIMES}
 RUN = {0: "accepts", 1: "refuses", 2: "ignores_rotation"}
 FILE = {0: "ok", 1: "refused", 2: "no_ternary_layout", 3: "undecided", 4: "other_runtime"}

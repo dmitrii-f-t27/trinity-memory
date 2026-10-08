@@ -24,7 +24,7 @@ double tm_json_strtod(uint8_t *);
 #include "live.h"
 
 enum { T_U16 = 2, T_U32 = 4, T_I32 = 5, T_F32 = 6, T_BOOL = 7, T_STR = 8, T_ARR = 9, T_U64 = 10 };
-enum { LLAMA = 1, PRISM = 2, BITNET = 3, MORTAR = 4 };
+enum { LLAMA = 1, PRISM = 2, BITNET = 3, MORTAR = 4, GENIEX = 5 };  /* GENIEX: ggml-org/llama.cpp@94256114, the pin of Qualcomm GenieX */
 #define NONE UINT64_MAX
 
 typedef struct {
@@ -632,7 +632,7 @@ static void test_runtime(void) {
     /* the architecture comes before the Hadamard rules (src/llama-model.cpp:368-369), even with a bad version */
     Spec s = base(); s.arch = "foo"; s.version = 2;
     Buf b = build(&s, &fs);
-    for (int32_t rt = LLAMA; rt <= MORTAR; rt++) {
+    for (int32_t rt = LLAMA; rt <= GENIEX; rt++) {
         assert(tlv_runtime(b.data, b.size, fs, rt, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_ARCH);
     }
     free(b.data);
@@ -683,7 +683,17 @@ static void test_runtime(void) {
             assert(tlv_runtime(b.data, b.size, fs, BITNET, &r) == TLV_RUN_ACCEPTS);
             assert(tlv_runtime(b.data, b.size, fs, MORTAR, &r) == TLV_RUN_ACCEPTS);
         }
+        /* the GenieX pin predates the activation precision policy: it never reads these keys, but the
+           architecture is refused there as in stock llama.cpp */
+        if (c == 8) assert(tlv_runtime(b.data, b.size, fs, GENIEX, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_ARCH);
+        else assert(tlv_runtime(b.data, b.size, fs, GENIEX, &r) == TLV_RUN_ACCEPTS);
         free(b.data);
+    }
+    /* the GenieX pin and stock llama.cpp at 4364bf72 hold the same type table and architectures */
+    assert(trt_type_count(GENIEX) == trt_type_count(LLAMA) && !trt_tensor_extra(GENIEX) && trt_tensor_extra(LLAMA));
+    for (uint32_t id = 0; id < 160; id++) {
+        assert(trt_blck(GENIEX, id) == trt_blck(LLAMA, id) && trt_bytes(GENIEX, id) == trt_bytes(LLAMA, id)
+               && trt_rule(GENIEX, id) == trt_rule(LLAMA, id));
     }
     /* the fork's ids without any prism. key */
     Gguf g = {0}; kv_str(&g, "general.architecture", "qwen35"); rec2(&g, "a", 128, 4, 142, 0);
@@ -705,7 +715,7 @@ static void test_runtime(void) {
     const char *refused[] = {"gptj", "(unknown)", "clip"};
     for (int i = 0; i < 3; i++) {
         g = (Gguf){0}; kv_str(&g, "general.architecture", refused[i]); rec2(&g, "w", 8, 1, 0, 0); b = finish(&g, &fs, 32);
-        for (int32_t rt = LLAMA; rt <= MORTAR; rt++) {
+        for (int32_t rt = LLAMA; rt <= GENIEX; rt++) {
             assert(tlv_runtime(b.data, b.size, fs, rt, &r) == TLV_RUN_REFUSES && r.status == TLV_ERR_ARCH);
         }
         free(b.data);
@@ -757,7 +767,7 @@ static void test_split_models(void) {
     m = (Parts){0};
     add_part(&m, split_part(1, 2, 2, "blk.0.attn_q.weight", 0, &fs1, 32), fs1, 1, 2);
     add_part(&m, split_part(2, 2, 2, "blk.1.attn_q.weight", 0, &fs2, 32), fs2, 2, 2);
-    for (int32_t rt = LLAMA; rt <= MORTAR; rt++) {
+    for (int32_t rt = LLAMA; rt <= GENIEX; rt++) {
         assert(tlv_model(m.all.data, m.all.size, m.rows, m.count, rt, &r) == TLV_RUN_ACCEPTS);
     }
     assert(tlv_loaded(m.all.data, m.all.size, m.rows, m.count) == 2 && tlv_native(m.all.data, m.all.size, m.rows, m.count) == LLAMA);
@@ -1061,6 +1071,7 @@ static void test_spec_load_rules(void) {
         rl_expect(c, PRISM, b.data, b.size, fs, 0);
         rl_expect(c, BITNET, b.data, b.size, fs, 0);
         rl_expect(c, MORTAR, b.data, b.size, fs, 0);
+        rl_expect(c, GENIEX, b.data, b.size, fs, 0);         /* no policy at the GenieX pin: the keys are not read */
         free(b.data);
     }
     assert(stock == 22);
