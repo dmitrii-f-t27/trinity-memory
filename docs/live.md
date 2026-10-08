@@ -4,7 +4,8 @@ Issues [#48](https://github.com/dmitrii-f-t27/trinity-memory/issues/48)–[#55](
 epic [#57](https://github.com/dmitrii-f-t27/trinity-memory/issues/57).
 
 **What it answers.** For every public ternary GGUF model on the Hugging Face Hub, at the
-pinned commits of llama.cpp, the PrismML fork, bitnet.cpp and mortar.cpp: will each of them read it,
+pinned commits of llama.cpp, the PrismML fork, bitnet.cpp and mortar.cpp (and of the llama.cpp
+that Qualcomm GenieX ships, `llama.cpp-94256114`, a second pin of the same reader): will each of them read it,
 and if not, why; which layout its ternary tensors really hold; are the PrismML fork's
 Hadamard metadata valid, and does a runtime ignore a rotation the model declares. A model
 is one GGUF file, or the parts of a split model (`<prefix>-KKKKK-of-NNNNN.gguf`), which

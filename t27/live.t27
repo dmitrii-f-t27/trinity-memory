@@ -14,7 +14,10 @@
 // reader it is mortar.cpp's too (tlv_old_reader); its type table differs:
 // id 42 is Q2_0 in 128-weight groups (34 bytes, the bytes the fork calls
 // PQ2_0) and id 143 is G8_0 (32 weights in 16 bytes), a ternary layout
-// formats.t27 has no storage contract for.
+// formats.t27 has no storage contract for. Runtime 5 (llama.cpp-94256114) is
+// stock llama.cpp at the commit Qualcomm GenieX ships: the same tables and
+// gguf.cpp as the first (every cited file has the same blob), but older than
+// the activation precision policy, so trt_tensor_extra is false there.
 //
 //  - tlv_walk: one file's header as gguf.cpp reads it (ggml/src/gguf.cpp:
 //    230-427 for the reads, :459-803 for the rules), in its order: magic;

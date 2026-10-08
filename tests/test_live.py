@@ -113,7 +113,8 @@ class CheckModelTest(unittest.TestCase):
         self.assertEqual((record["verdict"], record["native"]), ("ok", "mortar.cpp"))
         self.assertEqual(record["layouts"], {"PQ2_0": 2, "G8_0": 1})
         self.assertEqual({key: entry["verdict"] for key, entry in record["runtimes"].items()},
-                         {"llama.cpp": "refuses", "prismml": "refuses", "bitnet.cpp": "refuses", "mortar.cpp": "accepts"})
+                         {"llama.cpp": "refuses", "prismml": "refuses", "bitnet.cpp": "refuses", "mortar.cpp": "accepts",
+                          "llama.cpp-94256114": "refuses"})
         # The same id 143 with the fork's PTQ1_0 bytes (28 per 128 weights) stays the fork's.
         fork = _gguf([("a.weight", [1024, 4], 142, 0), ("b.weight", [1024, 4], 143, 1088)])
         record = live.check_model([("m.gguf", fork, len(fork) + 1088 + 896)])
@@ -220,6 +221,33 @@ class SplitModelTest(unittest.TestCase):
         self.assertEqual((files, total, named), (4, 3, 2))
         self.assertEqual([[name for name, _, _ in model] for model in models],
                          [["Q2_0/m-Q2_0-00001-of-00002.gguf", "Q2_0/m-Q2_0-00002-of-00002.gguf"], ["m-TQ1_0.gguf"]])
+
+
+class GenieXPinTest(unittest.TestCase):
+    """llama.cpp-94256114 is stock llama.cpp at the commit Qualcomm GenieX ships."""
+
+    def spec(self, name):
+        return json.loads((ROOT / "specs" / "runtimes" / f"{name}.json").read_text())
+
+    def test_the_pin_holds_the_tables_of_llama_cpp_and_no_activation_policy(self):
+        stock, genie = self.spec("llama_cpp"), self.spec("llama_cpp_94256114")
+        self.assertEqual((genie["repo"], genie["commit"]), ("ggml-org/llama.cpp", "94256114c229674ef96e76eb2dea596e65b43818"))
+        for field in ("type_count", "types", "archs", "archs_refused_as_main", "hadamard"):
+            self.assertEqual(genie[field], stock[field], field)
+        # The gguf.cpp and the model loader are the same blobs; the activation precision
+        # policy (general.tensor_extra.*) came after this pin.
+        for path in ("ggml/include/ggml.h", "ggml/src/gguf.cpp", "src/llama-model-loader.cpp"):
+            self.assertEqual(genie["files"][path], stock["files"][path], path)
+        self.assertEqual((stock["tensor_extra"], genie["tensor_extra"]), (True, False))
+
+    def test_a_malformed_activation_policy_is_refused_at_the_head_pin_only(self):
+        names = struct.pack("<IQ", 8, 2) + _string("a.weight") + _string("b.weight")
+        keys = [("general.tensor_extra.name", 9, names),
+                ("general.tensor_extra.prec_a4", 9, struct.pack("<IQ", 7, 1) + b"\x01")]
+        header, size = _file([("a.weight", 8, 32)], 34, keys=keys)
+        record = live.check_header(header, size)
+        self.assertEqual(record["runtimes"]["llama.cpp"]["status"], "tensor_extra")
+        self.assertEqual(record["runtimes"]["llama.cpp-94256114"], {"verdict": "accepts"})
 
 
 class RuntimeTablesTest(unittest.TestCase):
