@@ -10,6 +10,16 @@ entries of 0.4.0 come from the release pull request itself.
 
 ## [Unreleased]
 
+- Ternary Check Live: `llama.cpp-94256114` (ggml-org/llama.cpp@94256114, the commit Qualcomm
+  GenieX pins as `third-party/llama.cpp`) is the fifth pinned runtime, so verdicts for that
+  pin are computed at it, not inferred from the verdicts at other llama.cpp pins
+  ([qualcomm/GenieX#1515](https://github.com/qualcomm/GenieX/issues/1515)). Its spec
+  `specs/runtimes/llama_cpp_94256114.json` holds the tables of `e6ab7c1a` (every cited file,
+  including `gguf.cpp`, `llama-arch.cpp`, `llama-model.cpp` and `llama-model-loader.cpp`, has
+  the same git blob at both commits); it has no `general.tensor_extra.*` rule (the activation
+  precision policy came after it), so `tensor_extra` is false. `tools/live-replay.sh` builds its
+  reader like the others. The pin is not in `upstream.lock.json`: that file follows branch heads,
+  and this pin follows GenieX's submodule.
 - Specs: the PrismML Hadamard version 2 and `tied_output` load rules (fork `87268f77`) are
   stated in `specs/formats/prismml.t27`, and stock llama.cpp's `general.tensor_extra.*` rule
   (`4364bf72`) in `specs/formats/llama_cpp.t27`, with `load_rules` cases (GGUF headers and facts)
