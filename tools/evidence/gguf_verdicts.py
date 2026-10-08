@@ -156,7 +156,7 @@ CLAIM = {
     'spec': 'specs/memory/gguf_verdicts_evidence.t27',
     'vectors': 'conformance/memory_gguf_verdicts_evidence.json',
     'accept': 'tmgv_accept',
-    'expected': (14, 34, 2, 147, 9),
+    'expected': (14, 34, 2, 182, 9),
     'manifest': 'reports/live/gguf-verdicts-evidence/evidence-manifest.json',
     'bind': [
         'specs/memory/gguf_verdicts_evidence.t27',
