@@ -1,0 +1,6815 @@
+{
+  "constants": {
+    "hosts": {
+      "other": 3,
+      "self_hosted": 1,
+      "zep_cloud": 2
+    },
+    "mirror_default_on": false,
+    "principals": {
+      "agent": 1,
+      "operator": 3,
+      "person": 2
+    },
+    "purposes": {
+      "facts_only": 1,
+      "reply_context": 2
+    },
+    "raw_ttl_default_seconds": 2592000,
+    "raw_ttl_max_seconds": 31536000
+  },
+  "created_at": "2026-10-08T00:00:00Z",
+  "description": "Who may read, write and erase a record of the graph memory; raw TTL and mirror rules. Expectations are independent Python restatements; tests/test_chat_store.py replays them through the functions the native library generates from the spec.",
+  "format_family": "Conformance",
+  "generator": "tools/generate-spec-vectors.py (tools/graph_memory_vectors.py)",
+  "invariants": [
+    {
+      "condition": "RAW_TTL_DEFAULT == 30 * DAY_SECONDS",
+      "id": "default_ttl_is_thirty_days"
+    },
+    {
+      "condition": "RAW_TTL_MAX == 365 * DAY_SECONDS",
+      "id": "max_ttl_is_a_year"
+    }
+  ],
+  "module": "MemoryGraphScope",
+  "schema_version": 2,
+  "spec_path": "specs/memory/graph/scope.t27",
+  "vector_name": "Graph memory scope",
+  "vectors": [
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        1,
+        0,
+        5,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        2,
+        6
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        9,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        9,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        0,
+        2,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        1,
+        0,
+        5
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_read",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_write",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        9,
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        0,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        1,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        2,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        3,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        2,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        2,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        2,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        2,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        2,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        1,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        0,
+        9,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        0,
+        1,
+        9
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        0,
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_erase",
+      "input": [
+        4,
+        0,
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "keep_raw",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "keep_raw",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "keep_raw",
+      "input": [
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "keep_raw",
+      "input": [
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_ttl_ok",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        0,
+        999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        0,
+        1000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        0,
+        1099
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        0,
+        1100
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        0,
+        2592999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        0,
+        2593000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_ttl_ok",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        1,
+        999
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        1,
+        1000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        1,
+        1099
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        1,
+        1100
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        1,
+        2592999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        1,
+        2593000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_ttl_ok",
+      "input": [
+        100
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        100,
+        999
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        100,
+        1000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        100,
+        1099
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        100,
+        1100
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        100,
+        2592999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        100,
+        2593000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_ttl_ok",
+      "input": [
+        2592000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        2592000,
+        999
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        2592000,
+        1000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        2592000,
+        1099
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        2592000,
+        1100
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        2592000,
+        2592999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        2592000,
+        2593000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_ttl_ok",
+      "input": [
+        31536000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536000,
+        999
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536000,
+        1000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536000,
+        1099
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536000,
+        1100
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536000,
+        2592999
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536000,
+        2593000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "raw_ttl_ok",
+      "input": [
+        31536001
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536001,
+        999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536001,
+        1000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536001,
+        1099
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536001,
+        1100
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536001,
+        2592999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "raw_expired",
+      "input": [
+        1000,
+        31536001,
+        2593000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        false,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        false,
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        false,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        false,
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        false,
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        true,
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "mirror_allowed",
+      "input": [
+        true,
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        true,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        true,
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "mirror_allowed",
+      "input": [
+        true,
+        4
+      ]
+    }
+  ]
+}

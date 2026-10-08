@@ -10,6 +10,16 @@ entries of 0.4.0 come from the release pull request itself.
 
 ## [Unreleased]
 
+- Chat memory ([#136](https://github.com/dmitrii-f-t27/trinity-memory/issues/136)): an encrypted
+  graph-memory store for the chat agent of gHashTag/999-multibots-telegraf (#3876, #3877).
+  `t27/chat_crypto.t27` implements ChaCha20-Poly1305 (RFC 8439), SHA-256, HMAC-SHA256 and
+  HKDF-SHA256 and the `TGE1` envelope; the rules run from the specs vendored from gHashTag/t27
+  under `specs/memory/graph/` (`scope.t27`, `crypt.t27` of t27#7885, `temporal.t27` of t27#7830,
+  pinned by `upstream.lock.json`) and compiled into the native library; `trinity_memory/chat_store.py`
+  is the thin sqlite layer (per-group keys wrapped by a KMS, raw TTL purge, erase by key
+  destruction, HMAC search tokens, opt-in self-hosted mirror, expiring service tokens). Vectors in
+  `conformance/memory_graph_{scope,temporal,crypt}.json`; design and limits in `docs/chat-memory.md`.
+
 - Ternary Check Live: `llama.cpp-94256114` (ggml-org/llama.cpp@94256114, the commit Qualcomm
   GenieX pins as `third-party/llama.cpp`) is the fifth pinned runtime, so verdicts for that
   pin are computed at it, not inferred from the verdicts at other llama.cpp pins
