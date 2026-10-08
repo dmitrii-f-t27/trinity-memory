@@ -887,6 +887,90 @@ static void negative_shape(int64_t root, int64_t vector) {
     assert(entries > 0);
 }
 
+/* Load rules of issue #98 (`load_rules` of formats_prismml.json and formats_llama_cpp.json): the facts of
+ * each case go through the spec functions of section 6 of prismml.t27 and section 7 of llama_cpp.t27.
+ * tests/native_live.c replays the same cases' GGUF bytes through the executable reader t27/live.t27. */
+static bool tied_is_true(int64_t facts) {
+    int64_t at = need(facts, "tied_output");
+    assert(text_is(at, "absent") || text_is(at, "false") || text_is(at, "true"));
+    return text_is(at, "true");
+}
+
+static void load_rule_bytes(int64_t item) {
+    static uint8_t header[MAX_BYTES];
+    size_t n = hex(item, "gguf_hex", header, sizeof header);
+    assert(n > 24 && memcmp(header, "GGUF", 4) == 0 && (int64_t)n <= integer(item, "file_size"));
+}
+
+static int32_t load_rule_class(int64_t item, int64_t errors) {
+    int64_t cls = member(need(item, "expect"), "error_class");
+    assert(cls >= 0);
+    if (tokens[cls].kind == TM_JSON_NULL) return 0;
+    int32_t status = 0;
+    bool found = false;
+    static const char *const names[] = {"hadamard_version", "hadamard_tied", "tensor_extra"};
+    for (size_t i = 0; i < 3; ++i) {
+        if (!text_is(cls, names[i])) continue;
+        status = (int32_t)integer(errors, names[i]);
+        found = true;
+    }
+    assert(found);
+    return status;
+}
+
+static size_t load_rules(int64_t root, const char *family) {
+    int64_t rules = member(root, "load_rules");
+    bool prism = strcmp(family, "prismml") == 0, llama = strcmp(family, "llama_cpp") == 0;
+    if (!prism && !llama) { assert(rules < 0); return 0; }
+    assert(rules >= 0);
+    assert(text_is(need(rules, "issue"), "https://github.com/dmitrii-f-t27/trinity-memory/issues/98"));
+    int64_t errors = need(rules, "errors");
+    size_t cases = 0;
+    if (prism) {
+        assert(integer(errors, "hadamard_version") == TFS_PRISM_ERR_HADAMARD_VERSION);
+        assert(integer(errors, "hadamard_tied") == TFS_PRISM_ERR_HADAMARD_TIED);
+        assert(TFS_PRISM_HADAMARD_VERSION_UNTIED == 1 && TFS_PRISM_HADAMARD_VERSION_TIED == 2);
+        for (int64_t c = tokens[need(rules, "hadamard")].first; c >= 0; c = tokens[c].next, ++cases) {
+            int64_t facts = need(c, "facts"), expect = need(c, "expect");
+            bool has_version = boolean(facts, "has_version"), tied = tied_is_true(facts);
+            bool has_output = boolean(facts, "has_output"), has_latent = boolean(facts, "has_latent");
+            uint32_t version = (uint32_t)tokens[need(facts, "version")].uinteger;
+            int32_t keys = tfs_prism_hadamard_keys_status(has_version, version, tied, has_output);
+            int32_t embedding = tfs_prism_hadamard_embedding_status(has_version, version, tied, has_output, has_latent);
+            int32_t both = tfs_prism_hadamard_tied_status(has_version, version, tied, has_output, has_latent);
+            assert(keys == integer(expect, "keys_status") && embedding == integer(expect, "embedding_status"));
+            assert(both == integer(expect, "status") && both == load_rule_class(c, errors));
+            load_rule_bytes(c);
+        }
+        assert(cases == 40);
+        size_t fork_loads = 0;
+        for (int64_t c = tokens[need(rules, "tensor_extra")].first; c >= 0; c = tokens[c].next, ++fork_loads) {
+            assert(tfs_prism_tensor_extra_status() == integer(need(c, "expect"), "status"));
+            assert(integer(need(c, "expect"), "status") == 0);
+            load_rule_bytes(c);
+        }
+        assert(fork_loads == 14);
+        return cases + fork_loads;
+    }
+    assert(integer(errors, "tensor_extra") == TFS_LLAMA_ERR_TENSOR_EXTRA);
+    int64_t types = need(rules, "gguf_types");
+    assert(integer(types, "bool") == TFS_LLAMA_GGUF_TYPE_BOOL && integer(types, "string") == TFS_LLAMA_GGUF_TYPE_STRING);
+    assert(integer(types, "array") == TFS_LLAMA_GGUF_TYPE_ARRAY && integer(types, "absent") == TFS_LLAMA_GGUF_TYPE_ABSENT);
+    size_t refused = 0;
+    for (int64_t c = tokens[need(rules, "tensor_extra")].first; c >= 0; c = tokens[c].next, ++cases) {
+        int64_t facts = need(c, "facts");
+        int32_t status = tfs_llama_tensor_extra_status(
+            (uint32_t)tokens[need(facts, "names_kind")].uinteger, (uint32_t)integer(facts, "names_elem"),
+            (uint64_t)integer(facts, "names_len"), (uint32_t)tokens[need(facts, "prec_kind")].uinteger,
+            (uint32_t)integer(facts, "prec_elem"), (uint64_t)integer(facts, "prec_len"));
+        assert(status == integer(need(c, "expect"), "status") && status == load_rule_class(c, errors));
+        refused += status != 0;
+        load_rule_bytes(c);
+    }
+    assert(cases == 22 && refused == 14);
+    return cases;
+}
+
 static size_t replay(const char *family) {
     char path[128];
     snprintf(path, sizeof path, "conformance/formats_%s.json", family);
@@ -925,6 +1009,8 @@ static size_t replay(const char *family) {
     }
     assert(vectors > 0);
     printf("replayed %s: %zu vectors\n", path, vectors);
+    size_t rules = load_rules(root, family);
+    if (rules) printf("replayed load rules of %s: %zu cases through the spec functions\n", path, rules);
     return vectors;
 }
 

@@ -2614,10 +2614,13 @@ def build_formats_llama_cpp():
         {"id": "llama_base3_code_counts", "condition": "243 == 3^5, 81 == 3^4"},
         {"id": "llama_gguf_alignment_is_a_power_of_two", "condition": "32 & 31 == 0, 24 == 8 + 4 + 4 + 8"},
     ]
-    return formats_document("llama_cpp", "TrinityFormatsLlamaCppSpec", "llama.cpp ternary blocks and GGUF rules",
-                            "TQ1_0, TQ2_0, Q2_0 (group 64) and Q1_0 blocks, their flags and rejections, and GGUF "
-                            "type-id, alignment and extent rules.",
-                            constants, invariants, vectors, ["llama.cpp", "bitnet.cpp-llama.cpp", "prismml"])
+    document = formats_document("llama_cpp", "TrinityFormatsLlamaCppSpec", "llama.cpp ternary blocks and GGUF rules",
+                                "TQ1_0, TQ2_0, Q2_0 (group 64) and Q1_0 blocks, their flags and rejections, GGUF "
+                                "type-id, alignment and extent rules, and the general.tensor_extra.* load rule "
+                                "(issue #98) in `load_rules`.",
+                                constants, invariants, vectors, ["llama.cpp", "bitnet.cpp-llama.cpp", "prismml"])
+    document["load_rules"] = load_rules_document("llama_cpp")
+    return document
 
 
 def build_formats_prismml():
@@ -2671,10 +2674,13 @@ def build_formats_prismml():
         {"id": "prism_ptq1_0_stages_cover_qs", "condition": "16 + 8 == 24, 5 * 16 + 5 * 8 + 4 * 2 == 128"},
         {"id": "prism_common_byte_run", "condition": "306 == 9 * 34 == 17 * 18"},
     ]
-    return formats_document("prismml", "TrinityFormatsPrismmlSpec", "PrismML fork PQ2_0, PTQ1_0 and Q2_0",
-                            "PQ2_0 and PTQ1_0 (group 128) and the fork's group-64 Q2_0, with real Bonsai blocks and "
-                            "the synthetic group-128-as-64 case.",
-                            constants, invariants, vectors, ["prismml"])
+    document = formats_document("prismml", "TrinityFormatsPrismmlSpec", "PrismML fork PQ2_0, PTQ1_0 and Q2_0",
+                                "PQ2_0 and PTQ1_0 (group 128) and the fork's group-64 Q2_0, with real Bonsai blocks and "
+                                "the synthetic group-128-as-64 case, and the fork's Hadamard version and tied-output "
+                                "load rules (issue #98) in `load_rules`.",
+                                constants, invariants, vectors, ["prismml"])
+    document["load_rules"] = load_rules_document("prismml")
+    return document
 
 
 # ---- bitnet.cpp I2_S
@@ -3300,6 +3306,302 @@ def build_formats_onnx():
     return formats_document("onnx", "TrinityFormatsOnnxSpec", "ONNX Runtime MatMulNBits bits=2",
                             "MatMulNBits 2-bit weights with default and packed zero points, padding and scales.",
                             constants, invariants, vectors, ["onnxruntime"])
+
+
+# ---- load rules of issue #98: PrismML Hadamard version 2 and stock llama.cpp tensor_extra
+#
+# Each case is a GGUF header built byte by byte plus the facts the rule reads from it.
+# tests/native_spec_formats.c feeds the facts to the spec functions and
+# tests/native_live.c feeds the bytes to the executable reader t27/live.t27; both must
+# return `expect`. The oracle is the fork's and the loader's own control flow, restated
+# below line by line (the cited lines are in the blobs pinned by specs/runtimes/*.json).
+
+LOAD_RULES_ISSUE = "https://github.com/dmitrii-f-t27/trinity-memory/issues/98"
+GGUF_U8, GGUF_U32, GGUF_I32, GGUF_BOOL, GGUF_STR, GGUF_ARR = 0, 4, 5, 7, 8, 9
+GGUF_ABSENT = 0xFFFFFFFF
+LOAD_RULE_ERRORS = {"hadamard_version": -65, "hadamard_tied": -88, "tensor_extra": -89}
+
+
+def runtime_pin(name):
+    return json.loads((ROOT / "specs" / "runtimes" / f"{name}.json").read_text(encoding="utf-8"))
+
+
+def load_cite(runtime, cite):
+    """A "path:line" or "path:first-last" cite into a file pinned by specs/runtimes/<runtime>.json."""
+    assert CITE.match(cite), cite
+    assert cite.split(":")[0] in runtime["files"], (runtime["runtime"], cite)
+    return cite
+
+
+def gguf_text(value):
+    raw = value.encode()
+    return struct.pack("<Q", len(raw)) + raw
+
+
+def gguf_kv(name, vtype, payload):
+    return gguf_text(name) + struct.pack("<I", vtype) + payload
+
+
+def gguf_kv_array(name, elem, items):
+    """items: the encoded elements (bytes each)."""
+    return gguf_kv(name, GGUF_ARR, struct.pack("<IQ", elem, len(items)) + b"".join(items))
+
+
+def gguf_tensor_record(name, ne, ggml_type, offset):
+    return gguf_text(name) + struct.pack("<I", len(ne)) + b"".join(struct.pack("<Q", d) for d in ne) \
+        + struct.pack("<IQ", ggml_type, offset)
+
+
+def gguf_header_file(keys, tensors, data_bytes):
+    """(header bytes padded to the default alignment, file size)."""
+    out = bytearray(struct.pack("<IIQQ", 0x46554747, 3, len(tensors), len(keys)))
+    for key in keys:
+        out += key
+    for record in tensors:
+        out += record
+    while len(out) % 32:
+        out.append(0)
+    return bytes(out), len(out) + data_bytes
+
+
+# prism.hadamard.* keys of a file the fork would rotate: identity signs over one weight
+# of 8 columns and a token embedding of 8 columns, block size 4, architecture qwen35.
+HADAMARD_WEIGHT = "blk.0.attn_q.weight"
+
+
+def hadamard_load_file(version, tied, has_output, has_latent):
+    """version: None or int; tied: "absent", "false" or "true"."""
+    keys = [gguf_kv("general.architecture", GGUF_STR, gguf_text("qwen35"))]
+    if version is not None:
+        keys.append(gguf_kv("prism.hadamard.version", GGUF_U32, struct.pack("<I", version)))
+    if tied != "absent":
+        keys.append(gguf_kv("prism.hadamard.tied_output", GGUF_BOOL, bytes([1 if tied == "true" else 0])))
+    keys.append(gguf_kv("prism.hadamard.block_size", GGUF_U32, struct.pack("<I", 4)))
+    keys.append(gguf_kv("prism.hadamard.transform", GGUF_STR, gguf_text("normalized-sylvester-walsh-hadamard")))
+    keys.append(gguf_kv("prism.hadamard.axis", GGUF_STR, gguf_text("input-last-dimension")))
+    keys.append(gguf_kv("prism.hadamard.sign_mode", GGUF_STR, gguf_text("identity")))
+    keys.append(gguf_kv_array("prism.hadamard.weight_names", GGUF_STR, [gguf_text(HADAMARD_WEIGHT)]))
+    if has_latent:
+        keys.append(gguf_kv_array("prism.hadamard.inverse_weight_names", GGUF_STR, [gguf_text("token_embd.weight")]))
+    tensors, offset = [gguf_tensor_record(HADAMARD_WEIGHT, [8, 2], 1, 0)], 32
+    tensors.append(gguf_tensor_record("token_embd.weight", [8, 4], 1, offset))
+    offset += 64
+    if has_output:
+        tensors.append(gguf_tensor_record("output.weight", [8, 4], 1, offset))
+        offset += 64
+    return gguf_header_file(keys, tensors, offset)
+
+
+def prism_keys_status(has_version, version, tied, has_output):
+    """src/llama-model.cpp:1197-1208 of the fork, as control flow."""
+    if not has_version:
+        return 0
+    if version not in (1, 2):
+        return LOAD_RULE_ERRORS["hadamard_version"]
+    if (version == 2) != tied:
+        return LOAD_RULE_ERRORS["hadamard_tied"]
+    if tied and has_output:
+        return LOAD_RULE_ERRORS["hadamard_tied"]
+    return 0
+
+
+def prism_embedding_status(has_version, version, tied, has_output, has_latent):
+    """src/llama-model.cpp:1345-1356 of the fork (the inverse tables are read only inside the version block)."""
+    latent = has_version and has_latent
+    if tied:
+        if version != 2 or not has_version:
+            return LOAD_RULE_ERRORS["hadamard_tied"]
+        if not latent:
+            return LOAD_RULE_ERRORS["hadamard_tied"]
+        return 0
+    if latent and not has_output:
+        return LOAD_RULE_ERRORS["hadamard_tied"]
+    return 0
+
+
+def hadamard_load_cases(runtime):
+    cites = {"version": load_cite(runtime, "src/llama-model.cpp:1198-1201"),
+             "tied": load_cite(runtime, "src/llama-model.cpp:1203-1208"),
+             "embedding": load_cite(runtime, "src/llama-model.cpp:1345-1356")}
+    cases = []
+
+    def case(version, tied, has_output, has_latent):
+        has_version = version is not None
+        is_tied = tied == "true"
+        keys = prism_keys_status(has_version, version or 0, is_tied, has_output)
+        embedding = prism_embedding_status(has_version, version or 0, is_tied, has_output, has_latent)
+        status = keys or embedding
+        header, file_size = hadamard_load_file(version, tied, has_output, has_latent)
+        name = "none" if version is None else str(version)
+        identifier = (f"hadamard_v{name}_tied_{tied}_{'output' if has_output else 'no_output'}"
+                      f"_{'latent' if has_latent else 'no_latent'}")
+        if status == 0:
+            reason = "the fork loads it"
+        elif status == LOAD_RULE_ERRORS["hadamard_version"]:
+            reason = "a version other than 1 or 2 throws"
+        elif not has_version:
+            reason = "tied_output with no version throws (a tied output needs version 2)"
+        elif keys:
+            reason = ("version 2 requires tied_output=true and version 1 forbids it" if (version == 2) != is_tied
+                      else "a tied output requires output.weight to be absent")
+        else:
+            reason = ("a tied output requires a latent token embedding" if is_tied
+                      else "a latent token embedding without output.weight requires version 2 and tied_output")
+        token = {0: None, -65: "hadamard_version", -88: "hadamard_tied"}[status]
+        cases.append({
+            "id": identifier,
+            "description": reason,
+            "facts": {"has_version": has_version, "version": version or 0, "tied_output": tied,
+                      "has_output": has_output, "has_latent": has_latent},
+            "gguf_hex": header.hex(), "file_size": file_size,
+            "expect": {"keys_status": keys, "embedding_status": embedding, "status": status, "error_class": token},
+            "cite": [cites["version"], cites["tied"], cites["embedding"]] if status else
+                    [cites["tied"], cites["embedding"]],
+        })
+
+    for tied in ("absent", "false", "true"):
+        for has_output in (False, True):
+            for has_latent in (False, True):
+                case(None, tied, has_output, has_latent)
+    for version in (1, 2):
+        for tied in ("absent", "false", "true"):
+            for has_output in (False, True):
+                for has_latent in (False, True):
+                    case(version, tied, has_output, has_latent)
+    for version, tied, has_output, has_latent in ((0, "absent", False, False), (3, "true", False, True),
+                                                  (3, "absent", True, False), (0xFFFFFFFF, "absent", True, False)):
+        case(version, tied, has_output, has_latent)
+    ids = [c["id"] for c in cases]
+    assert len(ids) == len(set(ids))
+    return cases
+
+
+# general.tensor_extra.*: (names array element type, names count) and (prec array element type, count);
+# a scalar is (kind, None). Encoded elements for the types the cases use.
+def tensor_extra_elements(elem, count):
+    if elem == GGUF_STR:
+        return [gguf_text(f"blk.{i}.attn_q.weight") for i in range(count)]
+    if elem == GGUF_BOOL:
+        return [bytes([i % 2]) for i in range(count)]
+    if elem == GGUF_I32:
+        return [struct.pack("<i", i) for i in range(count)]
+    if elem == GGUF_U8:
+        return [bytes([i % 2]) for i in range(count)]
+    raise AssertionError(elem)
+
+
+def tensor_extra_file(names, prec):
+    """names, prec: None (key absent), ("array", elem, count) or ("scalar", vtype)."""
+    keys = [gguf_kv("general.architecture", GGUF_STR, gguf_text("llama"))]
+    for key, shape in (("general.tensor_extra.name", names), ("general.tensor_extra.prec_a4", prec)):
+        if shape is None:
+            continue
+        if shape[0] == "array":
+            keys.append(gguf_kv_array(key, shape[1], tensor_extra_elements(shape[1], shape[2])))
+        elif shape[1] == GGUF_STR:
+            keys.append(gguf_kv(key, GGUF_STR, gguf_text("blk.0.attn_q.weight")))
+        else:
+            assert shape[1] == GGUF_BOOL
+            keys.append(gguf_kv(key, GGUF_BOOL, bytes([1])))
+    return gguf_header_file(keys, [gguf_tensor_record("w", [8, 1], 0, 0)], 32)
+
+
+def tensor_extra_shape(shape):
+    """(kind, element type, count) as the spec function takes them."""
+    if shape is None:
+        return GGUF_ABSENT, 0, 0
+    if shape[0] == "array":
+        return GGUF_ARR, shape[1], shape[2]
+    return shape[1], 0, 0
+
+
+def tensor_extra_status(names, prec):
+    """src/llama-model.cpp:1237-1272 and src/llama-model-loader.cpp:305-332 as control flow."""
+    names_kind, names_elem, names_len = tensor_extra_shape(names)
+    prec_kind, prec_elem, prec_len = tensor_extra_shape(prec)
+    if names_kind != GGUF_ARR:
+        return 0
+    if names_elem != GGUF_STR:
+        return LOAD_RULE_ERRORS["tensor_extra"]
+    if prec_kind != GGUF_ARR or prec_elem != GGUF_BOOL:
+        return LOAD_RULE_ERRORS["tensor_extra"]
+    if prec_len != names_len:
+        return LOAD_RULE_ERRORS["tensor_extra"]
+    return 0
+
+
+TENSOR_EXTRA_SHAPES = [
+    ("no_keys", None, None, "neither key is present"),
+    ("names_absent_prec_bool_array", None, ("array", GGUF_BOOL, 3), "no names key: the policy is not loaded"),
+    ("names_scalar_string", ("scalar", GGUF_STR), None, "a names key that is not an array reads as absent"),
+    ("names_scalar_bool_prec_int_array", ("scalar", GGUF_BOOL), ("array", GGUF_I32, 2),
+     "a names key that is not an array reads as absent, whatever prec_a4 holds"),
+    ("empty_names_empty_prec", ("array", GGUF_STR, 0), ("array", GGUF_BOOL, 0), "length 0 against length 0"),
+    ("one_name_one_flag", ("array", GGUF_STR, 1), ("array", GGUF_BOOL, 1), "length 1 against length 1"),
+    ("two_names_two_flags", ("array", GGUF_STR, 2), ("array", GGUF_BOOL, 2), "length 2 against length 2"),
+    ("sixty_four_names_sixty_four_flags", ("array", GGUF_STR, 64), ("array", GGUF_BOOL, 64),
+     "length 64 against length 64"),
+    ("two_names_one_flag", ("array", GGUF_STR, 2), ("array", GGUF_BOOL, 1), "prec_a4 shorter than the names"),
+    ("one_name_two_flags", ("array", GGUF_STR, 1), ("array", GGUF_BOOL, 2), "prec_a4 longer than the names"),
+    ("empty_names_one_flag", ("array", GGUF_STR, 0), ("array", GGUF_BOOL, 1), "no names against one flag"),
+    ("one_name_empty_prec", ("array", GGUF_STR, 1), ("array", GGUF_BOOL, 0), "one name against no flags"),
+    ("sixty_four_names_sixty_three_flags", ("array", GGUF_STR, 64), ("array", GGUF_BOOL, 63),
+     "length 64 against length 63"),
+    ("names_without_prec", ("array", GGUF_STR, 2), None, "prec_a4 is missing"),
+    ("empty_names_without_prec", ("array", GGUF_STR, 0), None, "prec_a4 is missing, though there are no names"),
+    ("prec_scalar_bool", ("array", GGUF_STR, 1), ("scalar", GGUF_BOOL), "prec_a4 is a bool, not an array"),
+    ("prec_int32_array", ("array", GGUF_STR, 2), ("array", GGUF_I32, 2), "prec_a4 is an int32 array"),
+    ("prec_uint8_array", ("array", GGUF_STR, 2), ("array", GGUF_U8, 2), "prec_a4 is a uint8 array"),
+    ("prec_string_array_empty", ("array", GGUF_STR, 0), ("array", GGUF_STR, 0), "prec_a4 is a string array"),
+    ("names_int32_array", ("array", GGUF_I32, 2), ("array", GGUF_BOOL, 2), "the names are int32, not strings"),
+    ("names_bool_array", ("array", GGUF_BOOL, 2), ("array", GGUF_BOOL, 2), "the names are bool, not strings"),
+    ("names_empty_int32_array", ("array", GGUF_I32, 0), None, "an empty array of int32 is still not a string array"),
+]
+
+
+def tensor_extra_cases(runtime, fork):
+    """fork False: stock llama.cpp (status per the rule); True: the PrismML fork (always loads)."""
+    cites = [load_cite(runtime, c) for c in ("src/llama-model.cpp:1237-1272", "src/llama-model-loader.cpp:305-332")]
+    cases = []
+    for identifier, names, prec, description in TENSOR_EXTRA_SHAPES:
+        stock = tensor_extra_status(names, prec)
+        if fork and stock == 0:
+            continue
+        header, file_size = tensor_extra_file(names, prec)
+        names_kind, names_elem, names_len = tensor_extra_shape(names)
+        prec_kind, prec_elem, prec_len = tensor_extra_shape(prec)
+        status = 0 if fork else stock
+        cases.append({
+            "id": f"tensor_extra_{identifier}",
+            "description": description + (" (stock llama.cpp refuses it; the fork has no reader)" if fork else ""),
+            "facts": {"names_kind": names_kind, "names_elem": names_elem, "names_len": names_len,
+                      "prec_kind": prec_kind, "prec_elem": prec_elem, "prec_len": prec_len},
+            "gguf_hex": header.hex(), "file_size": file_size,
+            "expect": {"status": status, "error_class": "tensor_extra" if status else None},
+            "cite": cites if not fork else [],
+        })
+    return cases
+
+
+def load_rules_document(family):
+    """The `load_rules` member of formats_prismml.json or formats_llama_cpp.json."""
+    if family == "prismml":
+        runtime = runtime_pin("prismml")
+        return {
+            "issue": LOAD_RULES_ISSUE,
+            "upstream": {"repo": runtime["repo"], "commit": runtime["commit"]},
+            "errors": {k: v for k, v in LOAD_RULE_ERRORS.items() if k != "tensor_extra"},
+            "hadamard": hadamard_load_cases(runtime),
+            "tensor_extra": tensor_extra_cases(runtime, True),
+        }
+    runtime = runtime_pin("llama_cpp")
+    return {
+        "issue": LOAD_RULES_ISSUE,
+        "upstream": {"repo": runtime["repo"], "commit": runtime["commit"]},
+        "errors": {"tensor_extra": LOAD_RULE_ERRORS["tensor_extra"]},
+        "gguf_types": {"bool": GGUF_BOOL, "string": GGUF_STR, "array": GGUF_ARR, "absent": GGUF_ABSENT},
+        "tensor_extra": tensor_extra_cases(runtime, False),
+    }
 
 
 FORMATS_BUILDERS = {"llama_cpp": build_formats_llama_cpp, "prismml": build_formats_prismml,

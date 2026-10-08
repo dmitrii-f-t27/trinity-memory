@@ -221,6 +221,75 @@ class SpecFormatsConformance(unittest.TestCase):
                                                              v["block_size"], zp))
                 self.assertEqual(status, v["expect"]["status"], v["id"])
 
+    def test_load_rules_of_issue_98(self):
+        """The cases of `load_rules` cover every combination and agree with the rules as the issue states them."""
+        prism, stock = load("prismml")["load_rules"], load("llama_cpp")["load_rules"]
+        for rules in (prism, stock):
+            self.assertEqual(rules["issue"], "https://github.com/dmitrii-f-t27/trinity-memory/issues/98")
+        self.assertEqual(prism["errors"], {"hadamard_version": -65, "hadamard_tied": -88})
+        self.assertEqual(stock["errors"], {"tensor_extra": -89})
+        # Hadamard: version absent / 1 / 2, tied_output absent / false / true, output.weight, latent token_embd.weight.
+        seen = set()
+        for c in prism["hadamard"]:
+            fa = c["facts"]
+            key = (fa["has_version"], fa["version"], fa["tied_output"], fa["has_output"], fa["has_latent"])
+            self.assertNotIn(key, seen, c["id"])
+            seen.add(key)
+            tied = fa["tied_output"] == "true"
+            if not fa["has_version"]:
+                want = -88 if tied else 0               # tied_output alone: a tied output needs version 2
+            elif fa["version"] not in (1, 2):
+                want = -65
+            elif (fa["version"] == 2) != tied:
+                want = -88                              # version 2 without tied_output, version 1 with it
+            elif tied and fa["has_output"]:
+                want = -88                              # tied_output with an output.weight
+            elif tied and not fa["has_latent"]:
+                want = -88                              # tied_output without a latent token_embd.weight
+            elif not tied and fa["has_latent"] and not fa["has_output"]:
+                want = -88                              # latent token_embd.weight without output.weight
+            else:
+                want = 0
+            self.assertEqual(c["expect"]["status"], want, c["id"])
+            self.assertEqual(c["expect"]["error_class"],
+                             {0: None, -65: "hadamard_version", -88: "hadamard_tied"}[want], c["id"])
+            self.assertTrue(bytes.fromhex(c["gguf_hex"]).startswith(b"GGUF"), c["id"])
+        every = {(True, v, t, o, la) for v in (1, 2) for t in ("absent", "false", "true")
+                 for o in (False, True) for la in (False, True)}
+        every |= {(False, 0, t, o, la) for t in ("absent", "false", "true") for o in (False, True) for la in (False, True)}
+        self.assertTrue(every <= seen)
+        self.assertEqual({c["expect"]["status"] for c in prism["hadamard"] if c["facts"]["version"] in (0, 3, 0xFFFFFFFF)
+                          and c["facts"]["has_version"]}, {-65})
+        # The accepting combinations of versions 1 and 2, exactly (the rest are refused with -88).
+        accepted = {(c["facts"]["version"], c["facts"]["tied_output"], c["facts"]["has_output"], c["facts"]["has_latent"])
+                    for c in prism["hadamard"] if c["facts"]["has_version"] and c["expect"]["status"] == 0}
+        self.assertEqual(accepted, {(1, t, o, la) for t in ("absent", "false") for o, la in
+                                    ((False, False), (True, False), (True, True))} | {(2, "true", False, True)})
+        # tensor_extra: stock llama.cpp refuses 14 shapes of 22; the fork loads all of them.
+        by_id = {c["id"]: c for c in stock["tensor_extra"]}
+        self.assertEqual(len(by_id), 22)
+        for c in stock["tensor_extra"]:
+            fa = c["facts"]
+            arr, string, boolean = 9, 8, 7
+            if fa["names_kind"] != arr:
+                want = 0
+            elif fa["names_elem"] != string or fa["prec_kind"] != arr or fa["prec_elem"] != boolean:
+                want = -89
+            else:
+                want = 0 if fa["prec_len"] == fa["names_len"] else -89
+            self.assertEqual(c["expect"]["status"], want, c["id"])
+            self.assertTrue(c["cite"] if want else True, c["id"])
+        refused = {c["id"] for c in stock["tensor_extra"] if c["expect"]["status"]}
+        self.assertEqual(len(refused), 14)
+        self.assertEqual({c["id"] for c in prism["tensor_extra"]}, refused)
+        for c in prism["tensor_extra"]:
+            self.assertEqual(c["expect"]["status"], 0, c["id"])
+            self.assertEqual(c["gguf_hex"], by_id[c["id"]]["gguf_hex"], c["id"])
+        # Lengths 0, 1 and N and a mismatch in each direction are all present.
+        shapes = {(c["facts"]["names_len"], c["facts"]["prec_len"]) for c in stock["tensor_extra"]
+                  if c["facts"]["names_kind"] == 9 and c["facts"]["prec_kind"] == 9 and c["facts"]["prec_elem"] == 7}
+        self.assertTrue({(0, 0), (1, 1), (2, 2), (64, 64), (2, 1), (1, 2), (0, 1), (1, 0), (64, 63)} <= shapes)
+
     def test_generator_output_is_committed(self):
         result = subprocess.run([sys.executable, str(ROOT / "tools" / "generate-spec-vectors.py"), "--check"],
                                 capture_output=True, text=True)
