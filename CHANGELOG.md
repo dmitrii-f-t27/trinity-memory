@@ -12,7 +12,7 @@ entries of 0.4.0 come from the release pull request itself.
 
 - Ternary Check Live: `llama.cpp-94256114` (ggml-org/llama.cpp@94256114, the commit Qualcomm
   GenieX pins as `third-party/llama.cpp`) is the fifth pinned runtime, so verdicts for that
-  pin are computed, not inferred from the older `e6ab7c1a` scan
+  pin are computed at it, not inferred from the verdicts at other llama.cpp pins
   ([qualcomm/GenieX#1515](https://github.com/qualcomm/GenieX/issues/1515)). Its spec
   `specs/runtimes/llama_cpp_94256114.json` holds the tables of `e6ab7c1a` (every cited file,
   including `gguf.cpp`, `llama-arch.cpp`, `llama-model.cpp` and `llama-model-loader.cpp`, has
