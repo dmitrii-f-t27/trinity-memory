@@ -10,6 +10,14 @@ entries of 0.4.0 come from the release pull request itself.
 
 ## [Unreleased]
 
+- Specs: the PrismML Hadamard version 2 and `tied_output` load rules (fork `87268f77`) are
+  stated in `specs/formats/prismml.t27`, and stock llama.cpp's `general.tensor_extra.*` rule
+  (`4364bf72`) in `specs/formats/llama_cpp.t27`, with `load_rules` cases (GGUF headers and facts)
+  in `conformance/formats_prismml.json` and `conformance/formats_llama_cpp.json`, replayed through
+  the spec functions and through `t27/live.t27`. Both specs now name issue
+  [#131](https://github.com/dmitrii-f-t27/trinity-memory/issues/131) and cover
+  [#98](https://github.com/dmitrii-f-t27/trinity-memory/issues/98). The rule that `tied_output`
+  must be bound to the token embedding is not stated (it depends on the architecture's graph builder).
 - Ternary Check Live: mortar.cpp (DosesAI/mortar.cpp@236418ec) is the fourth pinned
   runtime (issue #51). Its type table is in `specs/runtimes/mortar_cpp.json` (id 42 in
   128-weight groups, id 143 G8_0); its `gguf.cpp` is bitnet.cpp's blob, so the reader

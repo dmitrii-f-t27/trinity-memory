@@ -968,6 +968,104 @@ static void test_record_answers(void) {
     free(b.data);
 }
 
+/* ---- the cases of `load_rules` in conformance/formats_prismml.json and conformance/formats_llama_cpp.json
+ * (issue #98). The specs (specs/formats/prismml.t27 section 6, llama_cpp.t27 section 7) restate the rules and
+ * tests/native_spec_formats.c runs the facts of each case through them; here the same GGUF bytes go through
+ * the executable reader, so the spec functions and t27/live.t27 are held to one set of cases. */
+enum { RL_TOKENS = 200000, RL_ARENA = 4 << 20, RL_FILE = 4 << 20 };
+static TMJsonToken rl_tokens[RL_TOKENS];
+static uint8_t rl_arena[RL_ARENA], rl_file[RL_FILE];
+static size_t rl_count;
+
+static int64_t rl_member(int64_t object, const char *k) {
+    return tm_json_field(rl_tokens, rl_count, object, (uint8_t *)k, strlen(k));
+}
+static int64_t rl_need(int64_t object, const char *k) {
+    int64_t at = rl_member(object, k);
+    if (at < 0) { fprintf(stderr, "missing %s\n", k); abort(); }
+    return at;
+}
+static int64_t rl_int(int64_t object, const char *k) { return rl_tokens[rl_need(object, k)].integer; }
+static int rl_nibble(uint8_t c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    assert(c >= 'a' && c <= 'f');
+    return c - 'a' + 10;
+}
+static Buf rl_header(int64_t item, uint64_t *file_size) {
+    int64_t at = rl_need(item, "gguf_hex");
+    size_t n = rl_tokens[at].text_size / 2;
+    assert(n > 24 && rl_tokens[at].text_size % 2 == 0);
+    Buf b = {0};
+    b.data = malloc(n);
+    assert(b.data);
+    for (size_t i = 0; i < n; i++)
+        b.data[i] = (uint8_t)(rl_nibble(rl_tokens[at].text[2 * i]) * 16 + rl_nibble(rl_tokens[at].text[2 * i + 1]));
+    b.size = b.capacity = n;
+    *file_size = (uint64_t)rl_int(item, "file_size");
+    return b;
+}
+
+static size_t rl_load(const char *family, int64_t *rules) {
+    char path[128];
+    snprintf(path, sizeof path, "conformance/formats_%s.json", family);
+    FILE *file = fopen(path, "rb");
+    if (!file) { fprintf(stderr, "cannot open %s\n", path); abort(); }
+    size_t size = fread(rl_file, 1, sizeof rl_file, file);
+    assert(size < sizeof rl_file && feof(file));
+    fclose(file);
+    TMJsonResult result;
+    assert(tm_json_parse(rl_file, size, rl_tokens, RL_TOKENS, rl_arena, RL_ARENA, 16, &result) == 0);
+    rl_count = result.token_count;
+    *rules = rl_need(result.root, "load_rules");
+    return size;
+}
+
+static void rl_expect(int64_t item, int32_t runtime, const uint8_t *data, size_t size, uint64_t fs, int32_t status) {
+    TLVRun r;
+    int32_t v = tlv_runtime((uint8_t *)data, size, fs, runtime, &r);
+    if (status == 0) assert(v == TLV_RUN_ACCEPTS);
+    else assert(v == TLV_RUN_REFUSES && r.status == status);
+    (void)item;
+}
+
+static void test_spec_load_rules(void) {
+    int64_t rules;
+    size_t hadamard = 0, stock = 0, fork_loads = 0;
+    rl_load("prismml", &rules);
+    for (int64_t c = rl_tokens[rl_need(rules, "hadamard")].first; c >= 0; c = rl_tokens[c].next, hadamard++) {
+        uint64_t fs;
+        Buf b = rl_header(c, &fs);
+        int32_t status = (int32_t)rl_int(rl_need(c, "expect"), "status");
+        TLVHadamard h;
+        assert(hadamard_of(&b, fs, &h) == status);           /* the scanner's tlv_hadamard */
+        rl_expect(c, PRISM, b.data, b.size, fs, status);     /* the fork's verdict on the whole model */
+        TLVRun r;                                            /* a runtime that applies no rotation never refuses it */
+        assert(tlv_runtime(b.data, b.size, fs, LLAMA, &r) != TLV_RUN_REFUSES);
+        free(b.data);
+    }
+    assert(hadamard == 40);
+    for (int64_t c = rl_tokens[rl_need(rules, "tensor_extra")].first; c >= 0; c = rl_tokens[c].next, fork_loads++) {
+        uint64_t fs;
+        Buf b = rl_header(c, &fs);
+        assert(rl_int(rl_need(c, "expect"), "status") == 0);
+        rl_expect(c, PRISM, b.data, b.size, fs, 0);          /* no reader of general.tensor_extra.* in the fork */
+        free(b.data);
+    }
+    assert(fork_loads == 14);
+    rl_load("llama_cpp", &rules);
+    for (int64_t c = rl_tokens[rl_need(rules, "tensor_extra")].first; c >= 0; c = rl_tokens[c].next, stock++) {
+        uint64_t fs;
+        Buf b = rl_header(c, &fs);
+        int32_t status = (int32_t)rl_int(rl_need(c, "expect"), "status");
+        rl_expect(c, LLAMA, b.data, b.size, fs, status);     /* stock llama.cpp refuses or loads */
+        rl_expect(c, PRISM, b.data, b.size, fs, 0);
+        rl_expect(c, BITNET, b.data, b.size, fs, 0);
+        rl_expect(c, MORTAR, b.data, b.size, fs, 0);
+        free(b.data);
+    }
+    assert(stock == 22);
+}
+
 int main(void) {
     test_header_rules();
     test_record_rules();
@@ -980,9 +1078,10 @@ int main(void) {
     test_reader_limits();
     test_scanner_limits();
     test_record_answers();
+    test_spec_load_rules();
     printf("PASS live: gguf.cpp header, key and record rules, offsets in record order, file end, per-record places "
            "and fitting layouts, runtime tables, the PrismML Hadamard rules with GDN heads, C-string names, "
            "runtime verdicts, split models, the readers' own limits and bitnet.cpp's differences, the scanner's "
-           "limits\n");
+           "limits, and the 76 load-rule cases of conformance/formats_prismml.json and formats_llama_cpp.json\n");
     return 0;
 }
