@@ -37,7 +37,7 @@ if ! grep -Eq '^[[:space:]]*0[[:space:]]+TOTAL across 0 spec\(s\)[[:space:]]*$' 
     cat "$out/lexer.log" >&2
     exit 1
 fi
-for module in codecs container compute sparsity json json_writer formats runtimes live ternary_contract hadamard tensorpack tensorpack_json tensorpack_cli http bridge client random matvec matrix rtl_driver experiments reports python_api cli; do
+for module in codecs container compute sparsity json json_writer formats runtimes live ternary_contract hadamard tensorpack tensorpack_json tensorpack_cli http bridge client random matvec matrix rtl_driver experiments reports python_api chat_crypto cli; do
     "$compiler" parse-complete --show "t27/$module.t27" > "$out/$module.parse.log" 2>&1
     if ! grep -q 'nothing discarded' "$out/$module.parse.log"; then
         cat "$out/$module.parse.log" >&2
@@ -54,6 +54,22 @@ for module in codecs container compute sparsity json json_writer formats runtime
     awk '/Function implementations/ { exit }
         { if (NR > 2) print lines[(NR - 2) % 3]; lines[NR % 3] = $0 }
         END { print "#endif" }' "$out/$module.h" > "$out/$module.abi.h"
+done
+# Graph-memory rules (issue #136): the chat store calls the functions generated
+# from the specs vendored under specs/memory/graph (pinned to gHashTag/t27 by
+# specs/memory/graph/upstream.lock.json); there is no second implementation.
+for module in scope crypt temporal; do
+    "$compiler" parse-complete --show "specs/memory/graph/$module.t27" > "$out/graph_$module.parse.log" 2>&1
+    if ! grep -q 'nothing discarded' "$out/graph_$module.parse.log"; then
+        cat "$out/graph_$module.parse.log" >&2
+        exit 1
+    fi
+    "$compiler" gen-c "specs/memory/graph/$module.t27" > "$out/graph_$module.h.tmp"
+    if grep -E 'TODO|ENTRY POINT REFUSED|not a C constant expression' "$out/graph_$module.h.tmp"; then
+        echo "Incomplete generated C: specs/memory/graph/$module.t27" >&2
+        exit 1
+    fi
+    mv "$out/graph_$module.h.tmp" "$out/graph_$module.h"
 done
 sh tools/build-t27-rtl.sh
 sh tools/build-t27-wasm.sh
@@ -85,10 +101,10 @@ printf '%s\n' "$pin" > "$out/compiler.revision"
 "$cxx" --version > "$out/cxx-compiler.txt"
 printf 'CFLAGS=%s\nCXXFLAGS=%s\nLDFLAGS=%s\n' "${CFLAGS:-}" "${CXXFLAGS:-}" "${LDFLAGS:-}" > "$out/build-flags.txt"
 if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum t27/*.t27 t27/rtl/*.t27 native/*.c native/*.cpp native/*.h native/wasm-include/*.h native/compiler.lock tools/*.sh tools/*.py rtl/t27/*.v rtl/tb_dot_stream.v scripts/generate_rtl.py "$out"/*.h "$out"/codecs.wasm "$out"/formats.wasm "$out"/rtl/*.v "$out"/rtl/resources/*.v "$out"/rtl/resources/generated/*.v "$out/trinity-memory-t27" "$out/libtrinity_memory_t27.$extension" > "$out/SHA256SUMS"
+    sha256sum t27/*.t27 t27/rtl/*.t27 specs/memory/graph/*.t27 native/*.c native/*.cpp native/*.h native/wasm-include/*.h native/compiler.lock tools/*.sh tools/*.py rtl/t27/*.v rtl/tb_dot_stream.v scripts/generate_rtl.py "$out"/*.h "$out"/codecs.wasm "$out"/formats.wasm "$out"/rtl/*.v "$out"/rtl/resources/*.v "$out"/rtl/resources/generated/*.v "$out/trinity-memory-t27" "$out/libtrinity_memory_t27.$extension" > "$out/SHA256SUMS"
     sha256sum < "$compiler" > "$out/compiler.sha256"
 else
-    shasum -a 256 t27/*.t27 t27/rtl/*.t27 native/*.c native/*.cpp native/*.h native/wasm-include/*.h native/compiler.lock tools/*.sh tools/*.py rtl/t27/*.v rtl/tb_dot_stream.v scripts/generate_rtl.py "$out"/*.h "$out"/codecs.wasm "$out"/formats.wasm "$out"/rtl/*.v "$out"/rtl/resources/*.v "$out"/rtl/resources/generated/*.v "$out/trinity-memory-t27" "$out/libtrinity_memory_t27.$extension" > "$out/SHA256SUMS"
+    shasum -a 256 t27/*.t27 t27/rtl/*.t27 specs/memory/graph/*.t27 native/*.c native/*.cpp native/*.h native/wasm-include/*.h native/compiler.lock tools/*.sh tools/*.py rtl/t27/*.v rtl/tb_dot_stream.v scripts/generate_rtl.py "$out"/*.h "$out"/codecs.wasm "$out"/formats.wasm "$out"/rtl/*.v "$out"/rtl/resources/*.v "$out"/rtl/resources/generated/*.v "$out/trinity-memory-t27" "$out/libtrinity_memory_t27.$extension" > "$out/SHA256SUMS"
     shasum -a 256 < "$compiler" > "$out/compiler.sha256"
 fi
 echo "Built $out/trinity-memory-t27 from executable .t27 sources"

@@ -1,0 +1,2089 @@
+{
+  "constants": {
+    "aad_bytes": 44,
+    "alg_chacha20_poly1305": 1,
+    "envelope_header_bytes": 24,
+    "envelope_max_plaintext_bytes": 1048576,
+    "envelope_overhead_bytes": 40,
+    "key_bytes": 32,
+    "key_states": {
+      "active": 1,
+      "destroyed": 3,
+      "retired": 2
+    },
+    "max_seals_per_key": 4294967296,
+    "nonce_bytes": 12,
+    "open_status": {
+      "header": -1,
+      "key_destroyed": -2,
+      "key_version": -3,
+      "kms_denied": -4,
+      "ok": 0,
+      "tag": -5
+    },
+    "service_token_max_ttl": 900,
+    "service_token_skew": 30,
+    "tag_bytes": 16,
+    "token_bytes": 16
+  },
+  "created_at": "2026-10-08T00:00:00Z",
+  "description": "Key states, envelope and associated-data layout, open status order, service tokens, and exact TGE1 envelopes from a pure-Python ChaCha20-Poly1305 (RFC 8439), with the published RFC 8439, RFC 4231, RFC 5869 and FIPS 180-4 vectors that t27/chat_crypto.t27 must reproduce.",
+  "format_family": "Conformance",
+  "generator": "tools/generate-spec-vectors.py (tools/graph_memory_vectors.py)",
+  "invariants": [
+    {
+      "condition": "ENV_NONCE_OFFSET + NONCE_BYTES == ENV_HEADER_BYTES",
+      "id": "header_is_contiguous"
+    },
+    {
+      "condition": "ENV_HEADER_BYTES + TAG_BYTES == ENV_OVERHEAD_BYTES",
+      "id": "overhead_is_header_and_tag"
+    },
+    {
+      "condition": "AAD_KEY_VERSION_OFFSET + 4 == AAD_BYTES",
+      "id": "aad_is_contiguous"
+    },
+    {
+      "condition": "TOKEN_BYTES <= HMAC_BYTES",
+      "id": "token_is_a_hmac_prefix"
+    }
+  ],
+  "module": "MemoryGraphCrypt",
+  "schema_version": 2,
+  "spec_path": "specs/memory/graph/crypt.t27",
+  "vector_name": "Graph memory sealing",
+  "vectors": [
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        0,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        0,
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        0,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        0,
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        0,
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        1,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        1,
+        1
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "key_transition_ok",
+      "input": [
+        1,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "key_transition_ok",
+      "input": [
+        1,
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        1,
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        2,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        2,
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        2,
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "key_transition_ok",
+      "input": [
+        2,
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        2,
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        3,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        3,
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        3,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        3,
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        3,
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        4,
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        4,
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        4,
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        4,
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "key_transition_ok",
+      "input": [
+        4,
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "is_key_state",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_seal",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_open",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": 0,
+      "fn": "forget",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "is_key_state",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_seal",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_open",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": 3,
+      "fn": "forget",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "is_key_state",
+      "input": [
+        2
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_seal",
+      "input": [
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "may_open",
+      "input": [
+        2
+      ]
+    },
+    {
+      "expected": 3,
+      "fn": "forget",
+      "input": [
+        2
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "is_key_state",
+      "input": [
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_seal",
+      "input": [
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_open",
+      "input": [
+        3
+      ]
+    },
+    {
+      "expected": 3,
+      "fn": "forget",
+      "input": [
+        3
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "is_key_state",
+      "input": [
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_seal",
+      "input": [
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "may_open",
+      "input": [
+        4
+      ]
+    },
+    {
+      "expected": 3,
+      "fn": "forget",
+      "input": [
+        4
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "must_rotate",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "must_rotate",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "must_rotate",
+      "input": [
+        4294967295
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "must_rotate",
+      "input": [
+        4294967296
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "must_rotate",
+      "input": [
+        4294967297
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "plaintext_bytes",
+      "input": [
+        0
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "plaintext_bytes",
+      "input": [
+        1
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "plaintext_bytes",
+      "input": [
+        39
+      ]
+    },
+    {
+      "expected": 0,
+      "fn": "plaintext_bytes",
+      "input": [
+        40
+      ]
+    },
+    {
+      "expected": 1,
+      "fn": "plaintext_bytes",
+      "input": [
+        41
+      ]
+    },
+    {
+      "expected": 1048576,
+      "fn": "plaintext_bytes",
+      "input": [
+        1048616
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "plaintext_bytes",
+      "input": [
+        1048617
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        1,
+        1,
+        0,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        85,
+        71,
+        69,
+        49,
+        1,
+        1,
+        0,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        72,
+        69,
+        49,
+        1,
+        1,
+        0,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        70,
+        49,
+        1,
+        1,
+        0,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        50,
+        1,
+        1,
+        0,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        2,
+        1,
+        0,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        1,
+        2,
+        0,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        1,
+        1,
+        1,
+        0,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        1,
+        1,
+        0,
+        1,
+        1,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        1,
+        1,
+        0,
+        0,
+        0,
+        45
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        1,
+        1,
+        0,
+        0,
+        1,
+        39
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "header_ok",
+      "input": [
+        84,
+        71,
+        69,
+        49,
+        1,
+        1,
+        0,
+        0,
+        1,
+        40
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        0,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        1,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        2,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        3,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -1,
+      "fn": "open_status",
+      "input": [
+        false,
+        4,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        0,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -4,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -4,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -5,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": 0,
+      "fn": "open_status",
+      "input": [
+        true,
+        1,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -3,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -4,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -4,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -5,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": 0,
+      "fn": "open_status",
+      "input": [
+        true,
+        2,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        3,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        true,
+        false,
+        true
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "expected": -2,
+      "fn": "open_status",
+      "input": [
+        true,
+        4,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "service_token_ok",
+      "input": [
+        1000,
+        1900,
+        1000
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "service_token_ok",
+      "input": [
+        1000,
+        1900,
+        1899
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "service_token_ok",
+      "input": [
+        1000,
+        1900,
+        1900
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "service_token_ok",
+      "input": [
+        1000,
+        1901,
+        1000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "service_token_ok",
+      "input": [
+        1000,
+        0,
+        1000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "service_token_ok",
+      "input": [
+        0,
+        900,
+        100
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "service_token_ok",
+      "input": [
+        1000,
+        1000,
+        999
+      ]
+    },
+    {
+      "expected": true,
+      "fn": "service_token_ok",
+      "input": [
+        1030,
+        1100,
+        1000
+      ]
+    },
+    {
+      "expected": false,
+      "fn": "service_token_ok",
+      "input": [
+        1031,
+        1100,
+        1000
+      ]
+    },
+    {
+      "expected": "5447413103000000010000000000000002000000000000000000000000000000090000000000000001000000",
+      "fn": "aad",
+      "input": [
+        3,
+        1,
+        2,
+        0,
+        9,
+        1
+      ]
+    },
+    {
+      "expected": "54474131010000000201000000000000070000000000000005000000000000002b1a00000000000004030201",
+      "fn": "aad",
+      "input": [
+        1,
+        258,
+        7,
+        5,
+        6699,
+        16909060
+      ]
+    },
+    {
+      "expected": "5447413102000000ffffffffffffff7f010000000000000000000000000000000100000000000000ffffffff",
+      "fn": "aad",
+      "input": [
+        2,
+        9223372036854775807,
+        1,
+        0,
+        1,
+        4294967295
+      ]
+    },
+    {
+      "expected": "544745310101000001000000000102030405060708090a0b4cc016acf8494ebc38d15471c572167a",
+      "fn": "envelope",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_version": 1,
+      "nonce": "000102030405060708090a0b",
+      "plaintext": "",
+      "scope": [
+        3,
+        11,
+        22,
+        0,
+        1000
+      ]
+    },
+    {
+      "expected": "544745310101000001000000010102030405060708090a0b8706e4e5c25a5fc95c4e7a869979155cc6",
+      "fn": "envelope",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_version": 1,
+      "nonce": "010102030405060708090a0b",
+      "plaintext": "78",
+      "scope": [
+        3,
+        11,
+        22,
+        0,
+        1001
+      ]
+    },
+    {
+      "expected": "544745310101000001000000020102030405060708090a0b5c15d2a57b74f2afd97d3cb74b00c14fc336fcab56d15104777447ac902f3db4ae07636a0b5afe9eacc0c476f2f2996ebfe6a2d7030c1828df5c7ae1323dc39a77fe3945ab04531a09d8d59070d0e4a9",
+      "fn": "envelope",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_version": 1,
+      "nonce": "020102030405060708090a0b",
+      "plaintext": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "scope": [
+        3,
+        11,
+        22,
+        0,
+        1002
+      ]
+    },
+    {
+      "expected": "544745310101000001000000030102030405060708090a0bec80ce846a2b6039235d8c7910d189ff1f6c0d6a7cbae3c71220292535e272fb3ab35ff449b08ef69b6458c182cc1d19d8dd21f6d099ed4b2690649f79fd68536fb9c857b10d83a327f22771ac8f755b23",
+      "fn": "envelope",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_version": 1,
+      "nonce": "030102030405060708090a0b",
+      "plaintext": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+      "scope": [
+        3,
+        11,
+        22,
+        0,
+        1003
+      ]
+    },
+    {
+      "expected": "544745310101000001000000040102030405060708090a0b5ddf028a214595b041b46f6543cb1a546b43688bd0dea902ae67ab6d5feba048715f56979691ea6114763c75ed7d762c8e40ba3575004057de0f3b65afc073896c28",
+      "fn": "envelope",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_version": 1,
+      "nonce": "040102030405060708090a0b",
+      "plaintext": "d090d0bdd0bdd0b020d180d0b0d0b1d0bed182d0b0d0b5d18220d0b22041636d6520d181203230323620d0b3d0bed0b4d0b0",
+      "scope": [
+        3,
+        11,
+        22,
+        0,
+        1004
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": 6,
+      "fn": "open",
+      "held_version": 1,
+      "id": "same_row",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -5,
+      "fn": "open",
+      "held_version": 1,
+      "id": "other_kind",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        3,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -5,
+      "fn": "open",
+      "held_version": 1,
+      "id": "other_owner",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        12,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -5,
+      "fn": "open",
+      "held_version": 1,
+      "id": "other_user",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        23,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -5,
+      "fn": "open",
+      "held_version": 1,
+      "id": "other_thread",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        34,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -5,
+      "fn": "open",
+      "held_version": 1,
+      "id": "other_record",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        45
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -4,
+      "fn": "open",
+      "held_version": 1,
+      "id": "kms_denied",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": false,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": 6,
+      "fn": "open",
+      "held_version": 1,
+      "id": "retired_key",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 2,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -2,
+      "fn": "open",
+      "held_version": 1,
+      "id": "destroyed_key",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 3,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -3,
+      "fn": "open",
+      "held_version": 2,
+      "id": "other_version",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101000001000000000000000000000000000000593979df5b2e81c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -5,
+      "fn": "open",
+      "held_version": 1,
+      "id": "flipped_ciphertext",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "554745310101000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -1,
+      "fn": "open",
+      "held_version": 1,
+      "id": "bad_magic",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310001000001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -1,
+      "fn": "open",
+      "held_version": 1,
+      "id": "bad_version",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "envelope": "544745310101010001000000000000000000000000000000593979df5b2e80c0d02cd5bee73cdf9d32b0b8487e14",
+      "expected": -1,
+      "fn": "open",
+      "held_version": 1,
+      "id": "bad_reserved",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "key_state": 1,
+      "kms_ok": true,
+      "scope": [
+        1,
+        11,
+        22,
+        33,
+        44
+      ]
+    },
+    {
+      "dek": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "expected": "84764177d477f558529fa8eb6c2e28c001888bcc2e5e8cfe4ab4b3c890e011d5",
+      "fn": "index_key",
+      "info": "544720696e646578207631"
+    },
+    {
+      "expected": "fc619b0b59a3eab95ebae24cca24eab2",
+      "field": 1,
+      "fn": "token",
+      "index_key": "84764177d477f558529fa8eb6c2e28c001888bcc2e5e8cfe4ab4b3c890e011d5",
+      "term": "anna"
+    },
+    {
+      "expected": "07e52325636137d8974db07f44384495",
+      "field": 2,
+      "fn": "token",
+      "index_key": "84764177d477f558529fa8eb6c2e28c001888bcc2e5e8cfe4ab4b3c890e011d5",
+      "term": "acme"
+    },
+    {
+      "expected": "e7619f7858f283f06c6c0286a0917071",
+      "field": 2,
+      "fn": "token",
+      "index_key": "84764177d477f558529fa8eb6c2e28c001888bcc2e5e8cfe4ab4b3c890e011d5",
+      "term": "работает"
+    },
+    {
+      "expected": "7ca7d04112cd7ba05dc69359e79c4054",
+      "field": 2,
+      "fn": "token",
+      "index_key": "84764177d477f558529fa8eb6c2e28c001888bcc2e5e8cfe4ab4b3c890e011d5",
+      "term": ""
+    },
+    {
+      "block": "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4ed2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e",
+      "counter": 1,
+      "fn": "rfc8439",
+      "id": "chacha20_block_2_3_2",
+      "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "nonce": "000000090000004a00000000"
+    },
+    {
+      "fn": "rfc8439",
+      "id": "poly1305_2_5_2",
+      "key": "85d6be7857556d337f4452fe42d506a80103808afb0db2fd4abff6af4149f51b",
+      "message": "43727970746f6772617068696320466f72756d2052657365617263682047726f7570",
+      "tag": "a8061dc1305136c6c22b8baf0c0127a9"
+    },
+    {
+      "aad": "50515253c0c1c2c3c4c5c6c7",
+      "ciphertext": "d31a8d34648e60db7b86afbc53ef7ec2a4aded51296e08fea9e2b5a736ee62d63dbea45e8ca9671282fafb69da92728b1a71de0a9e060b2905d6a5b67ecd3b3692ddbd7f2d778b8c9803aee328091b58fab324e4fad675945585808b4831d7bc3ff4def08e4b7a9de576d26586cec64b6116",
+      "fn": "rfc8439",
+      "id": "aead_2_8_2",
+      "key": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f",
+      "nonce": "070000004041424344454647",
+      "plaintext": "4c616469657320616e642047656e746c656d656e206f662074686520636c617373206f66202739393a204966204920636f756c64206f6666657220796f75206f6e6c79206f6e652074697020666f7220746865206675747572652c2073756e73637265656e20776f756c642062652069742e",
+      "tag": "1ae10b594f09e26a7e902ecbd0600691"
+    },
+    {
+      "case": 2,
+      "data": "7768617420646f2079612077616e7420666f72206e6f7468696e673f",
+      "fn": "rfc4231",
+      "hmac": "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843",
+      "key": "4a656665"
+    },
+    {
+      "case": 6,
+      "data": "54657374205573696e67204c6172676572205468616e20426c6f636b2d53697a65204b6579202d2048617368204b6579204669727374",
+      "fn": "rfc4231",
+      "hmac": "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54",
+      "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "case": 1,
+      "fn": "rfc5869",
+      "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "info": "f0f1f2f3f4f5f6f7f8f9",
+      "length": 42,
+      "okm": "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865",
+      "salt": "000102030405060708090a0b0c"
+    },
+    {
+      "case": 3,
+      "fn": "rfc5869",
+      "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "info": "",
+      "length": 42,
+      "okm": "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8",
+      "salt": ""
+    },
+    {
+      "fn": "fips180_4",
+      "message": "",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "fn": "fips180_4",
+      "message": "616263",
+      "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    },
+    {
+      "fn": "fips180_4",
+      "message": "6162636462636465636465666465666765666768666768696768696a68696a6b696a6b6c6a6b6c6d6b6c6d6e6c6d6e6f6d6e6f706e6f7071",
+      "sha256": "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+    }
+  ]
+}

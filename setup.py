@@ -38,7 +38,7 @@ def native_artifacts():
         if not path.is_file() or sha256(path.read_bytes()).hexdigest() != digest:
             raise RuntimeError(f"Native build provenance is stale at {name}; rebuild tools/build-t27.sh")
         entries[name] = digest
-    for source in [*ROOT.glob("t27/*.t27"), *ROOT.glob("t27/rtl/*.t27"),
+    for source in [*ROOT.glob("t27/*.t27"), *ROOT.glob("t27/rtl/*.t27"), *ROOT.glob("specs/memory/graph/*.t27"),
                    *ROOT.glob("native/*.c"), *ROOT.glob("native/*.cpp"), *ROOT.glob("native/*.h")]:
         if source.relative_to(ROOT).as_posix() not in entries:
             raise RuntimeError(f"Native source was added after the build: {source.name}; rebuild")

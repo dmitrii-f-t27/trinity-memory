@@ -32,3 +32,7 @@
 #include "experiments.h"
 #include "reports.h"
 #include "python_api.h"
+#include "chat_crypto.h"
+#include "graph_scope.h"
+#include "graph_crypt.h"
+#include "graph_temporal.h"

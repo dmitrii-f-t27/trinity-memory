@@ -3609,6 +3609,14 @@ FORMATS_BUILDERS = {"llama_cpp": build_formats_llama_cpp, "prismml": build_forma
                     "mlx": build_formats_mlx, "onnx": build_formats_onnx}
 
 
+def load_graph_memory_vectors():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("graph_memory_vectors", ROOT / "tools" / "graph_memory_vectors.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def render(document):
     return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -3621,6 +3629,10 @@ def main():
                  (TENSORPACK_OUTPUT, render(build_tensorpack())), (STREAM_OUTPUT, render(build_stream_compute())),
                  (LAB_OUTPUT, render(build_conformance())), (EDGE_OUTPUT, render(build_edge_demo())))
     documents += tuple((FORMATS_OUTPUTS[family], render(builder())) for family, builder in FORMATS_BUILDERS.items())
+    # Graph memory (issue #136): specs vendored from gHashTag/t27 under specs/memory/graph.
+    graph = load_graph_memory_vectors()
+    graph.self_check()
+    documents += tuple((ROOT / "conformance" / name, render(builder())) for name, builder in graph.OUTPUTS.items())
     stale = 0
     for output, text in documents:
         if args.check:
