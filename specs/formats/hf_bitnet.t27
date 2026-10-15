@@ -168,21 +168,23 @@ module TrinityFormatsHfBitnetSpec {
     invariant hf_four_codes_per_byte { assert TFS_HF_VALUES_PER_ITEM * TFS_HF_CODE_BITS == 8; }
     invariant hf_scale_is_one_word_per_tensor { assert TFS_HF_SCALE_BITS_BF16 == 16; }
 
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "hf unpack example from the transformers docstring" {
         var packed: [4]u8 = [161, 24, 144, 10];
-        var v: [16]i32;
+        var v: [16]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_hf_decode(packed, 4, 8, 2, v, 16) == 0;
         assert v[0] == 0 && v[1] == -1 && v[2] == -1 && v[3] == 1 && v[4] == -1 && v[5] == 1;
         assert v[6] == -1 && v[7] == 1 && v[8] == 1 && v[9] == 0 && v[10] == 0 && v[11] == -1;
         assert v[12] == 1 && v[13] == -1 && v[14] == 1 && v[15] == -1;
-        var again: [4]u8;
+        var again: [4]u8 = [0, 0, 0, 0];
         assert tfs_hf_encode(v, 8, 2, again, 4) == 4;
         assert again[0] == 161 && again[1] == 24 && again[2] == 144 && again[3] == 10;
         assert tfs_hf_weight(packed, 8, 2, 7, 1) == -1;
     }
     test "hf rejections and scale classes" {
         var packed: [4]u8 = [255, 24, 144, 10];
-        var v: [16]i32;
+        var v: [16]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_hf_decode(packed, 4, 8, 2, v, 16) == 4;
         assert tfs_hf_decode(packed, 4, 6, 2, v, 16) == TFS_HF_ERR_LENGTH;
         assert tfs_hf_decode(packed, 3, 8, 2, v, 16) == TFS_HF_ERR_LENGTH;

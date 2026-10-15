@@ -109,8 +109,6 @@ jobs:
         run: python -m unittest tests.test_gf16_attn_sim.AttentionRtlTest.test_two_positions_rope_and_softmax tests.test_gf16_attn_sim.AttentionRtlTest.test_result_only_mode -v
       - name: Recheck committed physical board captures
         run: python reports/fpga/gf16-ffn-2026-10-01-24917fa7/verify-captures.py
-      - name: Recheck committed performance evidence
-        run: python reports/fpga/gf16-performance-2026-10-01/verify-evidence.py
       - name: Recheck paired physical performance captures
         run: python reports/fpga/gf16-performance-2026-10-01/verify-board-evidence.py
       - name: Recheck attention simulations and physical raw CRC evidence offline
@@ -127,6 +125,11 @@ jobs:
           python tools/measure_gf16_ffn.py
           --vectors build/gf16-ffn/replay/prompt-0-token-0
           --output build/gf16-ffn/performance
+      # After the measurement, so a compiler pin change still yields the Linux
+      # record that the committed bounded reports must match; this step fails
+      # the job exactly as before when they do not.
+      - name: Recheck committed performance evidence
+        run: python reports/fpga/gf16-performance-2026-10-01/verify-evidence.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -138,4 +141,7 @@ jobs:
             build/gf16-ffn/performance/*/simulation.log
             build/gf16-ffn/replay/prompt-*/capture.txt
             build/gf16-ffn/replay/prompt-*/rtl.log
+            build/gf16-ffn/replay/prompt-0-token-0/*.bin
+            build/gf16-ffn/replay/prompt-0-token-0/inputs.json
+            build/gf16-ffn/replay/prompt-0-token-0/reference.json
             build/bitnet-capture/linux-report.json

@@ -204,32 +204,34 @@ module TrinityFormatsBitnetCppSpec {
     invariant bitnet_two_bits_per_weight_plus_256_per_tensor { assert TFS_BITNET_CODE_BITS * 4 == 8 && TFS_BITNET_TAIL_BYTES * 8 == 256; }
     invariant bitnet_type_ids { assert TFS_BITNET_TYPE_I2_S == 36 && TFS_BITNET_TYPE_TL1 == 38 && TFS_BITNET_TYPE_TL2 == 42 && TFS_BITNET_TYPE_COUNT == 43; }
 
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "bitnet i2_s packs weights 32 apart into one byte" {
-        var t: [128]i32;
+        var t: [128]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 128) { t[i] = 0; i = i + 1; }
         t[0] = 1; t[32] = 0; t[64] = -1; t[96] = 1;
-        var out: [64]u8;
+        var out: [64]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_bitnet_encode(0, t, 1, 128, 1065353216, out, 64) == 64;
         assert out[0] == 146 && out[1] == 85 && out[32] == 0 && out[35] == 63;
-        var v: [128]i32;
-        var s: [1]u32;
+        var v: [128]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var s: [1]u32 = [0];
         assert tfs_bitnet_decode(out, 64, 128, v, 128, s) == 0;
         assert v[0] == 1 && v[32] == 0 && v[64] == -1 && v[96] == 1 && s[0] == 1065353216;
-        var f: [7]i64;
+        var f: [7]i64 = [0, 0, 0, 0, 0, 0, 0];
         assert tfs_bitnet_flags(out, 64, 128, f) == 0 && f[4] == 0;
         out[40] = 7; out[0] = 255;
         assert tfs_bitnet_flags(out, 64, 128, f) == 0 && f[4] == 1 && f[0] == 4;
         assert tfs_bitnet_decode(out, 64, 128, v, 128, s) == 4 && v[0] == 2;
     }
     test "bitnet other layouts put the same codes in other bytes" {
-        var t: [128]i32;
+        var t: [128]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 128) { t[i] = 0; i = i + 1; }
         t[16] = 1;
-        var x86: [64]u8;
-        var arm: [64]u8;
-        var rows4: [64]u8;
+        var x86: [64]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var arm: [64]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var rows4: [64]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_bitnet_encode(0, t, 4, 32, 0, x86, 64) == 64;
         assert tfs_bitnet_encode(1, t, 4, 32, 0, arm, 64) == 64;
         assert tfs_bitnet_encode(2, t, 4, 32, 0, rows4, 64) == 64;
@@ -238,25 +240,25 @@ module TrinityFormatsBitnetCppSpec {
         // ARM bytes read as ACT_PARALLEL move weight 16 to weight 32.
         assert tfs_bitnet_code(arm, 16) == 1 && tfs_bitnet_code(arm, 32) == 2;
         // quants.c's quantize_i2_s layout read as ACT_PARALLEL moves weight 16 to weight 4.
-        var seq: [64]u8;
+        var seq: [64]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_bitnet_encode(3, t, 4, 32, 0, seq, 64) == 64;
         assert tfs_bitnet_code_seq(seq, 16) == 2 && seq[4] == 149;
         assert tfs_bitnet_code(seq, 4) == 2 && tfs_bitnet_code(seq, 16) == 1;
         assert tfs_bitnet_encode(2, t, 2, 64, 0, rows4, 64) == TFS_BITNET_ERR_LENGTH;
     }
     test "bitnet rejects lengths and non-finite scales" {
-        var d: [64]u8;
+        var d: [64]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 64) { d[i] = 85; i = i + 1; }
         d[32] = 0; d[33] = 0; d[34] = 192; d[35] = 127;
-        var v: [128]i32;
-        var s: [1]u32;
+        var v: [128]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var s: [1]u32 = [0];
         assert tfs_bitnet_decode(d, 64, 128, v, 128, s) == TFS_BITNET_ERR_SCALE_NONFINITE;
         assert tfs_bitnet_decode(d, 63, 128, v, 128, s) == TFS_BITNET_ERR_LENGTH;
         assert tfs_bitnet_decode(d, 64, 64, v, 128, s) == TFS_BITNET_ERR_LENGTH;
         assert tfs_bitnet_decode(d, 64, 128, v, 127, s) == TFS_BITNET_ERR_CAPACITY;
         d[35] = 191; d[34] = 128;
-        var f: [7]i64;
+        var f: [7]i64 = [0, 0, 0, 0, 0, 0, 0];
         assert tfs_bitnet_flags(d, 64, 128, f) == 0 && f[2] == 1 && f[3] == 0;
         // BitNet b1.58 2B4T blk.0.ffn_down: ne [6912, 2560] -> 4423712 bytes.
         assert tfs_bitnet_bytes(17694720) == 4423712;

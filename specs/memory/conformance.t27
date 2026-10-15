@@ -252,9 +252,11 @@ module TrinityMemoryConformanceLabSpec {
         assert tms_lab_activation_valid(-128) && tms_lab_activation_valid(127) && !tms_lab_activation_valid(128);
         assert tms_lab_fixture_size_valid(16777216) && !tms_lab_fixture_size_valid(16777217);
     }
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "the dot of the fixture vectors" {
-        var weights: [7]i32;
-        var activations: [7]i32;
+        var weights: [7]i32 = [0, 0, 0, 0, 0, 0, 0];
+        var activations: [7]i32 = [0, 0, 0, 0, 0, 0, 0];
         weights[0] = 1; weights[1] = -1; weights[2] = 0; weights[3] = 1; weights[4] = 0; weights[5] = -1; weights[6] = 1;
         activations[0] = 127; activations[1] = -128; activations[2] = 55; activations[3] = 2; activations[4] = -90; activations[5] = 3; activations[6] = -4;
         assert tms_lab_dot(weights, activations, 7) == 250;
