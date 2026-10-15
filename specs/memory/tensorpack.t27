@@ -243,8 +243,10 @@ module TrinityMemoryTensorPackSpec {
         assert !tms_ttpk_header_limits_valid(1048576, 1024, 67108865);
         assert tms_ttpk_header_limits_valid(0, 0, 0);
     }
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "shape counts multiply valid dimensions in c order" {
-        var shape: [17]u64;
+        var shape: [17]u64 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 17) { shape[i] = 1; i = i + 1; }
         assert tms_ttpk_shape_count(shape, 0) == 1;
@@ -287,8 +289,8 @@ module TrinityMemoryTensorPackSpec {
         assert !tms_ttpk_scale_valid(0.0) && !tms_ttpk_scale_valid(-1.0);
     }
     test "descriptors cover the payload contiguously" {
-        var offsets: [2]u64;
-        var lengths: [2]u64;
+        var offsets: [2]u64 = [0, 0];
+        var lengths: [2]u64 = [0, 0];
         offsets[0] = 0; offsets[1] = 25;
         lengths[0] = 25; lengths[1] = 26;
         assert tms_ttpk_chain_valid(offsets, lengths, 2, 51);

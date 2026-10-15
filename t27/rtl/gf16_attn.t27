@@ -39,6 +39,9 @@ module TrinityGf16AttnT27;
 // 69 error; stages n=103,q=104,k=105,v=106,qr=107,kr=108,sc=109,a=110,
 // c=111,o=112,r=113.
 fn pick(flag: bool, a: u64, b: u64) -> u64 { if (flag) { return a; } return b; }
+// pick returns u64. A u32 register that takes its result narrows it explicitly with `as u32`
+// (the low 32 bits, the width the register always had in the netlist): every selected value is
+// a u32 word (sample_q: vr2 or ur2) or a state or tag constant below 2^16, so no bit is dropped.
 fn carry(a: u64, b: u64) -> u64 {
     // Carry-out from the sign bit of the wrapped sum. Reuse the adder;
     // comparing the full sum with a would add another 64-bit carry chain.
@@ -319,7 +322,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         index = 0; sumsq0 = 0; sumsq1 = 0; state = 1021;
     }
     if (state == 21) {
-        sample_q = pick(norm_pass == 0, vr2, ur2);
+        sample_q = pick(norm_pass == 0, vr2, ur2) as u32;
         state = 22;
     }
     if (state == 22) {
@@ -383,7 +386,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     }
     if (state == 40) {
         // Per lane: q = div_rne(mag(t)*mag(w) << 16, rms), sign of t xor w.
-        sample_q = pick(norm_pass == 0, vr2, ur2);
+        sample_q = pick(norm_pass == 0, vr2, ur2) as u32;
         weight_q = gr2;
         state = 41;
     }
@@ -421,7 +424,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     }
     if (state == 47) {
         gate[index & 8191] = quant as u32;
-        emit_tag = pick(norm_pass == 0,103,111); emit_index = index; emit_value = quant as u32; after_emit = 46; state = pick(result_only,46,300);
+        emit_tag = pick(norm_pass == 0,103,111) as u32; emit_index = index; emit_value = quant as u32; after_emit = 46; state = pick(result_only,46,300) as u32;
     }
     if (state == 50) {
         // q projection: H rows x H cols into gate[H..2H-1].
@@ -477,7 +480,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
         if (projection_stage == 1) { up[(store_base+row) & 8191] = quant as u32; }
         if (projection_stage == 2) { vec[(store_base+row) & 8191] = quant as u32; }
         if (projection_stage == 3) { gate[(store_base+row) & 8191] = quant as u32; }
-        emit_tag = proj_tag; emit_index = row; emit_value = quant as u32; after_emit = 800; state = pick(result_only,800,300);
+        emit_tag = proj_tag; emit_index = row; emit_value = quant as u32; after_emit = 800; state = pick(result_only,800,300) as u32;
     }
     if (state == 90) {
         // RoPE rotation of q (in place in gate[H..2H-1]).
@@ -561,7 +564,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     }
     if (state == 110) {
         // qr = rotated q, emitted lane by lane.
-        emit_tag = 107; emit_index = index; emit_value = gr2; after_emit = 111; state = pick(result_only,111,300);
+        emit_tag = 107; emit_index = index; emit_value = gr2; after_emit = 111; state = pick(result_only,111,300) as u32;
     }
     if (state == 111) {
         if (index+1 == hidden) { index = 0; pair = 0; head = 0; state = 115; }
@@ -659,7 +662,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     }
     if (state == 135) {
         // kr = rotated k of this position, emitted from the cache slot.
-        emit_tag = 108; emit_index = index; emit_value = ur2; after_emit = 136; state = pick(result_only,136,300);
+        emit_tag = 108; emit_index = index; emit_value = ur2; after_emit = 136; state = pick(result_only,136,300) as u32;
     }
     if (state == 136) {
         if (index+1 == kv) { head = 0; state = 140; }
@@ -754,7 +757,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     }
     if (state == 158) {
         up[(kvcount+head*head_dim+dd) & 8191] = quant as u32;
-        emit_tag = 110; emit_index = head*head_dim+dd; emit_value = quant as u32; after_emit = 168; state = pick(result_only,168,300);
+        emit_tag = 110; emit_index = head*head_dim+dd; emit_value = quant as u32; after_emit = 168; state = pick(result_only,168,300) as u32;
     }
     if (state == 160) {
         // Context lane d of head h: sum of e_j * v_j[d], one division.
@@ -807,7 +810,7 @@ fn on_clock(calib: bool, stall: bool, ack: bool, rdata_lo: u64, rdata_hi: u64,
     }
     if (state == 169) {
         vec[(hidden+kvcount+jj) & 8191] = sample_q;
-        emit_tag = 109; emit_index = sc_index; emit_value = sample_q; after_emit = 149; state = pick(result_only,149,300);
+        emit_tag = 109; emit_index = sc_index; emit_value = sample_q; after_emit = 149; state = pick(result_only,149,300) as u32;
     }
     if (state == 170) {
         // o projection: H rows x H cols from c into gate[H..2H-1].
@@ -1208,3 +1211,4 @@ test exp_zero { assert_eq(exp_q16(0),65536); }
 test exp_unit { assert_eq(exp_q16(4294967295),65535); }
 test exp_deep { assert_eq(exp_q16(4293918720),0); }
 test exp_one { assert_eq(exp_q16(4294901760),24109); }
+test pick_narrows_to_low32 { assert_eq(pick(true, 4294967295, 7) as u32, 4294967295); assert_eq(pick(false, 4294967295, 46) as u32, 46); assert_eq(pick(true, 300, 7) as u32, 300); }

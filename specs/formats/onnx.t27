@@ -185,13 +185,15 @@ module TrinityFormatsOnnxSpec {
     invariant onnx_four_codes_per_byte { assert TFS_ONNX_CODES_PER_BYTE * TFS_ONNX_BITS == 8 && TFS_ONNX_DEFAULT_ZERO_POINT == 2; }
     invariant onnx_example_is_17_8_bits_per_weight { assert TFS_ONNX_EXAMPLE_ROW_BITS == TFS_ONNX_EXAMPLE_K * 2 + (TFS_ONNX_EXAMPLE_K / TFS_ONNX_EXAMPLE_BLOCK) * 16 && TFS_ONNX_EXAMPLE_ROW_BITS * 8 == 17 * TFS_ONNX_EXAMPLE_K; }
 
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "onnx default zero point shifts every code by two" {
         var t: [4]i32 = [1, 0, -1, 1];
-        var row: [4]u8;
+        var row: [4]u8 = [0, 0, 0, 0];
         var none: [1]u8 = [0];
         assert tfs_onnx_encode(t, 1, 4, 16, none, 0, row, 4) == 4;
         assert row[0] == 219 && row[1] == 0 && row[3] == 0;
-        var v: [4]i32;
+        var v: [4]i32 = [0, 0, 0, 0];
         assert tfs_onnx_decode(row, 4, 1, 4, 16, none, 0, v, 4) == 0;
         assert v[0] == 1 && v[1] == 0 && v[2] == -1 && v[3] == 1;
         row[0] = 0;
@@ -203,14 +205,14 @@ module TrinityFormatsOnnxSpec {
     test "onnx packed zero points per block" {
         // K = 40, block 16: 3 blocks, 12 bytes per row, one zero-point byte.
         var zp: [1]u8 = [22];
-        var t: [40]i32;
+        var t: [40]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 40) { t[i] = 0; i = i + 1; }
         t[0] = 1; t[16] = -1; t[39] = 1;
-        var row: [12]u8;
+        var row: [12]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_onnx_encode(t, 1, 40, 16, zp, 1, row, 12) == 12;
         assert row[0] == 171 && row[4] == 84 && row[8] == 85 && row[9] == 149 && row[10] == 0;
-        var v: [40]i32;
+        var v: [40]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_onnx_decode(row, 12, 1, 40, 16, zp, 1, v, 40) == 0;
         assert v[0] == 1 && v[16] == -1 && v[39] == 1 && v[20] == 0;
         assert tfs_onnx_decode(row, 12, 1, 40, 16, zp, 2, v, 40) == TFS_ONNX_ERR_LENGTH;

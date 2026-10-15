@@ -183,8 +183,10 @@ module TrinityMemoryEdgeDemoSpec {
         }
         assert rising_sum == 0 && alternating_sum == 0;
     }
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "synthetic fixtures score their own template" {
-        var samples: [12]i32;
+        var samples: [12]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var fixture: u32 = 0;
         while (fixture < 3) {
             var column: u32 = 0;
@@ -201,7 +203,7 @@ module TrinityMemoryEdgeDemoSpec {
         assert tms_edge_expected_label(3) == 0 && tms_edge_expected_label(4) == 1 && tms_edge_expected_label(5) == 2;
     }
     test "the offset step-up fixture" {
-        var samples: [12]i32;
+        var samples: [12]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         samples[0] = -8; samples[1] = -7; samples[2] = -9; samples[3] = -8; samples[4] = -6; samples[5] = -8;
         samples[6] = 33; samples[7] = 34; samples[8] = 35; samples[9] = 34; samples[10] = 32; samples[11] = 35;
         assert tms_edge_accumulator(0, samples) == 249;
@@ -215,7 +217,7 @@ module TrinityMemoryEdgeDemoSpec {
         assert tms_edge_argmax(1.0, 2.0, 2.0) == -1;
         assert tms_edge_argmax(1.0, 3.0, 2.0) == 1;
         assert tms_edge_argmax(-1.0, -2.0, -3.0) == 0;
-        var samples: [12]i32;
+        var samples: [12]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var column: u32 = 0;
         while (column < 12) { samples[column] = 17; column = column + 1; }
         assert tms_edge_accumulator(0, samples) == 0 && tms_edge_accumulator(1, samples) == 0 && tms_edge_accumulator(2, samples) == 0;

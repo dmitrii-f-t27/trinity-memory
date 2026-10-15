@@ -154,15 +154,17 @@ module TrinityFormatsMlxSpec {
     invariant mlx_bits_per_weight_group_64 { assert 2 * (TFS_MLX_GROUP_MEDIUM * TFS_MLX_BITS + TFS_MLX_SCALE_BITS + TFS_MLX_BIAS_BITS) == 5 * TFS_MLX_GROUP_MEDIUM; }
     invariant mlx_bits_per_weight_group_32 { assert TFS_MLX_GROUP_SMALL * TFS_MLX_BITS + TFS_MLX_SCALE_BITS + TFS_MLX_BIAS_BITS == 3 * TFS_MLX_GROUP_SMALL; }
 
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "mlx 2-bit words hold sixteen codes low bits first" {
-        var t: [32]i32;
+        var t: [32]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 32) { t[i] = 0; i = i + 1; }
         t[0] = 1; t[1] = -1; t[15] = 1; t[16] = 2;
-        var out: [8]u8;
+        var out: [8]u8 = [0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_mlx_encode(t, 1, 32, 32, out, 8) == 8;
         assert out[0] == 82 && out[1] == 85 && out[3] == 149 && out[4] == 87;
-        var v: [32]i32;
+        var v: [32]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_mlx_decode(out, 8, 1, 32, 32, v, 32) == 1;
         assert v[0] == 1 && v[1] == -1 && v[15] == 1 && v[16] == 2 && v[31] == 0;
         assert tfs_mlx_code(out, 32, 0, 16) == 3;
@@ -175,7 +177,7 @@ module TrinityFormatsMlxSpec {
     test "mlx affine groups are ternary when bias is minus scale" {
         var s: [4]u32 = [8264, 0, 47104, 15360];
         var b: [4]u32 = [41032, 32768, 14336, 48128];
-        var f: [7]i64;
+        var f: [7]i64 = [0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 7) { f[i] = 0; i = i + 1; }
         assert tfs_mlx_affine_check(s, b, 4, TFS_MLX_KIND_F16, f) == 0;

@@ -96,27 +96,28 @@ module TrinityFpgaDdr3LoaderT27;
 // Every statement of on_clock reads a variable before the same tick writes it,
 // so the C and the Verilog backends agree on the functions; the module as a whole
 // is checked in Icarus (tests/test_uart_loader.py).
-const P_HELLO: u32 = 0;
-const P_HUNT: u32 = 1;
-const P_SYNC1: u32 = 2;
-const P_HDR: u32 = 3;
-const P_PAYLOAD: u32 = 4;
-const P_CRC: u32 = 5;
-const P_HDR_CHECK: u32 = 6;
-const P_CHECK: u32 = 7;
-const P_NAK: u32 = 8;
-const P_RESP: u32 = 9;
-const P_RESP_WAIT: u32 = 10;
-const P_COMMIT_RD: u32 = 11;
-const P_COMMIT_SET: u32 = 12;
-const P_COMMIT_WR: u32 = 13;
-const P_COMMIT_DRAIN: u32 = 14;
-const P_RB_NEXT: u32 = 15;
-const P_RB_REQ: u32 = 16;
-const P_RB_RESP: u32 = 17;
-const P_RB_SEND: u32 = 18;
-const P_STATUS: u32 = 19;
-const P_BAUD: u32 = 20;
+// [ddr3] The parser states are u8 like pstate and resp_after (values 0..20; u32 in part 1).
+const P_HELLO: u8 = 0;
+const P_HUNT: u8 = 1;
+const P_SYNC1: u8 = 2;
+const P_HDR: u8 = 3;
+const P_PAYLOAD: u8 = 4;
+const P_CRC: u8 = 5;
+const P_HDR_CHECK: u8 = 6;
+const P_CHECK: u8 = 7;
+const P_NAK: u8 = 8;
+const P_RESP: u8 = 9;
+const P_RESP_WAIT: u8 = 10;
+const P_COMMIT_RD: u8 = 11;
+const P_COMMIT_SET: u8 = 12;
+const P_COMMIT_WR: u8 = 13;
+const P_COMMIT_DRAIN: u8 = 14;
+const P_RB_NEXT: u8 = 15;
+const P_RB_REQ: u8 = 16;
+const P_RB_RESP: u8 = 17;
+const P_RB_SEND: u8 = 18;
+const P_STATUS: u8 = 19;
+const P_BAUD: u8 = 20;
 
 const MAGIC0: u32 = 165;
 const MAGIC1: u32 = 90;

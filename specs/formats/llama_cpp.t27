@@ -528,8 +528,8 @@ module TrinityFormatsLlamaCppSpec {
     // ---- tests ----------------------------------------------------------------
     test "llama q1_0 worked example decodes bits low first" {
         var q: [18]u8 = [0, 52, 165, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        var v: [128]i32;
-        var s: [1]u32;
+        var v: [128]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var s: [1]u32 = [0];
         assert tfs_llama_decode(TFS_LLAMA_Q1_0, q, 18, 128, v, 128, s, 1) == 0;
         assert s[0] == 13312;
         assert v[0] == 1 && v[1] == -1 && v[2] == 1 && v[3] == -1 && v[4] == -1 && v[5] == 1;
@@ -537,28 +537,29 @@ module TrinityFormatsLlamaCppSpec {
     }
     test "llama q2_0 worked example counts code 3 as outside" {
         var q: [18]u8 = [0, 52, 27, 228, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        var v: [64]i32;
-        var s: [1]u32;
+        var v: [64]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var s: [1]u32 = [0];
         assert tfs_llama_decode(TFS_LLAMA_Q2_0, q, 18, 64, v, 64, s, 1) == 2;
         assert v[0] == 2 && v[1] == 1 && v[2] == 0 && v[3] == -1;
         assert v[4] == -1 && v[5] == 0 && v[6] == 1 && v[7] == 2 && v[8] == 1 && v[9] == 0;
-        var f: [7]i64;
+        var f: [7]i64 = [0, 0, 0, 0, 0, 0, 0];
         assert tfs_llama_flags(TFS_LLAMA_Q2_0, q, 18, 64, f) == 0;
         assert f[0] == 2 && f[1] == 0 && f[2] == 0 && f[3] == 0;
     }
     test "llama tq2_0 and tq1_0 worked examples" {
-        var t2: [66]u8;
+        var t2: [66]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 66) { t2[i] = 0; i = i + 1; }
         t2[0] = 6; t2[1] = 0; t2[2] = 1; t2[3] = 2; t2[4] = 10; t2[5] = 5; t2[6] = 9; t2[7] = 8; t2[8] = 4; t2[9] = 2;
         t2[65] = 52;
-        var v: [256]i32;
-        var s: [1]u32;
+        var v: [256]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var s: [1]u32 = [0];
         assert tfs_llama_decode(TFS_LLAMA_TQ2_0, t2, 66, 256, v, 256, s, 1) == 0;
         assert s[0] == 13312 && v[0] == 1 && v[1] == -1 && v[2] == 0 && v[4] == 1 && v[32] == 0 && v[128] == -1;
-        var t1: [54]u8;
-        i = 0;
-        while (i < 54) { t1[i] = 0; i = i + 1; }
+        // A fresh loop counter: the pinned 0.2.0 Zig emitter writes a repeated `i = 0;` as a second `var i`.
+        var t1: [54]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var k: usize = 0;
+        while (k < 54) { t1[k] = 0; k = k + 1; }
         t1[0] = 207; t1[2] = 86; t1[3] = 171; t1[4] = 255; t1[5] = 122; t1[6] = 50; t1[7] = 243; t1[8] = 128; t1[9] = 162;
         t1[53] = 52;
         assert tfs_llama_decode(TFS_LLAMA_TQ1_0, t1, 54, 256, v, 256, s, 1) == 0;
@@ -566,12 +567,12 @@ module TrinityFormatsLlamaCppSpec {
         assert v[32] == 0 && v[64] == -1 && v[96] == 1 && v[128] == 0;
     }
     test "llama encoders match the upstream quantizer bytes" {
-        var codes: [256]i32;
+        var codes: [256]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 256) { codes[i] = 0; i = i + 1; }
         codes[0] = 1; codes[1] = 1; codes[2] = -1; codes[64] = -1; codes[96] = 1;
         var one: [4]u32 = [15360, 15360, 15360, 15360];
-        var out: [72]u8;
+        var out: [72]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert tfs_llama_encode(TFS_LLAMA_Q2_0, codes, 256, one, 4, out, 72) == 72;
         assert out[0] == 0 && out[1] == 60 && out[2] == 74 && out[3] == 85;
         assert tfs_llama_encode(TFS_LLAMA_TQ2_0, codes, 256, one, 1, out, 72) == 66;
@@ -585,12 +586,12 @@ module TrinityFormatsLlamaCppSpec {
         assert tfs_llama_encode(99, codes, 256, one, 1, out, 72) == TFS_LLAMA_ERR_FORMAT;
     }
     test "llama rejects non-finite scales and partial blocks" {
-        var q: [36]u8;
+        var q: [36]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 36) { q[i] = 85; i = i + 1; }
         q[0] = 0; q[1] = 60; q[18] = 0; q[19] = 126;
-        var v: [128]i32;
-        var s: [2]u32;
+        var v: [128]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var s: [2]u32 = [0, 0];
         assert tfs_llama_decode(TFS_LLAMA_Q2_0, q, 36, 128, v, 128, s, 2) == TFS_LLAMA_ERR_SCALE_NONFINITE;
         assert tfs_llama_decode(TFS_LLAMA_Q2_0, q, 35, 128, v, 128, s, 2) == TFS_LLAMA_ERR_LENGTH;
         assert tfs_llama_decode(TFS_LLAMA_Q2_0, q, 36, 100, v, 128, s, 2) == TFS_LLAMA_ERR_LENGTH;
@@ -598,7 +599,7 @@ module TrinityFormatsLlamaCppSpec {
         q[19] = 124;
         assert tfs_llama_decode(TFS_LLAMA_Q2_0, q, 36, 128, v, 128, s, 2) == TFS_LLAMA_ERR_SCALE_NONFINITE;
         q[19] = 188;
-        var f: [7]i64;
+        var f: [7]i64 = [0, 0, 0, 0, 0, 0, 0];
         assert tfs_llama_flags(TFS_LLAMA_Q2_0, q, 36, 128, f) == 0;
         assert f[2] == 1 && f[3] == 0 && f[0] == 0;
         assert tfs_llama_f16_class(32768) == 1 && tfs_llama_f16_class(1) == 0;
@@ -618,27 +619,28 @@ module TrinityFormatsLlamaCppSpec {
         assert tfs_llama_b3_trit(255, 0) == 1 && tfs_llama_b3_trit(255, 4) == 1 && tfs_llama_b3_trit(0, 3) == -1;
         var padded: u32 = 0;
         var flagged: u32 = 0;
-        b = 0;
-        while (b < 256) {
-            if (tfs_llama_b3_padded(b)) { padded = padded + 1; }
-            if (!tfs_llama_b3_padded(b) && !tfs_llama_b3_canonical(b, 4)) { flagged = flagged + 1; }
-            if (tfs_llama_b3_canonical(b, 4)) { assert !tfs_llama_b3_padded(b); }
-            b = b + 1;
+        // A fresh loop counter: the pinned 0.2.0 Zig emitter writes a repeated `b = 0;` as a second `var b`.
+        var c: u32 = 0;
+        while (c < 256) {
+            if (tfs_llama_b3_padded(c)) { padded = padded + 1; }
+            if (!tfs_llama_b3_padded(c) && !tfs_llama_b3_canonical(c, 4)) { flagged = flagged + 1; }
+            if (tfs_llama_b3_canonical(c, 4)) { assert !tfs_llama_b3_padded(c); }
+            c = c + 1;
         }
         assert padded == TFS_LLAMA_B3_QH_PADDED && flagged == 256 - TFS_LLAMA_B3_QH_CANONICAL - TFS_LLAMA_B3_QH_PADDED;
         assert !tfs_llama_b3_padded(1) && tfs_llama_b3_padded(2) && !tfs_llama_b3_padded(4);
     }
     test "llama tq1_0 rejects a nonzero padding digit" {
-        var t1: [54]u8;
+        var t1: [54]u8 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         var i: usize = 0;
         while (i < 54) { t1[i] = 0; i = i + 1; }
         t1[53] = 60;
-        var v: [256]i32;
-        var s: [1]u32;
+        var v: [256]i32 = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        var s: [1]u32 = [0];
         assert tfs_llama_decode(TFS_LLAMA_TQ1_0, t1, 54, 256, v, 256, s, 1) == 0;
         t1[49] = 2;
         assert tfs_llama_decode(TFS_LLAMA_TQ1_0, t1, 54, 256, v, 256, s, 1) == TFS_LLAMA_ERR_PADDING;
-        var f: [7]i64;
+        var f: [7]i64 = [0, 0, 0, 0, 0, 0, 0];
         assert tfs_llama_flags(TFS_LLAMA_TQ1_0, t1, 54, 256, f) == TFS_LLAMA_ERR_PADDING;
         t1[49] = 1;
         assert tfs_llama_decode(TFS_LLAMA_TQ1_0, t1, 54, 256, v, 256, s, 1) == 0;

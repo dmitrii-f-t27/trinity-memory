@@ -9,7 +9,9 @@ There is no Python fallback in the native executable or library.
 ## Build
 
 The compiler revision is pinned by [`native/compiler.lock`](../native/compiler.lock):
-[`gHashTag/t27@bff21b85b206a0dd367876343e56dcd8312d81ba`](https://github.com/gHashTag/t27/tree/bff21b85b206a0dd367876343e56dcd8312d81ba).
+[`gHashTag/t27@d06eaedc9fb59cda13c3529e1c6ed5bc510f3e08`](https://github.com/gHashTag/t27/tree/d06eaedc9fb59cda13c3529e1c6ed5bc510f3e08)
+(t27c 0.5.2; the move from `bff21b85` is described in
+[`compiler-0.5.2.md`](compiler-0.5.2.md)).
 Prerequisites: Git, Rust/Cargo **1.94.0**, C11 and C++17 compilers, Python 3.10+
 for build/test orchestration, and Icarus Verilog for explicit RTL runs.
 Linux needs OpenSSL development libraries, Clang and LLD. On macOS, CommonCrypto
@@ -120,7 +122,8 @@ C and compares output bytes. The GitHub workflow then tests Python adapters on
 3.10, 3.12 and 3.14, the pinned upstream SDK, and an installed wheel outside the
 checkout. See the workflow run for the result of a particular commit.
 
-Known compiler workarounds at the pinned revision:
+Known compiler workarounds, recorded at the previous pin `bff21b85` (not
+re-audited at `d06eaedc`):
 
 - `compile --backend python/rust` can emit Zig; explicit `gen-c` and
   `gen-verilog` entry points are used.

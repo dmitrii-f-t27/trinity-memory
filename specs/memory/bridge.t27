@@ -436,10 +436,12 @@ module TrinityMemoryBridgeSpec {
         assert !tms_bridge_dot_layout_valid(1, -1, 3, 2);
         assert tms_bridge_dot_rows(2, 7) == 7 && tms_bridge_dot_rows(1, 7) == 1;
     }
+    // Locals passed to slice parameters carry an array-literal initializer: a bare
+    // `var x: [N]T;` is passed by value in the generated Zig, which a slice rejects.
     test "dot rows multiply trits by activations exactly" {
-        var trits: [3]i32;
+        var trits: [3]i32 = [0, 0, 0];
         trits[0] = 1; trits[1] = -1; trits[2] = 0;
-        var activations: [3]i64;
+        var activations: [3]i64 = [0, 0, 0];
         activations[0] = -128; activations[1] = 127; activations[2] = -128;
         assert tms_bridge_dot_row(trits, activations, 3) == -255;
         trits[0] = -1; trits[1] = 1; trits[2] = 1;
