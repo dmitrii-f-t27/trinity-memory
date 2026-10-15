@@ -90,7 +90,8 @@ by hand:
   |---|---|
   | `ternary_check_matrix` | `native/compiler.lock` and the three Ternary Check reports |
   | `ffn_real_layer` | `native/compiler.lock`, `reports/numeric/ffn-quantization-v1.json` |
-  | `ffn_oracles`, `gf16_ffn_performance`, `gguf_verdicts`, `prism_hadamard` | `native/compiler.lock` |
+  | `ffn_oracles`, `gguf_verdicts`, `prism_hadamard` | `native/compiler.lock` |
+  | `gf16_ffn_performance` | `native/compiler.lock`, the two GF16 bounded reports below, `reports/fpga/gf16-performance-2026-10-01/README.md` |
   | `matvec_pipeline` | `reports/ternary-check/matvec-2026-09-23.json` |
 
   Retained hardware measurements and their origin pins are not changed.
@@ -98,20 +99,45 @@ by hand:
   requires the current accelerated record of
   `reports/numeric/gf16-ffn-performance-bounded.json` and
   `reports/numeric/gf16-ffn-performance-bounded-linux.json` to hash the current
-  `native/compiler.lock`, with counters and capture hashes identical to the
-  committed ones. Both are rewritten only from real
-  `tools/measure_gf16_ffn.py` runs at 0.5.2 (macOS locally, Linux in
-  `gf16-ffn.yml`). The four generated GF16 Verilog modules (`gf16_wide_norm`,
-  `ffn_wide`, `gf16_scalar`, `gf16_ffn`) are byte-identical under both
-  compilers; that supports, but does not replace, the measurement. Historical
-  measurements, physical captures and their producer pins are unchanged.
-  Status: PENDING (measurement not yet adopted).
+  sources including `native/compiler.lock`, with counters and capture hashes
+  identical to the committed ones. Both were measured again at 0.5.2 with
+  `tools/measure_gf16_ffn.py` on consumer source `57e4cd0e`: macOS arm64
+  (Verilator 5.052, BOS run-6 inputs whose eight regions match the committed
+  payload hashes) and Linux x86_64 (Verilator 5.020, the measurement step of
+  [CI run 38665511038](https://github.com/dmitrii-f-t27/trinity-memory/actions/runs/38665511038),
+  producer output unchanged; that run failed afterwards at the recheck of the
+  old records). Every counter and capture hash is identical to the committed
+  records; only the source hashes, the simulator string and the measured
+  commit changed. The serial baseline, the ratios and all physical captures
+  are unchanged. The unchanged `verify-evidence.py` and
+  `verify-board-evidence.py` pass on the new records. The four generated GF16
+  FFN Verilog modules are also byte-identical under both compilers (supporting
+  only). Notes in `reports/fpga/gf16-performance-2026-10-01/README.md`.
 - `.github/workflows/gf16-ffn.yml`: "Recheck committed performance evidence"
   now runs after "Measure full and result-only clocks", and the artifact also
   keeps the prompt-0-token-0 input regions. Before, a pin change failed the job
   before the Linux measurement that the committed records must match could be
-  produced. The recheck itself is unchanged and still fails the job while the
+  produced. The recheck itself is unchanged and fails the job whenever the
   committed records are stale.
+
+## Physical attention proof: not current for this source
+
+`make attention-proof` (`tools/attention-proof.py`,
+`specs/memory/attention_evidence.t27`) requires every `source/*` row of
+`reports/fpga/attn-2026-10-03/evidence-manifest.json` to equal the current
+tree. That retained layer-0 attention qualification was a physical board run
+on the previous `t27/rtl/gf16_attn.t27` (45243 bytes, sha256
+`f2f0c4ff9c50a0095f247452fdaaf0d2531376f76bf77f8a59654099c9bf1ed9`). The nine
+casts that 0.5.2 requires change it (45776 bytes, sha256
+`60028a20da70973e022ab888636e87d210c3c3c4b5ccd20a35220c974c35e1a4`), so the
+proof fails, as designed. It is the only differing source row; the archive
+`board-evidence.tar.gz` (21491652 bytes, sha256
+`c35f822bec24ef14eb8a39a9bef528898262991cdaec4cc74317e4a277a5297d`) is
+unchanged. The manifest, the archive and the guard are not changed, and no
+report is rewritten to pass it. Closed issue #115 does not qualify the edited
+source. Making this proof current needs a new physical attention run on the
+edited source, or a separately approved formal-evidence rule; neither is part
+of this change. Until then this upgrade is not ready to merge.
 
 ## Checks on this branch
 
@@ -121,12 +147,13 @@ branch: `make t27` pass; `make check-specs` pass (30 specs, all seals,
 conformance, differential harnesses); Zig `test-report` of all 30 specs pass
 (146 tests, 110 invariants, 0 failed, 0 blocked, 0 vacuous). `make t27-test`
 and the root `make test` were not repeated on the branch: the source is
-byte-identical to the qualified one and the only new generated change is the
-producer line above, which the evidence registry checks. Evidence registry: 13
-of 14 claims pass (435 acceptance vectors); `gf16_ffn_performance` waits for
-the GF16 re-measurement above. CI results are reported in the pull request.
+byte-identical to the qualified one, and the data regenerated on the branch
+is checked by the evidence registry. Evidence registry:
+each of the 14 claims passes locally (465 acceptance vectors, all manifests
+current). `make attention-proof` fails (previous section). CI results are
+reported in the pull request.
 
-## Previous local qualification
+## Previous local qualification (history)
 
 Before this change was moved onto a branch, the same 13 source files were
 qualified locally in two isolated clones of
@@ -166,6 +193,8 @@ skips are the optional Torch/transformers capture environment.
   are covered by the RTL numerical tests, the typecheck and the builds.
 - Retained hardware measurements and their origin pins are unchanged. An offline
   replay of a hardware claim under 0.5.2 is not a new hardware qualification.
+- The physical attention proof is not current for the edited source (see
+  above).
 - Not validated: full-model quality, live hardware, the Rust runtime, other
   compilers. The known compiler workarounds in
   [`T27-MIGRATION.md`](T27-MIGRATION.md) were recorded at the previous pin and

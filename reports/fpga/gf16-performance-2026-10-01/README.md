@@ -119,3 +119,29 @@ the receipts) and the saved run commands. They are not
 embedded in this evidence directory.
 
 The [current-source Linux CI run](https://github.com/dmitrii-f-t27/trinity-memory/actions/runs/36944415801) also passes. Its bounded-address reports match macOS on every source hash, all 45 integer rows, all five raw full-FFN captures and both modes’ clock/phase counters. The portable verifier checks these `*-bounded*-linux.json` reports in addition to the historical reports.
+
+## Simulation requalification at t27c 0.5.2 (2026-10-15)
+
+Issue [#138](https://github.com/dmitrii-f-t27/trinity-memory/issues/138),
+PR [#139](https://github.com/dmitrii-f-t27/trinity-memory/pull/139). The
+compiler pin moved from `bff21b85` to `d06eaedc` (t27c 0.5.2), so the current
+bounded-address records were measured again with
+`tools/measure_gf16_ffn.py` on source `57e4cd0e`:
+
+- macOS arm64, 2026-10-15 UTC, Verilator 5.052, BOS run-6 inputs whose eight
+  regions match the committed `input_payloads` byte for byte: the accelerated
+  record of `gf16-ffn-performance-bounded.json`.
+- Linux x86_64, Verilator 5.020, the measurement step of
+  [CI run 38665511038](https://github.com/dmitrii-f-t27/trinity-memory/actions/runs/38665511038)
+  (that run failed afterwards at the recheck, which still compared the old
+  records): `gf16-ffn-performance-bounded-linux.json`, the producer output
+  unchanged.
+
+Both measurements reproduce every committed counter and capture hash: full
+trace 32768 stage / 9472 ActQuant values, 184,069,815 active clocks; result
+mode 2560 values, 183,993,318 active clocks; 160,911,360 projection-loop clocks
+in both modes. Only the source hashes (the lock), the simulator string and the
+measured commit changed. The serial baseline variant, the ratios, the input
+payloads and every physical capture, receipt and earlier report above are
+unchanged; the physical results are the 2026-10-01 board runs, revalidated
+offline, not a new board run.
