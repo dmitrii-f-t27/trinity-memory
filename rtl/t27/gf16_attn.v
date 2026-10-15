@@ -1343,7 +1343,7 @@ module TrinityGf16AttnT27 (
                 state <= 1021;
             end
             if ((state == 21)) begin
-                sample_q <= pick((norm_pass == 0), vr2, ur2);
+                sample_q <= (pick((norm_pass == 0), vr2, ur2) & {32{1'b1}});
                 state <= 22;
             end
             if ((state == 22)) begin
@@ -1443,7 +1443,7 @@ module TrinityGf16AttnT27 (
                 state <= 1040;
             end
             if ((state == 40)) begin
-                sample_q <= pick((norm_pass == 0), vr2, ur2);
+                sample_q <= (pick((norm_pass == 0), vr2, ur2) & {32{1'b1}});
                 weight_q <= gr2;
                 state <= 41;
             end
@@ -1502,11 +1502,11 @@ module TrinityGf16AttnT27 (
             end
             if ((state == 47)) begin
                 gate[(index & 8191)] <= (quant & {32{1'b1}});
-                emit_tag <= pick((norm_pass == 0), 103, 111);
+                emit_tag <= (pick((norm_pass == 0), 103, 111) & {32{1'b1}});
                 emit_index <= index;
                 emit_value <= (quant & {32{1'b1}});
                 after_emit <= 46;
-                state <= pick(result_only, 46, 300);
+                state <= (pick(result_only, 46, 300) & {32{1'b1}});
             end
             if ((state == 50)) begin
                 projection_stage <= 0;
@@ -1622,7 +1622,7 @@ module TrinityGf16AttnT27 (
                 emit_index <= row;
                 emit_value <= (quant & {32{1'b1}});
                 after_emit <= 800;
-                state <= pick(result_only, 800, 300);
+                state <= (pick(result_only, 800, 300) & {32{1'b1}});
             end
             if ((state == 90)) begin
                 ropebase <= ((321536 + __mul_noop(pos, head_dim)) + __mul_noop(2, pair));
@@ -1745,7 +1745,7 @@ module TrinityGf16AttnT27 (
                 emit_index <= index;
                 emit_value <= gr2;
                 after_emit <= 111;
-                state <= pick(result_only, 111, 300);
+                state <= (pick(result_only, 111, 300) & {32{1'b1}});
             end
             if ((state == 111)) begin
                 if (((index + 1) == hidden)) begin
@@ -1898,7 +1898,7 @@ module TrinityGf16AttnT27 (
                 emit_index <= index;
                 emit_value <= ur2;
                 after_emit <= 136;
-                state <= pick(result_only, 136, 300);
+                state <= (pick(result_only, 136, 300) & {32{1'b1}});
             end
             if ((state == 136)) begin
                 if (((index + 1) == kv)) begin
@@ -2056,7 +2056,7 @@ module TrinityGf16AttnT27 (
                 emit_index <= (__mul_noop(head, head_dim) + dd);
                 emit_value <= (quant & {32{1'b1}});
                 after_emit <= 168;
-                state <= pick(result_only, 168, 300);
+                state <= (pick(result_only, 168, 300) & {32{1'b1}});
             end
             if ((state == 160)) begin
                 acc0 <= 0;
@@ -2138,7 +2138,7 @@ module TrinityGf16AttnT27 (
                 emit_index <= sc_index;
                 emit_value <= sample_q;
                 after_emit <= 149;
-                state <= pick(result_only, 149, 300);
+                state <= (pick(result_only, 149, 300) & {32{1'b1}});
             end
             if ((state == 170)) begin
                 projection_stage <= 3;
@@ -2870,6 +2870,7 @@ module TrinityGf16AttnT27 (
     // test      exp_unit
     // test      exp_deep
     // test      exp_one
+    // test      pick_narrows_to_low32
     // -------------------------------------------------------
 
 endmodule
