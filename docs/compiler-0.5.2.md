@@ -113,6 +113,14 @@ by hand:
   `verify-board-evidence.py` pass on the new records. The four generated GF16
   FFN Verilog modules are also byte-identical under both compilers (supporting
   only). Notes in `reports/fpga/gf16-performance-2026-10-01/README.md`.
+- `kits/processorci/rtl/generated/provenance.json`: rewritten by the existing
+  `python3 scripts/generate_rtl.py --compiler "$T27_ROOT/target/release/t27c"`
+  and `python3 kits/processorci/tools/sync_generated.py`. The only change is
+  `compiler_revision` `bff21b85 -> d06eaedc`; the five generated kit modules
+  and all their source and output hashes are byte-identical. Then
+  `sync_generated.py --check`, `make -C kits/processorci check` (vectors
+  unchanged, both simulations ALL PASS, wrapper compile) and
+  `kits/processorci/tools/crosscheck_ml_dtypes.py` (0 mismatches) pass.
 - `.github/workflows/gf16-ffn.yml`: "Recheck committed performance evidence"
   now runs after "Measure full and result-only clocks", and the artifact also
   keeps the prompt-0-token-0 input regions. Before, a pin change failed the job
