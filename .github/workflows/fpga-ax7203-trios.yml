@@ -65,6 +65,7 @@ jobs:
           iverilog -g2012 -o build/trios/guard.vvp -s tb_guard build/trios/TriosUartGuardT27.v fpga/ax7203-trios/tb/tb_guard.v
           vvp build/trios/guard.vvp | tee build/trios/guard_tb.log
           grep -q TB_GUARD_PASS build/trios/guard_tb.log
+          ! grep -q "TB_GUARD_FAIL\|TB_GUARD_ASSERT_FAIL" build/trios/guard_tb.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -135,6 +136,8 @@ jobs:
             fpga/ax7203-trios/rtl/trios_soc_core.v fpga/ax7203-trios/tb/tb_trios_soc.v
           vvp build/trios/sim.vvp | tee build/trios/sim.log
           grep -q TB_DONE build/trios/sim.log
+          ! grep -q "TB_TIMEOUT\|TB_TRAP" build/trios/sim.log
+          ! grep -qi x build/trios/resp.hex
           python3 fpga/ax7203-trios/host/mesh_run.py sim-compare build/trios build/trios/resp.hex | tee build/trios/sim_compare.log
           dropped=$(sed -n 's/.*TB_GUARD dropped=\([0-9]*\).*/\1/p' build/trios/sim.log); echo "bytes dropped by the guard in simulation: $dropped"; test "$dropped" -gt 0
       - uses: actions/upload-artifact@v4

@@ -16,7 +16,7 @@ module tb_guard;
         .dropped(dropped), .idle(idle), .quiet(quiet), .empty(empty), .full(full));
     integer errors = 0, i;
     task check(input cond, input [255:0] what);
-        if (!cond) begin errors = errors + 1; $display("FAIL: %0s (level=%0d overrun=%b dropped=%0d quiet=%b)", what, level, overrun, dropped, quiet); end
+        if (cond !== 1'b1) begin errors = errors + 1; $display("TB_GUARD_ASSERT_FAIL: %0s (level=%0d overrun=%b dropped=%0d quiet=%b)", what, level, overrun, dropped, quiet); end
     endtask
     task tick; begin @(posedge clk); #1; end endtask
     reg [3:0] seen;
@@ -62,7 +62,9 @@ module tb_guard;
         check(quiet, "quiet again");
         push = 1; tick; push = 0; tick; tick;
         check(!quiet && level == 1, "a queued byte keeps the line not quiet");
-        if (errors == 0) $display("TB_GUARD_PASS"); else $display("TB_GUARD_FAIL %0d", errors);
+        // Any X/Z in an observed output makes the comparison above not definitely true, so it fails.
+        if (errors == 0 && level === 32'd1 && overrun === 1'b0 && quiet === 1'b0) $display("TB_GUARD_PASS");
+        else $display("TB_GUARD_FAIL %0d", errors);
         $finish;
     end
 endmodule

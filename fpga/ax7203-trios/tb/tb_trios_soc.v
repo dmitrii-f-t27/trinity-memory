@@ -53,7 +53,7 @@ module tb_trios_soc;
         end
     endtask
 
-    always @(posedge clk) if (dut.trap) begin
+    always @(posedge clk) if (dut.resetn === 1'b1 && dut.trap !== 1'b0) begin
         $display("TB_TRAP at %0t", $time);
         $fclose(fd);
         $finish;
@@ -83,6 +83,7 @@ module tb_trios_soc;
             end
         end
         #(BIT_NS * 20);
+        if (dut.trap !== 1'b0) begin $display("TB_TRAP final"); $fclose(fd); $finish; end
         $display("TB_GUARD dropped=%0d overrun_flag=%0d", dut.guard.dropped, dut.guard.overrun);
         $display("TB_DONE %0d response bytes in %0t", ncap, $time);
         $fclose(fd);
