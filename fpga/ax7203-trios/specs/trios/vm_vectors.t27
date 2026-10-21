@@ -130,7 +130,8 @@ fn build_vectors() -> Vectors {
     inst(&v, 1, 0, 3, 0, 0, 0); cmd(&v, 82, 0);
     state(&v, 0, 0, 7, 7, 7, 10, -5, 2, 10, 10);
     // Corrupt reset request must not mutate any register or execution state.
-    add(&v, "Z", "E\x04\x04", true);
+    const bad_crc_reply: [3]u8 = [69, 4, 4];
+    add(&v, "Z", bad_crc_reply[0 .. 3], true);
     state(&v, 0, 0, 7, 7, 7, 10, -5, 2, 10, 10);
     // Invalid register indices alias v0, as the pinned source does.
     cmd(&v, 66, 0);
