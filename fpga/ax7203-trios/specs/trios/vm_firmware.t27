@@ -1,0 +1,137 @@
+// SPDX-License-Identifier: MIT
+module TriosVmFirmware;
+
+use trios::vsavm;
+
+// t27c -> Zig -> RV32I. Volatile MMIO and an erased exported code pointer are
+// expressible through real Zig builtins preserved by t27c. The link stage globalizes
+// vm_firmware.trios_main as trios_main; the unchanged earlier startup calls it with
+// no arguments, initializes sp and clears bss. There is no hand-written new shim.
+const MmioPtr = @Type(.{ .pointer = .{ .size = .one, .is_const = false, .is_volatile = true, .alignment = 4, .address_space = .generic, .child = u32, .is_allowzero = false, .sentinel_ptr = null } });
+const CodePtr = @Type(.{ .pointer = .{ .size = .one, .is_const = true, .is_volatile = false, .alignment = 1, .address_space = .generic, .child = u8, .is_allowzero = false, .sentinel_ptr = null } });
+const entry_pointer = @as(CodePtr, @ptrCast(&trios_main));
+invariant export_entry_pointer { @export(&entry_pointer, .{ .name = "trios_entry_pointer" }); }
+
+pub fn read32(addr: usize) -> u32 {
+    const p: MmioPtr = @ptrFromInt(addr);
+    return p.*;
+}
+pub fn write32(addr: usize, value: u32) -> void {
+    const p: MmioPtr = @ptrFromInt(addr);
+    p.* = value;
+}
+
+pub fn crc8(crc: u8, byte: u8) -> u8 {
+    var v: u32 = @as(u32, crc ^ byte);
+    var i: u8 = 0;
+    while (i < 8) {
+        if ((v & 128) != 0) { v = ((v << 1) ^ 7) & 255; }
+        else { v = (v << 1) & 255; }
+        i = i + 1;
+    }
+    return @as(u8, @intCast(v));
+}
+
+fn send(byte: u8) -> void {
+    while ((read32(268435460) & 1) != 0) {}
+    write32(268435456, @as(u32, byte));
+}
+
+fn text(s: []const u8) -> void {
+    var i: usize = 0;
+    while (i < s.len) { send(s[i]); i = i + 1; }
+}
+
+fn word(v: u64) -> void {
+    var x: u64 = v;
+    var i: usize = 0;
+    while (i < 8) { send(@as(u8, @intCast(x & 255))); x = x >> 8; i = i + 1; }
+}
+
+fn decode_i64(b: []const u8) -> i64 {
+    var x: u64 = 0;
+    var i: usize = 0;
+    while (i < 8) {
+        x = x | (@as(u64, b[i]) << @as(u6, @intCast(i * 8)));
+        i = i + 1;
+    }
+    return @bitCast(x);
+}
+
+// Frames use the existing SYNC/len/payload/CRC8 transport. Responses have fixed
+// lengths documented in VM-PROFILE.md. A bad frame cannot mutate VM state.
+// V identity; Z cold reset; B beginProgram; A append 12-byte instruction;
+// R run (max 64 instructions); S step; Q read full state. No flash writes.
+fn handle(vm: *VM, b: []const u8) -> void {
+    const cmd: u8 = b[0];
+    if (cmd == 86 and b.len == 1) { text("VTRIOS-VSAVM 70882158 T27 RV32I P1\n"); return; }
+    if (cmd == 90 and b.len == 1) { vm.* = init_vm(); send(90); send(0); return; }
+    if (cmd == 66 and b.len == 1) { begin_program(vm); send(66); send(0); return; }
+    if (cmd == 65 and b.len == 13) {
+        const ok: bool = append(vm, instruction(b[1], b[2], b[3], b[4], decode_i64(b[5 .. 13])));
+        send(65);
+        if (ok) { send(0); } else { send(3); }
+        return;
+    }
+    if ((cmd == 82 or cmd == 83) and b.len == 1) {
+        if (cmd == 82) { run(vm); }
+        else { const more: bool = step(vm); if (more) { write32(268435464, 1); } }
+        send(cmd); send(vm.error_code); return;
+    }
+    if (cmd == 81 and b.len == 1) {
+        send(81); send(vm.error_code);
+        if (vm.halted) { send(1); } else { send(0); }
+        send(@as(u8, @intCast(vm.length)));
+        word(@as(u64, vm.pc)); word(vm.cycles); word(@bitCast(vm.s0));
+        var i: usize = 0;
+        while (i < 4) { word(@bitCast(vm.v[i])); i = i + 1; }
+        return;
+    }
+    send(69); send(1); send(cmd);
+}
+
+// Receive one byte or a framing failure (256). Before-frame idle has no deadline;
+// inside a frame the existing UART guard supplies quiet timeout and sticky faults.
+fn receive(in_frame: bool) -> u16 {
+    while (true) {
+        const st: u32 = read32(268435460);
+        if ((st & 20) != 0) { return 256; }
+        if ((st & 2) != 0) { return @as(u16, @intCast(read32(268435456) & 255)); }
+        if (in_frame and (st & 8) != 0) { return 256; }
+    }
+}
+
+fn resync() -> void {
+    while (true) {
+        const st: u32 = read32(268435460);
+        if ((st & 2) != 0) { const dropped: u32 = read32(268435456); if (dropped > 255) { write32(268435464, 2); } }
+        else { if ((st & 8) != 0) { write32(268435460, 20); return; } }
+    }
+}
+
+pub fn trios_main() -> void {
+    var vm: VM = init_vm();
+    var payload: [80]u8 = undefined;
+    text("TRIOS-VSAVM 70882158 T27 RV32I P1\n");
+    while (true) {
+        const sync: u16 = receive(false);
+        if (sync == 256) { resync(); send(69); send(4); send(1); continue; }
+        if (sync != 165) { continue; }
+        const length: u16 = receive(true);
+        if (length == 0 or length > 80) { resync(); send(69); send(4); send(3); continue; }
+        var crc: u8 = crc8(0, @as(u8, @intCast(length)));
+        var i: usize = 0;
+        var valid: bool = true;
+        while (i < length) {
+            const next: u16 = receive(true);
+            if (next == 256) { valid = false; break; }
+            payload[i] = @as(u8, @intCast(next));
+            crc = crc8(crc, payload[i]);
+            i = i + 1;
+        }
+        if (!valid) { resync(); send(69); send(4); send(2); continue; }
+        const got: u16 = receive(true);
+        if (got != crc) { resync(); send(69); send(4); send(4); continue; }
+        handle(&vm, payload[0 .. @as(usize, length)]);
+    }
+}
