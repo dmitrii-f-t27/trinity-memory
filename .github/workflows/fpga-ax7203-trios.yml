@@ -89,6 +89,8 @@ jobs:
         run: cd fpga/ax7203-trios/fw/vendor && find . -type f | sort | xargs sha256sum | diff - ../VENDOR-SHA256.txt
       - name: The vendored crate's own tests on the host
         run: cargo +1.94.0 test --manifest-path fpga/ax7203-trios/fw/vendor/Cargo.toml --lib 2>&1 | tee host_crate_tests.log
+      - name: Board-runner parsers (offline, including negative cases)
+        run: python3 fpga/ax7203-trios/host/test_board_parsers.py
       - name: Cross-build the firmware for riscv32i-unknown-none-elf
         working-directory: fpga/ax7203-trios/fw
         run: cargo +1.94.0 build --release --locked 2>&1 | tee ../../../cross_build.log
