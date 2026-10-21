@@ -44,6 +44,7 @@ rep = {
                 "cargo_lock_sha256": sha(fw / "fw/Cargo.lock")},
     "bitstream": {"bit_sha256_whole_file": sha(b / "trios_soc_ax7203.bit"), "fasm_sha256": sha(b / "trios_soc_ax7203.fasm"),
                   "frames_sha256": sha(b / "trios_soc_ax7203.frames"), "bytes": (b / "trios_soc_ax7203.bit").stat().st_size},
+    "tool_provenance": (b / "tool_provenance.txt").read_text().splitlines(),
     "xdc_sha256": sha(fw / "trios_soc_ax7203.xdc"),
     "yosys_cells": stat_cells(b / "yosys_stat.txt"),
     "nextpnr_utilisation": tail_util(chosen),
