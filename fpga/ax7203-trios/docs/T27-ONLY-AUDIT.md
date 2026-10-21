@@ -5,6 +5,34 @@ through the repository's generators; a missing capability is reported as an exac
 This is the state of `fpga/ax7203-trios/` at the commit that adds this file. Third-party, unmodified code is listed
 separately and is not claimed as t27.
 
+## Update: Codex direct implementation, 2026-10-21
+
+The owner explicitly replaced Claude delegation for this task. New source remains `.t27`.
+The earlier bare-metal limitation below is superseded by a verified path:
+`vsavm.t27` + `vm_firmware.t27` -> `t27c gen` -> generated Zig 0.15.2 -> RV32I object.
+Volatile MMIO uses `@Type`; an exported erased code pointer retains the entry, and
+llvm-objcopy globalizes it for the unchanged existing startup. Linked image is 3244
+bytes; existing ELF checker confirms RV32I, soft-float ABI, reset0, stack0x8000.
+Five source tests passed locally. Firmware uses unmodified Zig compiler-runtime
+helpers, retained through section GC. There is no new hand-written Rust/C/asm shim.
+
+`vm_vectors.t27` generates independent UART data and checks captured responses.
+`serial_runner.t27` is the native host UART executor, with a shared lock, exact
+responses, deadlines, no request retries and actual-byte capture. Its no-config
+path and parser were tested without opening hardware. `board_gate.t27` now supports
+SRAM loading after fresh identity and strict <70 C preflight, keeping the same lock
+through loading and the post-temperature read; it still supplies no independent
+thermal actuator.
+
+The new VM workflow is emitted by compiling/running `vm_ci.t27`; its YAML and tool
+invocations are metadata in the `.t27` source. This is a metadata emitter, not a
+new typed CI language. Legacy RTL, XDC, testbench, linker script and Python checks
+are reused unchanged and remain explicitly non-t27. The earlier handwritten
+workflows and historical compliance gaps are not retrospectively erased.
+
+At source967447a, whole-SoC simulation and FPGA CI are pending. This section makes
+no claim of a new board run or full operating-system boot; use the physical receipt.
+
 ## Authored as t27 (checked by the pinned t27c, bff21b85, in CI)
 
 | File | What | Check |

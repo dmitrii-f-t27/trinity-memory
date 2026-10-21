@@ -1,0 +1,327 @@
+// SPDX-License-Identifier: MIT
+module TriosSerialRunner;
+
+// A host-only, single-executor driver for the vm_vectors.t27 wire corpus.
+// Compile: t27c gen -> Zig 0.15.2 build-exe -target aarch64-macos.14.0 -lc.
+// TRIOS_SERIAL must name the intended UART. No environment => exit 4 before any
+// lock, serial open or output write. Root brackets this run with identity/XADC checks.
+// This program never loads a bitstream, emulates a result or retries a command.
+// It accepts one exact boot banner only if bytes really arrive, otherwise omits
+// the historical boot-only step; the live V response is always required before Z.
+// Captures contain only actually received bytes: build/trios/board_resp.hex.
+// Darwin termios fields and 115200 enum come from Zig std.c; independently checked
+// against Xcode MacOSX.sdk/usr/include/sys/termios.h (8N1, CREAD, CLOCAL, VMIN/VTIME).
+// A timeout, unsolicited byte, I/O error or mismatch stops all further requests.
+const io = @import("std");
+const OpenFlags = @field(io.c, "O");
+const Termios = @field(io.c, "termios");
+const PollFd = @field(io.c, "pollfd");
+const Timespec = @field(io.c, "timespec");
+const LOCK: str = "/private/tmp/claude-501/ax7203-board.lock";
+const BOOT: str = "TRIOS-VSAVM 70882158 T27 RV32I P1\n";
+const VERSION: str = "VTRIOS-VSAVM 70882158 T27 RV32I P1\n";
+const SESSION_MS: i64 = 30000;
+const COMMAND_MS: i64 = 2000;
+
+struct Corpus {
+    steps: [1024]u8,
+    request: [8192]u8,
+    expected: [16384]u8,
+    ns: usize,
+    nr: usize,
+    ne: usize,
+}
+
+struct Receipt {
+    bytes: [16384]u8,
+    received: usize,
+    completed: usize,
+    current_step: usize,
+    start_ms: i64,
+    boot_observed: bool,
+}
+
+fn whitespace(c: u8) -> bool { return c == 10 or c == 13 or c == 32 or c == 9; }
+fn nibble(c: u8) -> i32 {
+    if (c >= 48 and c <= 57) { return @as(i32, c - 48); }
+    if (c >= 97 and c <= 102) { return @as(i32, c - 87); }
+    if (c >= 65 and c <= 70) { return @as(i32, c - 55); }
+    return -1;
+}
+
+fn parse_hex(text: []const u8, out: []u8) -> i64 {
+    var p: usize = 0;
+    var n: usize = 0;
+    while (p < text.len) {
+        if (whitespace(text[p])) { p = p + 1; continue; }
+        if (p + 1 >= text.len or n >= out.len) { return -1; }
+        const hi: i32 = nibble(text[p]);
+        const lo: i32 = nibble(text[p + 1]);
+        if (hi < 0 or lo < 0) { return -1; }
+        if (p + 2 < text.len and !whitespace(text[p + 2])) { return -1; }
+        out[n] = @as(u8, @intCast(hi * 16 + lo));
+        n = n + 1;
+        p = p + 2;
+    }
+    return @as(i64, @intCast(n));
+}
+
+fn read_hex(path: []const u8, out: []u8) -> i64 {
+    const flags = OpenFlags { .ACCMODE = .RDONLY };
+    const fd: i32 = io.c.open(@ptrCast(path.ptr), flags);
+    if (fd < 0) { return -1; }
+    var bytes: [65536]u8 = undefined;
+    var n: usize = 0;
+    var good: bool = true;
+    while (n < 65536) {
+        const got = io.c.read(fd, bytes[n .. 65536].ptr, 65536 - n);
+        if (got < 0) { good = false; break; }
+        if (got == 0) { break; }
+        n = n + @as(usize, @intCast(got));
+    }
+    const closed: i32 = io.c.close(fd);
+    if (!good or closed != 0 or n == 65536) { return -1; }
+    return parse_hex(bytes[0 .. n], out);
+}
+
+fn bytes_equal(a: []const u8, b: []const u8) -> bool {
+    if (a.len != b.len) { return false; }
+    var i: usize = 0;
+    while (i < a.len) { if (a[i] != b[i]) { return false; } i = i + 1; }
+    return true;
+}
+
+fn load_corpus(c: *Corpus) -> bool {
+    const s: i64 = read_hex("build/trios/steps.mem", c.steps[0 .. 1024]);
+    const q: i64 = read_hex("build/trios/req.mem", c.request[0 .. 8192]);
+    const r: i64 = read_hex("build/trios/expected.hex", c.expected[0 .. 16384]);
+    if (s < 4 or q < 4 or r < 1) { return false; }
+    c.ns = @as(usize, @intCast(s)); c.nr = @as(usize, @intCast(q)); c.ne = @as(usize, @intCast(r));
+    if (c.ns % 2 != 0 or c.steps[0] != 0 or c.steps[1] != BOOT.len) { return false; }
+    if (c.ne < BOOT.len + VERSION.len or !bytes_equal(c.expected[0 .. BOOT.len], BOOT)) { return false; }
+    // No mutating command may precede the live protocol identity handshake.
+    if (c.steps[2] != 4 or c.steps[3] != VERSION.len) { return false; }
+    if (c.request[0] != 165 or c.request[1] != 1 or c.request[2] != 86) { return false; }
+    if (!bytes_equal(c.expected[BOOT.len .. BOOT.len + VERSION.len], VERSION)) { return false; }
+    var nq: usize = 0;
+    var nr: usize = BOOT.len;
+    var i: usize = 2;
+    while (i < c.ns) {
+        if (c.steps[i] == 0 or c.steps[i + 1] == 0) { return false; }
+        nq = nq + @as(usize, c.steps[i]);
+        nr = nr + @as(usize, c.steps[i + 1]);
+        i = i + 2;
+    }
+    return nq == c.nr and nr == c.ne;
+}
+
+fn mono_ms() -> i64 {
+    var t: Timespec = undefined;
+    const code: i32 = io.c.clock_gettime(.MONOTONIC, &t);
+    if (code != 0 or t.sec < 0 or t.nsec < 0) { return -1; }
+    return @as(i64, t.sec) * 1000 + @divTrunc(@as(i64, t.nsec), 1000000);
+}
+
+// poll status: -1 I/O error, 0 no event, 1 requested readiness.
+fn wait_fd(fd: i32, events: i16, timeout: i32) -> i32 {
+    var p: [1]PollFd = undefined;
+    p[0] = PollFd { .fd = fd, .events = events, .revents = 0 };
+    const n: i32 = io.c.poll(p[0 .. 1].ptr, 1, timeout);
+    if (n < 0) { return -1; }
+    if (n == 0) { return 0; }
+    if ((p[0].revents & (io.c.POLL.ERR | io.c.POLL.HUP | io.c.POLL.NVAL)) != 0) { return -1; }
+    if ((p[0].revents & events) == 0) { return -1; }
+    return 1;
+}
+
+fn deadline_ok(start: i64, command: i64) -> bool {
+    const now: i64 = mono_ms();
+    return now >= start and now >= command and now - start < SESSION_MS and now - command < COMMAND_MS;
+}
+
+fn capture_read(fd: i32, receipt: *Receipt, limit: usize) -> i64 {
+    if (limit == 0 or receipt.received + limit > 16384) { return -1; }
+    const got = io.c.read(fd, receipt.bytes[receipt.received .. receipt.received + limit].ptr, limit);
+    if (got > 0) { receipt.received = receipt.received + @as(usize, @intCast(got)); }
+    return @as(i64, got);
+}
+
+// Check for unsolicited bytes. Any present bytes are captured before failing.
+fn quiet(fd: i32, receipt: *Receipt, timeout: i32) -> bool {
+    const event: i32 = wait_fd(fd, io.c.POLL.IN, timeout);
+    if (event < 0) { return false; }
+    if (event == 0) { return true; }
+    const got: i64 = capture_read(fd, receipt, 256);
+    if (got < 0) { return false; }
+    return false;
+}
+
+fn startup(fd: i32, receipt: *Receipt) -> bool {
+    const first: i32 = wait_fd(fd, io.c.POLL.IN, 100);
+    if (first < 0) { return false; }
+    if (first == 0) { return true; } // no boot is invented for an already-running design
+    const start: i64 = mono_ms();
+    if (start < 0) { return false; }
+    while (receipt.received < BOOT.len) {
+        if (!deadline_ok(receipt.start_ms, start)) { return false; }
+        const ready: i32 = wait_fd(fd, io.c.POLL.IN, 50);
+        if (ready < 0) { return false; }
+        if (ready == 0) { continue; }
+        const got: i64 = capture_read(fd, receipt, BOOT.len - receipt.received);
+        if (got <= 0) { return false; }
+        var i: usize = 0;
+        while (i < receipt.received) {
+            if (receipt.bytes[i] != BOOT[i]) { return false; }
+            i = i + 1;
+        }
+    }
+    receipt.boot_observed = true;
+    return quiet(fd, receipt, 100);
+}
+
+fn execute(fd: i32, corpus: *Corpus, receipt: *Receipt) -> i32 {
+    receipt.start_ms = mono_ms();
+    if (receipt.start_ms < 0) { return 7; }
+    // An optional exact real boot is captured; an absent boot is never synthesized.
+    if (!startup(fd, receipt)) { return 8; }
+    var qi: usize = 0;
+    var ei: usize = BOOT.len;
+    var si: usize = 2;
+    while (si < corpus.ns) {
+        receipt.current_step = si / 2;
+        const request_len: usize = @as(usize, corpus.steps[si]);
+        const response_len: usize = @as(usize, corpus.steps[si + 1]);
+        const started: i64 = mono_ms();
+        if (started < 0 or !deadline_ok(receipt.start_ms, started)) { return 9; }
+        if (!quiet(fd, receipt, 0)) { return 8; }
+        var sent: usize = 0;
+        while (sent < request_len) {
+            if (!deadline_ok(receipt.start_ms, started)) { return 9; }
+            const ready: i32 = wait_fd(fd, io.c.POLL.OUT, 50);
+            if (ready < 0) { return 7; }
+            if (ready == 0) { continue; }
+            const wrote = io.c.write(fd, corpus.request[qi + sent .. qi + request_len].ptr, request_len - sent);
+            if (wrote <= 0) { return 7; }
+            sent = sent + @as(usize, @intCast(wrote));
+        }
+        // Continue a short write from its remaining suffix; never resend a frame.
+        const before: usize = receipt.received;
+        while (receipt.received - before < response_len) {
+            if (!deadline_ok(receipt.start_ms, started)) { return 9; }
+            const ready: i32 = wait_fd(fd, io.c.POLL.IN, 50);
+            if (ready < 0) { return 7; }
+            if (ready == 0) { continue; }
+            const got: i64 = capture_read(fd, receipt, response_len - (receipt.received - before));
+            if (got <= 0) { return 7; }
+        }
+        var j: usize = 0;
+        while (j < response_len) {
+            if (receipt.bytes[before + j] != corpus.expected[ei + j]) {
+                io.debug.print("VM_BOARD_MISMATCH step={d} byte={d} expected={d} got={d}\n",
+                    .{receipt.current_step, j, corpus.expected[ei + j], receipt.bytes[before + j]});
+                return 10;
+            }
+            j = j + 1;
+        }
+        // Allow one character time before the next request; late extra data is failure.
+        if (!quiet(fd, receipt, 2)) { return 8; }
+        receipt.completed = receipt.completed + 1;
+        qi = qi + request_len; ei = ei + response_len; si = si + 2;
+    }
+    if (!quiet(fd, receipt, 100)) { return 8; }
+    if (!deadline_ok(receipt.start_ms, mono_ms())) { return 9; }
+    return 0;
+}
+
+fn raw115200(fd: i32, previous: *Termios) -> bool {
+    var t: Termios = previous.*;
+    t.iflag = .{}; t.oflag = .{}; t.lflag = .{};
+    t.cflag = .{ .CSIZE = .CS8, .CREAD = true, .CLOCAL = true };
+    t.ispeed = .B115200; t.ospeed = .B115200;
+    t.cc[@intFromEnum(io.c.V.MIN)] = 0;
+    t.cc[@intFromEnum(io.c.V.TIME)] = 0;
+    if (io.c.tcsetattr(fd, .NOW, &t) != 0) { return false; }
+    var observed: Termios = undefined;
+    if (io.c.tcgetattr(fd, &observed) != 0) { return false; }
+    return observed.ispeed == .B115200 and observed.ospeed == .B115200 and
+        // The SDK's raw CLOCAL|CREAD|CS8 mask also checks CSTOPB at bit 10;
+        // Zig 0.15.2's Darwin packed field names put CSTOPB at bit 6.
+        @as(u64, @bitCast(observed.cflag)) == 35584 and
+        @as(u64, @bitCast(observed.iflag)) == 0 and @as(u64, @bitCast(observed.oflag)) == 0 and
+        @as(u64, @bitCast(observed.lflag)) == 0 and observed.cc[@intFromEnum(io.c.V.MIN)] == 0 and
+        observed.cc[@intFromEnum(io.c.V.TIME)] == 0;
+}
+
+fn hex_digit(n: u8) -> u8 { if (n < 10) { return n + 48; } return n + 87; }
+fn save_capture(receipt: *Receipt) -> bool {
+    const flags = OpenFlags { .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+    const fd: i32 = io.c.open("build/trios/board_resp.hex", flags, @as(u32, 420));
+    if (fd < 0) { return false; }
+    var out: [49152]u8 = undefined;
+    var i: usize = 0;
+    while (i < receipt.received) {
+        out[i * 3] = hex_digit(receipt.bytes[i] >> 4);
+        out[i * 3 + 1] = hex_digit(receipt.bytes[i] & 15);
+        out[i * 3 + 2] = 10;
+        i = i + 1;
+    }
+    var n: usize = 0;
+    var good: bool = true;
+    while (n < receipt.received * 3) {
+        const sent = io.c.write(fd, out[n .. receipt.received * 3].ptr, receipt.received * 3 - n);
+        if (sent <= 0) { good = false; break; }
+        n = n + @as(usize, @intCast(sent));
+    }
+    const closed: i32 = io.c.close(fd);
+    return good and closed == 0;
+}
+
+fn run_main() -> i32 {
+    const serial = io.c.getenv("TRIOS_SERIAL");
+    if (serial == null) { io.debug.print("TRIOS_SERIAL is required; no board opened\n", .{}); return 4; }
+    if (serial.?[0] == 0) { io.debug.print("TRIOS_SERIAL is empty; no board opened\n", .{}); return 4; }
+    var corpus: Corpus = undefined;
+    if (!load_corpus(&corpus)) { io.debug.print("invalid or missing vector corpus; no board opened\n", .{}); return 5; }
+    if (io.c.mkdir(@ptrCast(LOCK.ptr), 493) != 0) { io.debug.print("board lock already held; no board opened\n", .{}); return 3; }
+    var receipt: Receipt = Receipt { .bytes = undefined, .received = 0, .completed = 0, .current_step = 0, .start_ms = -1, .boot_observed = false };
+    var code: i32 = 0;
+    const flags = OpenFlags { .ACCMODE = .RDWR, .NONBLOCK = true, .NOCTTY = true };
+    const fd: i32 = io.c.open(serial.?, flags);
+    if (fd < 0) { code = 6; }
+    else {
+        var previous: Termios = undefined;
+        // Save original settings separately, so restoration also covers partial setup.
+        const had_settings: bool = io.c.tcgetattr(fd, &previous) == 0;
+        if (!had_settings or !raw115200(fd, &previous)) { code = 6; }
+        else { code = execute(fd, &corpus, &receipt); }
+        if (had_settings) {
+            const restored: i32 = io.c.tcsetattr(fd, .NOW, &previous);
+            if (restored != 0 and code == 0) { code = 11; }
+        }
+        const closed: i32 = io.c.close(fd);
+        if (closed != 0 and code == 0) { code = 11; }
+    }
+    const saved: bool = save_capture(&receipt);
+    if (!saved and code == 0) { code = 12; }
+    // This process created the directory. Never remove a lock whose mkdir failed.
+    const released: i32 = io.c.rmdir(@ptrCast(LOCK.ptr));
+    if (released != 0 and code == 0) { code = 13; }
+    const printed: i32 = io.c.printf("VM_BOARD_RESULT rc=%d completed=%zu planned=%zu current_step=%zu captured_bytes=%zu boot_expected_bytes=%zu boot_observed=%d capture_saved=%d lock_released=%d\n",
+        code, receipt.completed, corpus.ns / 2 - 1, receipt.current_step, receipt.received,
+        BOOT.len, @as(i32, @intFromBool(receipt.boot_observed)), @as(i32, @intFromBool(saved)), @as(i32, @intFromBool(released == 0)));
+    if (printed < 0 and code == 0) { code = 12; }
+    return code;
+}
+
+pub fn main() -> void { io.c.exit(run_main()); }
+
+test strict_hex_file_parser {
+    var out: [4]u8 = undefined;
+    const sample: [13]u8 = [48, 48, 10, 65, 53, 32, 55, 102, 9, 102, 102, 13, 10];
+    assert_eq(parse_hex(sample[0 .. 13], out[0 .. 4]), 4);
+    assert_eq(out[0], 0); assert_eq(out[1], 165); assert_eq(out[2], 127); assert_eq(out[3], 255);
+    assert_eq(parse_hex("0", out[0 .. 4]), -1);
+    assert_eq(parse_hex("0001", out[0 .. 4]), -1);
+    assert_eq(parse_hex("xx\n", out[0 .. 4]), -1);
+    assert_eq(parse_hex("00 01 02 03 04", out[0 .. 4]), -1);
+}
