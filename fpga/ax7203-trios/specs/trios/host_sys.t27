@@ -21,6 +21,8 @@ pub fn sys_forkpty(master: [2]u32, name: u64, term: u64, ws: []const u8) -> i32 
 pub fn sys_execv(path: []const u8, argv: [12]u64) -> i32 { return @extern("execv"); }
 pub fn sys_exit(code: i32) -> void { @extern("_exit"); }
 pub fn sys_waitpid(pid: i32, status: [2]u32, opts: i32) -> i32 { return @extern("waitpid"); }
+pub fn sys_kill(pid: i32, sig: i32) -> i32 { return @extern("kill"); }
+pub fn sys_poll(fds: []u8, n: u64, ms: i32) -> i32 { return @extern("poll"); }
 pub fn sys_usleep(us: u32) -> i32 { return @extern("usleep"); }
 /// clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW = 4): monotonic nanoseconds.
 pub fn sys_mono_ns(clock: u32) -> u64 { return @extern("clock_gettime_nsec_np"); }

@@ -77,15 +77,36 @@ jobs:
         run: |
           B=build/t27host/target/release/t27b
           cd fpga/ax7203-trios
-          for f in board_parse thermal_policy host_smoke; do
+          for f in board_parse thermal_policy host_smoke board_gate; do
             ../../$B test specs/trios/$f.t27 2>&1 | tee ../../build/trios/t27b_$f.log
             ! grep -q "^FAIL" ../../build/trios/t27b_$f.log
             grep -Eq ": [0-9]+ passed, 0 failed" ../../build/trios/t27b_$f.log
           done
-          for f in specs/trios/mutants/thermal_mut*.t27 specs/trios/mutants/board_parse_mut*.t27; do
+          for f in specs/trios/mutants/thermal_mut*.t27 specs/trios/mutants/board_parse_mut*.t27 specs/trios/mutants/board_gate_mut*.t27; do
             if ../../$B test $f > ../../build/trios/t27b_$(basename $f .t27).log 2>&1; then echo "$f was NOT caught on t27b"; exit 1; fi
             grep -q "^FAIL" ../../build/trios/t27b_$(basename $f .t27).log || { echo "$f failed without a test verdict on t27b"; exit 1; }
           done
+      - name: Build the board executor (t27) and run only its no-board paths
+        run: |
+          B=build/t27host/target/release/t27b
+          mkdir -p build/trios
+          $B build fpga/ax7203-trios/specs/trios/board_gate.t27 -o build/trios/board_gate.o --macho 2>&1 | grep -v "not exported" || true
+          nm -u build/trios/board_gate.o | tee build/trios/board_gate_undefined.txt
+          SDK=$(xcrun --show-sdk-path); SDKV=$(xcrun --show-sdk-version)
+          ld -arch arm64 -platform_version macos 11.0 $SDKV -syslibroot $SDK -e _main -lSystem -o build/trios/board_gate build/trios/board_gate.o
+          codesign --force --sign - build/trios/board_gate
+          otool -tv build/trios/board_gate > build/trios/board_gate_text.txt
+          ! grep -q "brk.*#0xa" build/trios/board_gate_text.txt
+          # no board here: the configuration paths must refuse with status 4 and must not take the lock
+          set +e
+          env -i ./build/trios/board_gate > build/trios/board_gate_noenv.txt; rc1=$?
+          env -i TRIOS_FTDI_SERIAL=x ./build/trios/board_gate > build/trios/board_gate_nodna.txt; rc2=$?
+          echo garbage > build/trios/baddna.txt
+          env -i TRIOS_FTDI_SERIAL=x TRIOS_EXPECT_DNA_FILE=build/trios/baddna.txt ./build/trios/board_gate > build/trios/board_gate_baddna.txt; rc3=$?
+          set -e
+          cat build/trios/board_gate_noenv.txt build/trios/board_gate_nodna.txt build/trios/board_gate_baddna.txt
+          test "$rc1" = 4 && test "$rc2" = 4 && test "$rc3" = 4
+          shasum -a 256 build/trios/board_gate | tee build/trios/board_gate_sha256.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -93,6 +114,7 @@ jobs:
           path: |
             build/trios/host_smoke*
             build/trios/t27b
+            build/trios/board_gate*
             build/trios/vprobe/
             build/trios/t27b_*.log
             build/trios/t27host_rev.txt
