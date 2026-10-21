@@ -82,7 +82,7 @@ jobs:
             ! grep -q "^FAIL" ../../build/trios/t27b_$f.log
             grep -Eq ": [0-9]+ passed, 0 failed" ../../build/trios/t27b_$f.log
           done
-          for f in specs/trios/mutants/thermal_mut*.t27; do
+          for f in specs/trios/mutants/thermal_mut*.t27 specs/trios/mutants/board_parse_mut*.t27; do
             if ../../$B test $f > ../../build/trios/t27b_$(basename $f .t27).log 2>&1; then echo "$f was NOT caught on t27b"; exit 1; fi
             grep -q "^FAIL" ../../build/trios/t27b_$(basename $f .t27).log || { echo "$f failed without a test verdict on t27b"; exit 1; }
           done
