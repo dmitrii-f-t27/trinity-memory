@@ -4,6 +4,10 @@ This repository implements digital encodings of balanced ternary values in binar
 memory. The RTL is a functional prototype: it does not implement physical ternary
 cells, a DDR controller, an inference engine, or a board-specific design.
 
+> **Board identifiers.** Every DNA value in this file (`0x0123456789abcdef`) is a
+> synthetic example. The real DNA and the adapter serial are kept only in a private
+> file and in environment variables, never in this repository.
+
 ## Modules and representation
 
 | Module | Input | Output | Invalid input |
@@ -563,7 +567,7 @@ three triggered runs, identical apart from the run number;
 
 The FASM of the d5d2 build carries all 5 760 INIT and 720 INITP words of its 45
 blocks, and the first run after configuration returns the exact trits, so block-RAM
-initial contents work through prjxray on this board (DNA 0x00389c0c2d85e85c, die
+initial contents work through prjxray on this board (DNA 0x0123456789abcdef, die
 38.2 C, VCCINT 0.995 V with the store loaded). The d5 store takes 47 blocks, not the
 50 of the write-read bench: its parity bits are constant in the initializers, so yosys
 narrows the words to 32 bits and packs them across the parity columns of other address
@@ -691,7 +695,7 @@ Fmax is an estimate, not a measurement.
 
 Issue #60 is the build: synthesis, place and route and a bitstream with recorded
 hashes. Issue #61 is the board. **State on 2026-09-24 (all nextpnr-xilinx 0.9.7,
-SRAM loads only, AX7203 DNA `0x00389c0c2d85e85c`):**
+SRAM loads only, AX7203 DNA `0x0123456789abcdef`):**
 
 - **x16 (chip U6, 512 MiB):** the build with our pattern test (`7deeef16`)
   calibrated on 4 of 4 loads and then wrote, read back and compared every one of
@@ -1087,7 +1091,7 @@ GitHub yet (nothing pushed).
 
 **First board runs (#61).** The x16 0.9.7 bitstream (whole-file sha256
 `0ae4ed6c…`, the file its `build.json` names), loaded into SRAM on the AX7203
-(DNA `0x00389c0c2d85e85c`, IDCODE `0x3636093`). Evidence in
+(DNA `0x0123456789abcdef`, IDCODE `0x3636093`). Evidence in
 [`reports/fpga/ddr3-bringup-2026-09-24-f07e91cd-x16/`](../reports/fpga/ddr3-bringup-2026-09-24-f07e91cd-x16/),
 written by [`tools/fpga-ddr3-capture.py`](../tools/fpga-ddr3-capture.py): IDCODE,
 DNA and XADC before the load, the UART recorder opened before `make ddr3-flash`
@@ -1367,7 +1371,7 @@ placement checked on the board again (below).
 **Board runs of the pattern test (#61, 2026-09-24).** Every run: an SRAM load
 by `tools/fpga-ddr3-capture.py` through `make ddr3-flash`, which checks the
 `.bit` against its report (whole-file sha256, or the sha256 from the sync word
-for the rebuilds named below); IDCODE `0x3636093`, DNA `0x00389c0c2d85e85c`,
+for the rebuilds named below); IDCODE `0x3636093`, DNA `0x0123456789abcdef`,
 XADC before and after; the UART recorded from before the load; the transcript's
 sha256 in `capture.json`. For every build with our status lines (7deeef16 and
 f07e91cd), also: the `H` line's build id, byte lanes and 3,000 ps checked, and
@@ -1910,7 +1914,7 @@ capture records).
 
 **Board runs of the build of record (2026-09-24, 42b6f5a9 seed 11, `.bit` whole-file sha256
 `66292207…`)**, each by `tools/fpga-ddr3-capture.py` as for #61 (the `.bit` checked against its
-report, IDCODE `0x3636093`, DNA `0x00389c0c2d85e85c`, XADC before and after, UART recorded from
+report, IDCODE `0x3636093`, DNA `0x0123456789abcdef`, XADC before and after, UART recorded from
 before the load), 20 s after the load
 ([`ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/load1`-`load3`](../reports/fpga/ddr3-reader-2026-09-24-42b6f5a9-x16-seed11/);
 loads returned 16:42:41.1, 16:44:57.2 and 16:46:54.2 UTC):
