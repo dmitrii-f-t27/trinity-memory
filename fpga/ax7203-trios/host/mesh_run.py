@@ -62,24 +62,23 @@ def sim_compare(out, resp):
     return 1 if bad else 0
 
 
-def serial_run(port, baud, out):
-    import serial
-    ss = mv.steps()
+def execute(link, ss):
+    """Run every step on an open serial link; return the transcript (stops at the first timeout)."""
     transcript = []
-    with serial.Serial(port, baud, timeout=0.2) as link:
-        # Drop anything already there (a boot line from a configuration earlier than this run).
-        time.sleep(0.3)
-        link.reset_input_buffer()
-        for name, rq, rs in ss:
-            link.write(rq)
-            buf = bytearray()
-            deadline = time.monotonic() + 5.0
-            while len(buf) < len(rs) and time.monotonic() < deadline:
-                buf += link.read(len(rs) - len(buf))
-            transcript.append({"step": name, "tx": rq.hex(), "rx": bytes(buf).hex()})
-            if len(buf) < len(rs):
-                print("TIMEOUT at step", name)
-                break
+    for name, rq, rs in ss:
+        link.write(rq)
+        buf = bytearray()
+        deadline = time.monotonic() + 5.0
+        while len(buf) < len(rs) and time.monotonic() < deadline:
+            buf += link.read(len(rs) - len(buf))
+        transcript.append({"step": name, "tx": rq.hex(), "rx": bytes(buf).hex()})
+        if len(buf) < len(rs):
+            print("TIMEOUT at step", name)
+            break
+    return transcript
+
+
+def evaluate(ss, transcript, baud, out):
     bad, rows = 0, []
     for (name, _, e), t in zip(ss, transcript):
         ok = bytes.fromhex(t["rx"]) == e
@@ -92,8 +91,20 @@ def serial_run(port, baud, out):
     for r in rows:
         if not r["ok"]:
             print("  MISMATCH", r["step"], "\n    expected", r["expected"], "\n    got     ", r["rx"])
-    Path(out).write_text(json.dumps({"baud": baud, "mismatches": bad, "complete": complete, "transcript": rows}, indent=1))
+    Path(out).write_text(json.dumps({"baud": baud, "planned": len(ss), "executed": len(transcript), "matched": passed,
+                                     "complete": complete, "transcript": rows}, indent=1))
     return 1 if bad or not complete else 0
+
+
+def serial_run(port, baud, out):
+    import serial
+    ss = mv.steps()
+    with serial.Serial(port, baud, timeout=0.2) as link:
+        # Drop anything already there (a boot line from a configuration earlier than this run).
+        time.sleep(0.3)
+        link.reset_input_buffer()
+        transcript = execute(link, ss)
+    return evaluate(ss, transcript, baud, out)
 
 
 def main():
