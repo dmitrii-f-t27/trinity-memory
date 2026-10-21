@@ -1,0 +1,264 @@
+name: fpga-ax7203-trios
+
+# TriOS mesh on the AX7203 (fpga/ax7203-trios): the real trios-mesh crate (gHashTag/trios
+# 70882158c9ff07c1157ff8a1a50ce39ee172fb3c) compiled for RV32I, run on a PicoRV32 soft CPU with
+# block RAM and a UART. Stages, each fail-closed and each needed by the next:
+#   spec      t27 RX-guard spec -> pinned t27c -> Verilog, spec tests, directed guard testbench
+#   firmware  vendored crate's own tests on the host; RV32I cross-build; ISA/ABI, reset vector and
+#             stack/link-map checks on the ELF; memory images
+#   sim       Icarus run of the whole SoC with the compiled payload, UART vectors, overflow/burst tests
+#   bitstream yosys -> nextpnr-xilinx (both clock domains constrained and gated) -> prjxray
+# Loading the board and the UART capture happen on the host that owns the board.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fpga/ax7203-trios-mesh']
+    # Only what the bitstream depends on; the thermal policy and the host specs have their own workflows.
+    paths:
+      - 'fpga/ax7203-trios/rtl/**'
+      - 'fpga/ax7203-trios/fw/**'
+      - 'fpga/ax7203-trios/tb/**'
+      - 'fpga/ax7203-trios/host/**'
+      - 'fpga/ax7203-trios/third_party/**'
+      - 'fpga/ax7203-trios/trios_soc_ax7203.xdc'
+      - 'fpga/ax7203-trios/specs/trios/trios_uart_guard.t27'
+      - '.github/workflows/fpga-ax7203-trios.yml'
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: regymm/openxc7@sha256:35c910739e3a4b40850b85de31ebc8954985a66e982009f09123b70dbb0e75da
+  PART: xc7a200tfbg484-2
+  T27_ROOT: ${{ github.workspace }}/build/compiler
+
+jobs:
+  spec:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned compiler and install tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build the pinned compiler
+        run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
+      - name: Spec tests and generated Verilog (fail on refusal)
+        run: |
+          mkdir -p build/trios
+          T27C="$T27_ROOT/target/release/t27c"
+          SPEC=fpga/ax7203-trios/specs/trios/trios_uart_guard.t27
+          "$T27C" gen-verilog "$SPEC" > build/trios/TriosUartGuardT27.v
+          if grep -q "ENTRY POINT REFUSED\|NO DATA PORTS" build/trios/TriosUartGuardT27.v; then echo "t27c refused the entry point"; cat build/trios/TriosUartGuardT27.v | head -20; exit 1; fi
+          grep -n "^module\|input\|output" build/trios/TriosUartGuardT27.v | head -40
+          "$T27C" icarus-simulate "$SPEC" 2>&1 | tee build/trios/spec_tests.log
+          sha256sum "$SPEC" build/trios/TriosUartGuardT27.v | tee build/trios/spec_sha256.txt
+      - name: Directed testbench of the generated guard (overflow, sticky flag, clear, quiet)
+        run: |
+          iverilog -g2012 -o build/trios/guard.vvp -s tb_guard build/trios/TriosUartGuardT27.v fpga/ax7203-trios/tb/tb_guard.v
+          vvp build/trios/guard.vvp | tee build/trios/guard_tb.log
+          grep -q TB_GUARD_PASS build/trios/guard_tb.log
+          ! grep -q "TB_GUARD_FAIL\|TB_GUARD_ASSERT_FAIL" build/trios/guard_tb.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trios-spec
+          path: |
+            build/trios/TriosUartGuardT27.v
+            build/trios/spec_tests.log
+            build/trios/spec_sha256.txt
+            build/trios/guard_tb.log
+          retention-days: 30
+          if-no-files-found: warn
+
+  firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain (RV32I target and LLVM tools)
+        run: rustup toolchain install 1.94.0 --profile minimal -t riscv32i-unknown-none-elf -c llvm-tools
+      - name: Verify vendored sources against the recorded hashes
+        run: cd fpga/ax7203-trios/fw/vendor && find . -type f | sort | xargs sha256sum | diff - ../VENDOR-SHA256.txt
+      - name: The vendored crate's own tests on the host
+        run: cargo +1.94.0 test --manifest-path fpga/ax7203-trios/fw/vendor/Cargo.toml --lib 2>&1 | tee host_crate_tests.log
+      - name: Board-runner parsers (offline, including negative cases)
+        run: python3 fpga/ax7203-trios/host/test_board_parsers.py
+      - name: Cross-build the firmware for riscv32i-unknown-none-elf
+        working-directory: fpga/ax7203-trios/fw
+        run: cargo +1.94.0 build --release --locked 2>&1 | tee ../../../cross_build.log
+      - name: Image, disassembly and checks
+        run: |
+          SYS="$(rustc +1.94.0 --print sysroot)"; BIN="$(echo "$SYS"/lib/rustlib/*/bin)"
+          mkdir -p build/trios
+          cp fpga/ax7203-trios/fw/target/riscv32i-unknown-none-elf/release/trios-mesh-ax7203 build/trios/firmware.elf
+          "$BIN/llvm-objcopy" -O binary build/trios/firmware.elf build/trios/firmware.bin
+          "$BIN/llvm-objdump" -d -M no-aliases --no-show-raw-insn build/trios/firmware.elf > build/trios/firmware.dis
+          "$BIN/llvm-readobj" --arch-specific --file-headers build/trios/firmware.elf > build/trios/firmware.readobj
+          "$BIN/llvm-nm" build/trios/firmware.elf > build/trios/firmware.nm
+          python3 fpga/ax7203-trios/host/check_elf.py build/trios/firmware.elf --objdump "$BIN/llvm-objdump" --readobj "$BIN/llvm-readobj" --nm "$BIN/llvm-nm" --json build/trios/elf_checks.json
+          python3 fpga/ax7203-trios/host/make_mem.py build/trios/firmware.bin build/trios
+          cp fpga/ax7203-trios/fw/Cargo.lock build/trios/Cargo.lock
+          sha256sum build/trios/firmware.elf build/trios/firmware.bin build/trios/Cargo.lock | tee build/trios/firmware_sha256.txt
+          rustc +1.94.0 -vV | tee build/trios/rustc_version.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trios-firmware
+          path: |
+            build/trios/
+            host_crate_tests.log
+            cross_build.log
+          retention-days: 30
+          if-no-files-found: warn
+
+  sim:
+    needs: [spec, firmware]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y iverilog
+      - uses: actions/download-artifact@v4
+        with: { name: trios-firmware, path: . }
+      - uses: actions/download-artifact@v4
+        with: { name: trios-spec, path: build/trios }
+      - name: Simulate the SoC running the compiled payload
+        run: |
+          python3 fpga/ax7203-trios/host/mesh_run.py sim-files build/trios
+          iverilog -g2012 -Ibuild/trios -o build/trios/sim.vvp -s tb_trios_soc \
+            fpga/ax7203-trios/third_party/picorv32.v build/trios/TriosUartGuardT27.v \
+            fpga/ax7203-trios/rtl/trios_soc_core.v fpga/ax7203-trios/tb/tb_trios_soc.v
+          vvp build/trios/sim.vvp | tee build/trios/sim.log
+          grep -q TB_DONE build/trios/sim.log
+          ! grep -q "TB_TIMEOUT\|TB_TRAP" build/trios/sim.log
+          ! grep -qi x build/trios/resp.hex
+          python3 fpga/ax7203-trios/host/mesh_run.py sim-compare build/trios build/trios/resp.hex | tee build/trios/sim_compare.log
+          dropped=$(sed -n 's/.*TB_GUARD dropped=\([0-9]*\).*/\1/p' build/trios/sim.log); echo "bytes dropped by the guard in simulation: $dropped"; test "$dropped" -gt 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trios-sim
+          path: |
+            build/trios/sim.log
+            build/trios/sim_compare.log
+            build/trios/sim_result.json
+            build/trios/resp.hex
+          retention-days: 30
+          if-no-files-found: warn
+
+  bitstream:
+    needs: [spec, firmware, sim]
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: trios-firmware, path: . }
+      - uses: actions/download-artifact@v4
+        with: { name: trios-spec, path: build/trios }
+      - name: Pull the toolchain image by digest
+        run: |
+          for i in 1 2 3 4 5 6; do docker pull "$IMAGE" && break; sleep $((i*20)); done
+          docker image inspect "$IMAGE" --format '{{index .RepoDigests 0}}'
+      - name: Synthesize (yosys)
+        run: |
+          D="docker run --rm -v $PWD:/work -w /work $IMAGE"
+          BID=$(echo "$GITHUB_SHA" | cut -c1-8)
+          $D yosys -V | tee build/trios/yosys_version.txt
+          $D yosys -q -l build/trios/yosys.log -p "read_verilog fpga/ax7203-trios/third_party/picorv32.v; read_verilog build/trios/TriosUartGuardT27.v; read_verilog -nomem2reg -Ibuild/trios fpga/ax7203-trios/rtl/trios_soc_core.v fpga/ax7203-trios/rtl/trios_soc_ax7203.v; chparam -set BUILD_ID 32'h$BID trios_soc_ax7203; synth_xilinx -flatten -abc9 -nocarry -nodsp -nowidelut -nosrl -nolutram -family xc7 -top trios_soc_ax7203; setundef -zero -params; tee -o build/trios/yosys_stat.txt stat; write_json build/trios/trios_soc_ax7203.json"
+          grep -E "RAMB|LUT|FDRE|FDCE|FDPE|FDSE|CARRY|BUFG|IBUFDS" build/trios/yosys_stat.txt | head -30
+      # Image and chip database are one proven pair: cache id 8759758651 (this key, refs/heads/master, created
+      # 2026-10-10T05:00:50Z) was written by run 38010453793 (source 4542dd23), whose docker pull resolved to the
+      # image digest pinned above, then bbaexport + bbasm in that same image. The other image seen in this
+      # repository (sha256:eced1cdd…, used by the DDR3 workflow) is never mixed with it. On a miss the database is
+      # regenerated by the pinned image itself, so the pair stays consistent.
+      - name: Restore the chip database (key proven to come from the pinned image)
+        id: chipdb
+        uses: actions/cache/restore@v4
+        with:
+          path: build/fpga/chipdb/xc7a200tfbg484-2.bin
+          key: chipdb-xc7a200tfbg484-2-regymm-openxc7-v1
+      - name: Generate the chip database if it was not cached
+        if: steps.chipdb.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p build/fpga/chipdb
+          docker run --rm -v "$PWD:/work" -w /work "$IMAGE" bash -c "cd /nextpnr-xilinx && python3 xilinx/python/bbaexport.py --device $PART --bba /work/build/fpga/chipdb/$PART.bba && bbasm -l /work/build/fpga/chipdb/$PART.bba /work/build/fpga/chipdb/$PART.bin && rm -f /work/build/fpga/chipdb/$PART.bba"
+      - name: Save the chip database right away
+        if: steps.chipdb.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/fpga/chipdb/xc7a200tfbg484-2.bin
+          key: chipdb-xc7a200tfbg484-2-regymm-openxc7-v1
+      - name: Record tool and chip-database provenance
+        run: |
+          D="docker run --rm -v $PWD:/work -w /work $IMAGE"
+          {
+            echo "image $IMAGE"
+            echo "nextpnr-xilinx git $($D git -C /nextpnr-xilinx rev-parse HEAD)"
+            echo "prjxray-db git $($D git -C /nextpnr-xilinx/xilinx/external/prjxray-db rev-parse HEAD)"
+            echo "prjxray git $($D git -C /prjxray rev-parse HEAD 2>/dev/null || echo unknown)"
+            echo "chipdb sha256 $(sha256sum build/fpga/chipdb/$PART.bin | cut -d' ' -f1)"
+            echo "chipdb origin: $([ '${{ steps.chipdb.outputs.cache-hit }}' = true ] && echo 'cache hit, key chipdb-...-regymm-openxc7-v1 (id 8759758651), created by run 38010453793 with this image digest' || echo 'generated in this run by the pinned image')"
+          } | tee build/trios/tool_provenance.txt
+      - name: Place and route; every attempt must pass the timing gate of both clock domains
+        run: |
+          D="docker run --rm -v $PWD:/work -w /work $IMAGE"
+          $D nextpnr-xilinx --version 2>&1 | tee build/trios/nextpnr_version.txt || true
+          ok=0
+          for router in router2 router1; do for s in 1 2 3 4 5 6; do
+            rm -f build/trios/trios_soc_ax7203.fasm
+            echo "nextpnr placer heap router $router seed $s"
+            $D nextpnr-xilinx --chipdb build/fpga/chipdb/$PART.bin --xdc fpga/ax7203-trios/trios_soc_ax7203.xdc \
+              --json build/trios/trios_soc_ax7203.json --write build/trios/routed.json --fasm build/trios/trios_soc_ax7203.fasm \
+              --freq 25 --seed $s --placer heap --router $router > build/trios/nextpnr_${router}_$s.log 2>&1 || true
+            if [ -s build/trios/trios_soc_ax7203.fasm ] && python3 fpga/ax7203-trios/host/check_timing.py build/trios/nextpnr_${router}_$s.log --expect clk200=200 --expect clk25=25 --json build/trios/timing.json; then
+              cp build/trios/nextpnr_${router}_$s.log build/trios/nextpnr.log; ok=1; echo "accepted: $router seed $s"; break 2
+            fi
+          done; done
+          test "$ok" = 1
+      - name: Pack the bitstream
+        run: |
+          D="docker run --rm -v $PWD:/work -w /work $IMAGE"
+          $D bash -c "source /prjxray/env/bin/activate && fasm2frames --db-root /nextpnr-xilinx/xilinx/external/prjxray-db/artix7 --part $PART build/trios/trios_soc_ax7203.fasm build/trios/trios_soc_ax7203.frames && /prjxray/build/tools/xc7frames2bit --part_file /nextpnr-xilinx/xilinx/external/prjxray-db/artix7/$PART/part.yaml --part_name $PART --frm_file build/trios/trios_soc_ax7203.frames --output_file build/trios/trios_soc_ax7203.bit"
+          python3 fpga/ax7203-trios/host/build_report.py "$GITHUB_SHA" "$IMAGE"
+      - name: Keep every tool log even when a step failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trios-tool-logs
+          path: |
+            build/trios/yosys.log
+            build/trios/yosys_stat.txt
+            build/trios/nextpnr*.log
+            build/trios/*_version.txt
+            build/trios/tool_provenance.txt
+            build/trios/timing.json
+          retention-days: 30
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trios-bitstream
+          path: |
+            build/trios/trios_soc_ax7203.bit
+            build/trios/trios_soc_ax7203.fasm
+            build/trios/build_report.json
+            build/trios/firmware.elf
+            build/trios/firmware.bin
+            build/trios/elf_checks.json
+          retention-days: 30
+          if-no-files-found: error

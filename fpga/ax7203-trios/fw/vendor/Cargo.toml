@@ -1,0 +1,40 @@
+[package]
+name = "trios-mesh"
+version = "0.1.0"
+edition = "2021"
+description = "no_std Reticulum-compatible mesh routing for Trinity GF16 ASIC nodes. φ² + φ⁻² = 3"
+license = "MIT"
+repository = "https://github.com/gHashTag/trios"
+keywords = ["mesh", "reticulum", "depin", "no-std", "fpga"]
+categories = ["embedded", "network-programming", "cryptography"]
+
+[features]
+default = []
+std = []  # enable only for host-side tooling / tests
+
+[dependencies]
+heapless        = "0.8"
+sha2            = { version = "0.10", default-features = false }
+ed25519-dalek   = { version = "2.1",  default-features = false, features = ["zeroize"] }
+chacha20poly1305 = { version = "0.10", default-features = false }
+serde           = { version = "1",    default-features = false, features = ["derive"], optional = true }
+
+[dev-dependencies]
+criterion = "0.5"  # benchmarks (std only)
+# competitor_bench uses real AEAD primitives — default-features off in main
+# deps because of no_std, but benches always run on a hosted target.
+chacha20poly1305 = { version = "0.10", features = ["alloc"] }
+sha2 = "0.10"
+
+[[bench]]
+name    = "routing_table"
+harness = false
+
+# L-E2E-5 (trinity-fpga#27) — Trinity vs competitors honest comparison
+[[bench]]
+name    = "competitor_bench"
+harness = false
+
+[profile.release]
+opt-level = "s"   # size-optimised for embedded
+lto       = true

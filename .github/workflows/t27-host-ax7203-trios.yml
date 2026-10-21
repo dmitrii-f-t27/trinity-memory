@@ -1,0 +1,154 @@
+name: t27-host-ax7203-trios
+
+# The t27 host path for the board executor: t27b from gHashTag/t27 master (extern boundary, PR 11324) built on a
+# macOS arm64 runner, specs under fpga/ax7203-trios/specs/trios/** compiled to Mach-O executables that call
+# libSystem. Separate from the FPGA workflow so iterating on host specs does not rebuild the bitstream.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fpga/ax7203-trios-mesh']
+    paths:
+      - 'fpga/ax7203-trios/specs/trios/**'
+      - 'fpga/ax7203-trios/specs/trios/thermal_policy.t27'
+      - '.github/workflows/t27-host-ax7203-trios.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  t27b-host:
+    # The t27 host path (board executor): t27b from gHashTag/t27 master (extern boundary, PR 11324) built here,
+    # one spec compiled to a Mach-O executable that calls libSystem. Informational for now: the board executor is
+    # not written yet, this proves the path exists.
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      T27_HOST_SHA: aeb772f46b15116d45d1a1c8b7254c74d1510493
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch gHashTag/t27 at the pinned commit and build t27b
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          git init build/t27host
+          git -C build/t27host remote add origin https://github.com/gHashTag/t27.git
+          git -C build/t27host fetch --depth 1 origin "$T27_HOST_SHA"
+          git -C build/t27host checkout --detach FETCH_HEAD
+          cd build/t27host && cargo +1.94.0 build --release -p t27b 2>&1 | tail -5
+      - name: Compile, link and run the host smoke spec
+        run: |
+          B=build/t27host/target/release/t27b
+          mkdir -p build/trios
+          $B test fpga/ax7203-trios/specs/trios/host_smoke.t27 --blockers 2>&1 | tee build/trios/host_smoke_blockers.txt || true
+          $B build fpga/ax7203-trios/specs/trios/host_smoke.t27 -o build/trios/host_smoke.o --macho 2>&1 | tee build/trios/host_smoke_build.txt
+          $B asm fpga/ax7203-trios/specs/trios/host_smoke.t27 > build/trios/host_smoke.asm 2>&1 || true
+          nm -u build/trios/host_smoke.o | tee build/trios/host_smoke_undefined.txt
+          grep -q _write build/trios/host_smoke_undefined.txt
+          SDK=$(xcrun --show-sdk-path); SDKV=$(xcrun --show-sdk-version)
+          ld -arch arm64 -platform_version macos 11.0 $SDKV -syslibroot $SDK -e _main -lSystem -o build/trios/host_smoke build/trios/host_smoke.o
+          codesign --force --sign - build/trios/host_smoke
+          otool -tv build/trios/host_smoke > build/trios/host_smoke_text.txt
+          cat build/trios/host_smoke_text.txt
+          # the emitted code must call write and contain no trap stub
+          grep -q "bl.*_write" build/trios/host_smoke_text.txt
+          ! grep -q "brk" build/trios/host_smoke_text.txt
+          set +e
+          ./build/trios/host_smoke > build/trios/host_smoke_stdout.bin 2> build/trios/host_smoke_stderr.txt
+          echo $? > build/trios/host_smoke_rc.txt
+          set -e
+          xxd build/trios/host_smoke_stdout.bin | tee build/trios/host_smoke_stdout.hex
+          echo "rc=$(cat build/trios/host_smoke_rc.txt)"
+          test "$(cat build/trios/host_smoke_rc.txt)" = 0
+          test "$(xxd -p build/trios/host_smoke_stdout.bin)" = "6f6b0a"
+          shasum -a 256 build/trios/host_smoke build/t27host/target/release/t27b | tee build/trios/host_smoke_sha256.txt
+          git -C build/t27host rev-parse HEAD | tee build/trios/t27host_rev.txt
+          cp build/t27host/target/release/t27b build/trios/t27b
+      - name: The primitive backend (t27b verilog) on the repository's own conformance spec and board top
+        if: always()
+        run: |
+          B=build/t27host/target/release/t27b
+          mkdir -p build/trios/vprobe
+          for s in specs/tri/t27b/conformance/verilog_prim.t27 specs/trinet/eth_top_ax7203.t27; do
+            n=$(basename $s .t27)
+            $B verilog build/t27host/$s > build/trios/vprobe/$n.v 2> build/trios/vprobe/$n.err; echo "$n rc=$?" | tee -a build/trios/vprobe/summary.txt
+            grep -E "BUFG|IBUFDS|STARTUPE2|BSCANE2|LOC|IOSTANDARD|t27_period_ps" build/trios/vprobe/$n.v | head -12 | tee -a build/trios/vprobe/summary.txt
+          done
+      - name: Every spec under specs/trios on t27b (a failing test fails the job); the mutants must fail
+        run: |
+          B=build/t27host/target/release/t27b
+          cd fpga/ax7203-trios
+          for f in board_parse thermal_policy host_smoke board_gate; do
+            ../../$B test specs/trios/$f.t27 2>&1 | tee ../../build/trios/t27b_$f.log
+            ! grep -q "^FAIL" ../../build/trios/t27b_$f.log
+            grep -Eq ": [0-9]+ passed, 0 failed" ../../build/trios/t27b_$f.log
+          done
+          nm=0
+          for f in specs/trios/mutants/thermal_mut*.t27 specs/trios/mutants/board_parse_mut*.t27 specs/trios/mutants/board_gate_mut*.t27; do
+            nm=$((nm+1)); b=$(basename $f .t27)
+            case $b in thermal_*) base=thermal_policy;; board_parse_*) base=board_parse;; board_gate_*) base=board_gate;; esac
+            # a mutant differs from its spec by a few lines only, so it cannot drift into testing something else
+            d=$(diff <(grep -v -e '^module ' -e '^// MUTANT' specs/trios/$base.t27) <(grep -v -e '^module ' -e '^// MUTANT' $f) | grep -c '^[<>]' || true)
+            if [ "$d" -lt 1 ] || [ "$d" -gt 6 ]; then echo "$b differs from $base.t27 by $d lines"; exit 1; fi
+            if ../../$B test $f > ../../build/trios/t27b_$b.log 2>&1; then echo "$f was NOT caught on t27b"; exit 1; fi
+            grep -q "^FAIL" ../../build/trios/t27b_$b.log || { echo "$f failed without a test verdict on t27b"; exit 1; }
+          done
+          echo "$nm mutants caught on t27b"
+          test "$nm" -ge 54
+      - name: Build the board executor (t27) and run only its no-board paths
+        run: |
+          B=build/t27host/target/release/t27b
+          mkdir -p build/trios
+          $B build fpga/ax7203-trios/specs/trios/board_gate.t27 -o build/trios/board_gate.o --macho 2>&1 | grep -v "not exported" || true
+          nm -u build/trios/board_gate.o | tee build/trios/board_gate_undefined.txt
+          SDK=$(xcrun --show-sdk-path); SDKV=$(xcrun --show-sdk-version)
+          ld -arch arm64 -platform_version macos 11.0 $SDKV -syslibroot $SDK -e _main -lSystem -o build/trios/board_gate build/trios/board_gate.o
+          codesign --force --sign - build/trios/board_gate
+          otool -tv build/trios/board_gate > build/trios/board_gate_text.txt
+          ! grep -q "brk.*#0xa" build/trios/board_gate_text.txt
+          # no board here: the configuration paths must refuse with status 4 and must not take the lock
+          set +e
+          env -i ./build/trios/board_gate > build/trios/board_gate_noenv.txt; rc1=$?
+          env -i TRIOS_FTDI_SERIAL=x ./build/trios/board_gate > build/trios/board_gate_nodna.txt; rc2=$?
+          echo garbage > build/trios/baddna.txt
+          env -i TRIOS_FTDI_SERIAL=x TRIOS_EXPECT_DNA_FILE=build/trios/baddna.txt ./build/trios/board_gate > build/trios/board_gate_baddna.txt; rc3=$?
+          set -e
+          cat build/trios/board_gate_noenv.txt build/trios/board_gate_nodna.txt build/trios/board_gate_baddna.txt
+          test "$rc1" = 4 && test "$rc2" = 4 && test "$rc3" = 4
+          # every mode needs the expected DNA file (series included), and load needs a verified bitstream:
+          # each refusal below happens before the board lock and before any tool touches a board.
+          printf '0x0123456789abcdef\n' > build/trios/dna.txt
+          printf 'bitstream-test-bytes' > build/trios/x.bit
+          H=$(shasum -a 256 build/trios/x.bit | cut -d' ' -f1)
+          P=$PWD/build/trios/x.bit; D=$PWD/build/trios/dna.txt
+          gate() { want=$1; name=$2; shift 2; set +e; env -i "$@" ./build/trios/board_gate > build/trios/gate_case.txt 2>&1; rc=$?; set -e; echo "$name: rc=$rc (want $want)"; cat build/trios/gate_case.txt; test "$rc" = "$want"; }
+          gate 4 "series without the DNA file" TRIOS_FTDI_SERIAL=x TRIOS_MODE=series
+          gate 4 "load without a bitstream" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D
+          gate 4 "load with a relative path" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=x.bit TRIOS_EXPECT_BITSTREAM_SHA256=$H
+          gate 4 "load without the expected hash" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P
+          gate 4 "load with a malformed hash" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P TRIOS_EXPECT_BITSTREAM_SHA256=${H%?}
+          gate 4 "load of a missing file" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$PWD/build/trios/none.bit TRIOS_EXPECT_BITSTREAM_SHA256=$H
+          gate 4 "load with the wrong hash" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P TRIOS_EXPECT_BITSTREAM_SHA256=0000000000000000000000000000000000000000000000000000000000000000
+          # a hash that matches passes the configuration stage; this runner has no board, so it stops at the lock (3) or at the missing loader (2)
+          set +e; env -i TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P TRIOS_EXPECT_BITSTREAM_SHA256=$H ./build/trios/board_gate > build/trios/gate_case.txt 2>&1; rc=$?; set -e
+          cat build/trios/gate_case.txt; echo "matching hash: rc=$rc"; test "$rc" = 3 || test "$rc" = 2
+          # a hung child is killed at the deadline: hashing a FIFO with no writer blocks forever
+          mkfifo build/trios/hang.bit
+          s=$(date +%s)
+          set +e; env -i TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$PWD/build/trios/hang.bit TRIOS_EXPECT_BITSTREAM_SHA256=$H ./build/trios/board_gate > build/trios/gate_case.txt 2>&1; rc=$?; set -e
+          e=$(( $(date +%s) - s )); cat build/trios/gate_case.txt; echo "hung child: rc=$rc after ${e}s"
+          test "$rc" = 4 && test "$e" -ge 14 && test "$e" -le 40
+          ! pgrep -f "shasum.*hang.bit"
+          shasum -a 256 build/trios/board_gate | tee build/trios/board_gate_sha256.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trios-t27b-host
+          path: |
+            build/trios/host_smoke*
+            build/trios/t27b
+            build/trios/board_gate*
+            build/trios/vprobe/
+            build/trios/t27b_*.log
+            build/trios/t27host_rev.txt
+          retention-days: 30
+          if-no-files-found: warn

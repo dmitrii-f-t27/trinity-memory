@@ -1,0 +1,22 @@
+[package]
+name = "trios-mesh-ax7203"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "UART front end that runs the real trios-mesh crate (gHashTag/trios 70882158) on a PicoRV32 RV32I soft CPU"
+publish = false
+
+# Standalone: the vendored crate lives below this directory and must not be pulled into a workspace.
+[workspace]
+exclude = ["vendor"]
+
+[dependencies]
+trios-mesh = { path = "vendor", default-features = false }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+overflow-checks = false

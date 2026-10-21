@@ -1,0 +1,279 @@
+// SPDX-License-Identifier: MIT
+module TriosVmVectors;
+
+// Independent wire-level acceptance vectors for vm_firmware.t27. Expected register
+// values are literals, never computed by the VM implementation under test.
+// t27c gen -> Zig host executable. Run without arguments to create the four inputs
+// for the unchanged tb_trios_soc.v; TRIOS_COMPARE=1 checks build/trios/resp.hex.
+// No hardware is opened by this program.
+const io = @import("std");
+const OpenFlags = @field(io.c, "O");
+
+const BOOT: str = "TRIOS-VSAVM 70882158 T27 RV32I P1\n";
+const VERSION: str = "VTRIOS-VSAVM 70882158 T27 RV32I P1\n";
+
+struct Vectors {
+    request: [8192]u8,
+    expected: [16384]u8,
+    steps: [1024]u8,
+    nr: usize,
+    ne: usize,
+    ns: usize,
+}
+
+fn fresh() -> Vectors {
+    return Vectors { .request = undefined, .expected = undefined, .steps = undefined,
+        .nr = 0, .ne = 0, .ns = 0 };
+}
+
+fn crc_byte(initial: u8, byte: u8) -> u8 {
+    var c: u32 = @as(u32, initial ^ byte);
+    var i: usize = 0;
+    while (i < 8) {
+        if ((c & 128) != 0) { c = ((c << 1) ^ 7) & 255; }
+        else { c = (c << 1) & 255; }
+        i = i + 1;
+    }
+    return @as(u8, @intCast(c));
+}
+
+fn add(v: *Vectors, payload: []const u8, reply: []const u8, corrupt: bool) -> void {
+    if (payload.len > 80 or reply.len > 255 or v.ns + 2 > 1024 or
+        v.nr + payload.len + 3 > 8192 or v.ne + reply.len > 16384) { @panic("vector capacity"); }
+    var count: usize = 0;
+    if (payload.len != 0) {
+        v.request[v.nr] = 165;
+        v.request[v.nr + 1] = @as(u8, @intCast(payload.len));
+        var crc: u8 = crc_byte(0, @as(u8, @intCast(payload.len)));
+        var i: usize = 0;
+        while (i < payload.len) {
+            v.request[v.nr + 2 + i] = payload[i];
+            crc = crc_byte(crc, payload[i]);
+            i = i + 1;
+        }
+        if (corrupt) { crc = crc ^ 1; }
+        v.request[v.nr + 2 + payload.len] = crc;
+        count = payload.len + 3;
+    }
+    v.steps[v.ns] = @as(u8, @intCast(count));
+    v.steps[v.ns + 1] = @as(u8, @intCast(reply.len));
+    v.ns = v.ns + 2;
+    v.nr = v.nr + count;
+    var j: usize = 0;
+    while (j < reply.len) { v.expected[v.ne + j] = reply[j]; j = j + 1; }
+    v.ne = v.ne + reply.len;
+}
+
+fn cmd(v: *Vectors, command: u8, code: u8) -> void {
+    var p: [1]u8 = [0];
+    var r: [2]u8 = [0, 0];
+    p[0] = command; r[0] = command; r[1] = code;
+    add(v, p[0 .. 1], r[0 .. 2], false);
+}
+
+fn le64(b: []u8, off: usize, value: u64) -> void {
+    var x: u64 = value;
+    var i: usize = 0;
+    while (i < 8) { b[off + i] = @as(u8, @intCast(x & 255)); x = x >> 8; i = i + 1; }
+}
+
+fn inst(v: *Vectors, op: u8, dst: u8, a: u8, b: u8, imm: i64, code: u8) -> void {
+    var p: [13]u8 = undefined;
+    p[0] = 65; p[1] = op; p[2] = dst; p[3] = a; p[4] = b;
+    le64(p[0 .. 13], 5, @bitCast(imm));
+    var r: [2]u8 = [65, 0]; r[1] = code;
+    add(v, p[0 .. 13], r[0 .. 2], false);
+}
+
+fn state(v: *Vectors, error_code: u8, halted: u8, length: u8, pc: u64, cycles: u64,
+    scalar: i64, v0: i64, v1: i64, v2: i64, v3: i64) -> void {
+    var r: [60]u8 = undefined;
+    r[0] = 81; r[1] = error_code; r[2] = halted; r[3] = length;
+    le64(r[0 .. 60], 4, pc); le64(r[0 .. 60], 12, cycles);
+    le64(r[0 .. 60], 20, @bitCast(scalar));
+    le64(r[0 .. 60], 28, @bitCast(v0)); le64(r[0 .. 60], 36, @bitCast(v1));
+    le64(r[0 .. 60], 44, @bitCast(v2)); le64(r[0 .. 60], 52, @bitCast(v3));
+    add(v, "Q", r[0 .. 60], false);
+}
+
+fn build_vectors() -> Vectors {
+    var v: Vectors = fresh();
+    add(&v, "", BOOT, false);
+    add(&v, "V", VERSION, false);
+    cmd(&v, 90, 0);
+    state(&v, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    // The original TriOS VM arithmetic test, executed by uploaded instructions.
+    cmd(&v, 66, 0);
+    inst(&v, 2, 0, 0, 0, 12345, 0);
+    inst(&v, 2, 1, 0, 0, 67890, 0);
+    inst(&v, 11, 2, 0, 1, 0, 0);
+    inst(&v, 1, 0, 2, 0, 0, 0);
+    inst(&v, 25, 0, 0, 0, 0, 0);
+    cmd(&v, 83, 0);
+    state(&v, 0, 0, 5, 1, 1, 0, 12345, 0, 0, 0);
+    cmd(&v, 82, 0);
+    state(&v, 0, 1, 5, 5, 5, 80235, 12345, 67890, 80235, 0);
+    cmd(&v, 82, 0);
+    state(&v, 0, 1, 5, 5, 5, 80235, 12345, 67890, 80235, 0);
+    // A new program resets execution state but preserves registers and scalar s0.
+    cmd(&v, 66, 0);
+    state(&v, 0, 0, 0, 0, 0, 80235, 12345, 67890, 80235, 0);
+    inst(&v, 12, 3, 2, 0, 0, 0);
+    inst(&v, 1, 0, 3, 0, 0, 0);
+    cmd(&v, 82, 0);
+    state(&v, 0, 0, 2, 2, 2, -80235, 12345, 67890, 80235, -80235);
+    // Signed arithmetic, destination alias, multiply and move; no halt opcode.
+    cmd(&v, 90, 0); cmd(&v, 66, 0);
+    inst(&v, 0, 0, 0, 0, -7, 0); inst(&v, 2, 1, 0, 0, 2, 0);
+    inst(&v, 11, 0, 0, 1, 0, 0); inst(&v, 12, 2, 0, 0, 0, 0);
+    inst(&v, 13, 2, 2, 1, 0, 0); inst(&v, 14, 3, 2, 0, 0, 0);
+    inst(&v, 1, 0, 3, 0, 0, 0); cmd(&v, 82, 0);
+    state(&v, 0, 0, 7, 7, 7, 10, -5, 2, 10, 10);
+    // Corrupt reset request must not mutate any register or execution state.
+    const bad_crc_reply: [3]u8 = [69, 4, 4];
+    add(&v, "Z", bad_crc_reply[0 .. 3], true);
+    state(&v, 0, 0, 7, 7, 7, 10, -5, 2, 10, 10);
+    // Invalid register indices alias v0, as the pinned source does.
+    cmd(&v, 66, 0);
+    inst(&v, 2, 255, 0, 0, 13, 0); inst(&v, 2, 1, 0, 0, 1, 0);
+    inst(&v, 11, 255, 255, 1, 0, 0); inst(&v, 1, 0, 255, 0, 0, 0);
+    inst(&v, 25, 0, 0, 0, 0, 0); inst(&v, 2, 0, 0, 0, 99, 0);
+    cmd(&v, 82, 0);
+    state(&v, 0, 1, 6, 5, 5, 14, 14, 1, 10, 10);
+    // Unsupported cosine opcode reports failure without advancing PC/cycles.
+    cmd(&v, 66, 0); inst(&v, 17, 0, 0, 0, 0, 0); cmd(&v, 82, 1);
+    state(&v, 1, 0, 1, 0, 0, 14, 14, 1, 10, 10);
+    // Explicit numeric overflow, then a clear error state and a multiply overflow.
+    cmd(&v, 66, 0); inst(&v, 2, 0, 0, 0, 2026277576509488133, 0);
+    inst(&v, 11, 1, 0, 0, 0, 0); cmd(&v, 82, 2);
+    state(&v, 2, 0, 2, 1, 1, 14, 2026277576509488133, 1, 10, 10);
+    cmd(&v, 66, 0); inst(&v, 13, 1, 0, 0, 0, 0); cmd(&v, 82, 2);
+    state(&v, 2, 0, 1, 0, 0, 14, 2026277576509488133, 1, 10, 10);
+    // Capacity: the 65th upload refuses; all 64 nops still execute exactly once.
+    cmd(&v, 90, 0); cmd(&v, 66, 0);
+    var i: usize = 0;
+    while (i < 64) { inst(&v, 24, 0, 0, 0, 0, 0); i = i + 1; }
+    inst(&v, 25, 0, 0, 0, 0, 3); cmd(&v, 82, 0);
+    state(&v, 0, 0, 64, 64, 64, 0, 0, 0, 0, 0);
+    cmd(&v, 66, 0); cmd(&v, 83, 0);
+    state(&v, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    return v;
+}
+
+fn hex_digit(n: u8) -> u8 {
+    if (n < 10) { return n + 48; }
+    return n + 87;
+}
+
+fn write_hex(path: []const u8, bytes: []const u8) -> void {
+    var out: [49152]u8 = undefined;
+    var i: usize = 0;
+    while (i < bytes.len) {
+        out[3 * i] = hex_digit(bytes[i] >> 4);
+        out[3 * i + 1] = hex_digit(bytes[i] & 15);
+        out[3 * i + 2] = 10;
+        i = i + 1;
+    }
+    write_file(path, out[0 .. bytes.len * 3]);
+}
+
+fn write_file(path: []const u8, bytes: []const u8) -> void {
+    const flags = OpenFlags { .ACCMODE = .WRONLY, .CREAT = true, .TRUNC = true };
+    const fd: i32 = io.c.open(@ptrCast(path.ptr), flags, @as(u32, 420));
+    if (fd < 0) { @panic("open vector output"); }
+    var pos: usize = 0;
+    while (pos < bytes.len) {
+        const n = io.c.write(fd, bytes[pos .. bytes.len].ptr, bytes.len - pos);
+        if (n <= 0) { @panic("write vector output"); }
+        pos = pos + @as(usize, @intCast(n));
+    }
+    const closed: i32 = io.c.close(fd);
+    if (closed != 0) { @panic("close vector output"); }
+}
+
+fn append_text(out: []u8, off: usize, s: []const u8) -> usize {
+    var i: usize = 0;
+    while (i < s.len) { out[off + i] = s[i]; i = i + 1; }
+    return off + s.len;
+}
+
+fn decimal(out: []u8, off: usize, value: usize) -> usize {
+    var temp: [20]u8 = undefined;
+    var x: usize = value;
+    var n: usize = 0;
+    if (x == 0) { temp[0] = 48; n = 1; }
+    while (x > 0) { temp[n] = @as(u8, @intCast(x % 10 + 48)); x = x / 10; n = n + 1; }
+    var i: usize = 0;
+    while (i < n) { out[off + i] = temp[n - i - 1]; i = i + 1; }
+    return off + n;
+}
+
+fn nibble(c: u8) -> i32 {
+    if (c >= 48 and c <= 57) { return @as(i32, c - 48); }
+    if (c >= 97 and c <= 102) { return @as(i32, c - 87); }
+    if (c >= 65 and c <= 70) { return @as(i32, c - 55); }
+    return -1;
+}
+
+fn compare(v: *Vectors) -> void {
+    const flags = OpenFlags { .ACCMODE = .RDONLY };
+    const fd: i32 = io.c.open("build/trios/resp.hex", flags);
+    if (fd < 0) { @panic("open resp.hex"); }
+    var storage: [65536]u8 = undefined;
+    var ng: usize = 0;
+    while (ng < 65536) {
+        const count = io.c.read(fd, storage[ng .. 65536].ptr, 65536 - ng);
+        if (count < 0) { @panic("read resp.hex"); }
+        if (count == 0) { break; }
+        ng = ng + @as(usize, @intCast(count));
+    }
+    const closed: i32 = io.c.close(fd);
+    if (closed != 0 or ng == 65536) { @panic("incomplete resp.hex"); }
+    const got: []const u8 = storage[0 .. ng];
+    var pos: usize = 0;
+    var i: usize = 0;
+    while (i < got.len) {
+        if (got[i] == 10 or got[i] == 13 or got[i] == 32 or got[i] == 9) { i = i + 1; continue; }
+        if (i + 2 >= got.len or pos >= v.ne) { @panic("extra or truncated response"); }
+        const high: i32 = nibble(got[i]);
+        const low: i32 = nibble(got[i + 1]);
+        if (high < 0 or low < 0) { @panic("non-hex response"); }
+        const byte: u8 = @as(u8, @intCast(high * 16 + low));
+        if (byte != v.expected[pos]) {
+            io.debug.print("VM_SIM_MISMATCH byte={d} expected={d} got={d}\n", .{pos, v.expected[pos], byte});
+            io.process.exit(1);
+        }
+        if (got[i + 2] != 10 and got[i + 2] != 13 and got[i + 2] != 32 and got[i + 2] != 9) { @panic("hex byte without separator"); }
+        pos = pos + 1; i = i + 2;
+    }
+    if (pos != v.ne) { @panic("short response"); }
+    io.debug.print("VM_SIM_PASS steps={d} response_bytes={d}\n", .{v.ns / 2, v.ne});
+}
+
+pub fn main() -> void {
+    var v: Vectors = build_vectors();
+    const mode = io.c.getenv("TRIOS_COMPARE");
+    if (mode != null) { compare(&v); return; }
+    const mk1: i32 = io.c.mkdir("build", 493);
+    const mk2: i32 = io.c.mkdir("build/trios", 493);
+    if (mk1 < -1 or mk2 < -1) { @panic("mkdir return"); }
+    write_hex("build/trios/steps.mem", v.steps[0 .. v.ns]);
+    write_hex("build/trios/req.mem", v.request[0 .. v.nr]);
+    write_hex("build/trios/expected.hex", v.expected[0 .. v.ne]);
+    var header: [160]u8 = undefined;
+    var n: usize = append_text(header[0 .. 160], 0, "localparam integer NSTEPS = ");
+    n = decimal(header[0 .. 160], n, v.ns / 2);
+    n = append_text(header[0 .. 160], n, ";\nlocalparam integer NREQ = ");
+    n = decimal(header[0 .. 160], n, v.nr);
+    n = append_text(header[0 .. 160], n, ";\n");
+    write_file("build/trios/nsteps.vh", header[0 .. n]);
+    io.debug.print("VM_VECTORS steps={d} request_bytes={d} response_bytes={d}\n", .{v.ns / 2, v.nr, v.ne});
+}
+
+test crc8_standard_check {
+    var crc: u8 = 0;
+    const s: str = "123456789";
+    var i: usize = 0;
+    while (i < s.len) { crc = crc_byte(crc, s[i]); i = i + 1; }
+    assert_eq(crc, 244);
+}

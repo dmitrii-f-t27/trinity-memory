@@ -1,0 +1,305 @@
+// SPDX-License-Identifier: MIT
+module TriosVsaVm;
+
+// A bounded execution profile of gHashTag/trios@70882158c9ff07c1157ff8a1a50ce39ee172fb3c,
+// crates/trios-vm/src/vm.zig:23-66,118-188,233-258,385-420,935-950 and
+// crates/trios-hybrid/src/hybrid_impl.zig:115-145,230-281,371-411.
+// Four vector registers, scalar s0, original opcode ordinals and load/step semantics.
+// Numeric representation is signed binary, equivalent to balanced ternary integers within
+// 39 trits; overflow is reported, never wrapped. This is a VM profile, not the full TriOS OS.
+// Unsupported vector/JIT/floating operations are errors; pack/unpack are not pretended to exist.
+pub const MAX_PROGRAM: usize = 64;
+pub const MAX_VALUE: i64 = 2026277576509488133; // (3^39 - 1) / 2
+
+pub struct Instruction {
+    opcode: u8,
+    dst: u8,
+    src1: u8,
+    src2: u8,
+    imm: i64,
+}
+
+pub struct VM {
+    v: [4]i64,
+    s0: i64,
+    pc: u32,
+    cycles: u64,
+    halted: bool,
+    error_code: u8,
+    length: usize,
+    program: [64]Instruction,
+}
+
+pub fn init_vm() -> VM {
+    return VM { .v = [0, 0, 0, 0], .s0 = 0, .pc = 0, .cycles = 0,
+        .halted = false, .error_code = 0, .length = 0, .program = undefined };
+}
+
+pub fn reg_index(index: u8) -> usize {
+    if (index < 4) { return @as(usize, index); }
+    return 0;
+}
+
+pub fn supported(opcode: u8) -> bool {
+    return opcode == 0 or opcode == 1 or opcode == 2 or opcode == 11 or
+        opcode == 12 or opcode == 13 or opcode == 14 or opcode == 24 or opcode == 25;
+}
+
+// loadProgram preserves registers in the source; explicit init_vm is a separate reset.
+// Uploads are sequential. Every program slot must be written before execution is allowed.
+pub fn begin_program(vm: *VM) -> void {
+    vm.pc = 0;
+    vm.cycles = 0;
+    vm.halted = false;
+    vm.error_code = 0;
+    vm.length = 0;
+}
+
+pub fn append(vm: *VM, inst: Instruction) -> bool {
+    if (vm.length >= MAX_PROGRAM) { return false; }
+    vm.program[vm.length] = inst;
+    vm.length = vm.length + 1;
+    return true;
+}
+
+pub fn step(vm: *VM) -> bool {
+    if (vm.halted or vm.error_code != 0 or vm.pc >= vm.length) { return false; }
+    const inst: Instruction = vm.program[vm.pc];
+    if (!supported(inst.opcode)) { vm.error_code = 1; return false; }
+    const a: i64 = vm.v[reg_index(inst.src1)];
+    const b: i64 = vm.v[reg_index(inst.src2)];
+    var result: i128 = 0;
+    var writes: bool = false;
+    if (inst.opcode == 0 or inst.opcode == 2) { result = @as(i128, inst.imm); writes = true; }
+    if (inst.opcode == 11) { result = @as(i128, a) + @as(i128, b); writes = true; }
+    if (inst.opcode == 12) { result = -@as(i128, a); writes = true; }
+    if (inst.opcode == 13) { result = @as(i128, a) * @as(i128, b); writes = true; }
+    if (inst.opcode == 14) { result = @as(i128, a); writes = true; }
+    if (writes) {
+        if (result > MAX_VALUE or result < -@as(i128, MAX_VALUE)) {
+            vm.error_code = 2;
+            return false;
+        }
+        vm.v[reg_index(inst.dst)] = @as(i64, @intCast(result));
+    }
+    if (inst.opcode == 1) { vm.s0 = a; }
+    if (inst.opcode == 25) { vm.halted = true; }
+    vm.pc = vm.pc + 1;
+    vm.cycles = vm.cycles + 1;
+    return !vm.halted;
+}
+
+pub fn run(vm: *VM) -> void {
+    while (step(vm)) {}
+}
+
+pub fn instruction(op: u8, dst: u8, a: u8, b: u8, imm: i64) -> Instruction {
+    return Instruction { .opcode = op, .dst = dst, .src1 = a, .src2 = b, .imm = imm };
+}
+
+test original_trios_arithmetic_program {
+    var vm: VM = init_vm();
+    assert(append(&vm, instruction(2, 0, 0, 0, 12345)));
+    assert(append(&vm, instruction(2, 1, 0, 0, 67890)));
+    assert(append(&vm, instruction(11, 2, 0, 1, 0)));
+    assert(append(&vm, instruction(1, 0, 2, 0, 0)));
+    assert(append(&vm, instruction(25, 0, 0, 0, 0)));
+    run(&vm);
+    assert_eq(vm.s0, 80235);
+    assert_eq(vm.pc, 5);
+    assert_eq(vm.cycles, 5);
+    assert(vm.halted);
+    assert_eq(vm.error_code, 0);
+}
+
+test independent_signed_program_and_aliases {
+    var vm: VM = init_vm();
+    assert(append(&vm, instruction(0, 0, 0, 0, -7)));
+    assert(append(&vm, instruction(2, 1, 0, 0, 2)));
+    assert(append(&vm, instruction(11, 0, 0, 1, 0)));
+    assert(append(&vm, instruction(12, 2, 0, 0, 0)));
+    assert(append(&vm, instruction(13, 2, 2, 1, 0)));
+    assert(append(&vm, instruction(14, 3, 2, 0, 0)));
+    assert(append(&vm, instruction(1, 0, 3, 0, 0)));
+    run(&vm);
+    assert_eq(vm.v[0], -5);
+    assert_eq(vm.s0, 10);
+    assert_eq(vm.cycles, 7);
+    assert(!vm.halted); // exhaustion is not the halt opcode
+    assert_eq(step(&vm), false);
+    assert_eq(vm.cycles, 7);
+}
+
+test reload_preserves_registers_and_empty_program_does_nothing {
+    var vm: VM = init_vm();
+    assert_eq(step(&vm), false);
+    assert(append(&vm, instruction(2, 255, 0, 0, 13))); // source maps invalid register to v0
+    assert(append(&vm, instruction(25, 0, 0, 0, 0)));
+    assert(append(&vm, instruction(2, 0, 0, 0, 99)));
+    run(&vm);
+    assert_eq(vm.v[0], 13);
+    assert_eq(vm.cycles, 2);
+    begin_program(&vm);
+    assert_eq(vm.pc, 0);
+    assert_eq(vm.cycles, 0);
+    assert(!vm.halted);
+    assert_eq(vm.v[0], 13);
+    assert(append(&vm, instruction(2, 1, 0, 0, 1)));
+    assert(append(&vm, instruction(11, 0, 255, 1, 0)));
+    assert(append(&vm, instruction(1, 0, 255, 0, 0)));
+    run(&vm);
+    assert_eq(vm.s0, 14);
+}
+
+test explicit_unsupported_and_overflow_errors_do_not_commit {
+    var vm: VM = init_vm();
+    assert(append(&vm, instruction(17, 0, 0, 0, 0))); // cosine comparison is not numeric compare
+    assert_eq(step(&vm), false);
+    assert_eq(vm.error_code, 1);
+    assert_eq(vm.cycles, 0);
+    begin_program(&vm);
+    assert(append(&vm, instruction(2, 0, 0, 0, MAX_VALUE)));
+    assert(append(&vm, instruction(11, 1, 0, 0, 0)));
+    run(&vm);
+    assert_eq(vm.error_code, 2);
+    assert_eq(vm.cycles, 1);
+    assert_eq(vm.v[0], MAX_VALUE);
+    assert_eq(vm.v[1], 0);
+    begin_program(&vm);
+    assert(append(&vm, instruction(13, 1, 0, 0, 0)));
+    run(&vm);
+    assert_eq(vm.error_code, 2);
+    assert_eq(vm.cycles, 0);
+}
+
+test program_capacity_is_checked_before_write {
+    var vm: VM = init_vm();
+    var i: usize = 0;
+    while (i < MAX_PROGRAM) {
+        assert(append(&vm, instruction(24, 0, 0, 0, 0)));
+        i = i + 1;
+    }
+    assert(!append(&vm, instruction(25, 0, 0, 0, 0)));
+    run(&vm);
+    assert_eq(vm.cycles, 64);
+    assert_eq(vm.pc, 64);
+    assert(!vm.halted);
+}
+
+test the_value_range_is_exactly_39_trits {
+    var p: i128 = 1;
+    var i: u32 = 0;
+    while (i < 39) {
+        p = p * 3;
+        i = i + 1;
+    }
+    assert_eq(MAX_VALUE, 2026277576509488133);
+    assert(@as(i128, MAX_VALUE) * 2 + 1 == p);
+}
+
+test negative_overflow_and_the_exact_range_edges {
+    var vm: VM = init_vm();
+    assert(append(&vm, instruction(2, 0, 0, 0, -MAX_VALUE)));
+    assert(append(&vm, instruction(2, 1, 0, 0, -1)));
+    assert(append(&vm, instruction(11, 2, 0, 1, 0)));
+    run(&vm);
+    assert_eq(vm.error_code, 2);
+    assert_eq(vm.cycles, 2);
+    assert_eq(vm.v[2], 0);
+    begin_program(&vm);
+    assert(append(&vm, instruction(12, 2, 0, 0, 0)));
+    run(&vm);
+    assert_eq(vm.error_code, 0);
+    assert_eq(vm.v[2], MAX_VALUE);
+    begin_program(&vm);
+    vm.error_code = 0;
+    assert(append(&vm, instruction(2, 0, 0, 0, MAX_VALUE)));
+    assert(append(&vm, instruction(2, 1, 0, 0, -2)));
+    assert(append(&vm, instruction(13, 2, 0, 1, 0)));
+    run(&vm);
+    assert_eq(vm.error_code, 2);
+    assert_eq(vm.v[2], MAX_VALUE); // the failed multiply did not commit: v2 keeps the earlier negation
+}
+
+test a_halted_or_failed_machine_does_not_step_again {
+    var vm: VM = init_vm();
+    assert(append(&vm, instruction(25, 0, 0, 0, 0)));
+    assert(append(&vm, instruction(2, 0, 0, 0, 5)));
+    run(&vm);
+    assert(vm.halted);
+    assert_eq(vm.cycles, 1);
+    assert_eq(step(&vm), false);
+    assert_eq(vm.cycles, 1);
+    assert_eq(vm.v[0], 0);
+    var bad: VM = init_vm();
+    assert(append(&bad, instruction(99, 0, 0, 0, 0)));
+    assert(append(&bad, instruction(2, 0, 0, 0, 5)));
+    assert_eq(step(&bad), false);
+    assert_eq(bad.error_code, 1);
+    assert_eq(step(&bad), false);
+    assert_eq(bad.error_code, 1);
+    assert_eq(bad.cycles, 0);
+    assert_eq(bad.pc, 0);
+    assert_eq(bad.v[0], 0);
+    // An error latches: even when the cause is gone (v0 is small again) the machine does not run on.
+    var sticky: VM = init_vm();
+    sticky.v[0] = MAX_VALUE;
+    assert(append(&sticky, instruction(11, 1, 0, 0, 0)));
+    assert_eq(step(&sticky), false);
+    assert_eq(sticky.error_code, 2);
+    sticky.v[0] = 1;
+    assert_eq(step(&sticky), false);
+    assert_eq(sticky.error_code, 2);
+    assert_eq(sticky.cycles, 0);
+    assert_eq(sticky.pc, 0);
+    assert_eq(sticky.v[1], 0);
+}
+
+test register_indexes_0_to_3_are_valid_and_4_maps_to_v0 {
+    var vm: VM = init_vm();
+    vm.v[0] = 1;
+    vm.v[3] = 7;
+    assert(append(&vm, instruction(14, 1, 3, 0, 0)));
+    assert(append(&vm, instruction(14, 2, 4, 0, 0)));
+    run(&vm);
+    assert_eq(vm.v[1], 7);
+    assert_eq(vm.v[2], 1);
+    assert_eq(reg_index(3), 3);
+    assert_eq(reg_index(4), 0);
+    assert_eq(reg_index(255), 0);
+}
+
+test every_supported_opcode_is_listed_and_the_neighbours_are_not {
+    assert(supported(0));
+    assert(supported(1));
+    assert(supported(2));
+    assert(supported(11));
+    assert(supported(12));
+    assert(supported(13));
+    assert(supported(14));
+    assert(supported(24));
+    assert(supported(25));
+    assert(!supported(3));
+    assert(!supported(10));
+    assert(!supported(15));
+    assert(!supported(17));
+    assert(!supported(23));
+    assert(!supported(26));
+    assert(!supported(255));
+}
+
+test begin_program_clears_the_error_and_the_counters {
+    var vm: VM = init_vm();
+    assert(append(&vm, instruction(99, 0, 0, 0, 0)));
+    run(&vm);
+    assert_eq(vm.error_code, 1);
+    begin_program(&vm);
+    assert_eq(vm.error_code, 0);
+    assert_eq(vm.length, 0);
+    assert_eq(vm.pc, 0);
+    assert_eq(vm.cycles, 0);
+    assert(append(&vm, instruction(2, 0, 0, 0, 3)));
+    run(&vm);
+    assert_eq(vm.v[0], 3);
+    assert_eq(vm.error_code, 0);
+}

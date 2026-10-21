@@ -1,0 +1,29 @@
+module TriosHostSmoke;
+
+// Smoke test of the t27 host path: a t27b executable that calls libSystem through @extern
+// (gHashTag/t27 PR 11324 put the extern boundary on master). It writes "ok\n" to fd 1 and exits 0
+// only if write returned 3, otherwise 7.
+//
+// Diagnosis of the first two attempts (CI run 39643636541): t27b compiles `undefined;` and an ignored
+// value (`expr;`) in a function no test reaches to a trap stub, `brk #10` (TrapKind::Stub, cli/t27b ir.rs).
+// The first attempt had `var b : [4]u8 = undefined;`, the second an ignored `sys_write(..);`: _main was a
+// prologue and that brk, with no call to write. So the result of every call is used here.
+pub fn sys_write(fd: i32, b: []const u8, n: u64) -> i64 { return @extern("write"); }
+
+/// The process exit status: 0 only when write accepted the three bytes.
+pub fn exit_code(r: i64) -> i32 {
+    if (r == 3) { return 0; }
+    return 7;
+}
+
+pub fn main() -> i32 {
+    const r : i64 = sys_write(1, "ok\n", 3);
+    return exit_code(r);
+}
+
+test exit_status_follows_the_write_result {
+    assert_eq(exit_code(3), 0);
+    assert_eq(exit_code(2), 7);
+    assert_eq(exit_code(0), 7);
+    assert_eq(exit_code(-1), 7);
+}

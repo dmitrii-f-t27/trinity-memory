@@ -1,0 +1,6 @@
+# Build from this directory (the linker script path is relative).
+[build]
+target = "riscv32i-unknown-none-elf"
+
+[target.riscv32i-unknown-none-elf]
+rustflags = ["-C", "link-arg=-Tlink.ld", "-C", "link-arg=--nmagic"]

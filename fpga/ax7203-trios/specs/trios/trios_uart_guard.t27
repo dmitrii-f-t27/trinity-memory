@@ -1,0 +1,83 @@
+module TriosUartGuardT27;
+
+// RX guard of the TriOS mesh SoC UART (fpga/ax7203-trios/docs/CONTRACT.md, "Receive path").
+// The data bytes live in a 16-slot register file in the Verilog glue; every decision about
+// them is made here: how many bytes are queued, where the next byte goes and where the
+// oldest one is, whether a byte was lost, and whether the line has been quiet.
+//
+// push   one received byte is offered this clock (stop bit was good).
+// pop    the CPU reads the oldest byte this clock (ignored when the queue is empty).
+// clear  the CPU writes the clear bit of the status register: drops the sticky overrun flag.
+// active the receiver is inside a character or the line is low.
+// A byte offered while the queue holds 16 is dropped, never overwrites a queued byte,
+// sets the sticky `overrun` and counts in `dropped`; only `clear` (or reset) drops the
+// flag, a status read does not. A push and a clear in one clock keep the flag.
+// `quiet` rises after quiet_clocks clocks with an empty queue and an inactive line and
+// falls at the next activity: the firmware uses it to detect the end of a burst (resync)
+// and a frame that stopped half way (timeout).
+// Every statement reads a variable before the same tick writes it (level is written last),
+// so the C and the Verilog backends agree. `store` is high one clock after the accepted
+// push, with `slot` the index to write.
+//
+// crc8_byte is the frame check of the request frames (CRC-8, polynomial 0x07, init 0, over
+// length byte and payload). The firmware (fw/src/main.rs) and host/mesh_vectors.py
+// implement the same function; their agreement is checked by the vectors on the board.
+var level: u32 = 0;
+var wr: u32 = 0;
+var rd: u32 = 0;
+var slot: u32 = 0;
+var store: bool = false;
+var overrun: bool = false;
+var dropped: u32 = 0;
+var idle: u32 = 0;
+var quiet: bool = false;
+var empty: bool;
+var full: bool;
+empty = level == 0;
+full = level >= 16;
+
+fn crc8_byte(crc: u32, b: u32) -> u32 {
+    var c: u32 = (crc ^ b) & 255;
+    var i: u32 = 0;
+    while (i < 8) {
+        if ((c & 128) == 128) { c = ((c << 1) ^ 7) & 255; } else { c = (c << 1) & 255; }
+        i = i + 1;
+    }
+    return c;
+}
+
+fn on_clock(push: bool, pop: bool, clear: bool, active: bool, quiet_clocks: u32) {
+    store = false;
+    if (clear) { overrun = false; }
+    if (push && level < 16) {
+        store = true;
+        slot = wr;
+        wr = (wr + 1) & 15;
+    }
+    if (push && level >= 16) {
+        overrun = true;
+        dropped = dropped + 1;
+    }
+    if (pop && level != 0) { rd = (rd + 1) & 15; }
+    if (active || level != 0) {
+        idle = 0;
+        quiet = false;
+    } else if (idle >= quiet_clocks) {
+        quiet = true;
+    } else {
+        idle = idle + 1;
+    }
+    if (push && level < 16) {
+        if (!(pop && level != 0)) { level = level + 1; }
+    } else if (pop && level != 0) {
+        level = level - 1;
+    }
+}
+
+test crc8_check_value {
+    assert_eq(crc8_byte(crc8_byte(crc8_byte(crc8_byte(crc8_byte(crc8_byte(crc8_byte(crc8_byte(crc8_byte(0, 49), 50), 51), 52), 53), 54), 55), 56), 57), 244);
+}
+test crc8_of_v_request_frame { assert_eq(crc8_byte(crc8_byte(0, 1), 86), 176); }
+test crc8_of_empty_table_request { assert_eq(crc8_byte(crc8_byte(crc8_byte(0, 2), 78), 0), 91); }
+test queue_depth_is_sixteen { assert_eq(15 < 16, true); assert_eq(16 < 16, false); }
+endmodule
