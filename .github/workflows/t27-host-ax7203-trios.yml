@@ -1,0 +1,91 @@
+name: t27-host-ax7203-trios
+
+# The t27 host path for the board executor: t27b from gHashTag/t27 master (extern boundary, PR 11324) built on a
+# macOS arm64 runner, specs under fpga/ax7203-trios/t27/host_*.t27 compiled to Mach-O executables that call
+# libSystem. Separate from the FPGA workflow so iterating on host specs does not rebuild the bitstream.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fpga/ax7203-trios-mesh']
+    paths:
+      - 'fpga/ax7203-trios/t27/host_*.t27'
+      - 'fpga/ax7203-trios/t27/thermal_policy.t27'
+      - '.github/workflows/t27-host-ax7203-trios.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  t27b-host:
+    # The t27 host path (board executor): t27b from gHashTag/t27 master (extern boundary, PR 11324) built here,
+    # one spec compiled to a Mach-O executable that calls libSystem. Informational for now: the board executor is
+    # not written yet, this proves the path exists.
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      T27_HOST_SHA: aeb772f46b15116d45d1a1c8b7254c74d1510493
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch gHashTag/t27 at the pinned commit and build t27b
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          git init build/t27host
+          git -C build/t27host remote add origin https://github.com/gHashTag/t27.git
+          git -C build/t27host fetch --depth 1 origin "$T27_HOST_SHA"
+          git -C build/t27host checkout --detach FETCH_HEAD
+          cd build/t27host && cargo +1.94.0 build --release -p t27b 2>&1 | tail -5
+      - name: Compile, link and run the host smoke spec
+        run: |
+          B=build/t27host/target/release/t27b
+          mkdir -p build/trios
+          $B test fpga/ax7203-trios/t27/host_smoke.t27 --blockers 2>&1 | tee build/trios/host_smoke_blockers.txt || true
+          $B build fpga/ax7203-trios/t27/host_smoke.t27 -o build/trios/host_smoke.o --macho 2>&1 | tee build/trios/host_smoke_build.txt
+          $B asm fpga/ax7203-trios/t27/host_smoke.t27 > build/trios/host_smoke.asm 2>&1 || true
+          nm -u build/trios/host_smoke.o | tee build/trios/host_smoke_undefined.txt
+          grep -q _write build/trios/host_smoke_undefined.txt
+          SDK=$(xcrun --show-sdk-path); SDKV=$(xcrun --show-sdk-version)
+          ld -arch arm64 -platform_version macos 11.0 $SDKV -syslibroot $SDK -e _main -lSystem -o build/trios/host_smoke build/trios/host_smoke.o
+          codesign --force --sign - build/trios/host_smoke
+          otool -tv build/trios/host_smoke > build/trios/host_smoke_text.txt
+          cat build/trios/host_smoke_text.txt
+          # the emitted code must call write and contain no trap stub
+          grep -q "bl.*_write" build/trios/host_smoke_text.txt
+          ! grep -q "brk" build/trios/host_smoke_text.txt
+          set +e
+          ./build/trios/host_smoke > build/trios/host_smoke_stdout.bin 2> build/trios/host_smoke_stderr.txt
+          echo $? > build/trios/host_smoke_rc.txt
+          set -e
+          xxd build/trios/host_smoke_stdout.bin | tee build/trios/host_smoke_stdout.hex
+          echo "rc=$(cat build/trios/host_smoke_rc.txt)"
+          test "$(cat build/trios/host_smoke_rc.txt)" = 0
+          test "$(xxd -p build/trios/host_smoke_stdout.bin)" = "6f6b0a"
+          shasum -a 256 build/trios/host_smoke build/t27host/target/release/t27b | tee build/trios/host_smoke_sha256.txt
+          git -C build/t27host rev-parse HEAD | tee build/trios/t27host_rev.txt
+          cp build/t27host/target/release/t27b build/trios/t27b
+      - name: The primitive backend (t27b verilog) on the repository's own conformance spec and board top
+        if: always()
+        run: |
+          B=build/t27host/target/release/t27b
+          mkdir -p build/trios/vprobe
+          for s in specs/tri/t27b/conformance/verilog_prim.t27 specs/trinet/eth_top_ax7203.t27; do
+            n=$(basename $s .t27)
+            $B verilog build/t27host/$s > build/trios/vprobe/$n.v 2> build/trios/vprobe/$n.err; echo "$n rc=$?" | tee -a build/trios/vprobe/summary.txt
+            grep -E "BUFG|IBUFDS|STARTUPE2|BSCANE2|LOC|IOSTANDARD|t27_period_ps" build/trios/vprobe/$n.v | head -12 | tee -a build/trios/vprobe/summary.txt
+          done
+      - name: The thermal policy on t27b (JIT run of its tests)
+        if: always()
+        run: |
+          build/t27host/target/release/t27b test fpga/ax7203-trios/t27/thermal_policy.t27 2>&1 | tee build/trios/thermal_t27b.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trios-t27b-host
+          path: |
+            build/trios/host_smoke*
+            build/trios/t27b
+            build/trios/vprobe/
+            build/trios/thermal_t27b.log
+            build/trios/t27host_rev.txt
+          retention-days: 30
+          if-no-files-found: warn

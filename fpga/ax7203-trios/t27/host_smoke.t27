@@ -1,21 +1,21 @@
 module TriosHostSmoke;
 
 // Smoke test of the t27 host path: a t27b executable that calls libSystem through @extern
-// (gHashTag/t27 PR 11324 put the extern boundary on master). It prints a line and exits 0.
-// The board executor (thermal gate, UART vectors) will be written the same way.
+// (gHashTag/t27 PR 11324 put the extern boundary on master). It writes "ok\n" to fd 1 and exits 0
+// only if write returned 3, otherwise 7.
+//
+// Diagnosis of the first two attempts (CI run 39643636541): t27b compiles `undefined;` and an ignored
+// value (`expr;`) in a function no test reaches to a trap stub, `brk #10` (TrapKind::Stub, cli/t27b ir.rs).
+// The first attempt had `var b : [4]u8 = undefined;`, the second an ignored `sys_write(..);`: _main was a
+// prologue and that brk, with no call to write. So the result of every call is used here.
 pub fn sys_write(fd: i32, b: []const u8, n: u64) -> i64 { return @extern("write"); }
 
-pub fn main() -> void {
-    var b : [4]u8 = undefined;
-    b[0] = 111;
-    b[1] = 107;
-    b[2] = 10;
-    b[3] = 0;
-    var r : i64 = sys_write(1, b, 3);
+pub fn main() -> i32 {
+    const r : i64 = sys_write(1, "ok\n", 3);
+    if (r == 3) { return 0; }
+    return 7;
 }
 
-test the_buffer_holds_the_line {
-    var b : [4]u8 = undefined;
-    b[0] = 111;
-    assert b[0] == 111;
+test the_exit_codes_are_distinct {
+    assert 0 != 7;
 }
