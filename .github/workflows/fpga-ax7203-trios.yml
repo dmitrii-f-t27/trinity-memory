@@ -14,8 +14,15 @@ on:
   workflow_dispatch:
   push:
     branches: ['fpga/ax7203-trios-mesh']
+    # Only what the bitstream depends on; the thermal policy and the host specs have their own workflows.
     paths:
-      - 'fpga/ax7203-trios/**'
+      - 'fpga/ax7203-trios/rtl/**'
+      - 'fpga/ax7203-trios/fw/**'
+      - 'fpga/ax7203-trios/tb/**'
+      - 'fpga/ax7203-trios/host/**'
+      - 'fpga/ax7203-trios/third_party/**'
+      - 'fpga/ax7203-trios/trios_soc_ax7203.xdc'
+      - 'fpga/ax7203-trios/specs/trios/trios_uart_guard.t27'
       - '.github/workflows/fpga-ax7203-trios.yml'
 
 permissions:
@@ -54,39 +61,12 @@ jobs:
         run: |
           mkdir -p build/trios
           T27C="$T27_ROOT/target/release/t27c"
-          SPEC=fpga/ax7203-trios/t27/trios_uart_guard.t27
+          SPEC=fpga/ax7203-trios/specs/trios/trios_uart_guard.t27
           "$T27C" gen-verilog "$SPEC" > build/trios/TriosUartGuardT27.v
           if grep -q "ENTRY POINT REFUSED\|NO DATA PORTS" build/trios/TriosUartGuardT27.v; then echo "t27c refused the entry point"; cat build/trios/TriosUartGuardT27.v | head -20; exit 1; fi
           grep -n "^module\|input\|output" build/trios/TriosUartGuardT27.v | head -40
           "$T27C" icarus-simulate "$SPEC" 2>&1 | tee build/trios/spec_tests.log
           sha256sum "$SPEC" build/trios/TriosUartGuardT27.v | tee build/trios/spec_sha256.txt
-      - name: Thermal policy in t27 - tests must pass and every mutant must be caught
-        run: |
-          T27C="$T27_ROOT/target/release/t27c"
-          POL=fpga/ax7203-trios/t27/thermal_policy.t27
-          "$T27C" icarus-simulate "$POL" 2>&1 | tee build/trios/thermal_tests.log
-          test "${PIPESTATUS[0]}" = 0
-          ! grep -q "FAILED" build/trios/thermal_tests.log
-          test "$(grep -c PASSED build/trios/thermal_tests.log)" -ge 15
-          # Negative controls: the spec with one protection broken (limit raised to the 100 C that was once
-          # used, sensor validity ignored, ERROR not sticky) must fail its own tests.
-          mkdir -p build/trios/mutants
-          # one broken protection per mutant; every one must fail the spec's own tests
-          mutate() { n="$1"; shift; sed "$@; s/ThermalPolicyT27/ThermalMut${n}T27/" "$POL" > build/trios/mutants/mut$n.t27; }
-          mutate 1 -e 's/const LOAD_MAX_MC: u32 = 70000;/const LOAD_MAX_MC: u32 = 100000;/'
-          mutate 2 -e 's/return valid \&\& age <= STALE_MAX_AGE/return age <= STALE_MAX_AGE/'
-          mutate 3 -e 's/    if (s == 3) { return pack(3, 0, 0, cyc, seq); }/    if (s == 3) { s = 0; }/'
-          mutate 4 -e 's/    if (!want_work) { return pack(0, 0, 0, cyc, seq); }/    if (false) { return pack(0, 0, 0, cyc, seq); }/'
-          mutate 5 -e 's/    if (seq == last) { return p; }/    if (false) { return p; }/'
-          mutate 6 -e 's/ \&\& seq == ((last + 1) \& 255)//'
-          mutate 7 -e 's/fn wd_expired(count: u32, limit: u32) -> bool { return count >= limit; }/fn wd_expired(count: u32, limit: u32) -> bool { return false; }/'
-          for m in 1 2 3 4 5 6 7; do
-            cmp -s "$POL" build/trios/mutants/mut$m.t27 && { echo "mutant $m is identical to the spec"; exit 1; }
-            if "$T27C" icarus-simulate build/trios/mutants/mut$m.t27 > build/trios/mutants/mut$m.log 2>&1; then echo "mutant $m was NOT caught"; exit 1; fi
-            grep -q FAILED build/trios/mutants/mut$m.log || { echo "mutant $m failed without a test verdict"; exit 1; }
-            echo "mutant $m caught"
-          done
-          sha256sum "$POL" fpga/ax7203-trios/t27/trios_uart_guard.t27 | tee -a build/trios/spec_sha256.txt
       - name: Directed testbench of the generated guard (overflow, sticky flag, clear, quiet)
         run: |
           iverilog -g2012 -o build/trios/guard.vvp -s tb_guard build/trios/TriosUartGuardT27.v fpga/ax7203-trios/tb/tb_guard.v
@@ -102,8 +82,6 @@ jobs:
             build/trios/spec_tests.log
             build/trios/spec_sha256.txt
             build/trios/guard_tb.log
-            build/trios/thermal_tests.log
-            build/trios/mutants/
           retention-days: 30
           if-no-files-found: warn
 

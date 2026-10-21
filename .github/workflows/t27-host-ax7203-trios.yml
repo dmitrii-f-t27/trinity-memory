@@ -1,7 +1,7 @@
 name: t27-host-ax7203-trios
 
 # The t27 host path for the board executor: t27b from gHashTag/t27 master (extern boundary, PR 11324) built on a
-# macOS arm64 runner, specs under fpga/ax7203-trios/t27/host_*.t27 compiled to Mach-O executables that call
+# macOS arm64 runner, specs under fpga/ax7203-trios/specs/trios/** compiled to Mach-O executables that call
 # libSystem. Separate from the FPGA workflow so iterating on host specs does not rebuild the bitstream.
 
 on:
@@ -9,8 +9,8 @@ on:
   push:
     branches: ['fpga/ax7203-trios-mesh']
     paths:
-      - 'fpga/ax7203-trios/t27/host_*.t27'
-      - 'fpga/ax7203-trios/t27/thermal_policy.t27'
+      - 'fpga/ax7203-trios/specs/trios/**'
+      - 'fpga/ax7203-trios/specs/trios/thermal_policy.t27'
       - '.github/workflows/t27-host-ax7203-trios.yml'
 
 permissions:
@@ -39,9 +39,9 @@ jobs:
         run: |
           B=build/t27host/target/release/t27b
           mkdir -p build/trios
-          $B test fpga/ax7203-trios/t27/host_smoke.t27 --blockers 2>&1 | tee build/trios/host_smoke_blockers.txt || true
-          $B build fpga/ax7203-trios/t27/host_smoke.t27 -o build/trios/host_smoke.o --macho 2>&1 | tee build/trios/host_smoke_build.txt
-          $B asm fpga/ax7203-trios/t27/host_smoke.t27 > build/trios/host_smoke.asm 2>&1 || true
+          $B test fpga/ax7203-trios/specs/trios/host_smoke.t27 --blockers 2>&1 | tee build/trios/host_smoke_blockers.txt || true
+          $B build fpga/ax7203-trios/specs/trios/host_smoke.t27 -o build/trios/host_smoke.o --macho 2>&1 | tee build/trios/host_smoke_build.txt
+          $B asm fpga/ax7203-trios/specs/trios/host_smoke.t27 > build/trios/host_smoke.asm 2>&1 || true
           nm -u build/trios/host_smoke.o | tee build/trios/host_smoke_undefined.txt
           grep -q _write build/trios/host_smoke_undefined.txt
           SDK=$(xcrun --show-sdk-path); SDKV=$(xcrun --show-sdk-version)
@@ -73,10 +73,19 @@ jobs:
             $B verilog build/t27host/$s > build/trios/vprobe/$n.v 2> build/trios/vprobe/$n.err; echo "$n rc=$?" | tee -a build/trios/vprobe/summary.txt
             grep -E "BUFG|IBUFDS|STARTUPE2|BSCANE2|LOC|IOSTANDARD|t27_period_ps" build/trios/vprobe/$n.v | head -12 | tee -a build/trios/vprobe/summary.txt
           done
-      - name: The thermal policy on t27b (JIT run of its tests)
-        if: always()
+      - name: Every spec under specs/trios on t27b (a failing test fails the job); the mutants must fail
         run: |
-          build/t27host/target/release/t27b test fpga/ax7203-trios/t27/thermal_policy.t27 2>&1 | tee build/trios/thermal_t27b.log || true
+          B=build/t27host/target/release/t27b
+          cd fpga/ax7203-trios
+          for f in board_parse thermal_policy host_smoke; do
+            ../../$B test specs/trios/$f.t27 2>&1 | tee ../../build/trios/t27b_$f.log
+            ! grep -q "^FAIL" ../../build/trios/t27b_$f.log
+            grep -Eq ": [0-9]+ passed, 0 failed" ../../build/trios/t27b_$f.log
+          done
+          for f in specs/trios/mutants/thermal_mut*.t27; do
+            if ../../$B test $f > ../../build/trios/t27b_$(basename $f .t27).log 2>&1; then echo "$f was NOT caught on t27b"; exit 1; fi
+            grep -q "^FAIL" ../../build/trios/t27b_$(basename $f .t27).log || { echo "$f failed without a test verdict on t27b"; exit 1; }
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -85,7 +94,7 @@ jobs:
             build/trios/host_smoke*
             build/trios/t27b
             build/trios/vprobe/
-            build/trios/thermal_t27b.log
+            build/trios/t27b_*.log
             build/trios/t27host_rev.txt
           retention-days: 30
           if-no-files-found: warn

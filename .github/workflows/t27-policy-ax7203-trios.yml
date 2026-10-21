@@ -1,0 +1,81 @@
+name: t27-policy-ax7203-trios
+
+# The thermal policy (specs/trios/thermal_policy.t27): its tests on the pinned t27c (bff21b85), and the ten committed
+# mutants, each of which must fail its own tests. Separate from the FPGA workflow: a policy change does not need a bitstream.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fpga/ax7203-trios-mesh']
+    paths:
+      - 'fpga/ax7203-trios/specs/trios/thermal_policy.t27'
+      - 'fpga/ax7203-trios/specs/trios/mutants/**'
+      - '.github/workflows/t27-policy-ax7203-trios.yml'
+
+permissions:
+  contents: read
+
+env:
+  T27_ROOT: ${{ github.workspace }}/build/compiler
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned compiler and install tools
+        run: |
+          git init "$T27_ROOT"
+          git -C "$T27_ROOT" remote add origin https://github.com/gHashTag/t27.git
+          git -C "$T27_ROOT" fetch --depth 1 origin "$(cat native/compiler.lock)"
+          git -C "$T27_ROOT" checkout --detach FETCH_HEAD
+          rustup toolchain install 1.94.0 --profile minimal
+          sudo apt-get update
+          sudo apt-get install -y iverilog
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            build/compiler/target
+          key: t27-ubuntu-rust1.94-${{ hashFiles('native/compiler.lock') }}
+      - name: Build the pinned compiler
+        run: cd "$T27_ROOT" && cargo +1.94.0 build --locked --release -p t27c --bin t27c --target-dir target
+      - name: Thermal policy in t27 - tests must pass and every mutant must be caught
+        run: |
+          mkdir -p build/trios/mutants
+          T27C="$T27_ROOT/target/release/t27c"
+          POL=fpga/ax7203-trios/specs/trios/thermal_policy.t27
+          "$T27C" icarus-simulate "$POL" 2>&1 | tee build/trios/thermal_tests.log
+          test "${PIPESTATUS[0]}" = 0
+          ! grep -q "FAILED" build/trios/thermal_tests.log
+          test "$(grep -c PASSED build/trios/thermal_tests.log)" -ge 20
+          # Negative controls: the spec with one protection broken (limit raised to the 100 C that was once
+          # used, sensor validity ignored, ERROR not sticky) must fail its own tests.
+          # Negative controls are committed .t27 files (specs/trios/mutants): each is the policy with one
+          # protection broken (including the two defects the review found in 44cd005a) and must FAIL its own
+          # tests. A mutant must also differ from the policy by only a few lines, so it cannot drift into
+          # testing something else.
+          mkdir -p build/trios/mutants
+          n=0
+          for f in fpga/ax7203-trios/specs/trios/mutants/thermal_mut*.t27; do
+            n=$((n+1)); b=$(basename "$f" .t27)
+            d=$(diff <(tail -n +2 "$POL") <(tail -n +3 "$f") | grep -c '^[<>]' || true)
+            if [ "$d" -lt 1 ] || [ "$d" -gt 6 ]; then echo "$b differs from the policy by $d lines"; exit 1; fi
+            if "$T27C" icarus-simulate "$f" > build/trios/mutants/$b.log 2>&1; then echo "$b was NOT caught"; exit 1; fi
+            grep -q FAILED build/trios/mutants/$b.log || { echo "$b failed without a test verdict"; exit 1; }
+            echo "$b caught (diff $d lines)"
+          done
+          test "$n" -ge 10
+          sha256sum "$POL" fpga/ax7203-trios/specs/trios/trios_uart_guard.t27 fpga/ax7203-trios/specs/trios/mutants/*.t27 | tee build/trios/spec_sha256.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trios-policy
+          path: |
+            build/trios/thermal_tests.log
+            build/trios/mutants/
+            build/trios/spec_sha256.txt
+          retention-days: 30
+          if-no-files-found: warn

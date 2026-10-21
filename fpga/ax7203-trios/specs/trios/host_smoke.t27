@@ -10,12 +10,20 @@ module TriosHostSmoke;
 // prologue and that brk, with no call to write. So the result of every call is used here.
 pub fn sys_write(fd: i32, b: []const u8, n: u64) -> i64 { return @extern("write"); }
 
-pub fn main() -> i32 {
-    const r : i64 = sys_write(1, "ok\n", 3);
+/// The process exit status: 0 only when write accepted the three bytes.
+pub fn exit_code(r: i64) -> i32 {
     if (r == 3) { return 0; }
     return 7;
 }
 
-test the_exit_codes_are_distinct {
-    assert 0 != 7;
+pub fn main() -> i32 {
+    const r : i64 = sys_write(1, "ok\n", 3);
+    return exit_code(r);
+}
+
+test exit_status_follows_the_write_result {
+    assert_eq(exit_code(3), 0);
+    assert_eq(exit_code(2), 7);
+    assert_eq(exit_code(0), 7);
+    assert_eq(exit_code(-1), 7);
 }

@@ -1,0 +1,26 @@
+module TriosHostSys;
+
+// libSystem calls the board executor makes, as t27b @extern imports (gHashTag/t27 PR 11324). Same calling
+// rules and declarations as specs/t27os/pty_sys.t27 in gHashTag/t27 (arm64 Darwin): a str or slice argument
+// is its bytes' address, an aggregate array is its own address, a scalar goes by value, an `int` result is
+// read as i32 and an ssize_t result as i64. Nothing here decides anything; every decision is a fn in
+// board_parse, thermal_policy or board_gate, tested there. Only non-variadic calls are imported.
+pub fn sys_write(fd: i32, b: []const u8, n: u64) -> i64 { return @extern("write"); }
+pub fn sys_read(fd: i32, b: []u8, n: u64) -> i64 { return @extern("read"); }
+pub fn sys_close(fd: i32) -> i32 { return @extern("close"); }
+pub fn sys_open_ro(path: []const u8, flags: i32) -> i32 { return @extern("open"); }
+pub fn sys_mkdir(path: []const u8, mode: u32) -> i32 { return @extern("mkdir"); }
+pub fn sys_rmdir(path: []const u8) -> i32 { return @extern("rmdir"); }
+pub fn sys_getenv(name: []const u8) -> u64 { return @extern("getenv"); }
+pub fn sys_strlen(p: u64) -> u64 { return @extern("strlen"); }
+/// memmove with a raw source address: copy n bytes from memory at `src` into dst.
+pub fn sys_peek(dst: []u8, src: u64, n: u64) -> u64 { return @extern("memmove"); }
+/// memmove with n = 0 hands back dst's address, which is how a byte buffer becomes an argv entry.
+pub fn sys_addr(dst: []u8, src: []const u8, n: u64) -> u64 { return @extern("memmove"); }
+pub fn sys_forkpty(master: [2]u32, name: u64, term: u64, ws: []const u8) -> i32 { return @extern("forkpty"); }
+pub fn sys_execv(path: []const u8, argv: [12]u64) -> i32 { return @extern("execv"); }
+pub fn sys_exit(code: i32) -> void { @extern("_exit"); }
+pub fn sys_waitpid(pid: i32, status: [2]u32, opts: i32) -> i32 { return @extern("waitpid"); }
+pub fn sys_usleep(us: u32) -> i32 { return @extern("usleep"); }
+/// clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW = 4): monotonic nanoseconds.
+pub fn sys_mono_ns(clock: u32) -> u64 { return @extern("clock_gettime_nsec_np"); }

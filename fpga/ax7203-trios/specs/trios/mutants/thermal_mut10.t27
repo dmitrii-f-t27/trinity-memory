@@ -1,4 +1,5 @@
-module ThermalPolicyT27;
+module ThermalMut10T27;
+// MUTANT 10: re-arm without the policy back in OBSERVE. Must FAIL its own tests (CI expects a failing run).
 
 // Thermal policy of the AX7203 TriOS board runs (owner request 2026-10-21: a cooling process,
 // everything in t27). All limits are OUR TEST POLICY, not a vendor rating; none may be raised to
@@ -24,10 +25,11 @@ module ThermalPolicyT27;
 //   bits 0-1 state, 2-5 consecutive good samples, 6-13 samples spent cooling, 14-16 cooling cycles used,
 //   17-24 number of the last sample.
 //   - `reset` (operator) returns to OBSERVE with the counters cleared; it is the only way out of ERROR.
-//   - A sample with the number of the previous one is not new information: nothing changes, nothing counts.
-//   - Any implausible new sample (invalid, stale, out of range) in any state -> ERROR.
-//   - ERROR is sticky: valid readings never leave it.
-//   - `want_work` is the CONTINUOUS permission of the operator, read on every sample: when it is false no
+//   - Safety conditions act on EVERY call, whether or not the sample number is new: an implausible sample
+//     (invalid, stale, out of range) -> ERROR; ERROR is sticky; dropped `want_work` -> OBSERVE; a hot sample
+//     in WORK -> COOL. A sample with the number of the previous one is not new information for progress:
+//     it never starts work, never counts toward leaving COOL and never advances the cooling timeout.
+//   - `want_work` is the CONTINUOUS permission of the operator, read on every call: when it is false no
 //     state but OBSERVE survives, and cooling never ends in WORK without it. Work is stopped by dropping
 //     it, not by a pulse. OBSERVE -> WORK needs want_work and a reading below LOAD_MAX_MC.
 //   - WORK -> COOL at COOL_ENTER_MC or above (work must stop, sampling goes on). The
@@ -35,10 +37,13 @@ module ThermalPolicyT27;
 //   - COOL -> WORK only after EXIT_GOOD_SAMPLES CONSECUTIVE NEW samples (numbers in sequence) at or below
 //     COOL_EXIT_MC; a warm sample or a gap in the numbers restarts the count (no chatter, no reuse of one
 //     cached result). COOL longer than COOL_TIMEOUT samples -> ERROR.
-// Watchdog (level 3 behaviour, specified here): wd_next(count, kick, limit) counts ticks of a clock that
-// does not depend on the host; a kick (a new valid sample accepted) clears it; at `limit` it stays
-// expired. run_enable() is the AND of the policy and an unexpired watchdog: a hung host that stops
-// calling step() makes the run enable fall when the watchdog expires, whatever the last state was.
+// Watchdog (level 3 behaviour, specified here): wd_step() counts ticks of a clock that does not depend on
+// the host; a kick (a new valid sample accepted) clears it while it is running. Reaching `limit` is a TRIP and
+// the trip is LATCHED: a late kick does not clear it. Only an explicit operator reset, and only while the
+// policy is back in OBSERVE, re-arms it; work then needs a new sample below LOAD_MAX_MC and want_work again
+// (OBSERVE -> WORK). run_enable() is the AND of the policy and an untripped watchdog: a hung host that stops
+// calling step() makes the run enable fall when the watchdog trips, whatever the last state was, and
+// nothing restarts it automatically.
 // Sampling period of the executor: one reading per second (policy; STALE_MAX_AGE in periods).
 const LOAD_MAX_MC: u32 = 70000;
 const COOL_ENTER_MC: u32 = 75000;
@@ -74,13 +79,13 @@ fn step(p: u32, temp: u32, valid: bool, age: u32, seq: u32, want_work: bool, res
     var cool: u32 = (p >> 6) & 255;
     var cyc: u32 = (p >> 14) & 7;
     var last: u32 = (p >> 17) & 255;
+    var is_new: bool = seq != last;
     if (reset) { return pack(0, 0, 0, 0, seq); }
-    if (seq == last) { return p; }
     if (!plausible(temp, valid, age)) { return pack(3, 0, 0, cyc, seq); }
     if (s == 3) { return pack(3, 0, 0, cyc, seq); }
     if (!want_work) { return pack(0, 0, 0, cyc, seq); }
     if (s == 0) {
-        if (temp < LOAD_MAX_MC) { return pack(1, 0, 0, cyc, seq); }
+        if (is_new && temp < LOAD_MAX_MC) { return pack(1, 0, 0, cyc, seq); }
         return pack(0, 0, 0, cyc, seq);
     }
     if (s == 1) {
@@ -90,6 +95,7 @@ fn step(p: u32, temp: u32, valid: bool, age: u32, seq: u32, want_work: bool, res
         }
         return pack(1, 0, 0, cyc, seq);
     }
+    if (!is_new) { return p; }
     if (cool + 1 >= COOL_TIMEOUT) { return pack(3, 0, 0, cyc, seq); }
     if (temp <= COOL_EXIT_MC && seq == ((last + 1) & 255)) {
         if (good + 1 >= EXIT_GOOD_SAMPLES) { return pack(1, 0, 0, cyc, seq); }
@@ -98,9 +104,14 @@ fn step(p: u32, temp: u32, valid: bool, age: u32, seq: u32, want_work: bool, res
     return pack(2, 0, cool + 1, cyc, seq);
 }
 
-fn wd_next(count: u32, kick: bool, limit: u32) -> u32 {
+/// One tick of the watchdog. A running counter is cleared by a kick; at `limit` it has tripped and stays
+/// tripped (a kick is ignored) until `reset` is given while the policy is in OBSERVE.
+fn wd_step(count: u32, p: u32, kick: bool, reset: bool, limit: u32) -> u32 {
+    if (count >= limit) {
+        if (reset) { return 0; }
+        return count;
+    }
     if (kick) { return 0; }
-    if (count >= limit) { return count; }
     return count + 1;
 }
 
@@ -124,7 +135,7 @@ fn silent_ticks(c0: u32) -> u32 {
     var c: u32 = c0;
     var i: u32 = 0;
     while (i < 4) {
-        c = wd_next(c, false, WATCHDOG_LIMIT_TICKS);
+        c = wd_step(c, 0, false, false, WATCHDOG_LIMIT_TICKS);
         i = i + 1;
     }
     return c;
@@ -266,17 +277,61 @@ test the_watchdog_cuts_the_run_enable_when_nobody_calls_step {
     assert_eq(run_enable(p, c, WATCHDOG_LIMIT_TICKS), true);
     c = silent_ticks(c);
     assert_eq(run_enable(p, c, WATCHDOG_LIMIT_TICKS), true);
-    c = wd_next(c, false, WATCHDOG_LIMIT_TICKS);
+    c = wd_step(c, p, false, false, WATCHDOG_LIMIT_TICKS);
     assert_eq(wd_expired(c, WATCHDOG_LIMIT_TICKS), true);
     assert_eq(work_allowed(p), true);
     assert_eq(run_enable(p, c, WATCHDOG_LIMIT_TICKS), false);
-    c = wd_next(c, false, WATCHDOG_LIMIT_TICKS);
-    assert_eq(wd_expired(c, WATCHDOG_LIMIT_TICKS), true);
 }
-test a_kick_restarts_the_watchdog_only_by_a_new_sample {
+test a_kick_restarts_a_running_watchdog_only {
     var c: u32 = silent_ticks(0);
-    c = wd_next(c, true, WATCHDOG_LIMIT_TICKS);
+    c = wd_step(c, 0, true, false, WATCHDOG_LIMIT_TICKS);
     assert_eq(c, 0);
     assert_eq(wd_expired(c, WATCHDOG_LIMIT_TICKS), false);
 }
-endmodule
+test a_late_kick_does_not_clear_a_trip_and_work_stays_forbidden {
+    var p: u32 = pack(1, 0, 0, 0, 9);
+    var c: u32 = silent_ticks(0);
+    c = wd_step(c, p, false, false, WATCHDOG_LIMIT_TICKS);
+    assert_eq(wd_expired(c, WATCHDOG_LIMIT_TICKS), true);
+    c = wd_step(c, p, true, false, WATCHDOG_LIMIT_TICKS);
+    assert_eq(wd_expired(c, WATCHDOG_LIMIT_TICKS), true);
+    p = step(p, 50000, true, 0, 10, true, false);
+    c = wd_step(c, p, true, false, WATCHDOG_LIMIT_TICKS);
+    assert_eq(work_allowed(p), true);
+    assert_eq(run_enable(p, c, WATCHDOG_LIMIT_TICKS), false);
+}
+test a_trip_is_rearmed_only_by_an_operator_reset_with_the_policy_back_in_observe {
+    var p: u32 = pack(1, 0, 0, 0, 9);
+    var c: u32 = 5;
+    c = wd_step(c, p, false, true, WATCHDOG_LIMIT_TICKS);
+    assert_eq(wd_expired(c, WATCHDOG_LIMIT_TICKS), true);
+    p = step(p, 50000, true, 0, 10, true, true);
+    assert_eq(state_of(p), 0);
+    c = wd_step(c, p, false, false, WATCHDOG_LIMIT_TICKS);
+    assert_eq(wd_expired(c, WATCHDOG_LIMIT_TICKS), true);
+    c = wd_step(c, p, false, true, WATCHDOG_LIMIT_TICKS);
+    assert_eq(c, 0);
+    assert_eq(run_enable(p, c, WATCHDOG_LIMIT_TICKS), false);
+    p = step(p, 50000, true, 0, 11, true, false);
+    assert_eq(run_enable(p, c, WATCHDOG_LIMIT_TICKS), true);
+}
+test a_repeated_sample_number_still_honours_stop {
+    var p: u32 = pack(1, 0, 0, 0, 5);
+    p = step(p, 50000, true, 0, 5, false, false);
+    assert_eq(state_of(p), 0);
+    assert_eq(work_allowed(p), false);
+}
+test a_repeated_sample_number_still_raises_stale_and_invalid {
+    assert_eq(state_of(step(pack(1, 0, 0, 0, 5), 50000, true, 4, 5, true, false)), 3);
+    assert_eq(state_of(step(pack(1, 0, 0, 0, 5), 50000, false, 0, 5, true, false)), 3);
+    assert_eq(state_of(step(pack(2, 0, 0, 1, 5), 50000, true, 4, 5, true, false)), 3);
+    assert_eq(state_of(step(pack(0, 0, 0, 0, 5), 50000, false, 0, 5, true, false)), 3);
+}
+test a_repeated_sample_number_still_reacts_to_heat_but_never_starts_work_or_counts {
+    assert_eq(state_of(step(pack(1, 0, 0, 0, 5), 80000, true, 0, 5, true, false)), 2);
+    assert_eq(state_of(step(pack(0, 0, 0, 0, 5), 50000, true, 0, 5, true, false)), 0);
+    var p: u32 = pack(2, 1, 4, 1, 5);
+    p = step(p, 50000, true, 0, 5, true, false);
+    assert_eq(good_of(p), 1);
+    assert_eq(state_of(p), 2);
+}
