@@ -1,0 +1,180 @@
+module ThermalPolicyT27;
+
+// Thermal policy of the AX7203 TriOS board runs (owner request 2026-10-21: a cooling process,
+// everything in t27). All limits are OUR TEST POLICY, not a vendor rating; none may be raised to
+// make a check pass, and no command-line argument or runner option can change them (they are
+// constants of this spec; the executor takes its decisions from the functions below).
+//
+// Readings are milli-degrees Celsius as u32 plus a `valid` flag and the age of the reading in
+// sampling periods. The host converts the sensor text to these; a reading it cannot convert
+// (command failed, no number, NaN, infinity, negative) is passed as valid = false.
+//
+// preflight_allows: a board may be loaded only with a fresh, valid, plausible reading strictly
+// below LOAD_MAX_MC. There is no "will cool down after the load" exception.
+//
+// step(): the four-state controller OBSERVE(0) WORK(1) COOL(2) ERROR(3), state packed in one u32:
+//   bits 0-1 state, bits 2-5 consecutive good samples, bits 6-13 samples spent cooling,
+//   bits 14-16 cooling cycles used.
+//   - Any implausible reading (invalid, stale, out of range) in any state -> ERROR.
+//   - ERROR is sticky: valid readings never leave it; only an explicit operator `reset` does,
+//     and it returns to OBSERVE with the cycle count cleared (not to WORK).
+//   - OBSERVE -> WORK only when the operator wants work and the reading is below LOAD_MAX_MC.
+//   - WORK -> COOL at COOL_ENTER_MC or above (work must stop; sampling continues). The
+//     (MAX_COOL_CYCLES + 1)-th entry is ERROR instead of another cycle.
+//   - COOL -> WORK only after EXIT_GOOD_SAMPLES consecutive readings at or below COOL_EXIT_MC;
+//     one reading above it restarts the count (no chatter). COOL longer than COOL_TIMEOUT
+//     samples -> ERROR (no endless cooling loop, no automatic restart).
+// Sampling period of the executor: one reading per second (policy; STALE_MAX_AGE in periods).
+const LOAD_MAX_MC: u32 = 70000;
+const COOL_ENTER_MC: u32 = 75000;
+const COOL_EXIT_MC: u32 = 65000;
+const TEMP_MAX_PLAUSIBLE_MC: u32 = 200000;
+const EXIT_GOOD_SAMPLES: u32 = 3;
+const STALE_MAX_AGE: u32 = 3;
+const COOL_TIMEOUT: u32 = 120;
+const MAX_COOL_CYCLES: u32 = 3;
+
+fn plausible(temp: u32, valid: bool, age: u32) -> bool {
+    return valid && age <= STALE_MAX_AGE && temp <= TEMP_MAX_PLAUSIBLE_MC;
+}
+
+fn preflight_allows(temp: u32, valid: bool, age: u32) -> bool {
+    return plausible(temp, valid, age) && temp < LOAD_MAX_MC;
+}
+
+fn pack(s: u32, good: u32, cool: u32, cyc: u32) -> u32 {
+    return s | (good << 2) | (cool << 6) | (cyc << 14);
+}
+
+fn state_of(p: u32) -> u32 { return p & 3; }
+fn cycles_of(p: u32) -> u32 { return (p >> 14) & 7; }
+fn work_allowed(p: u32) -> bool { return (p & 3) == 1; }
+
+fn step(p: u32, temp: u32, valid: bool, age: u32, want_work: bool, reset: bool) -> u32 {
+    var s: u32 = p & 3;
+    var good: u32 = (p >> 2) & 15;
+    var cool: u32 = (p >> 6) & 255;
+    var cyc: u32 = (p >> 14) & 7;
+    if (reset) { return 0; }
+    if (!plausible(temp, valid, age)) { return pack(3, 0, 0, cyc); }
+    if (s == 3) { return p; }
+    if (s == 0) {
+        if (want_work && temp < LOAD_MAX_MC) { return pack(1, 0, 0, cyc); }
+        return p;
+    }
+    if (s == 1) {
+        if (temp >= COOL_ENTER_MC) {
+            if (cyc >= MAX_COOL_CYCLES) { return pack(3, 0, 0, cyc); }
+            return pack(2, 0, 0, cyc + 1);
+        }
+        return p;
+    }
+    if (cool + 1 >= COOL_TIMEOUT) { return pack(3, 0, 0, cyc); }
+    if (temp <= COOL_EXIT_MC) {
+        if (good + 1 >= EXIT_GOOD_SAMPLES) { return pack(1, 0, 0, cyc); }
+        return pack(2, good + 1, cool + 1, cyc);
+    }
+    return pack(2, 0, cool + 1, cyc);
+}
+
+fn hot_run(p0: u32) -> u32 {
+    var p: u32 = p0;
+    var i: u32 = 0;
+    while (i < 119) {
+        p = step(p, 80000, true, 0, false, false);
+        i = i + 1;
+    }
+    return p;
+}
+
+test preflight_limit_is_strict {
+    assert_eq(preflight_allows(69999, true, 0), true);
+    assert_eq(preflight_allows(70000, true, 0), false);
+    assert_eq(preflight_allows(93959, true, 0), false);
+}
+test preflight_refuses_bad_readings {
+    assert_eq(preflight_allows(50000, false, 0), false);
+    assert_eq(preflight_allows(50000, true, 4), false);
+    assert_eq(preflight_allows(200001, true, 0), false);
+    assert_eq(preflight_allows(50000, true, 3), true);
+}
+test observe_waits_for_the_operator_and_a_cool_die {
+    var p: u32 = 0;
+    p = step(p, 50000, true, 0, false, false);
+    assert_eq(state_of(p), 0);
+    p = step(p, 70000, true, 0, true, false);
+    assert_eq(state_of(p), 0);
+    p = step(p, 69999, true, 0, true, false);
+    assert_eq(state_of(p), 1);
+    assert_eq(work_allowed(p), true);
+}
+test cooling_enters_at_the_threshold_and_stops_work {
+    var p: u32 = pack(1, 0, 0, 0);
+    p = step(p, 74999, true, 0, true, false);
+    assert_eq(state_of(p), 1);
+    p = step(p, 75000, true, 0, true, false);
+    assert_eq(state_of(p), 2);
+    assert_eq(work_allowed(p), false);
+    assert_eq(cycles_of(p), 1);
+}
+test cooling_leaves_only_after_three_good_samples_without_chatter {
+    var p: u32 = pack(2, 0, 0, 1);
+    p = step(p, 66000, true, 0, true, false);
+    p = step(p, 65000, true, 0, true, false);
+    p = step(p, 65000, true, 0, true, false);
+    assert_eq(state_of(p), 2);
+    p = step(p, 66000, true, 0, true, false);
+    p = step(p, 65000, true, 0, true, false);
+    p = step(p, 65000, true, 0, true, false);
+    assert_eq(state_of(p), 2);
+    p = step(p, 65000, true, 0, true, false);
+    assert_eq(state_of(p), 1);
+    assert_eq(work_allowed(p), true);
+}
+test sensor_loss_is_an_error_and_never_resumes_by_itself {
+    var p: u32 = pack(1, 0, 0, 0);
+    p = step(p, 50000, false, 0, true, false);
+    assert_eq(state_of(p), 3);
+    p = step(p, 40000, true, 0, true, false);
+    p = step(p, 40000, true, 0, true, false);
+    p = step(p, 40000, true, 0, true, false);
+    p = step(p, 40000, true, 0, true, false);
+    assert_eq(state_of(p), 3);
+    assert_eq(work_allowed(p), false);
+    p = step(p, 40000, true, 0, true, true);
+    assert_eq(state_of(p), 0);
+}
+test stale_and_implausible_readings_are_errors_in_every_state {
+    assert_eq(state_of(step(pack(0, 0, 0, 0), 50000, true, 4, true, false)), 3);
+    assert_eq(state_of(step(pack(1, 0, 0, 0), 200001, true, 0, true, false)), 3);
+    assert_eq(state_of(step(pack(2, 0, 0, 1), 50000, true, 4, true, false)), 3);
+}
+test cooling_timeout_is_an_error {
+    var p: u32 = pack(2, 0, 0, 1);
+    p = hot_run(p);
+    assert_eq(state_of(p), 2);
+    p = step(p, 80000, true, 0, false, false);
+    assert_eq(state_of(p), 3);
+}
+test the_cycle_limit_ends_in_an_error {
+    var p: u32 = pack(1, 0, 0, 0);
+    p = step(p, 80000, true, 0, true, false);
+    assert_eq(cycles_of(p), 1);
+    p = step(p, 60000, true, 0, true, false);
+    p = step(p, 60000, true, 0, true, false);
+    p = step(p, 60000, true, 0, true, false);
+    assert_eq(state_of(p), 1);
+    p = step(p, 80000, true, 0, true, false);
+    p = step(p, 60000, true, 0, true, false);
+    p = step(p, 60000, true, 0, true, false);
+    p = step(p, 60000, true, 0, true, false);
+    p = step(p, 80000, true, 0, true, false);
+    assert_eq(cycles_of(p), 3);
+    p = step(p, 60000, true, 0, true, false);
+    p = step(p, 60000, true, 0, true, false);
+    p = step(p, 60000, true, 0, true, false);
+    assert_eq(state_of(p), 1);
+    p = step(p, 80000, true, 0, true, false);
+    assert_eq(state_of(p), 3);
+}
+endmodule

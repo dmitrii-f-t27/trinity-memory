@@ -98,3 +98,11 @@ bytes and compares with literals.
 
 Operating-system kernel or scheduler, DDR3, Ethernet, flash persistence (SRAM load only: configuration is lost on
 power-off), cryptographic signing/AEAD, physical radio, the Rust/TypeScript orchestrator, the `trios-vm` Zig VM, any UI.
+
+## Thermal safety and the t27-only rule (2026-10-21)
+
+- The first board run (SRAM load, 56/56 UART steps) was made with the die at 93.96 C because the runner had a pre-load
+  bound of 100 C that I had set above the intended 70 C. That run counts as a component result, not as a pass of the
+  70 C preflight. The runner is removed; the limit is now the constant `LOAD_MAX_MC = 70000` in
+  `t27/thermal_policy.t27`, with tests and mutation checks in CI. No option can raise it.
+- All new authored source is `.t27`; what is still hand-written is listed with its exact gap in `docs/T27-ONLY-AUDIT.md`.

@@ -1,0 +1,21 @@
+module TriosHostSmoke;
+
+// Smoke test of the t27 host path: a t27b executable that calls libSystem through @extern
+// (gHashTag/t27 PR 11324 put the extern boundary on master). It prints a line and exits 0.
+// The board executor (thermal gate, UART vectors) will be written the same way.
+pub fn sys_write(fd: i32, b: []const u8, n: u64) -> i64 { return @extern("write"); }
+
+pub fn main() -> void {
+    var b : [4]u8 = undefined;
+    b[0] = 111;
+    b[1] = 107;
+    b[2] = 10;
+    b[3] = 0;
+    var r : i64 = sys_write(1, b, 3);
+}
+
+test the_buffer_holds_the_line {
+    var b : [4]u8 = undefined;
+    b[0] = 111;
+    assert b[0] == 111;
+}

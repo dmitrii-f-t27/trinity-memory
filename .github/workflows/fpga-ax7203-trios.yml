@@ -60,6 +60,27 @@ jobs:
           grep -n "^module\|input\|output" build/trios/TriosUartGuardT27.v | head -40
           "$T27C" icarus-simulate "$SPEC" 2>&1 | tee build/trios/spec_tests.log
           sha256sum "$SPEC" build/trios/TriosUartGuardT27.v | tee build/trios/spec_sha256.txt
+      - name: Thermal policy in t27 - tests must pass and every mutant must be caught
+        run: |
+          T27C="$T27_ROOT/target/release/t27c"
+          POL=fpga/ax7203-trios/t27/thermal_policy.t27
+          "$T27C" icarus-simulate "$POL" 2>&1 | tee build/trios/thermal_tests.log
+          test "${PIPESTATUS[0]}" = 0
+          ! grep -q "FAILED" build/trios/thermal_tests.log
+          test "$(grep -c PASSED build/trios/thermal_tests.log)" -ge 9
+          # Negative controls: the spec with one protection broken (limit raised to the 100 C that was once
+          # used, sensor validity ignored, ERROR not sticky) must fail its own tests.
+          mkdir -p build/trios/mutants
+          sed 's/const LOAD_MAX_MC: u32 = 70000;/const LOAD_MAX_MC: u32 = 100000;/; s/ThermalPolicyT27/ThermalMut1T27/' "$POL" > build/trios/mutants/mut1.t27
+          sed 's/return valid \&\& age <= STALE_MAX_AGE/return age <= STALE_MAX_AGE/; s/ThermalPolicyT27/ThermalMut2T27/' "$POL" > build/trios/mutants/mut2.t27
+          sed 's/    if (s == 3) { return p; }/    if (s == 3) { s = 0; }/; s/ThermalPolicyT27/ThermalMut3T27/' "$POL" > build/trios/mutants/mut3.t27
+          for m in 1 2 3; do
+            cmp -s "$POL" build/trios/mutants/mut$m.t27 && { echo "mutant $m is identical to the spec"; exit 1; }
+            if "$T27C" icarus-simulate build/trios/mutants/mut$m.t27 > build/trios/mutants/mut$m.log 2>&1; then echo "mutant $m was NOT caught"; exit 1; fi
+            grep -q FAILED build/trios/mutants/mut$m.log || { echo "mutant $m failed without a test verdict"; exit 1; }
+            echo "mutant $m caught"
+          done
+          sha256sum "$POL" fpga/ax7203-trios/t27/trios_uart_guard.t27 | tee -a build/trios/spec_sha256.txt
       - name: Directed testbench of the generated guard (overflow, sticky flag, clear, quiet)
         run: |
           iverilog -g2012 -o build/trios/guard.vvp -s tb_guard build/trios/TriosUartGuardT27.v fpga/ax7203-trios/tb/tb_guard.v
@@ -75,6 +96,53 @@ jobs:
             build/trios/spec_tests.log
             build/trios/spec_sha256.txt
             build/trios/guard_tb.log
+            build/trios/thermal_tests.log
+            build/trios/mutants/
+          retention-days: 30
+          if-no-files-found: warn
+
+  t27b-host:
+    # The t27 host path (board executor): t27b from gHashTag/t27 master (extern boundary, PR 11324) built here,
+    # one spec compiled to a Mach-O executable that calls libSystem. Informational for now: the board executor is
+    # not written yet, this proves the path exists.
+    runs-on: macos-14
+    timeout-minutes: 45
+    continue-on-error: true
+    env:
+      T27_HOST_SHA: aeb772f46b15116d45d1a1c8b7254c74d1510493
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch gHashTag/t27 at the pinned commit and build t27b
+        run: |
+          rustup toolchain install 1.94.0 --profile minimal
+          git init build/t27host
+          git -C build/t27host remote add origin https://github.com/gHashTag/t27.git
+          git -C build/t27host fetch --depth 1 origin "$T27_HOST_SHA"
+          git -C build/t27host checkout --detach FETCH_HEAD
+          cd build/t27host && cargo +1.94.0 build --release -p t27b 2>&1 | tail -5
+      - name: Compile, link and run the host smoke spec; run the thermal policy on t27b
+        run: |
+          B=build/t27host/target/release/t27b
+          mkdir -p build/trios
+          $B build fpga/ax7203-trios/t27/host_smoke.t27 -o build/trios/host_smoke.o --macho
+          nm -u build/trios/host_smoke.o | tee build/trios/host_smoke_undefined.txt
+          grep -q _write build/trios/host_smoke_undefined.txt
+          SDK=$(xcrun --show-sdk-path); SDKV=$(xcrun --show-sdk-version)
+          ld -arch arm64 -platform_version macos 11.0 $SDKV -syslibroot $SDK -e _main -lSystem -o build/trios/host_smoke build/trios/host_smoke.o
+          codesign --force --sign - build/trios/host_smoke
+          ./build/trios/host_smoke | tee build/trios/host_smoke_out.txt
+          grep -q '^ok$' build/trios/host_smoke_out.txt
+          $B test fpga/ax7203-trios/t27/thermal_policy.t27 2>&1 | tee build/trios/thermal_t27b.log || true
+          shasum -a 256 build/trios/host_smoke | tee build/trios/host_smoke_sha256.txt
+          git -C build/t27host rev-parse HEAD | tee build/trios/t27host_rev.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trios-t27b-host
+          path: |
+            build/trios/host_smoke*
+            build/trios/thermal_t27b.log
+            build/trios/t27host_rev.txt
           retention-days: 30
           if-no-files-found: warn
 
