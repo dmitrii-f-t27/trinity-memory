@@ -1,25 +1,32 @@
 module TriosBoardGateMut05;
 // MUTANT 5: a capture of a tool that never started accepted. Must FAIL its own tests.
 
-// Board executor of the AX7203 TriOS runs, read-only part (preflight and temperature series), in t27 for
-// t27b (gHashTag/t27 @extern boundary). Every decision comes from a tested spec: board_parse (what the
-// tool printed), thermal_policy (what is allowed). This file only plumbs: it takes the board lock, runs
-// openFPGALoader in a pseudo-terminal with a deadline, and hands the captured text to those functions.
-// It never loads a bitstream and never writes to the board: no load until a verified bitstream, the
-// preflight below and the thermal policy all agree (the loader is the next step).
+// Board executor of the AX7203 TriOS runs, in t27 for t27b (gHashTag/t27 @extern boundary): preflight,
+// temperature series and the SRAM load. Every decision comes from a tested spec: board_parse (what the tools
+// printed), thermal_policy (what is allowed) and the pure functions below. This file only plumbs: it takes the
+// board lock, runs tools in a pseudo-terminal under a deadline, and hands the captured text to those functions.
 //
 // Configuration comes from the environment (a t27b program has no argv):
-//   TRIOS_MODE            preflight (default) | series
-//   TRIOS_FTDI_SERIAL     the JTAG adapter serial, required (never printed)
-//   TRIOS_EXPECT_DNA_FILE path of a private file holding the board DNA as 0x..., required for preflight
-//   TRIOS_SAMPLES         series: number of readings (default 10, at most 600)
-//   TRIOS_INTERVAL_MS     series: milliseconds between readings (default 1000)
-//   TRIOS_WANT_WORK       series: 1 = the operator's permission to work (default 0)
-// Exit status: 0 allowed / series finished without ERROR, 2 refused, 3 board lock held, 4 configuration
-// error, 5 series ended in ERROR.
-// A tool exit status other than 0, a timeout, an empty or completely filled capture buffer (an incomplete
-// one), a wrong IDCODE, a wrong DNA or an unreadable temperature each refuse on their own, whatever the
-// parsers say. Nothing identifying the board is printed.
+//   TRIOS_MODE                  preflight (default) | series | load
+//   TRIOS_FTDI_SERIAL           the JTAG adapter serial, required (never printed)
+//   TRIOS_EXPECT_DNA_FILE       path of a private file holding the board DNA as 0x..., required in EVERY mode
+//   TRIOS_BITSTREAM             load: absolute .bit path
+//   TRIOS_EXPECT_BITSTREAM_SHA256  load: the SHA-256 (64 hex digits) of the verified bitstream, required
+//   TRIOS_SAMPLES               series: number of readings (default 10, at most 600)
+//   TRIOS_INTERVAL_MS           series: milliseconds between readings (default 1000)
+//   TRIOS_WANT_WORK             series: 1 = the operator's permission to work (default 0)
+// Exit status: 0 allowed / series finished without ERROR / loaded, 2 refused, 3 board lock held, 4 configuration
+// error (nothing touched the board), 5 series ended in ERROR, 6 a tool could not be reaped (lock left in place).
+//
+// Order in every mode: environment, the DNA file, (load: the bitstream's SHA-256 against the expected value,
+// computed with /usr/bin/shasum in the same captured, deadline-bound way as the loader), then the board lock,
+// then the IDCODE and DNA of the board, then the temperature; only then a series reading or the load. A
+// bitstream is hashed again after the load, which detects a swap of the file during the run (it cannot prevent
+// one). A tool exit status other than 0, a timeout, an empty or completely filled capture buffer, a wrong
+// IDCODE, a wrong DNA or an unreadable temperature each refuse on their own, whatever the parsers say.
+// Every wait for a child is bounded: the pty read loop AND the wait for the child to exit share one deadline,
+// the child is then killed, and a child that cannot be reaped after the kill ends the executor with status 6.
+// Nothing identifying the board is printed.
 use trios::host_sys::sys_write;
 use trios::host_sys::sys_read;
 use trios::host_sys::sys_close;
@@ -43,6 +50,8 @@ use trios::board_parse::parse_idcode;
 use trios::board_parse::dna_at;
 use trios::board_parse::hex64_value;
 use trios::board_parse::bare_hex64_ok;
+use trios::board_parse::expected_hash_valid;
+use trios::board_parse::sha256_line_matches;
 use trios::board_parse::NOT_FOUND;
 use trios::thermal_policy::preflight_allows;
 use trios::thermal_policy::step;
@@ -63,6 +72,7 @@ pub const O_POLL : usize = 15360;
 pub const MEM_SIZE : usize = 16384;
 
 pub const TIMEOUT_MS : u64 = 15000;
+pub const KILL_GRACE_MS : u64 = 3000;
 pub const LOCK_PATH : str = "/private/tmp/claude-501/ax7203-board.lock";
 pub const LOADER : str = "/opt/homebrew/bin/openFPGALoader";
 
@@ -84,6 +94,24 @@ pub fn capture_usable(len: u64, ws: u64, timed_out: u64, spawned: u64, cap: u64)
     if (len >= cap) { return false; }
     return true;
 }
+
+/// True when more than `deadline_ms` have passed since the tool started.
+pub fn deadline_passed(elapsed_ms: u64, deadline_ms: u64) -> bool { return elapsed_ms > deadline_ms; }
+
+/// What to do while waiting for a child to exit: 0 it is reaped, 1 keep waiting, 2 kill it now (the deadline
+/// passed and it was not killed yet), 3 give up (it was killed but is still not reaped after the grace time).
+pub fn wait_action(reaped: bool, elapsed_ms: u64, deadline_ms: u64, killed: bool, since_kill_ms: u64, grace_ms: u64) -> u32 {
+    if (reaped) { return 0; }
+    if (killed) {
+        if (since_kill_ms > grace_ms) { return 3; }
+        return 1;
+    }
+    if (deadline_passed(elapsed_ms, deadline_ms)) { return 2; }
+    return 1;
+}
+
+/// The board's IDCODE and DNA are checked before the first measurement in every mode, series included.
+pub fn identity_required(is_series: bool, is_load: bool) -> bool { return true; }
 
 pub fn idcode_allowed(v: u64) -> bool { return v == 4294967296 + 0x3636093 or v == 4294967296 + 0x13636093; }
 
@@ -149,23 +177,14 @@ fn add_arg(mem: []u8, argv: []u64, k: usize, off: usize, s: []const u8) -> usize
     return off + n + 1;
 }
 
-/// Run LOADER with the serial and one option in a pseudo-terminal, capture what it prints into mem[O_CAP ..]
-/// and fill st[S_*]. The child is killed when TIMEOUT_MS pass.
-fn run_loader(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, option: []const u8) -> void {
+/// Run `exe` with the prepared argv in a pseudo-terminal, capture what it prints into mem[O_CAP ..] and fill
+/// st[S_*]. One deadline (TIMEOUT_MS) covers both the read loop and the wait for the child: when it passes the
+/// child is killed; a child still not reaped KILL_GRACE_MS after the kill ends the executor (status 6, lock left).
+fn spawn_capture(mem: []u8, st: []u64, exe: []const u8, argv: [12]u64) -> void {
     st[S_LEN] = 0;
     st[S_STATUS] = 0;
     st[S_TIMEOUT] = 0;
     st[S_SPAWN] = 0;
-    var argv : [12]u64 = undefined;
-    var k : usize = 0;
-    while (k < 12) { argv[k] = 0; k = k + 1; }
-    var off : usize = O_ARG;
-    off = add_arg(mem, argv[0 .. 12], 0, off, "openFPGALoader");
-    off = add_arg(mem, argv[0 .. 12], 1, off, "-c");
-    off = add_arg(mem, argv[0 .. 12], 2, off, "digilent_hs2");
-    off = add_arg(mem, argv[0 .. 12], 3, off, "--ftdi-serial");
-    argv[4] = sys_addr(mem[serial_off .. serial_off + 8], mem[serial_off .. serial_off + 8], 0);
-    off = add_arg(mem, argv[0 .. 12], 5, off, option);
     var master : [2]u32 = undefined;
     master[0] = 0;
     master[1] = 0;
@@ -181,7 +200,7 @@ fn run_loader(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, option
             const igc : i32 = sys_close(fd);
             fd = fd + 1;
         }
-        const ign2 : i32 = sys_execv(LOADER, argv);
+        const ign2 : i32 = sys_execv(exe, argv);
         sys_exit(127);
     }
     if (pid < 0) { return; }
@@ -190,10 +209,14 @@ fn run_loader(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, option
     const t0 : u64 = sys_mono_ns(4);
     var total : usize = 0;
     var open_pty : bool = true;
+    var killed : bool = false;
+    var kill_ms : u64 = 0;
     while (open_pty) {
-        const now : u64 = sys_mono_ns(4);
-        if ((now - t0) / 1000000 > TIMEOUT_MS) {
+        const el : u64 = (sys_mono_ns(4) - t0) / 1000000;
+        if (deadline_passed(el, TIMEOUT_MS)) {
             const ign3 : i32 = sys_kill(pid, 9);
+            killed = true;
+            kill_ms = el;
             st[S_TIMEOUT] = 1;
             open_pty = false;
         } else {
@@ -219,12 +242,73 @@ fn run_loader(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, option
         }
     }
     st[S_LEN] = @as(u64, total);
+    // The wait for the child is bounded by the same deadline: a child that closed its output (or filled the
+    // buffer) and then keeps running is killed when the deadline passes, never waited for without a limit.
     var ws : [2]u32 = undefined;
     ws[0] = 0;
     ws[1] = 0;
-    const ign4 : i32 = sys_waitpid(pid, ws, 0);
+    var reaped : bool = false;
+    while (!reaped) {
+        const el2 : u64 = (sys_mono_ns(4) - t0) / 1000000;
+        const r : i32 = sys_waitpid(pid, ws, 1);
+        if (r == pid) {
+            reaped = true;
+        } else {
+            if (r < 0) {
+                st[S_SPAWN] = 0;
+                reaped = true;
+            } else {
+                var since : u64 = 0;
+                if (killed) { since = el2 - kill_ms; }
+                const act : u32 = wait_action(false, el2, TIMEOUT_MS, killed, since, KILL_GRACE_MS);
+                if (act == 2) {
+                    const ign8 : i32 = sys_kill(pid, 9);
+                    killed = true;
+                    kill_ms = el2;
+                    st[S_TIMEOUT] = 1;
+                }
+                if (act == 3) {
+                    emit(mem, put_str(mem, 0, "a tool could not be stopped; the board lock is left in place"));
+                    sys_exit(6);
+                }
+                const igu : i32 = sys_usleep(20000);
+            }
+        }
+    }
     st[S_STATUS] = @as(u64, ws[0]);
     const ign5 : i32 = sys_close(mfd);
+}
+
+/// Run openFPGALoader with the adapter serial and one option.
+fn run_loader(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, option: []const u8) -> void {
+    var argv : [12]u64 = undefined;
+    var k : usize = 0;
+    while (k < 12) { argv[k] = 0; k = k + 1; }
+    var off : usize = O_ARG;
+    off = add_arg(mem, argv[0 .. 12], 0, off, "openFPGALoader");
+    off = add_arg(mem, argv[0 .. 12], 1, off, "-c");
+    off = add_arg(mem, argv[0 .. 12], 2, off, "digilent_hs2");
+    off = add_arg(mem, argv[0 .. 12], 3, off, "--ftdi-serial");
+    argv[4] = sys_addr(mem[serial_off .. serial_off + 8], mem[serial_off .. serial_off + 8], 0);
+    off = add_arg(mem, argv[0 .. 12], 5, off, option);
+    spawn_capture(mem, st, LOADER, argv);
+}
+
+/// Hash `path` (a NUL-terminated string in mem[path_off ..]) with /usr/bin/shasum -a 256 and compare with the
+/// expected hash in mem[exp_off .. exp_off + exp_len]. False for any failure: tool, timeout, text, mismatch.
+fn bitstream_matches(mem: []u8, st: []u64, path_off: usize, exp_off: usize, exp_len: usize) -> bool {
+    var argv : [12]u64 = undefined;
+    var k : usize = 0;
+    while (k < 12) { argv[k] = 0; k = k + 1; }
+    var off : usize = O_ARG;
+    off = add_arg(mem, argv[0 .. 12], 0, off, "shasum");
+    off = add_arg(mem, argv[0 .. 12], 1, off, "-a");
+    off = add_arg(mem, argv[0 .. 12], 2, off, "256");
+    argv[3] = sys_addr(mem[path_off .. path_off + 8], mem[path_off .. path_off + 8], 0);
+    spawn_capture(mem, st, "/usr/bin/shasum", argv);
+    if (!usable(st)) { return false; }
+    const n : usize = @as(usize, @intCast(st[S_LEN]));
+    return sha256_line_matches(mem[O_CAP .. O_CAP + n], n, mem[exp_off .. exp_off + exp_len], exp_len);
 }
 
 fn captured(mem: []u8, st: []u64) -> []const u8 {
@@ -262,7 +346,9 @@ fn refuse(mem: []u8, reason: []const u8) -> i32 {
     return 2;
 }
 
-fn preflight(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, dna_expected: u64) -> i32 {
+/// IDCODE and DNA of the board in front of the adapter. 0 when both are the expected ones; otherwise the
+/// refusal is printed and 2 is returned. Used by every mode before its first measurement.
+fn identity_check(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, dna_expected: u64) -> i32 {
     run_loader(mem, st, serial_off, serial_len, "--detect");
     if (!usable(st)) { diag(mem, st); return refuse(mem, "detect failed or incomplete"); }
     const idc : u64 = parse_idcode(mem[O_CAP .. O_CAP + @as(usize, @intCast(st[S_LEN]))], @as(usize, @intCast(st[S_LEN])));
@@ -274,6 +360,12 @@ fn preflight(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, dna_exp
     if (hex64_value(mem[O_CAP .. O_CAP + @as(usize, @intCast(st[S_LEN]))], @as(usize, @intCast(st[S_LEN])), dat) != dna_expected) {
         return refuse(mem, "DNA is not the expected board");
     }
+    return 0;
+}
+
+fn preflight(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, dna_expected: u64) -> i32 {
+    const ic : i32 = identity_check(mem, st, serial_off, serial_len, dna_expected);
+    if (ic != 0) { return ic; }
     const t : u64 = read_temp(mem, st, serial_off, serial_len);
     if (t == 0) { return refuse(mem, "temperature unreadable or incomplete"); }
     const mc : u32 = @as(u32, @intCast(t & 4294967295));
@@ -289,7 +381,9 @@ fn preflight(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, dna_exp
     return 0;
 }
 
-fn series(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, samples: u64, interval_ms: u64, want: bool) -> i32 {
+fn series(mem: []u8, st: []u64, serial_off: usize, serial_len: usize, dna_expected: u64, samples: u64, interval_ms: u64, want: bool) -> i32 {
+    const ic : i32 = identity_check(mem, st, serial_off, serial_len, dna_expected);
+    if (ic != 0) { return ic; }
     var p : u32 = 0;
     var wd : u32 = 0;
     var seq : u32 = 0;
@@ -356,6 +450,20 @@ fn dec_env(name: []const u8, mem: []u8, dflt: u64, maxv: u64) -> u64 {
     return v;
 }
 
+pub fn text_equal(a: []const u8, b: []const u8) -> bool {
+    if (a.len != b.len) { return false; }
+    var i: usize = 0;
+    while (i < a.len) { if (a[i] != b[i]) { return false; } i = i + 1; }
+    return true;
+}
+
+/// Syntax only: an absolute path ending in .bit. Which file it is, is decided by the SHA-256 check.
+pub fn absolute_bit_path(b: []const u8) -> bool {
+    if (b.len < 6) { return false; }
+    return b[0] == 47 and b[b.len - 4] == 46 and b[b.len - 3] == 98 and
+        b[b.len - 2] == 105 and b[b.len - 1] == 116;
+}
+
 pub fn main() -> i32 {
     var arena : [16384]u8 = undefined;
     var st : [4]u64 = undefined;
@@ -369,10 +477,15 @@ pub fn main() -> i32 {
         return 4;
     }
     const mlen : usize = env_text("TRIOS_MODE", mem, O_FILE, 32);
-    var is_series : bool = false;
-    if (mlen == 6 and mem[O_FILE] == 115 and mem[O_FILE + 1] == 101 and mem[O_FILE + 2] == 114) { is_series = true; }
+    const is_series: bool = text_equal(mem[O_FILE .. O_FILE + mlen], "series");
+    const is_load: bool = text_equal(mem[O_FILE .. O_FILE + mlen], "load");
+    if (mlen != 0 and !is_series and !is_load and !text_equal(mem[O_FILE .. O_FILE + mlen], "preflight")) {
+        emit(mem, put_str(mem, 0, "config: unknown TRIOS_MODE"));
+        return 4;
+    }
+    // The expected board DNA: required in every mode that touches the board.
     var dna_expected : u64 = 0;
-    if (!is_series) {
+    if (identity_required(is_series, is_load)) {
         const pl : usize = env_text("TRIOS_EXPECT_DNA_FILE", mem, O_FILE, 256);
         if (pl == 0) {
             emit(mem, put_str(mem, 0, "config: TRIOS_EXPECT_DNA_FILE is not set"));
@@ -391,6 +504,26 @@ pub fn main() -> i32 {
         }
         dna_expected = hex64_value(mem[O_POLL + 16 .. O_POLL + 16 + 256], @as(usize, @intCast(got)), 0);
     }
+    // load: the bitstream must be the verified one. Path syntax, the expected SHA-256 and the file's actual
+    // SHA-256 are all checked before the lock and before any operation on the board.
+    var bit_len: usize = 0;
+    var hash_len: usize = 0;
+    if (is_load) {
+        bit_len = env_text("TRIOS_BITSTREAM", mem, O_ENV + 256, 768);
+        if (!absolute_bit_path(mem[O_ENV + 256 .. O_ENV + 256 + bit_len])) {
+            emit(mem, put_str(mem, 0, "config: TRIOS_BITSTREAM must be an absolute .bit path"));
+            return 4;
+        }
+        hash_len = env_text("TRIOS_EXPECT_BITSTREAM_SHA256", mem, O_ENV + 1024, 128);
+        if (!expected_hash_valid(mem[O_ENV + 1024 .. O_ENV + 1024 + hash_len], hash_len)) {
+            emit(mem, put_str(mem, 0, "config: TRIOS_EXPECT_BITSTREAM_SHA256 must be 64 hex digits"));
+            return 4;
+        }
+        if (!bitstream_matches(mem, st[0 .. 4], O_ENV + 256, O_ENV + 1024, hash_len)) {
+            emit(mem, put_str(mem, 0, "config: the bitstream is unreadable or is not the expected SHA-256"));
+            return 4;
+        }
+    }
     if (sys_mkdir(LOCK_PATH, 493) != 0) {
         emit(mem, put_str(mem, 0, "board lock is held by another executor"));
         return 3;
@@ -404,10 +537,30 @@ pub fn main() -> i32 {
             emit(mem, put_str(mem, 0, "config: bad TRIOS_SAMPLES or TRIOS_INTERVAL_MS"));
             code = 4;
         } else {
-            code = series(mem, st[0 .. 4], O_ENV, serial_len, n, ms, w == 1);
+            code = series(mem, st[0 .. 4], O_ENV, serial_len, dna_expected, n, ms, w == 1);
         }
     } else {
         code = preflight(mem, st[0 .. 4], O_ENV, serial_len, dna_expected);
+        // The common lock remains held from identity/XADC through the SRAM operation.
+        // The path is a single execv argument, never a shell command or --flash option.
+        if (code == 0 and is_load) {
+            run_loader(mem, st[0 .. 4], O_ENV, serial_len, mem[O_ENV + 256 .. O_ENV + 256 + bit_len]);
+            if (!usable(st[0 .. 4])) {
+                diag(mem, st[0 .. 4]);
+                code = refuse(mem, "SRAM loader did not finish cleanly; inspect before retry");
+            } else if (!bitstream_matches(mem, st[0 .. 4], O_ENV + 256, O_ENV + 1024, hash_len)) {
+                code = refuse(mem, "bitstream file changed during the load; treat the run as untrusted");
+            } else {
+                const post: u64 = read_temp(mem, st[0 .. 4], O_ENV, serial_len);
+                if ((post >> 32) != 1 or (post & 4294967295) >= 75000) {
+                    code = refuse(mem, "post-load temperature unavailable or hot; no further work");
+                } else {
+                    var line: usize = put_str(mem, 0, "sram_load=OK post_temp_mc=");
+                    line = put_dec(mem, line, post & 4294967295);
+                    emit(mem, line);
+                }
+            }
+        }
     }
     const ign7 : i32 = sys_rmdir(LOCK_PATH);
     return code;
@@ -428,6 +581,16 @@ test exit_status_decoding {
     assert_eq(exited_ok(127 * 256), false);
     assert_eq(exited_ok(9), false);
 }
+
+test exact_mode_and_bitstream_argument {
+    assert(text_equal("load", "load"));
+    assert(!text_equal("loader", "load"));
+    assert(!text_equal("serxxx", "series"));
+    assert(absolute_bit_path("/tmp/verified.bit"));
+    assert(!absolute_bit_path("--flash"));
+    assert(!absolute_bit_path("relative.bit"));
+    assert(!absolute_bit_path("/tmp/verified.bin"));
+}
 test only_the_xc7a200t_idcodes_are_accepted {
     assert_eq(idcode_allowed(4294967296 + 0x3636093), true);
     assert_eq(idcode_allowed(4294967296 + 0x13636093), true);
@@ -435,4 +598,29 @@ test only_the_xc7a200t_idcodes_are_accepted {
     assert_eq(idcode_allowed(4294967296 + 0x3636094), false);
     assert_eq(idcode_allowed(4294967296 + 0x23636093), false);
     assert_eq(idcode_allowed(0), false);
+}
+
+test the_wait_for_a_child_always_ends {
+    // reaped: done
+    assert_eq(wait_action(true, 0, 15000, false, 0, 3000), 0);
+    assert_eq(wait_action(true, 99999, 15000, true, 99999, 3000), 0);
+    // running inside the deadline: keep waiting
+    assert_eq(wait_action(false, 100, 15000, false, 0, 3000), 1);
+    assert_eq(wait_action(false, 15000, 15000, false, 0, 3000), 1);
+    // past the deadline and not killed yet: kill now
+    assert_eq(wait_action(false, 15001, 15000, false, 0, 3000), 2);
+    // killed: wait out the grace time, then give up
+    assert_eq(wait_action(false, 16000, 15000, true, 1000, 3000), 1);
+    assert_eq(wait_action(false, 18000, 15000, true, 3000, 3000), 1);
+    assert_eq(wait_action(false, 18001, 15000, true, 3001, 3000), 3);
+}
+test the_deadline_boundary {
+    assert_eq(deadline_passed(15000, 15000), false);
+    assert_eq(deadline_passed(15001, 15000), true);
+    assert_eq(deadline_passed(0, 15000), false);
+}
+test every_mode_checks_the_boards_identity {
+    assert_eq(identity_required(false, false), true);
+    assert_eq(identity_required(true, false), true);
+    assert_eq(identity_required(false, true), true);
 }

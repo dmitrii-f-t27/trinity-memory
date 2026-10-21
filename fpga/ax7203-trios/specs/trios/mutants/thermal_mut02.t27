@@ -1,4 +1,4 @@
-module ThermalMut02T27;
+module ThermalPolicyT27Mut02;
 // MUTANT 2: sensor validity ignored. Must FAIL its own tests (CI expects a failing run).
 
 // Thermal policy of the AX7203 TriOS board runs (owner request 2026-10-21: a cooling process,
@@ -334,4 +334,21 @@ test a_repeated_sample_number_still_reacts_to_heat_but_never_starts_work_or_coun
     p = step(p, 50000, true, 0, 5, true, false);
     assert_eq(good_of(p), 1);
     assert_eq(state_of(p), 2);
+}
+test plausibility_edges {
+    assert_eq(plausible(200000, true, 0), true);
+    assert_eq(plausible(200001, true, 0), false);
+    assert_eq(plausible(0, true, 3), true);
+    assert_eq(plausible(0, true, 4), false);
+    assert_eq(plausible(0, false, 0), false);
+}
+test sample_numbers_wrap_at_256_and_still_count_as_consecutive {
+    var p: u32 = pack(2, 0, 0, 1, 253);
+    p = step(p, 60000, true, 0, 254, true, false);
+    p = step(p, 60000, true, 0, 255, true, false);
+    assert_eq(good_of(p), 2);
+    assert_eq(seq_of(p), 255);
+    p = step(p, 60000, true, 0, 0, true, false);
+    assert_eq(state_of(p), 1);
+    assert_eq(seq_of(p), 0);
 }

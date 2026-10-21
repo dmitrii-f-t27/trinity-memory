@@ -50,7 +50,7 @@ jobs:
           "$T27C" icarus-simulate "$POL" 2>&1 | tee build/trios/thermal_tests.log
           test "${PIPESTATUS[0]}" = 0
           ! grep -q "FAILED" build/trios/thermal_tests.log
-          test "$(grep -c PASSED build/trios/thermal_tests.log)" -ge 20
+          test "$(grep -c PASSED build/trios/thermal_tests.log)" -ge 22
           # Negative controls: the spec with one protection broken (limit raised to the 100 C that was once
           # used, sensor validity ignored, ERROR not sticky) must fail its own tests.
           # Negative controls are committed .t27 files (specs/trios/mutants): each is the policy with one
@@ -67,7 +67,7 @@ jobs:
             grep -q FAILED build/trios/mutants/$b.log || { echo "$b failed without a test verdict"; exit 1; }
             echo "$b caught (diff $d lines)"
           done
-          test "$n" -ge 10
+          test "$n" -ge 22
           sha256sum "$POL" fpga/ax7203-trios/specs/trios/trios_uart_guard.t27 fpga/ax7203-trios/specs/trios/mutants/*.t27 | tee build/trios/spec_sha256.txt
       - uses: actions/upload-artifact@v4
         if: always()

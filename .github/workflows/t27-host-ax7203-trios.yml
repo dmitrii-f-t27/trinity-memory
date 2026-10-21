@@ -82,10 +82,18 @@ jobs:
             ! grep -q "^FAIL" ../../build/trios/t27b_$f.log
             grep -Eq ": [0-9]+ passed, 0 failed" ../../build/trios/t27b_$f.log
           done
+          nm=0
           for f in specs/trios/mutants/thermal_mut*.t27 specs/trios/mutants/board_parse_mut*.t27 specs/trios/mutants/board_gate_mut*.t27; do
-            if ../../$B test $f > ../../build/trios/t27b_$(basename $f .t27).log 2>&1; then echo "$f was NOT caught on t27b"; exit 1; fi
-            grep -q "^FAIL" ../../build/trios/t27b_$(basename $f .t27).log || { echo "$f failed without a test verdict on t27b"; exit 1; }
+            nm=$((nm+1)); b=$(basename $f .t27)
+            case $b in thermal_*) base=thermal_policy;; board_parse_*) base=board_parse;; board_gate_*) base=board_gate;; esac
+            # a mutant differs from its spec by a few lines only, so it cannot drift into testing something else
+            d=$(diff <(grep -v -e '^module ' -e '^// MUTANT' specs/trios/$base.t27) <(grep -v -e '^module ' -e '^// MUTANT' $f) | grep -c '^[<>]' || true)
+            if [ "$d" -lt 1 ] || [ "$d" -gt 6 ]; then echo "$b differs from $base.t27 by $d lines"; exit 1; fi
+            if ../../$B test $f > ../../build/trios/t27b_$b.log 2>&1; then echo "$f was NOT caught on t27b"; exit 1; fi
+            grep -q "^FAIL" ../../build/trios/t27b_$b.log || { echo "$f failed without a test verdict on t27b"; exit 1; }
           done
+          echo "$nm mutants caught on t27b"
+          test "$nm" -ge 54
       - name: Build the board executor (t27) and run only its no-board paths
         run: |
           B=build/t27host/target/release/t27b
@@ -106,6 +114,30 @@ jobs:
           set -e
           cat build/trios/board_gate_noenv.txt build/trios/board_gate_nodna.txt build/trios/board_gate_baddna.txt
           test "$rc1" = 4 && test "$rc2" = 4 && test "$rc3" = 4
+          # every mode needs the expected DNA file (series included), and load needs a verified bitstream:
+          # each refusal below happens before the board lock and before any tool touches a board.
+          printf '0x0123456789abcdef\n' > build/trios/dna.txt
+          printf 'bitstream-test-bytes' > build/trios/x.bit
+          H=$(shasum -a 256 build/trios/x.bit | cut -d' ' -f1)
+          P=$PWD/build/trios/x.bit; D=$PWD/build/trios/dna.txt
+          gate() { want=$1; name=$2; shift 2; set +e; env -i "$@" ./build/trios/board_gate > build/trios/gate_case.txt 2>&1; rc=$?; set -e; echo "$name: rc=$rc (want $want)"; cat build/trios/gate_case.txt; test "$rc" = "$want"; }
+          gate 4 "series without the DNA file" TRIOS_FTDI_SERIAL=x TRIOS_MODE=series
+          gate 4 "load without a bitstream" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D
+          gate 4 "load with a relative path" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=x.bit TRIOS_EXPECT_BITSTREAM_SHA256=$H
+          gate 4 "load without the expected hash" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P
+          gate 4 "load with a malformed hash" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P TRIOS_EXPECT_BITSTREAM_SHA256=${H%?}
+          gate 4 "load of a missing file" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$PWD/build/trios/none.bit TRIOS_EXPECT_BITSTREAM_SHA256=$H
+          gate 4 "load with the wrong hash" TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P TRIOS_EXPECT_BITSTREAM_SHA256=0000000000000000000000000000000000000000000000000000000000000000
+          # a hash that matches passes the configuration stage; this runner has no board, so it stops at the lock (3) or at the missing loader (2)
+          set +e; env -i TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$P TRIOS_EXPECT_BITSTREAM_SHA256=$H ./build/trios/board_gate > build/trios/gate_case.txt 2>&1; rc=$?; set -e
+          cat build/trios/gate_case.txt; echo "matching hash: rc=$rc"; test "$rc" = 3 || test "$rc" = 2
+          # a hung child is killed at the deadline: hashing a FIFO with no writer blocks forever
+          mkfifo build/trios/hang.bit
+          s=$(date +%s)
+          set +e; env -i TRIOS_FTDI_SERIAL=x TRIOS_MODE=load TRIOS_EXPECT_DNA_FILE=$D TRIOS_BITSTREAM=$PWD/build/trios/hang.bit TRIOS_EXPECT_BITSTREAM_SHA256=$H ./build/trios/board_gate > build/trios/gate_case.txt 2>&1; rc=$?; set -e
+          e=$(( $(date +%s) - s )); cat build/trios/gate_case.txt; echo "hung child: rc=$rc after ${e}s"
+          test "$rc" = 4 && test "$e" -ge 14 && test "$e" -le 40
+          ! pgrep -f "shasum.*hang.bit"
           shasum -a 256 build/trios/board_gate | tee build/trios/board_gate_sha256.txt
       - uses: actions/upload-artifact@v4
         if: always()

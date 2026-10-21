@@ -1,0 +1,367 @@
+module TriosBoardParseMut11;
+// MUTANT 11: trailing garbage accepted after the expected DNA token. Must FAIL its own tests.
+
+// Parsers for the text openFPGALoader prints (--detect, --read-dna, --read-xadc), in t27, so that a
+// failed, truncated or garbled measurement can never be read as a number. Every parser answers "not found"
+// unless the text has exactly the expected shape:
+//   - the key appears EXACTLY ONCE (a duplicated or ambiguous key is refused);
+//   - the value is complete: it ends with a terminator that was actually received (a buffer that stops in
+//     the middle of a number, or right after it, is refused), and nothing but digits precedes it;
+//   - NaN, infinity, negative numbers and text where a number should be are refused.
+// Temperatures are milli-degrees Celsius. Results are u64: bit 32 = found, low 32 bits = the value.
+// Exit status, timeout and identity checks belong to the executor (board_gate) and close the gate on
+// their own; these parsers are only the last layer.
+pub const NOT_FOUND : usize = 4294967295;
+pub const FOUND : u64 = 4294967296;
+
+pub fn find(b: []const u8, n: usize, pat: []const u8, m: usize) -> usize {
+    var i : usize = 0;
+    while (i + m <= n) {
+        var j : usize = 0;
+        var ok : bool = true;
+        while (j < m) {
+            if (b[i + j] != pat[j]) { ok = false; }
+            j = j + 1;
+        }
+        if (ok) { return i; }
+        i = i + 1;
+    }
+    return NOT_FOUND;
+}
+
+/// How many times `pat` occurs (overlaps counted).
+pub fn count(b: []const u8, n: usize, pat: []const u8, m: usize) -> usize {
+    var c : usize = 0;
+    var i : usize = 0;
+    while (i + m <= n) {
+        var j : usize = 0;
+        var ok : bool = true;
+        while (j < m) {
+            if (b[i + j] != pat[j]) { ok = false; }
+            j = j + 1;
+        }
+        if (ok) { c = c + 1; }
+        i = i + 1;
+    }
+    return c;
+}
+
+fn is_digit(c: u8) -> bool { return c >= 48 and c <= 57; }
+
+fn hex_val(c: u8) -> u32 {
+    if (c >= 48 and c <= 57) { return @as(u32, c) - 48; }
+    if (c >= 97 and c <= 102) { return @as(u32, c) - 87; }
+    if (c >= 65 and c <= 70) { return @as(u32, c) - 55; }
+    return 16;
+}
+
+/// Terminators that may follow a number in the XADC object: comma, space, newline, return, closing brace.
+fn ends_number(c: u8) -> bool { return c == 44 or c == 32 or c == 10 or c == 13 or c == 125; }
+
+/// Terminators that may follow the idcode token: space, tab, newline, return.
+fn ends_token(c: u8) -> bool { return c == 32 or c == 9 or c == 10 or c == 13; }
+
+/// `"temp": 61.25,` -> 61250. The key must be preceded by a quote so `"maxtemp"` is never matched, must
+/// occur once, and the number must be followed by a received terminator.
+pub fn parse_temp_mc(b: []const u8, n: usize) -> u64 {
+    if (count(b, n, "\"temp\":", 7) != 1) { return 0; }
+    const at : usize = find(b, n, "\"temp\":", 7);
+    var i : usize = at + 7;
+    while (i < n and b[i] == 32) { i = i + 1; }
+    if (i >= n or !is_digit(b[i])) { return 0; }
+    var whole : u32 = 0;
+    var digits : u32 = 0;
+    while (i < n and is_digit(b[i])) {
+        whole = whole * 10 + (@as(u32, b[i]) - 48);
+        digits = digits + 1;
+        if (digits > 3) { return 0; }
+        i = i + 1;
+    }
+    var frac : u32 = 0;
+    var fd : u32 = 0;
+    if (i < n and b[i] == 46) {
+        i = i + 1;
+        if (i >= n or !is_digit(b[i])) { return 0; }
+        while (i < n and is_digit(b[i])) {
+            if (fd < 3) { frac = frac * 10 + (@as(u32, b[i]) - 48); fd = fd + 1; }
+            i = i + 1;
+        }
+    }
+    while (fd < 3) { frac = frac * 10; fd = fd + 1; }
+    if (i >= n) { return 0; }
+    if (!ends_number(b[i])) { return 0; }
+    return FOUND + @as(u64, whole * 1000 + frac);
+}
+
+/// `idcode 0x3636093` followed by whitespace -> 0x3636093; the key occurs once.
+pub fn parse_idcode(b: []const u8, n: usize) -> u64 {
+    if (count(b, n, "idcode 0x", 9) != 1) { return 0; }
+    const at : usize = find(b, n, "idcode 0x", 9);
+    var i : usize = at + 9;
+    var v : u32 = 0;
+    var d : u32 = 0;
+    while (i < n and hex_val(b[i]) < 16) {
+        d = d + 1;
+        if (d > 8) { return 0; }
+        v = v * 16 + hex_val(b[i]);
+        i = i + 1;
+    }
+    if (d == 0) { return 0; }
+    if (i >= n) { return 0; }
+    if (!ends_token(b[i])) { return 0; }
+    return FOUND + @as(u64, v);
+}
+
+/// Offset of the `0x` of the DNA value in `{"dna": "0x0123456789abcdef"}`, or NOT_FOUND. One key, one to
+/// sixteen hex digits, then the closing quote.
+pub fn dna_at(b: []const u8, n: usize) -> usize {
+    if (count(b, n, "\"dna\": \"0x", 10) != 1) { return NOT_FOUND; }
+    const at : usize = find(b, n, "\"dna\": \"0x", 10);
+    var i : usize = at + 10;
+    var d : u32 = 0;
+    while (i < n and hex_val(b[i]) < 16) {
+        d = d + 1;
+        if (d > 16) { return NOT_FOUND; }
+        i = i + 1;
+    }
+    if (d == 0) { return NOT_FOUND; }
+    if (i >= n) { return NOT_FOUND; }
+    if (b[i] != 34) { return NOT_FOUND; }
+    return at + 8;
+}
+
+/// The 64-bit value of the hex token that starts with `0x` at `at` (use after dna_at or on a verified token).
+pub fn hex64_value(b: []const u8, n: usize, at: usize) -> u64 {
+    var i : usize = at + 2;
+    var v : u64 = 0;
+    while (i < n and hex_val(b[i]) < 16) {
+        v = v * 16 + @as(u64, hex_val(b[i]));
+        i = i + 1;
+    }
+    return v;
+}
+
+/// A bare `0x...` token (the expected-DNA file): one to sixteen hex digits then whitespace or the end of the
+/// file's content. 0 when it is anything else.
+pub fn bare_hex64_ok(b: []const u8, n: usize) -> bool {
+    if (n < 3 or b[0] != 48 or b[1] != 120) { return false; }
+    var i : usize = 2;
+    var d : u32 = 0;
+    while (i < n and hex_val(b[i]) < 16) {
+        d = d + 1;
+        if (d > 16) { return false; }
+        i = i + 1;
+    }
+    if (d == 0) { return false; }
+    while (i < n) {
+        i = i + 1;
+    }
+    return true;
+}
+
+/// An expected SHA-256 given in the environment: exactly 64 hex digits and nothing else.
+pub fn expected_hash_valid(b: []const u8, n: usize) -> bool {
+    if (n != 64) { return false; }
+    var i : usize = 0;
+    while (i < 64) {
+        if (hex_val(b[i]) >= 16) { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+/// The line `shasum -a 256 FILE` printed: 64 hex digits, a space, then the file name. True only when the
+/// first 64 characters equal the expected hash (compared as hex values, so case does not matter) and the
+/// separator follows. A shorter, longer or non-hex expected value never matches.
+pub fn sha256_line_matches(out: []const u8, n: usize, expected: []const u8, en: usize) -> bool {
+    if (!expected_hash_valid(expected, en)) { return false; }
+    if (n < 66) { return false; }
+    var i : usize = 0;
+    while (i < 64) {
+        if (hex_val(out[i]) >= 16) { return false; }
+        if (hex_val(out[i]) != hex_val(expected[i])) { return false; }
+        i = i + 1;
+    }
+    if (out[64] != 32) { return false; }
+    return true;
+}
+
+test temperature_formats_seen_from_the_installed_tool {
+    const s : []const u8 = "empty\n{\"temp\": 96.7029, \n    \"maxtemp\": 97.9717, \n\"mintemp\": 26.2851, \n}\n";
+    assert_eq(parse_temp_mc(s, s.len), 4294967296 + 96702);
+    const t : []const u8 = "{\"temp\": 61.25, \"maxtemp\": 62.5, }";
+    assert_eq(parse_temp_mc(t, t.len), 4294967296 + 61250);
+    const u : []const u8 = "{\"temp\": 7, }";
+    assert_eq(parse_temp_mc(u, u.len), 4294967296 + 7000);
+}
+test a_carriage_return_after_the_number_is_a_terminator {
+    var buf : [20]u8 = undefined;
+    const head : []const u8 = "{\"temp\": 61.25";
+    var i : usize = 0;
+    while (i < head.len) { buf[i] = head[i]; i = i + 1; }
+    buf[i] = 13;
+    buf[i + 1] = 10;
+    buf[i + 2] = 125;
+    assert_eq(parse_temp_mc(buf[0 .. i + 3], i + 3), 4294967296 + 61250);
+    assert_eq(parse_temp_mc(buf[0 .. i], i), 0);
+}
+test temperature_refusals {
+    const a : []const u8 = "";
+    assert_eq(parse_temp_mc(a, a.len), 0);
+    const b : []const u8 = "Error: cable not found\n";
+    assert_eq(parse_temp_mc(b, b.len), 0);
+    const c : []const u8 = "{\"maxtemp\": 60.0, }";
+    assert_eq(parse_temp_mc(c, c.len), 0);
+    const d : []const u8 = "{\"temp\": nan, }";
+    assert_eq(parse_temp_mc(d, d.len), 0);
+    const e : []const u8 = "{\"temp\": -4.0, }";
+    assert_eq(parse_temp_mc(e, e.len), 0);
+    const f : []const u8 = "{\"temp\": 1e999, }";
+    assert_eq(parse_temp_mc(f, f.len), 0);
+    const g : []const u8 = "{\"temp\": 6x.0, }";
+    assert_eq(parse_temp_mc(g, g.len), 0);
+    const k : []const u8 = "{\"temp\": 1234.5, }";
+    assert_eq(parse_temp_mc(k, k.len), 0);
+}
+test truncated_temperature_is_refused_at_every_point {
+    const a : []const u8 = "{\"temp\": 6";
+    assert_eq(parse_temp_mc(a, a.len), 0);
+    const b : []const u8 = "{\"temp\": 61";
+    assert_eq(parse_temp_mc(b, b.len), 0);
+    const c : []const u8 = "{\"temp\": 61.";
+    assert_eq(parse_temp_mc(c, c.len), 0);
+    const d : []const u8 = "{\"temp\": 61.2";
+    assert_eq(parse_temp_mc(d, d.len), 0);
+    const e : []const u8 = "{\"temp\": 61.25";
+    assert_eq(parse_temp_mc(e, e.len), 0);
+    const f : []const u8 = "{\"temp\":";
+    assert_eq(parse_temp_mc(f, f.len), 0);
+    const g : []const u8 = "{\"temp";
+    assert_eq(parse_temp_mc(g, g.len), 0);
+}
+test corrupted_tail_and_duplicate_keys_are_refused {
+    const a : []const u8 = "{\"temp\": 61.25abc, }";
+    assert_eq(parse_temp_mc(a, a.len), 0);
+    const b : []const u8 = "{\"temp\": 61.25;, }";
+    assert_eq(parse_temp_mc(b, b.len), 0);
+    const c : []const u8 = "{\"temp\": 61.25, \"temp\": 40.0, }";
+    assert_eq(parse_temp_mc(c, c.len), 0);
+}
+test idcode_formats {
+    const s : []const u8 = "index 0:\n\tidcode 0x3636093\n\tmanufacturer xilinx\n";
+    assert_eq(parse_idcode(s, s.len), 4294967296 + 56844435);
+    const t : []const u8 = "no device";
+    assert_eq(parse_idcode(t, t.len), 0);
+    const u : []const u8 = "idcode 0x";
+    assert_eq(parse_idcode(u, u.len), 0);
+}
+test idcode_truncation_garbage_and_duplicates_are_refused {
+    const a : []const u8 = "index 0:\n\tidcode 0x3636093";
+    assert_eq(parse_idcode(a, a.len), 0);
+    const b : []const u8 = "idcode 0x3636093zz\n";
+    assert_eq(parse_idcode(b, b.len), 0);
+    const c : []const u8 = "idcode 0x36360\n idcode 0x3636093\n";
+    assert_eq(parse_idcode(c, c.len), 0);
+    const d : []const u8 = "idcode 0x123456789\n";
+    assert_eq(parse_idcode(d, d.len), 0);
+}
+test dna_formats {
+    const s : []const u8 = "empty\n{\"dna\": \"0x0123456789abcdef\"}\n";
+    const at : usize = dna_at(s, s.len);
+    assert_eq(at != NOT_FOUND, true);
+    assert_eq(hex64_value(s, s.len, at), 81985529216486895);
+    const t : []const u8 = "Error: read failed\n";
+    assert_eq(dna_at(t, t.len), NOT_FOUND);
+    const u : []const u8 = "{\"dna\": \"zz\"}";
+    assert_eq(dna_at(u, u.len), NOT_FOUND);
+}
+test dna_truncation_garbage_and_duplicates_are_refused {
+    const a : []const u8 = "{\"dna\": \"0x0123456789abcdef";
+    assert_eq(dna_at(a, a.len), NOT_FOUND);
+    const b : []const u8 = "{\"dna\": \"0x0123456789abcdefZ\"}";
+    assert_eq(dna_at(b, b.len), NOT_FOUND);
+    const c : []const u8 = "{\"dna\": \"0x01234567890123456\"}";
+    assert_eq(dna_at(c, c.len), NOT_FOUND);
+    const d : []const u8 = "{\"dna\": \"0x\"}";
+    assert_eq(dna_at(d, d.len), NOT_FOUND);
+    const e : []const u8 = "{\"dna\": \"0x1\"} {\"dna\": \"0x2\"}";
+    assert_eq(dna_at(e, e.len), NOT_FOUND);
+}
+test the_expected_dna_file_token {
+    const a : []const u8 = "0x0123456789abcdef\n";
+    assert_eq(bare_hex64_ok(a, a.len), true);
+    assert_eq(hex64_value(a, a.len, 0), 81985529216486895);
+    const b : []const u8 = "0x0123456789abcdefg";
+    assert_eq(bare_hex64_ok(b, b.len), false);
+    const c : []const u8 = "0x";
+    assert_eq(bare_hex64_ok(c, c.len), false);
+    const d : []const u8 = "";
+    assert_eq(bare_hex64_ok(d, d.len), false);
+}
+
+test the_expected_hash_must_be_exactly_64_hex_digits {
+    const ok : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33";
+    assert_eq(expected_hash_valid(ok, ok.len), true);
+    const up : []const u8 = "5D7AD37AE5FE6C4A8593D3003D5EA557008F11934A99681853E1DBD84CD0BC33";
+    assert_eq(expected_hash_valid(up, up.len), true);
+    const s63 : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc3";
+    assert_eq(expected_hash_valid(s63, s63.len), false);
+    const s65 : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc330";
+    assert_eq(expected_hash_valid(s65, s65.len), false);
+    const bad : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bcg3";
+    assert_eq(expected_hash_valid(bad, bad.len), false);
+    const e : []const u8 = "";
+    assert_eq(expected_hash_valid(e, e.len), false);
+}
+test the_shasum_line_must_carry_the_expected_hash {
+    const exp : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33";
+    const good : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33  /tmp/x.bit\n";
+    assert_eq(sha256_line_matches(good, good.len, exp, exp.len), true);
+    const upper : []const u8 = "5D7AD37AE5FE6C4A8593D3003D5EA557008F11934A99681853E1DBD84CD0BC33  /tmp/x.bit\n";
+    assert_eq(sha256_line_matches(upper, upper.len, exp, exp.len), true);
+    const last : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc32  /tmp/x.bit\n";
+    assert_eq(sha256_line_matches(last, last.len, exp, exp.len), false);
+    const first : []const u8 = "4d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33  /tmp/x.bit\n";
+    assert_eq(sha256_line_matches(first, first.len, exp, exp.len), false);
+}
+test the_shasum_line_refusals {
+    const exp : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33";
+    const nosep : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33/tmp/x.bit\n";
+    assert_eq(sha256_line_matches(nosep, nosep.len, exp, exp.len), false);
+    const shortl : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33 ";
+    assert_eq(sha256_line_matches(shortl, shortl.len, exp, exp.len), false);
+    const err : []const u8 = "shasum: /tmp/none.bit: No such file or directory\n";
+    assert_eq(sha256_line_matches(err, err.len, exp, exp.len), false);
+    const good : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc33  /tmp/x.bit\n";
+    const wrongexp : []const u8 = "5d7ad37ae5fe6c4a8593d3003d5ea557008f11934a99681853e1dbd84cd0bc3";
+    assert_eq(sha256_line_matches(good, good.len, wrongexp, wrongexp.len), false);
+    const emptyexp : []const u8 = "";
+    assert_eq(sha256_line_matches(good, good.len, emptyexp, emptyexp.len), false);
+}
+
+test characters_next_to_the_digits_are_not_digits {
+    const a : []const u8 = "{\"temp\": 6:0, }";
+    assert_eq(parse_temp_mc(a, a.len), 0);
+    const b : []const u8 = "{\"temp\": 6/0, }";
+    assert_eq(parse_temp_mc(b, b.len), 0);
+    const c : []const u8 = "{\"temp\": 6@, }";
+    assert_eq(parse_temp_mc(c, c.len), 0);
+}
+test hex_digits_map_to_their_values {
+    const s : []const u8 = "{\"dna\": \"0x00000000000000af\"}";
+    const at : usize = dna_at(s, s.len);
+    assert_eq(hex64_value(s, s.len, at), 175);
+    const t : []const u8 = "{\"dna\": \"0x00000000000000AF\"}";
+    assert_eq(hex64_value(t, t.len, dna_at(t, t.len)), 175);
+    const u : []const u8 = "{\"dna\": \"0x1000000000000000\"}";
+    assert_eq(hex64_value(u, u.len, dna_at(u, u.len)), 1152921504606846976);
+    const v : []const u8 = "idcode 0x9f\n";
+    assert_eq(parse_idcode(v, v.len), 4294967296 + 159);
+}
+test one_key_counted_once_and_two_keys_counted_twice {
+    const a : []const u8 = "{\"temp\": 1.0, \"temp\": 2.0, \"temp\": 3.0, }";
+    assert_eq(count(a, a.len, "\"temp\":", 7), 3);
+    const b : []const u8 = "{\"temp\": 1.0, }";
+    assert_eq(count(b, b.len, "\"temp\":", 7), 1);
+    assert_eq(count(b, b.len, "nothing", 7), 0);
+}
